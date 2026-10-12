@@ -2493,8 +2493,15 @@ class MainActivity : AppCompatActivity() {
                     ) {
                         result = pendingBackupManager?.importFrom(uri, confirmed = true)
                     }
-                    val msg = result?.let { getString(R.string.plug_imported_summary, it.providersImported, it.epgSourcesImported, it.customGroupsImported) } ?: getString(R.string.plug_import_failed)
+                    // Report the failure's actual reason when there is one; the summary of
+                    // zeroes read as a successful-but-empty import either way (a corrupt or
+                    // previously-unreadable backup looked identical to "nothing to restore").
+                    val msg = result?.errorMessage?.let { getString(R.string.plug_import_failed_reason, it) }
+                        ?: result?.let { getString(R.string.plug_imported_summary, it.providersImported, it.epgSourcesImported, it.customGroupsImported) }
+                        ?: getString(R.string.plug_import_failed)
                     Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                    // A restore the app never applies looks like a restore that never happened.
+                    if (result?.errorMessage == null) applyImportedConfiguration()
                     pendingBackupManager = null
                 }
             }

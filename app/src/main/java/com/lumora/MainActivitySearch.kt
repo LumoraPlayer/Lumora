@@ -21,6 +21,14 @@ import kotlinx.coroutines.*
 // ── Search dialog, ranking & recents ──
 //
 // Extracted from MainActivity.kt; see that file's header.
+
+/** Whether this device is a phone or tablet: a touchscreen means the device carries a soft
+ *  keyboard of its own, so the search overlays leave the field to the platform IME instead
+ *  of the app's on-screen keyboard. TVs and sticks have no touchscreen and keep the app's
+ *  keyboard - there the platform IME opens full-screen over the app and hides the results. */
+internal fun MainActivity.isTouchDevice(): Boolean =
+    packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN)
+
 internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     // Re-entry guard: a second press while the overlay is up would stack a second
     // MainActivity.FullScreenOverlay in the same container (double focus trees, overwritten
@@ -34,7 +42,12 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     activeSettingsOverlay?.dismiss()
     val searchView = layoutInflater.inflate(R.layout.dialog_search, null)
     val input = searchView.findViewById<EditText>(R.id.searchInput)
-    searchView.findViewById<View>(R.id.searchCursor)?.let { attachBlinkingCursor(input, it) }
+    val touchDevice = isTouchDevice()
+    // The app-drawn caret stands in for the field's own (which never shows while the field
+    // is deliberately non-focusable on TV). A touch device keeps the field focusable and
+    // the IME's own cursor, so the stand-in stays hidden there.
+    if (touchDevice) searchView.findViewById<View>(R.id.searchCursor)?.visibility = View.GONE
+    else searchView.findViewById<View>(R.id.searchCursor)?.let { attachBlinkingCursor(input, it) }
     val statusText = searchView.findViewById<TextView>(R.id.searchStatus)
     val resultsList = searchView.findViewById<RecyclerView>(R.id.searchResults)
     val recentsBlock = searchView.findViewById<View>(R.id.searchRecentsBlock)
@@ -44,16 +57,26 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     val keyboard = searchView.findViewById<com.lumora.ui.OnScreenKeyboard>(R.id.searchKeyboard)
     applyPanelWidth(searchView.findViewById(R.id.searchPanel), R.dimen.search_panel_width)
 
-    // The platform IME on a Fire TV opens full-screen over the app and takes focus with
-    // it, so the query and its results can never be on screen together. Suppress it and
-    // drive the field from the on-screen keyboard instead.
-    input.showSoftInputOnFocus = false
+    // TV: the platform IME opens full-screen over the app and takes focus with it, so the
+    // query and its results can never be on screen together - it is suppressed and the
+    // app's on-screen keyboard drives the field instead. Phone/tablet: the device has a
+    // soft keyboard of its own, so the app keyboard gets out of the way and the field
+    // becomes an ordinary focusable input fed by the IME.
+    input.showSoftInputOnFocus = touchDevice
+    if (touchDevice) {
+        keyboard.visibility = View.GONE
+        input.isFocusable = true
+        input.isFocusableInTouchMode = true
+        input.isCursorVisible = true
+    }
     fun replaceQuery(text: String) = input.setText(text)
     keyboard.onKey = { ch -> replaceQuery(input.text.toString() + ch) }
     keyboard.onBackspace = { replaceQuery(input.text.toString().dropLast(1)) }
     keyboard.onClear = { replaceQuery("") }
-    // A paired bluetooth/USB keyboard can't type into the field any more (it isn't
+    // A paired bluetooth/USB keyboard can't type into the field on TV (it isn't
     // focusable), so the Activity forwards printable keys and backspace here instead.
+    // Kept on touch too: the interception runs before the focused view, so the two
+    // paths can't both apply.
     searchKeyHandler = { ch -> if (ch == null) keyboard.onBackspace?.invoke() else replaceQuery(input.text.toString() + ch) }
 
     // Fixed span: the grid shares the panel with the keyboard now, so overall screen
@@ -88,16 +111,20 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     // P0-1: UP from the top row used to target the non-focusable query field (a dead
     // key - requestFocus failed silently while the press was consumed). Target the
     // keyboard itself instead: it's focusable, and the next D-pad press enters the
-    // keys via normal focus search.
-    resultsAdapter.topRowFocusUpTargetId = R.id.searchKeyboard
-    // P0-1: LEFT from the first column must also return to the keyboard - default
-    // focus search can't cross out of the RecyclerView into the keyboard.
-    resultsAdapter.leftFocusTarget = keyboard
+    // keys via normal focus search. Only meaningful while the app keyboard is shown.
+    if (!touchDevice) {
+        resultsAdapter.topRowFocusUpTargetId = R.id.searchKeyboard
+        // P0-1: LEFT from the first column must also return to the keyboard - default
+        // focus search can't cross out of the RecyclerView into the keyboard.
+        resultsAdapter.leftFocusTarget = keyboard
+    }
     resultsAdapter.posterHeightDimen = R.dimen.search_poster_image_height
     resultsList.adapter = resultsAdapter
-    // P2-7: DOWN from the keyboard's bottom row (and the K/L columns with nothing
-    // below them) lands on the first result row.
-    keyboard.bottomRowDownTarget = resultsList
+    if (!touchDevice) {
+        // P2-7: DOWN from the keyboard's bottom row (and the K/L columns with nothing
+        // below them) lands on the first result row.
+        keyboard.bottomRowDownTarget = resultsList
+    }
 
     var searchRunnable: Runnable? = null
     // One scheduling path for both typing and filter-chip presses: debounce, and stamp
@@ -203,7 +230,7 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
         closeButton = searchView.findViewById(R.id.searchCloseButton),
         // P2-3: land on the G key (center of the letter block), not the top-left "1" -
         // a letter is the overwhelmingly likely first key, and G is closest to all of them.
-        initialFocus = { keyboard.firstKey() ?: input }
+        initialFocus = { if (touchDevice) input else keyboard.firstKey() ?: input }
     )
     // P2-8: keep the tab bar out of reach while search is up - a stray press would
     // dismiss search via selectTab and silently lose the query.
@@ -285,6 +312,14 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     applyStatus()
     if (initialQuery != null) input.setText(initialQuery)
     overlay.show()
+    if (touchDevice) {
+        // On touch the device's own keyboard is the point of this split, so raising it is
+        // part of opening the overlay - no extra tap on the field first.
+        input.post {
+            (getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+                ?.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
 }
 
 /** Ranks a title's relevance to [query] (lower is better) - exact match first, then

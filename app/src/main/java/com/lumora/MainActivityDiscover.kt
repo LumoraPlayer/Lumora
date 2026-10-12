@@ -14,7 +14,6 @@ import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
 import com.lumora.model.MediaType
 import com.lumora.plugin.js.PluginScript
-import com.lumora.parser.XtreamClient
 import com.lumora.ui.attachBlinkingCursor
 import com.lumora.util.cleanVodTitle
 import com.lumora.util.versionGroupContaining
@@ -33,6 +32,12 @@ internal fun MainActivity.setupDiscover() {
     // with the IME suppressed is a dead end for the remote) - the whole pill opens the
     // on-screen-keyboard overlay instead, exactly like Home's search bar.
     binding.discoverSearchField.setOnClickListener { showDiscoverSearchOverlay() }
+    // The pill's display field is a text widget, so it is clickable and a finger landing
+    // on the hint text ("the middle of the box") gets the tap instead of the pill - with
+    // no handler there, those taps died silently and only the icon/padding opened search
+    // ("hard to tap, keep retrying"). Give the field the same handler so the whole pill
+    // opens the overlay however it is touched.
+    binding.discoverSearchInput.setOnClickListener { showDiscoverSearchOverlay() }
     applyPanelWidth(binding.discoverSearchField, R.dimen.home_search_bar_width)
     binding.discoverFilterAll.setOnClickListener { selectDiscoverFilter(null) }
     binding.discoverFilterMovies.setOnClickListener { selectDiscoverFilter(MediaType.MOVIE) }
@@ -52,8 +57,19 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
     val status = view.findViewById<TextView>(R.id.discoverSearchStatus)
     val resultsList = view.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.discoverSearchResults)
     applyPanelWidth(view.findViewById(R.id.discoverSearchPanel), R.dimen.search_panel_width)
-    input.showSoftInputOnFocus = false
-    attachBlinkingCursor(input, view.findViewById(R.id.discoverSearchCursor))
+    // Same split as the main search overlay: TV drives the field from the app's keyboard
+    // (the platform IME covers the whole app there); a phone/tablet uses its own IME.
+    val touchDevice = isTouchDevice()
+    input.showSoftInputOnFocus = touchDevice
+    if (touchDevice) {
+        keyboard.visibility = View.GONE
+        input.isFocusable = true
+        input.isFocusableInTouchMode = true
+        input.isCursorVisible = true
+        view.findViewById<View>(R.id.discoverSearchCursor)?.visibility = View.GONE
+    } else {
+        attachBlinkingCursor(input, view.findViewById(R.id.discoverSearchCursor))
+    }
 
     // Fixed span, same as the main overlay: the grid shares the panel with the keyboard, so
     // overall screen width no longer describes the space it actually has.
@@ -81,8 +97,11 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
     resultsAdapter.spanCount = span
     // UP off the top row and LEFT off the first column both have to cross out of the
     // RecyclerView to the keyboard, which default focus search cannot do (see the adapter).
-    resultsAdapter.topRowFocusUpTargetId = R.id.discoverSearchKeyboard
-    resultsAdapter.leftFocusTarget = keyboard
+    // Only meaningful while the app keyboard is shown.
+    if (!touchDevice) {
+        resultsAdapter.topRowFocusUpTargetId = R.id.discoverSearchKeyboard
+        resultsAdapter.leftFocusTarget = keyboard
+    }
     resultsAdapter.posterHeightDimen = R.dimen.search_poster_image_height
     resultsList.adapter = resultsAdapter
 
@@ -159,8 +178,8 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
     keyboard.onClear = { input.setText("") }
     // DOWN off the bottom key row (SHIFT/SPACE/DEL/CLEAR) lands on the first result row,
     // exactly like the main search overlay - default focus search can't cross out of the
-    // keyboard's own tree.
-    keyboard.bottomRowDownTarget = resultsList
+    // keyboard's own tree. Only meaningful while the app keyboard is shown.
+    if (!touchDevice) keyboard.bottomRowDownTarget = resultsList
     // Hardware (BT/USB) keyboard routes here while the overlay is up.
     searchKeyHandler = { ch ->
         if (ch == null) keyboard.onBackspace?.invoke()
@@ -170,7 +189,7 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
         binding.searchContainer,
         view,
         closeButton = view.findViewById(R.id.discoverSearchClose),
-        initialFocus = { keyboard.firstKey() ?: input }
+        initialFocus = { if (touchDevice) input else keyboard.firstKey() ?: input }
     )
     val tabBarWasVisible = binding.tabBar.visibility == View.VISIBLE
     if (tabBarWasVisible) binding.tabBar.visibility = View.GONE
@@ -200,6 +219,14 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
     }
     activeSearchOverlay = overlay
     overlay.show()
+    if (touchDevice) {
+        // On touch the device's own keyboard is the point of this split, so raising it is
+        // part of opening the overlay - no extra tap on the field first.
+        input.post {
+            (getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+                ?.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
 }
 
 /** Discover is its own pane (like Downloads): browse/search TMDB, no category sidebar. */
@@ -722,31 +749,33 @@ internal fun MainActivity.resolveHomeTileSeries(channel: Channel): Channel? {
  *  played with no queue - so when it ends nothing auto-advances. Back-fill the series'
  *  full episode chain (all seasons, season-major then episode-major, the order the detail
  *  page plays) and index it from the played episode. Any failure leaves the queue empty,
- *  which is exactly what happened before this existed. */
+ *  which is exactly what happened before this existed.
+ *
+ *  The snapshot's own parent id (categoryId) is turned into a series stand-in and fed to
+ *  [loadSeriesContent], which speaks every backend (Xtream, M3U, Stalker, Jellyfin, Plex).
+ *  The old implementation only queried Xtream, so an episode played straight from a Home
+ *  tile on any other provider got no queue and never auto-advanced - the gap that made
+ *  "autoplay next episode" look like an Xtream-only feature. */
 internal fun MainActivity.populateHomeTileEpisodeQueue(channel: Channel) {
-    val playedId = channel.id
-    if (playedId.isBlank()) return
-    // A media server's chain comes from the server itself (getEpisodes/getSeasons), not
-    // Xtream getSeriesFull - and those tiles resolve to the series detail page anyway, so
-    // this fallback never needs to build a Jellyfin or Plex queue.
-    if (channel.isOwnLibrary) return
+    val playedKey = channel.id.ifBlank { channel.url }
+    if (playedKey.isBlank()) return
     scope.launch {
         val ordered = withContext(Dispatchers.IO) {
-            val seriesId = channel.categoryId ?: return@withContext emptyList<Channel>()
-            // Only Xtream items have a resolvable provider; anything else (an M3U series,
-            // or a provider since removed) has no credentials to query, so leave the queue
-            // empty rather than run getSeriesFull against the wrong account.
-            val xtream = xtreamProviderFor(channel) ?: return@withContext emptyList<Channel>()
-            val client = XtreamClient(BaseApplication.instance.okHttpClient)
-            // Seasons arrive season-major already; sort each season's episodes by
-            // episode number, then flatten into the cross-season chain.
-            client.getSeriesFull(xtream, seriesId).seasons
-                .flatMap { (_, eps) -> eps.sortedBy { it.episodeNum ?: Int.MAX_VALUE } }
+            // A live catalog entry could in principle resolve here, but the call site only
+            // lands in this fallback when it doesn't - so the snapshot's stamped parent id
+            // is the one source of truth. Its absence means there is nothing to query.
+            val seriesId = channel.categoryId?.takeIf { it.isNotBlank() }
+                ?: return@withContext emptyList<Channel>()
+            val series = channel.copy(id = seriesId, mediaType = MediaType.SERIES, episodeNum = null)
+            runCatching { loadSeriesContent(series).second }.getOrNull()
+                ?.flatMap { (_, eps) -> eps.sortedBy { it.episodeNum ?: Int.MAX_VALUE } }
+                ?: emptyList()
         }
         // Don't clobber a queue belonging to whatever is playing now if the user moved on
         // while the fetch was in flight.
-        if (nowPlayingChannel?.id != playedId) return@launch
-        val index = ordered.indexOfFirst { it.id == playedId }
+        val currentKey = nowPlayingChannel?.let { it.id.ifBlank { it.url } }
+        if (currentKey != playedKey) return@launch
+        val index = ordered.indexOfFirst { it.id.ifBlank { it.url } == playedKey }
         if (index >= 0) {
             currentEpisodeQueue = ordered
             currentEpisodeQueueIndex = index

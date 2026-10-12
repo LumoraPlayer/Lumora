@@ -114,4 +114,5 @@
     <string name="plug_export_failed">Export failed</string>
     <string name="plug_imported_summary">Imported: %1$d providers, %2$d EPG sources, %3$d groups</string>
     <string name="plug_import_failed">Import failed</string>
+    <string name="plug_import_failed_reason">Import failed: %1$s</string>
 </resources>

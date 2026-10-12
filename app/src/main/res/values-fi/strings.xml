@@ -177,7 +177,7 @@
     <string name="results">TULOKSET</string>
     <string name="version">Versio</string>
     <string name="github">GitHub</string>
-    <string name="github_url">github.com/disclosurez/Lumora</string>
+    <string name="github_url">github.com/LumoraPlayer/Lumora</string>
     <string name="about_app_label">Sovellus</string>
     <string name="about_platform_label">Alusta</string>
     <string name="about_platform_value">Android · TV + puhelin</string>

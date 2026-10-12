@@ -423,6 +423,16 @@ internal fun MainActivity.playItem(channel: Channel) {
     if (idx >= 0) { currentIndex = idx; showPlayerFor(channel) }
 }
 
+/** Cross-season play order for auto-advance: seasons in the order they loaded, episodes
+ *  within each season sorted by number, unreleased placeholders dropped (nothing can play
+ *  them, so a queue must never walk into one). The same ordering the Play button, the Home
+ *  up-next tiles and everything else that walks a series uses; episodes played from a row
+ *  build their queue from it too, so a season ending auto-advances into the next season
+ *  instead of stopping there. */
+internal fun episodeChain(seasons: List<Pair<String, List<Channel>>>): List<Channel> =
+    seasons.flatMap { (_, eps) -> eps.sortedBy { it.episodeNum ?: Int.MAX_VALUE } }
+        .filterNot { isUnreleasedEpisode(it) }
+
 /** One series' details and season/episode lists, whichever backend it came from. Jellyfin
  *  and Stalker carry plot/date/rating on the catalog item itself (no per-series detail
  *  endpoint); Xtream's get_series_info returns both in one call.
@@ -838,14 +848,20 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 currentIndex = if (isSeries) -1 else filmList.indexOf(item)
                 // Auto-advance walks this queue on its own, with no user press to check - an
                 // episode that hasn't aired would end the run in a Find Stream dialog for
-                // something that doesn't exist, so it never enters the queue.
-                val queue = if (isSeries) itemAdapter.currentList.filterNot { isUnreleasedEpisode(it) } else emptyList()
+                // something that doesn't exist, so it never enters the queue. The chain is
+                // the whole series, not just the season on screen: pressing a row starts the
+                // same cross-season run the Play button does, so a show doesn't stop
+                // advancing at a season boundary. Matched to the tapped episode by playback
+                // key, because the row may be a TMDB-enriched copy carrying the same
+                // id/url but different display fields.
+                val queue = if (isSeries) episodeChain(detailSeasons) else emptyList()
+                val chosenKey = chosen.id.ifBlank { chosen.url }
                 showPlayerFor(chosen)
                 detailReturnItem = item
                 detailReturnGroup = seriesGroup
                 if (isSeries) {
                     currentEpisodeQueue = queue
-                    currentEpisodeQueueIndex = queue.indexOf(chosen)
+                    currentEpisodeQueueIndex = queue.indexOfFirst { it.id.ifBlank { it.url } == chosenKey }
                     currentSeriesVersionContext = item to (seriesGroup ?: listOf(item))
                     updateVersionsButtonVisibility()
                 }
@@ -1056,9 +1072,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         // Episodes nothing carries and that haven't aired are dropped from the chain outright:
         // they can't be the Play button's target, and auto-advance must not walk into one at
         // the end of a season that is still airing.
-        val ordered = seasons.flatMap { (_, eps) ->
-            eps.sortedBy { it.episodeNum ?: Int.MAX_VALUE }
-        }.filterNot { isUnreleasedEpisode(it) }
+        val ordered = episodeChain(seasons)
         // The "next episode to watch" is whatever was left part-watched most recently
         // (across every season, not just the one currently shown): the in-progress
         // episode with the newest saved position.

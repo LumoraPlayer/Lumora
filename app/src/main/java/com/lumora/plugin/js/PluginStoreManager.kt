@@ -67,6 +67,21 @@ class PluginStoreManager(
     private fun customStoreUrls(): Set<String> = prefs.getStringSet(PREF_STORE_URLS, emptySet()) ?: emptySet()
 
     /**
+     * The text of [storeUrl]'s catalog and the URL it came from. The default store walks
+     * [DEFAULT_STORE_MIRRORS] until one home answers; every other store has exactly one URL.
+     * Throws when nothing can be reached - [fetchCatalog] and [fetchStoreName] turn that
+     * into their own failure results.
+     */
+    private fun fetchStoreText(storeUrl: String): Pair<String, String> {
+        if (storeUrl != DEFAULT_STORE_URL) {
+            return storeUrl to (fetchText(storeUrl) ?: error("Couldn't reach that store"))
+        }
+        return DEFAULT_STORE_MIRRORS.firstNotNullOfOrNull { home ->
+            fetchText(home)?.let { home to it }
+        } ?: error("Couldn't reach that store")
+    }
+
+    /**
      * Fetches and parses a store's catalog. Never throws - failures come back as [Result.failure].
      *
      * Uses Gson rather than `org.json` deliberately: `org.json` classes resolve to the Android
@@ -77,15 +92,15 @@ class PluginStoreManager(
      */
     suspend fun fetchCatalog(storeUrl: String): Result<List<StoreScript>> = withContext(Dispatchers.IO) {
         runCatching {
-            val body = fetchText(storeUrl) ?: error("Couldn't reach that store")
+            val (sourceUrl, body) = fetchStoreText(storeUrl)
             val json = JsonParser.parseString(body).asJsonObject
             val scriptsArray = json.getAsJsonArray("scripts")
-            // Resolve relative `file` names against the store URL's own directory, via URI
-            // so a store hosted at the bare origin (no path at all) doesn't turn "a.js"
-            // into "https://a.js". Falls back to the old string split if the URL isn't a
-            // parseable URI.
-            val baseUrl = runCatching { java.net.URI(storeUrl).resolve(".").toString() }
-                .getOrElse { storeUrl.substringBeforeLast('/', "") + "/" }
+            // Resolve relative `file` names against the URL that actually served the catalog,
+            // via URI so a store hosted at the bare origin (no path at all) doesn't turn
+            // "a.js" into "https://a.js". Falls back to the old string split if the URL
+            // isn't a parseable URI.
+            val baseUrl = runCatching { java.net.URI(sourceUrl).resolve(".").toString() }
+                .getOrElse { sourceUrl.substringBeforeLast('/', "") + "/" }
             val result = mutableListOf<StoreScript>()
             scriptsArray?.forEach { element ->
                 val item = element.takeIf { it.isJsonObject }?.asJsonObject ?: return@forEach
@@ -119,7 +134,7 @@ class PluginStoreManager(
     /** The store's self-declared name, if its catalog has been fetched successfully. */
     suspend fun fetchStoreName(storeUrl: String): String? = withContext(Dispatchers.IO) {
         runCatching {
-            val body = fetchText(storeUrl) ?: return@withContext null
+            val body = fetchStoreText(storeUrl).second
             JsonParser.parseString(body).asJsonObject.optString("name")?.takeIf { it.isNotBlank() }
         }.getOrNull()
     }
@@ -156,7 +171,20 @@ class PluginStoreManager(
 
     companion object {
         private const val PREF_STORE_URLS = "plugin_store_urls"
-        const val DEFAULT_STORE_URL = "https://raw.githubusercontent.com/disclosurez/Lumora-Plugins/master/scripts/index.json"
+
+        /**
+         * The default store, mirrored to Lumora's homes. The first URL is the canonical one;
+         * the list adds the mirror the fetcher falls back to when that one is unreachable,
+         * and the catalog is parsed against whichever home answered so its relative script
+         * files resolve there. (GitFlic carries the same mirror, but it serves source files
+         * to signed-in users only, so the app can't read it.)
+         */
+        const val DEFAULT_STORE_URL = "https://raw.githubusercontent.com/LumoraPlayer/Lumora-Plugins/master/scripts/index.json"
+        private val DEFAULT_STORE_MIRRORS = listOf(
+            DEFAULT_STORE_URL,
+            "https://gitlab.com/LumoraPlayer/Lumora-Plugins/-/raw/master/scripts/index.json",
+        )
+
         /** Same per-response cap the JS host applies to script-visible HTTP (JsHostImpl). */
         private const val MAX_RESPONSE_BYTES = 8 * 1024 * 1024
     }

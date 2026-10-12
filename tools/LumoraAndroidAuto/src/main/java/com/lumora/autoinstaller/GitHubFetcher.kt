@@ -16,7 +16,11 @@ import java.util.concurrent.TimeUnit
  */
 object GitHubFetcher {
 
-    private const val LATEST_URL = "https://api.github.com/repos/disclosurez/Lumora/releases/latest"
+    /**
+     * Releases are published to LumoraPlayer/Lumora - the installer follows only this
+     * canonical home.
+     */
+    private val REPOS = listOf("LumoraPlayer/Lumora")
     private const val ASSET_NAME = "Lumora.apk"
     private const val USER_AGENT = "LumoraAndroidAuto"
 
@@ -26,13 +30,37 @@ object GitHubFetcher {
         .build()
 
     /**
-     * Fetches the latest release's tag and the browser download URL of the
+     * Fetches the latest release: its tag and the browser download URL of the
      * [ASSET_NAME] asset. Throws [IOException] with a clear message if the
-     * repo has no release yet or the asset is missing.
+     * repository has no release with that asset.
      */
     suspend fun latestReleaseInfo(): Pair<String, String> = withContext(Dispatchers.IO) {
+        val failures = mutableListOf<String>()
+        var bestTag = ""
+        var bestUrl = ""
+        var found = false
+        for (repo in REPOS) {
+            try {
+                val (tag, url) = fetchLatestFor(repo)
+                if (!found || compareVersions(tag, bestTag) > 0) {
+                    bestTag = tag
+                    bestUrl = url
+                    found = true
+                }
+            } catch (e: IOException) {
+                failures += "$repo: ${e.message}"
+            }
+        }
+        if (!found) {
+            throw IOException("No Lumora release found (${failures.joinToString("; ")})")
+        }
+        Pair(bestTag, bestUrl)
+    }
+
+    /** One repository's latest release: tag plus the [ASSET_NAME] download URL. */
+    private fun fetchLatestFor(repo: String): Pair<String, String> {
         val request = Request.Builder()
-            .url(LATEST_URL)
+            .url("https://api.github.com/repos/$repo/releases/latest")
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", USER_AGENT)
             .build()
@@ -61,11 +89,23 @@ object GitHubFetcher {
                     if (url.isEmpty()) {
                         throw IOException("Asset $ASSET_NAME in release $tag has no download URL")
                     }
-                    return@withContext Pair(tag, url)
+                    return Pair(tag, url)
                 }
             }
             throw IOException("Release $tag does not contain an asset named $ASSET_NAME")
         }
+    }
+
+    /** Numeric, part-by-part comparison - a plain string ">" breaks past single
+     *  digits ("1.10" < "1.9" lexically, even though 1.10 is the newer release). */
+    private fun compareVersions(a: String, b: String): Int {
+        val aParts = a.removePrefix("v").split(".").mapNotNull { it.toIntOrNull() }
+        val bParts = b.removePrefix("v").split(".").mapNotNull { it.toIntOrNull() }
+        for (i in 0 until maxOf(aParts.size, bParts.size)) {
+            val cmp = aParts.getOrElse(i) { 0 }.compareTo(bParts.getOrElse(i) { 0 })
+            if (cmp != 0) return cmp
+        }
+        return 0
     }
 
     /**

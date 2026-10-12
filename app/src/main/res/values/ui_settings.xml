@@ -71,6 +71,7 @@
     <string name="sett_export_failed">Export failed</string>
     <string name="sett_no_backup_file">No backup file found at %1$s</string>
     <string name="sett_imported_summary">Imported: %1$d providers, %2$d EPG sources, %3$d groups</string>
+    <string name="sett_import_failed_reason">Import failed: %1$s</string>
     <string name="sett_recording_storage_path">Recording storage: %1$s</string>
 
     <!-- MainActivitySettings.kt - playback settings dialog -->

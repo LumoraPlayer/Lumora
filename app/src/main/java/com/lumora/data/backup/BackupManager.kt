@@ -22,10 +22,44 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.*
 
+/** Matches the JSON field holding the file's own checksum, value included. The value is
+ *  always hex (see [backupMd5]), so no string content can make this over-match. */
+private val BACKUP_CHECKSUM_FIELD_REGEX = Regex(""""checksum"\s*:\s*"[^"]*"""")
+
+/**
+ * The checksum of a backup file, computed over the exact text that was written with the
+ * checksum value blanked out.
+ *
+ * This is deliberately NOT a re-serialization of the parsed data. Adding a field to
+ * [BackupManager.BackupData] between two builds changes the re-serialized text even though
+ * the file is untouched, so the old parse-then-re-serialize check rejected valid backups
+ * written by any other version (and hard-rejected them since the mismatch was made fatal,
+ * which is what made old backups import as nothing). Hashing the raw text is schema
+ * independent: it verifies the file is intact, which is all an integrity check should do.
+ *
+ * The blanked form reproduces the text every build has always hashed at export time
+ * (`gson.toJson(data)` with `checksum = ""`, pretty-printed), so files from older builds
+ * verify too. [backupMd5] is shared with the writer so both ends can never drift.
+ */
+internal fun backupRawChecksum(rawJson: String): String =
+    backupMd5(BACKUP_CHECKSUM_FIELD_REGEX.replaceFirst(rawJson, "\"checksum\": \"\""))
+
+/** MD5 hex digest, lower-case, of [input]'s UTF-8 bytes. */
+internal fun backupMd5(input: String): String {
+    val digest = MessageDigest.getInstance("MD5")
+    return digest.digest(input.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+}
+
 /**
  * Manages export/import of app data for backup and restore.
  * Exports IPTV provider configs, Jellyfin/Plex sessions, favorites, EPG sources,
  * custom groups, watch history and recording schedules to JSON.
+ *
+ * The DTOs below are (de)serialised by Gson through reflection on their field names, so
+ * they are kept from R8 renaming/removal in proguard-rules.pro - without that keep rule
+ * every release build renamed the JSON keys, and a backup written by one build could not
+ * be read by any other (nor by a debug build).
  */
 class BackupManager(private val context: Context) {
 
@@ -64,7 +98,12 @@ class BackupManager(private val context: Context) {
         val watchHistory: List<WatchHistoryBackup>? = emptyList(),
         val recordingStorage: RecordingStorageBackup? = null,
         val recordingSchedules: List<RecordingScheduleBackup>? = emptyList(),
-        val checksum: String = ""
+        // Nullable because a backup written by a build whose fields R8 had renamed (before
+        // the keep rule) carries no field this build can map, so Gson leaves even this one
+        // unset - a non-null declaration would then NPE on the first read. Empty by default
+        // so the export path still serializes the field (see backupRawChecksum for why the
+        // blank form is what the checksum is hashed over).
+        val checksum: String? = ""
     )
 
     data class ProviderBackup(
@@ -157,7 +196,7 @@ class BackupManager(private val context: Context) {
             val data = collectBackupData(db)
 
             val json = gson.toJson(data)
-            val checksum = md5(json)
+            val checksum = backupMd5(json)
             val finalData = data.copy(checksum = checksum)
             val finalJson = gson.toJson(finalData)
 
@@ -194,10 +233,16 @@ class BackupManager(private val context: Context) {
 
             val data = gson.fromJson(json, BackupData::class.java)
 
-            // Verify checksum
-            if (data.checksum.isNotBlank()) {
-                val expectedChecksum = md5(gson.toJson(data.copy(checksum = "")))
-                if (data.checksum != expectedChecksum) {
+            // Verify checksum. Computed over the raw file text (checksum value blanked),
+            // not over a re-serialization of the parsed data - see backupRawChecksum for
+            // why the latter rejected valid backups written by other builds. The
+            // re-serialized comparison stays as a fallback for a file whose formatting
+            // was rewritten in transit (a human re-indenting the JSON, say).
+            val storedChecksum = data.checksum.orEmpty()
+            if (storedChecksum.isNotBlank()) {
+                val fromRawText = backupRawChecksum(json)
+                val fromReserialization = backupMd5(gson.toJson(data.copy(checksum = "")))
+                if (storedChecksum != fromRawText && storedChecksum != fromReserialization) {
                     Log.e(TAG, "Backup checksum mismatch - rejecting import")
                     return@withContext ImportResult(
                         errorMessage = "Checksum mismatch - backup is corrupt or was modified"
@@ -468,10 +513,4 @@ class BackupManager(private val context: Context) {
         liveEnabled = liveEnabled, moviesEnabled = moviesEnabled,
         seriesEnabled = seriesEnabled
     )
-
-    private fun md5(input: String): String {
-        val digest = MessageDigest.getInstance("MD5")
-        return digest.digest(input.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
-    }
 }

@@ -438,6 +438,16 @@ internal fun MainActivity.isCatalogStale(): Boolean {
     return last <= 0L || System.currentTimeMillis() - last >= CATALOG_TTL_MS
 }
 
+/** Brings the running app in line with data a backup restore just wrote. Both the settings
+ *  provider list (when its overlay is open) and the in-memory catalog were loaded before the
+ *  import and still show the pre-import state, so without this a perfectly successful restore
+ *  looks like it did nothing - which is exactly how "the export makes a file but the import
+ *  loads nothing" reads from the couch. */
+internal fun MainActivity.applyImportedConfiguration() {
+    refreshIptvProviderList.invoke()
+    loadAllConfiguredProviders(forceRefresh = true)
+}
+
 /** The one place that loads whatever's configured+enabled across every IPTV provider
  *  (any number of them now, not just one) plus Jellyfin, and merges the result - every
  *  settings Save/Quick Connect/reload call site routes through here instead of assuming

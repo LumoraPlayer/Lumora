@@ -135,7 +135,7 @@ Anything else on Android 7.1 (SDK 25) or newer should work; those are just the d
 
 ## Installation
 
-Grab the latest signed APK from the [Releases](https://github.com/disclosurez/lumora/releases) page and sideload it. Lumora checks GitHub Releases on launch and will prompt you when a new version is available.
+Grab the latest signed APK from the [Releases](https://github.com/LumoraPlayer/Lumora/releases) page and sideload it. Lumora checks GitHub Releases on launch and will prompt you when a new version is available.
 
 To use it in the car, also switch on **Unknown sources** in Android Auto's developer settings (Android Auto → Settings → tap *Version* ten times → ⋮ → Developer settings → Unknown sources). Lumora is sideloaded, so the car launcher hides it until that's on.
 
@@ -144,7 +144,7 @@ On first launch, you'll be asked to add a provider — this is your own Xtream C
 ## Building from Source
 
 ```bash
-git clone https://github.com/disclosurez/lumora.git
+git clone https://github.com/LumoraPlayer/Lumora.git
 cd lumora
 ./gradlew :app:assembleDebug
 ```

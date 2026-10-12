@@ -61,6 +61,13 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
+# Backup DTOs are (de)serialised by name through Gson too, and unlike the scraper models
+# their JSON is written to a file the user carries between installs and versions. Without
+# this keep rule R8 renamed every field in release builds, so the exported JSON's keys were
+# build-specific: a backup written by one version imported as nothing (or was rejected
+# outright) on any other - including a debug build of the same version.
+-keep class com.lumora.data.backup.** { *; }
+
 # Provider.providers and Extractor.extractors are keyed by each implementation's own `name`
 # string, and several providers are matched back from a persisted name (UserPreferences.
 # currentProvider). Obfuscating the classes is fine; stripping one as unreachable is not,

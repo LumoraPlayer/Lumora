@@ -1309,11 +1309,15 @@ internal fun MainActivity.showProviderSettings() {
                     if (result.conflicts > 0 && result.providersImported == 0 && result.epgSourcesImported == 0) {
                         result = withContext(Dispatchers.IO) { backupManager.importFrom(Uri.fromFile(file), confirmed = true) }
                     }
+                    // A failed import is not a silent zero - say what went wrong, or the
+                    // toast is indistinguishable from a backup that genuinely held nothing.
                     Toast.makeText(
                         this@showProviderSettings,
-                        getString(R.string.sett_imported_summary, result.providersImported, result.epgSourcesImported, result.customGroupsImported),
+                        result.errorMessage?.let { getString(R.string.sett_import_failed_reason, it) }
+                            ?: getString(R.string.sett_imported_summary, result.providersImported, result.epgSourcesImported, result.customGroupsImported),
                         Toast.LENGTH_LONG
                     ).show()
+                    if (result.errorMessage == null) applyImportedConfiguration()
                 }
             }
         }
@@ -1650,7 +1654,7 @@ internal fun MainActivity.showProviderSettings() {
     } catch (e: Exception) { getString(R.string.sett_unknown) }
     dialogView.findViewById<View>(R.id.settingsGithubLink).setOnClickListener {
         try {
-            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse("https://github.com/disclosurez/Lumora")))
+            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse("https://github.com/LumoraPlayer/Lumora")))
         } catch (e: android.content.ActivityNotFoundException) {
             Toast.makeText(this, getString(R.string.sett_no_browser_available), Toast.LENGTH_SHORT).show()
         }
