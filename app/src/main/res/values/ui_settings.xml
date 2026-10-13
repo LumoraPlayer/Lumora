@@ -125,6 +125,8 @@
     <string name="sett_update_available_message">Lumora v%1$s is available.\nCurrent: v%2$s\n\n%3$s</string>
     <string name="sett_later">Later</string>
     <string name="sett_latest_version">You\'re on the latest version</string>
+    <string name="sett_update_checks">Automatically check for updates</string>
+    <string name="sett_update_checks_caption">Show a notice when a newer release is available - a build that must update is still told so</string>
 
     <!-- MainActivityTrakt.kt - Trakt pane (OAuth device flow, scrobbling, watched sync) -->
     <!-- Brand name - the one string here that is the same in every locale. -->

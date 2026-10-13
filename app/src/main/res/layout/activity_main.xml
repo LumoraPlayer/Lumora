@@ -20,10 +20,12 @@
 
         <!-- Update required: one chrome line above the tab bar, not a modal dialog. Filled
              and revealed by showUpdateBanner() when checkAndPromptUpdate() finds a newer
-             release; the Update button hands straight off to the package installer. A modal
-             popup took the whole screen (and, on the car display, opened on top of the
-             driving warning) for something that only has to say "this build is out of
-             date" - as a line it stays readable while the app underneath remains usable. -->
+             release; the Update button hands straight off to the package installer, and
+             Dismiss hides the line until a newer release (or until checks are switched off
+             in Settings). A modal popup took the whole screen (and, on the car display,
+             opened on top of the driving warning) for something that only has to say "this
+             build is out of date" - as a line it stays readable while the app underneath
+             remains usable. -->
         <LinearLayout
             android:id="@+id/updateBanner"
             android:layout_width="match_parent"
@@ -69,6 +71,30 @@
                     android:text="@string/update"
                     android:textAllCaps="true"
                     android:textColor="@android:color/white"
+                    android:textSize="@dimen/text_body" />
+            </LinearLayout>
+
+            <!-- Secondary next to Update: hides the line and remembers the version. Kept the
+                 same height so the two sit level and the focus ring doesn't jump. -->
+            <LinearLayout
+                android:id="@+id/updateBannerDismiss"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginStart="12dp"
+                android:background="@drawable/bg_select_item"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="20dp"
+                android:stateListAnimator="@animator/focus_scale">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/inter_semibold"
+                    android:text="@string/plug_update_dismiss"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_primary"
                     android:textSize="@dimen/text_body" />
             </LinearLayout>
         </LinearLayout>

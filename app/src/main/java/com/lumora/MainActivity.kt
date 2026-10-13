@@ -110,6 +110,13 @@ internal const val PREF_WYZIE_KEY = "subtitle_wyzie_key"
  *  isn't a published release at all is blocked by the same screen regardless of distance;
  *  only a check that couldn't read the release list (offline) blocks nothing. */
 private const val FORCE_UPDATE_RELEASES_BEHIND = 50
+/** Automatic update checks: the launch-time banner offering a newer release. On by default;
+ *  turning it off never disables the mandatory-update block above - that check still runs,
+ *  so a build that must update is still told so. */
+internal const val PREF_UPDATE_CHECKS = "update_checks_enabled"
+/** The latest version whose banner the user dismissed, so it doesn't come back every launch;
+ *  a newer release re-arms the banner. */
+internal const val PREF_DISMISSED_UPDATE = "dismissed_update_version"
 /** Preferred subtitle language, as an ISO 639-1 code. Drives which track is picked when
  *  subtitles are on, and which forced track is allowed through when they're off. Read by
  *  PlayerManager straight from the same prefs file. */
@@ -1497,7 +1504,9 @@ class MainActivity : AppCompatActivity() {
      *
      *  Shown as the out-of-date line above the tab bar (see [showUpdateBanner]) rather than
      *  as a modal dialog: the notice only says "this build is out of date", and a line keeps
-     *  the app usable underneath instead of claiming the whole screen for it.
+     *  the app usable underneath instead of claiming the whole screen for it. The notice is
+     *  dismissable (and can be switched off entirely in Settings); the mandatory-update
+     *  cases are decided first and are not affected by either.
      *
      *  Never on the car screen: the banner would sit on top of the driving warning, where a
      *  rotary head unit has one focused button and it is "Update" - and that route ends in the
@@ -1523,6 +1532,11 @@ class MainActivity : AppCompatActivity() {
                 info.isUnrecognisedBuild -> showForceUpdateBlock(info, unrecognised = true)
                 !info.isUpdateAvailable -> return@launch
                 behind != null && behind >= FORCE_UPDATE_RELEASES_BEHIND -> showForceUpdateBlock(info)
+                // The optional notice only: switched off in Settings, or dismissed for this
+                // version. Deliberately after the two blocks - those are what must not be
+                // silenceable, and the check keeps running for them either way.
+                !prefs.getBoolean(PREF_UPDATE_CHECKS, true) -> return@launch
+                prefs.getString(PREF_DISMISSED_UPDATE, null) == info.latestVersion -> return@launch
                 else -> showUpdateBanner(info)
             }
         }
@@ -1561,15 +1575,21 @@ class MainActivity : AppCompatActivity() {
         binding.updateBlockButton.requestFocus()
     }
 
-    /** Fills in and reveals the chrome's out-of-date banner. The Update button hides the
-     *  banner and starts the download/install right away; there is deliberately no dismiss:
-     *  the release is required, so the line stays until the update is taken. */
+    /** Fills in and reveals the chrome's out-of-date banner. Update hides the line and starts
+     *  the download/install right away; Dismiss hides it and remembers the version, so the
+     *  line stays gone until a newer release - automatic checks can be switched off entirely
+     *  in Settings. Neither button reaches the mandatory-update block (see
+     *  [showForceUpdateBlock]), which owns the screen when the build must update. */
     private fun showUpdateBanner(info: AppUpdateChecker.UpdateInfo) {
         binding.updateBannerText.text =
             getString(R.string.plug_update_required_message, info.latestVersion, info.currentVersion)
         binding.updateBannerButton.setOnClickListener {
             binding.updateBanner.visibility = View.GONE
             downloadAndInstallUpdate(info.downloadUrl, info.latestVersion)
+        }
+        binding.updateBannerDismiss.setOnClickListener {
+            prefs.edit().putString(PREF_DISMISSED_UPDATE, info.latestVersion).apply()
+            binding.updateBanner.visibility = View.GONE
         }
         binding.updateBanner.visibility = View.VISIBLE
     }

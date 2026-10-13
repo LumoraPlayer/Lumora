@@ -28,6 +28,7 @@ import com.lumora.PREF_SUBTITLE_LANGUAGE
 import com.lumora.PREF_SUBTITLE_SIZE
 import com.lumora.PREF_SUGGEST_EXTERNAL_PLAYER
 import com.lumora.PREF_UI_LANGUAGE
+import com.lumora.PREF_UPDATE_CHECKS
 import com.lumora.cache.FavoritesStore
 import com.lumora.data.IptvProviderStore
 import com.lumora.data.MediaServerStore
@@ -147,7 +148,9 @@ internal val BACKED_UP_SETTINGS: Map<String, SettingType> = mapOf(
     CrashReporter.PREF_CRASH_REPORTS to SettingType.BOOLEAN,
     SessionLog.PREF_SESSION_LOG to SettingType.BOOLEAN,
     // Streaming sites
-    PlayerManager.PREF_EXTRA_BUFFERING to SettingType.BOOLEAN
+    PlayerManager.PREF_EXTRA_BUFFERING to SettingType.BOOLEAN,
+    // Updates
+    PREF_UPDATE_CHECKS to SettingType.BOOLEAN
 )
 
 /** Encodes a raw pref value into the string form the backup carries. */

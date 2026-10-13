@@ -55,6 +55,7 @@ class BackupSettingsTest {
         assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["ui_language"])
         assertEquals(SettingType.INT, BACKED_UP_SETTINGS["subtitle_text_size"])
         assertEquals(SettingType.INT, BACKED_UP_SETTINGS["av_offset_ms"])
+        assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["update_checks_enabled"])
         // The parental PIN is carried on purpose - see the allowlist's kdoc.
         assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["parental_pin"])
 

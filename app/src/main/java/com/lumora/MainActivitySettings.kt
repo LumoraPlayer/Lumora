@@ -389,7 +389,7 @@ internal fun MainActivity.twoLineSettingsText(title: String, subtitle: String): 
     return text
 }
 
-internal fun MainActivity.dubCheckBoxRow(title: String, subtitle: String, key: String, onToggle: ((Boolean) -> Unit)? = null): CheckBox {
+internal fun MainActivity.dubCheckBoxRow(title: String, subtitle: String, key: String, default: Boolean = false, onToggle: ((Boolean) -> Unit)? = null): CheckBox {
     val checkBox = CheckBox(this)
     checkBox.text = twoLineSettingsText(title, subtitle)
     checkBox.setTextColor(getColor(R.color.text_primary))
@@ -400,7 +400,7 @@ internal fun MainActivity.dubCheckBoxRow(title: String, subtitle: String, key: S
     checkBox.stateListAnimator = AnimatorInflater.loadStateListAnimator(this, R.animator.focus_scale_flat)
     checkBox.isClickable = true
     checkBox.isFocusable = true
-    checkBox.isChecked = prefs.getBoolean(key, false)
+    checkBox.isChecked = prefs.getBoolean(key, default)
     checkBox.setOnCheckedChangeListener { _, checked ->
         prefs.edit().putBoolean(key, checked).apply()
         onToggle?.invoke(checked)
@@ -1687,6 +1687,18 @@ internal fun MainActivity.showProviderSettings() {
             }
         }
     }
+
+    // The optional half of update prompts: the banner's own Dismiss silences one version,
+    // this silences the automatic check entirely. Default on; neither touches the
+    // mandatory-update block, which checkAndPromptUpdate() decides before reading this pref.
+    dialogView.findViewById<LinearLayout>(R.id.paneAbout).addView(
+        dubCheckBoxRow(
+            getString(R.string.sett_update_checks),
+            getString(R.string.sett_update_checks_caption),
+            PREF_UPDATE_CHECKS,
+            default = true
+        )
+    )
 
     // Init UI
     // No selectType() call here - the form starts closed with no type chosen; see
