@@ -7,7 +7,7 @@
 >
 > ### **Discord: [discord.gg/cNKYGhQWvq](https://discord.gg/cNKYGhQWvq)**
 
-**Lumora** is a fast, lightweight IPTV and personal-media client for Android, Android TV, Fire TV, and — unusually — **Android Auto, where the full app runs on the car screen while parked**. It speaks **Xtream Codes, M3U/M3U8 playlists, Stalker Portal, Jellyfin, Silo, and Plex** — any number of them running at the same time — and merges Live TV, Movies, and Series from all of them into one clean, D-pad-friendly interface.
+**Lumora** is a fast, lightweight IPTV and personal-media client for Android, Android TV, Fire TV, and — unusually — **Android Auto, where the full app runs on the car screen while parked**. It speaks **Xtream Codes, M3U/M3U8 playlists, Stalker Portal, Jellyfin, Silo, and Plex** — any number of them running at the same time — and merges Live TV, Movies, and Series from all of them into one clean, D-pad-friendly interface. Plugins and **Stremio addons** extend it to sources it doesn't speak natively.
 
 Nothing is behind a paywall — the multi-playlist support, EPG guide, recording, and catch-up that comparable players charge for are simply included.
 
@@ -102,6 +102,7 @@ Lumora is not affiliated with, endorsed by, or certified by Google. Android, And
 ### Extending it
 
 - **Plugins** — a small JS plugin engine plus a plugin store, for provider types and stream sources Lumora doesn't speak natively
+- **Stremio addons** — install one by its manifest URL (or a `stremio://` link) beside the JS plugins, and its streams join Find & Play for movies and series, torrents included; enable, update or remove them in *Settings → Plugins*
 - **Find & Play** — for a title none of your configured libraries carry, one search across the sources you have enabled, played best-first without a picker. Site sources are preferred over torrents (they start in about a second); within torrents, quality ranks above seeders
 - **Site sources are on by default and can be turned off entirely** in *Settings → Streaming sites*, individually or all at once. They are third-party websites Lumora neither operates nor endorses — see [Disclaimer](#disclaimer)
 
@@ -187,7 +188,7 @@ app/src/main/java/com/lumora/
 ├── parser/        M3U / Xtream Codes parsing
 ├── player/        Playback stack (ExoPlayer wrapper, Cast, subtitles, media session)
 │   └── playback/  Sleep timer, speed control, timeshift, catch-up, diagnostics
-├── plugin/        JS plugin engine and plugin store
+├── plugin/        JS plugin engine, Stremio addons and plugin store
 ├── recording/     DVR scheduling and capture
 ├── reminder/      Program reminder scheduling
 ├── scraper/       Site-source stack behind Find & Play
@@ -201,7 +202,7 @@ Issues and pull requests are welcome. Please open an issue describing the change
 
 ## Disclaimer
 
-**Lumora provides no content, service, or subscription of its own.** It is a generic IPTV/media client, comparable to a web browser or a media player — it does not host, stream, index, sell, endorse, or have any affiliation with any channel, film, series, or IPTV service. Everything played through Lumora comes from a source *you* configure or enable: an Xtream Codes account, an M3U playlist, a Stalker Portal, your Jellyfin, Silo or Plex server, a plugin you install, or a third-party site source. The authors have no visibility into, and no control over, what any of those serve.
+**Lumora provides no content, service, or subscription of its own.** It is a generic IPTV/media client, comparable to a web browser or a media player — it does not host, stream, index, sell, endorse, or have any affiliation with any channel, film, series, or IPTV service. Everything played through Lumora comes from a source *you* configure or enable: an Xtream Codes account, an M3U playlist, a Stalker Portal, your Jellyfin, Silo or Plex server, a plugin or Stremio addon you install, or a third-party site source. The authors have no visibility into, and no control over, what any of those serve.
 
 **Third-party sources.** Find & Play searches third-party websites and public torrent indexes that Lumora does not operate, host, control, or endorse, and whose results it cannot vet. These sources are enabled by default and can be disabled entirely, or one by one, in *Settings → Streaming sites*. Availability, accuracy and legality of anything they return is a matter between you, that source, and the rights holder.
 
