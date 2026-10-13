@@ -73,9 +73,11 @@ jobs:
 
       # Release notes come from the tag's own section of CHANGELOG.md, so a release says
       # what actually changed rather than just "download the APK". The awk block takes
-      # everything between this version's "## x.y" heading and the next one; if the tag has
-      # no section (or the file is missing), it falls back to a generic body rather than
-      # publishing an empty release.
+      # everything between this version's "## x.y" heading and the next one; CR is
+      # stripped first so a CRLF-edited file still matches, and if the tag has no section
+      # (or the file is missing), it falls back to a generic body rather than publishing
+      # an empty release. The heading must exist at the tag's commit - a tag cut before
+      # its changelog entry is how v5.1 shipped a generic body.
       - name: Extract release notes
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -84,6 +86,7 @@ jobs:
             echo "## Lumora ${GITHUB_REF_NAME}"
             echo
             awk -v ver="$VERSION" '
+              { sub(/\r$/, "") }
               $0 == "## " ver { found = 1; next }
               found && /^## / { exit }
               found { print }
@@ -182,32 +185,36 @@ jobs:
         run: |
           set -euo pipefail
           BASE="https://api.gitflic.ru/project/lumora/lumora"
+          APK="app/build/outputs/apk/release/Lumora.apk"
 
-          # Reuse the release when the other repository's build already created it, and skip
-          # the upload when its APK is already attached, so two builds converge on one
-          # release with one file.
+          # The release is rebuilt from scratch on every run. GitFlic has no call to update
+          # a release's description or to delete a single attachment (PATCH and the
+          # per-file DELETE both answer 405), so an older attempt - or the other
+          # repository's copy of this workflow - that left a stale description or APK can
+          # only be replaced by deleting the release and recreating it. Deleting a release
+          # does not delete its tag (checked).
           RELEASES=$(curl -s --header "Authorization: token $GITFLIC_TOKEN" "$BASE/release?size=100")
-          RELEASE_ID=$(echo "$RELEASES" | jq -r --arg tag "$GITHUB_REF_NAME" '._embedded.releaseTagModelList[] | select(.tagName == $tag) | .id' | head -1)
-          FILE_COUNT=$(echo "$RELEASES" | jq -r --arg tag "$GITHUB_REF_NAME" '[._embedded.releaseTagModelList[] | select(.tagName == $tag) | (.attachmentFiles // [])[] | select(.name == "Lumora.apk")] | length')
-
-          if [ -z "$RELEASE_ID" ]; then
-            RELEASE_ID=$(jq -n --arg title "Lumora $GITHUB_REF_NAME" --arg tag "$GITHUB_REF_NAME" \
-              --rawfile description release-notes.md \
-              '{title: $title, description: $description, tagName: $tag, preRelease: false, attachProjectArchive: false}' \
-              | curl -sf --request POST --header "Authorization: token $GITFLIC_TOKEN" \
-                  --header "Content-Type: application/json" --data @- "$BASE/release" | jq -r '.id')
+          STALE_ID=$(echo "$RELEASES" | jq -r --arg tag "$GITHUB_REF_NAME" '._embedded.releaseTagModelList[] | select(.tagName == $tag) | .id' | head -1)
+          if [ -n "$STALE_ID" ]; then
+            curl -sf --request DELETE --header "Authorization: token $GITFLIC_TOKEN" "$BASE/release/$STALE_ID" > /dev/null
           fi
 
-          if [ "$FILE_COUNT" = "0" ]; then
-            curl -sf --request POST --header "Authorization: token $GITFLIC_TOKEN" \
-              --form "files=@app/build/outputs/apk/release/Lumora.apk" \
-              "$BASE/release/$RELEASE_ID/file" > /dev/null
-          fi
+          RELEASE_ID=$(jq -n --arg title "Lumora $GITHUB_REF_NAME" --arg tag "$GITHUB_REF_NAME" \
+            --rawfile description release-notes.md \
+            '{title: $title, description: $description, tagName: $tag, preRelease: false, attachProjectArchive: false}' \
+            | curl -sf --request POST --header "Authorization: token $GITFLIC_TOKEN" \
+                --header "Content-Type: application/json" --data @- "$BASE/release" | jq -r '.id')
 
-          # Verify the attachment matches the built APK.
-          STORED_SIZE=$(curl -s --header "Authorization: token $GITFLIC_TOKEN" "$BASE/release/$RELEASE_ID" | jq -r '.attachmentFiles[] | select(.name == "Lumora.apk") | .size' | head -1)
-          EXPECTED_SIZE=$(stat -c%s app/build/outputs/apk/release/Lumora.apk)
-          if [ "$STORED_SIZE" != "$EXPECTED_SIZE" ]; then
-            echo "GitFlic attachment size mismatch: $STORED_SIZE != $EXPECTED_SIZE"
+          curl -sf --request POST --header "Authorization: token $GITFLIC_TOKEN" \
+            --form "files=@$APK" \
+            "$BASE/release/$RELEASE_ID/file" > /dev/null
+
+          # Verify the attachment is byte-for-byte the built APK: a truncated upload (32 KiB
+          # short, once) is invisible to a name-only check and must never ship. GitFlic
+          # reports sha256 of what it actually stored.
+          STORED_SHA=$(curl -s --header "Authorization: token $GITFLIC_TOKEN" "$BASE/release/$RELEASE_ID" | jq -r '.attachmentFiles[] | select(.name == "Lumora.apk") | .hashSha256' | head -1)
+          LOCAL_SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          if [ "$STORED_SHA" != "$LOCAL_SHA" ]; then
+            echo "GitFlic attachment hash mismatch: $STORED_SHA != $LOCAL_SHA"
             exit 1
           fi
