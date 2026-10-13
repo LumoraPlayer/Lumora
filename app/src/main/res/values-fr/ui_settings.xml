@@ -70,7 +70,7 @@
     <string name="sett_backup_saved_to">Sauvegarde enregistrée dans %1$s</string>
     <string name="sett_export_failed">Échec de l\'exportation</string>
     <string name="sett_no_backup_file">Aucun fichier de sauvegarde trouvé à %1$s</string>
-    <string name="sett_imported_summary">Importés : %1$d fournisseurs, %2$d sources EPG, %3$d groupes</string>
+    <string name="sett_imported_summary">Importés : %1$d fournisseurs, %2$d sources EPG, %3$d groupes, %4$d paramètres</string>
     <string name="sett_recording_storage_path">Stockage des enregistrements : %1$s</string>
 
     <!-- MainActivitySettings.kt - boîte de dialogue des paramètres de lecture -->

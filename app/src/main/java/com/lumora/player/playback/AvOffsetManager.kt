@@ -12,8 +12,13 @@ import androidx.media3.common.PlaybackParameters
  */
 class AvOffsetManager(private val context: Context) {
 
+    companion object {
+        /** SharedPreferences key for the global offset. Exposed (with the same file name the
+         *  other settings live in) so backup/restore can carry the user's chosen offset. */
+        const val KEY_GLOBAL_OFFSET = "av_offset_ms"
+    }
+
     private val PREFS_NAME = "iptv_prefs"
-    private val KEY_GLOBAL_OFFSET = "av_offset_ms"
 
     private var currentOffset = load()
 

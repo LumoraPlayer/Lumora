@@ -32,6 +32,9 @@ import com.lumora.plugin.js.PluginScriptManager
 import com.lumora.plugin.js.PluginStore
 import com.lumora.plugin.js.PluginStoreManager
 import com.lumora.plugin.js.StoreScript
+import com.lumora.plugin.stremio.StremioAddon
+import com.lumora.plugin.stremio.StremioAddonManager
+import com.lumora.plugin.stremio.StremioProtocol
 import com.lumora.torrent.TorrentEngine
 import com.lumora.torrent.TorrentForegroundService
 import com.lumora.plugin.TorrentResult
@@ -46,6 +49,41 @@ import java.util.Locale
 // Extracted from MainActivity.kt; see that file's header.
 
 private const val PREF_PUBLIC_CONTENT_DISCLAIMER_ACCEPTED = "public_content_disclaimer_accepted"
+
+/**
+ * UI identity for an installed Stremio addon in the Plugins pane.
+ *
+ * Scripts are keyed by their own manifest id, and addons get this prefix so both kinds can share
+ * one "which page is open" field, one focus-restore id and one list. An addon whose manifest id
+ * literally starts with the prefix would still be routed correctly (the prefix is stripped once,
+ * and [StremioAddonManager] keys storage by the raw id), so this cannot mis-route a real addon.
+ */
+private const val STREMIO_UI_KEY_PREFIX = "stremio:"
+
+internal fun stremioUiKey(addon: StremioAddon): String = STREMIO_UI_KEY_PREFIX + addon.id
+
+/** The addon id behind a [stremioUiKey], or null when [key] names a script instead. */
+internal fun stremioIdFromUiKey(key: String): String? =
+    if (key.startsWith(STREMIO_UI_KEY_PREFIX)) key.removePrefix(STREMIO_UI_KEY_PREFIX) else null
+
+/** One row's data in the installed-plugins inventory the pane and the nav rail share. */
+private data class PluginInventoryRow(
+    val key: String,
+    val label: String,
+    val enabled: Boolean,
+    /** Secondary line parts the pane prints - e.g. "Stremio addon", or a script's last run. */
+    val summary: List<String>,
+)
+
+/** The label for one resource a Stremio addon declares, or null for one Lumora has no name for
+ *  (the manifest may list resources this app has no use for - see [StremioProtocol]). */
+private fun stremioResourceLabel(resource: String): Int? = when (resource) {
+    StremioProtocol.RESOURCE_STREAM -> R.string.plug_stremio_resource_stream
+    StremioProtocol.RESOURCE_META -> R.string.plug_stremio_resource_meta
+    StremioProtocol.RESOURCE_CATALOG -> R.string.plug_stremio_resource_catalog
+    StremioProtocol.RESOURCE_SUBTITLES -> R.string.plug_stremio_resource_subtitles
+    else -> null
+}
 
 /** Gate in front of installing or enabling any stream_search/scraper_sites plugin - those
  *  search public torrent/streaming sites, which Lumora neither hosts nor controls. Accepted
@@ -332,6 +370,20 @@ internal suspend fun MainActivity.resolveTorrentStream(
 }
 
 /**
+ * Tears down whatever torrent session a resolve left running: the engine is stopped off the main
+ * thread (its `stop()` joins in-flight native lookups and must not block the UI), the field is
+ * cleared, and the foreground service that keeps the process alive for a torrent is told to
+ * stop. The one caller that must *not* use this is playback of a resolved torrent URL - there the
+ * session has to stay alive, which is why the teardown sites are all places where nothing is
+ * playing (a superseding resolve, a cancelled search dialog, the player closing).
+ */
+internal fun MainActivity.stopActiveTorrentSession() {
+    activeTorrentSession?.let { engine -> Thread { runCatching { engine.stop() } }.start() }
+    activeTorrentSession = null
+    TorrentForegroundService.stop(this)
+}
+
+/**
  * The enabled `stream_search` plugin to use for [item], if any. With more than one enabled
  * (e.g. an anime plugin and a general torrent plugin) this picks by declared
  * [PluginScript.contentTypes] instead of an arbitrary one - without [item] (existence-only
@@ -365,6 +417,66 @@ internal fun MainActivity.enabledStreamSearchPlugin(item: Channel? = null): Plug
     if (item == null) return candidates.firstOrNull()
     val isAnime = item.id.startsWith("anime:")
     return candidates.firstOrNull { isAnime == it.contentTypes.contains("anime") } ?: candidates.firstOrNull()
+}
+
+/**
+ * The enabled Stremio addons that can actually be asked for [item].
+ *
+ * With no [item] (existence-only checks: is *any* stream addon enabled at all - what the app's
+ * provider-less chrome gates ask) this is every enabled stream-capable addon; with an item,
+ * addons that declare some other content type, or only id shapes Lumora cannot produce, are
+ * dropped here rather than queried pointlessly. Unlike the JS side there can be several at once
+ * - one addon per indexer is the normal setup - so the caller gets a list to fan out over.
+ */
+internal fun MainActivity.enabledStremioStreamAddons(item: Channel? = null): List<StremioAddon> =
+    stremioAddonManager.getDiscoveredAddons().filter { addon ->
+        addon.enabled && addon.supportsStreams && (item == null || stremioAddonServes(addon, item))
+    }
+
+/** True when [addon] declares it handles this item's content type *and* at least one of the id
+ *  shapes Lumora can address it by: an IMDb id (`tt...`) or a TMDB id (`tmdb:...`). A kitsu- or
+ *  anilist-only addon is genuinely unaddressable from a catalogue item, and asking it anyway
+ *  would only produce a 404 in the middle of a search. */
+private fun MainActivity.stremioAddonServes(addon: StremioAddon, item: Channel): Boolean {
+    val type = if (item.mediaType == MediaType.SERIES) "series" else "movie"
+    if (!StremioProtocol.acceptsType(addon, type)) return false
+    if (addon.idPrefixes.isNotEmpty() &&
+        addon.idPrefixes.none { it.startsWith("tt") || it.startsWith("imdb") || it.startsWith("tmdb") }
+    ) {
+        return false
+    }
+    // The stream query is id-keyed, and those ids come from either a configured TMDB key (a
+    // title search) or something the item itself already carries. Without either, the addon
+    // cannot be asked at all - counting it as a source would lead the user to a Find Stream
+    // that can only end in "no sources".
+    return tmdbClient.hasKey() || item.tmdbTypeAndId() != null || tmdbTypeAndId(item.id) != null
+}
+
+/**
+ * The base ids a title's stream request can be built from, best first: its IMDb id via TMDB's
+ * external ids (what nearly every stream addon keys on), then `tmdb:...` for the addons that
+ * declare that shape. Empty when none could be resolved - the addon simply cannot be asked.
+ *
+ * The TMDB id comes from wherever the item already carries one (a Discover id, or the panel's
+ * own `tmdb_id`), and only falls back to a title search when it doesn't - a search is a network
+ * round trip, and it is the same resolution the detail screen's metadata fill already does.
+ * Every lookup here runs on the search coroutine, never the UI thread.
+ */
+internal suspend fun MainActivity.stremioBaseIds(item: Channel, isSeries: Boolean): List<String> {
+    val wantedType = if (isSeries) "tv" else "movie"
+    val fromItem = item.tmdbTypeAndId()?.takeIf { it.first == wantedType }?.second
+    val fromId = tmdbTypeAndId(item.id)?.takeIf { it.first == wantedType }?.second
+    val resolved = if (fromItem == null && fromId == null) {
+        runCatching {
+            tmdbClient.resolveId(cleanVodTitle(item.name), item.tmdbYear(), isSeries)
+                ?.takeIf { it.first == wantedType }?.second
+        }.getOrNull()
+    } else {
+        null
+    }
+    val tmdbId = fromItem ?: fromId ?: resolved
+    val imdb = tmdbId?.let { runCatching { tmdbClient.imdbId(it, isSeries) }.getOrNull() }
+    return StremioProtocol.idCandidates(imdb, tmdbId)
 }
 
 /**
@@ -538,9 +650,7 @@ internal fun MainActivity.showStreamSearchDialog(
         // resolveTorrentStream's kdoc) - only reachable while it hasn't succeeded yet, since
         // a successful resolve already dismissed this dialog before the user could cancel it.
         if (plugin.resolvesNatively) {
-            activeTorrentSession?.let { engine -> Thread { runCatching { engine.stop() } }.start() }
-            activeTorrentSession = null
-            TorrentForegroundService.stop(this)
+            stopActiveTorrentSession()
         }
     }
     dialog.show()
@@ -672,8 +782,49 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
             .show()
     }
 
+    fun fetchAndAddStremioAddon(url: String) {
+        scope.launch {
+            // Validation, fetching and parsing all live in the manager (it owns the addon
+            // storage), and every failure comes back as a message to show - including the
+            // pasted link not being a usable URL at all.
+            when (val result = stremioAddonManager.installFromUrl(url)) {
+                is StremioAddonManager.InstallResult.Installed -> {
+                    // Same as a script install: the toast has to say that it landed switched
+                    // off, or an addon that does nothing reads as broken.
+                    val message = if (result.addon.enabled) getString(R.string.plug_added_label, result.addon.name)
+                        else getString(R.string.plug_added_label_enable, result.addon.name)
+                    Toast.makeText(this@wirePluginsPane, message, Toast.LENGTH_LONG).show()
+                    renderPluginList()
+                    refreshPluginNavRows?.invoke()
+                }
+                is StremioAddonManager.InstallResult.Rejected ->
+                    Toast.makeText(this@wirePluginsPane, result.reason, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    fun showAddStremioAddonDialog() {
+        val input = EditText(this).apply {
+            hint = "https://example.com/manifest.json"
+            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+            setSingleLine()
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val container = FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(input) }
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.plug_add_stremio_addon))
+            .setMessage(getString(R.string.plug_add_stremio_message))
+            .setView(container)
+            .setPositiveButton(getString(R.string.add)) { _, _ -> fetchAndAddStremioAddon(input.text.toString().trim()) }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+
     dialogView.findViewById<View>(R.id.settingsPluginInstallUrl)?.setOnClickListener {
         showAddPluginScriptFromUrlDialog()
+    }
+    dialogView.findViewById<View>(R.id.settingsPluginInstallStremio)?.setOnClickListener {
+        showAddStremioAddonDialog()
     }
     wirePluginStoresSection(dialogView, manager) { renderPluginList() }
 
@@ -815,20 +966,42 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
     renderPluginList = {
         scope.launch {
             val plugins = manager.discoverScripts()
+            val addons = stremioAddonManager.discoverAddons()
             listContainer.removeAllViews()
-            listEmpty.visibility = if (plugins.isEmpty()) View.VISIBLE else View.GONE
+            listEmpty.visibility = if (plugins.isEmpty() && addons.isEmpty()) View.VISIBLE else View.GONE
             var focusRestored = false
-            for (plugin in plugins) {
+            // One list, two kinds: a script and an addon are both "something the user installed
+            // that can find streams", so they share the pane and its one alphabetical order -
+            // each row tagged with which kind it is, since the controls on its page differ (only
+            // a script has a discovery run).
+            val rows = plugins.map { plugin ->
+                PluginInventoryRow(
+                    key = plugin.id,
+                    label = plugin.label,
+                    enabled = plugin.enabled,
+                    summary = listOfNotNull(
+                        pluginDiscoveryStatus.takeIf { plugin.id == pluginDiscoveryPluginId },
+                        getString(R.string.plug_kind_script),
+                    ),
+                )
+            } + addons.map { addon ->
+                PluginInventoryRow(
+                    key = stremioUiKey(addon),
+                    label = addon.name,
+                    enabled = addon.enabled,
+                    summary = listOf(getString(R.string.plug_kind_stremio)),
+                )
+            }
+            for (entry in rows.sortedBy { it.label.lowercase(Locale.US) }) {
                 val row = layoutInflater.inflate(R.layout.item_plugin_row, listContainer, false)
-                row.findViewById<TextView>(R.id.pluginName).text = plugin.label
-                row.findViewById<TextView>(R.id.pluginSummary).text = listOfNotNull(
-                    if (plugin.enabled) getString(R.string.plug_enabled) else getString(R.string.plug_disabled),
-                    pluginDiscoveryStatus.takeIf { plugin.id == pluginDiscoveryPluginId }
-                ).joinToString("  ·  ")
-                row.setOnClickListener { openPluginDetail(plugin.id) }
+                row.findViewById<TextView>(R.id.pluginName).text = entry.label
+                row.findViewById<TextView>(R.id.pluginSummary).text = listOf(
+                    if (entry.enabled) getString(R.string.plug_enabled) else getString(R.string.plug_disabled)
+                ).plus(entry.summary).joinToString("  ·  ")
+                row.setOnClickListener { openPluginDetail(entry.key) }
                 listContainer.addView(row)
 
-                if (plugin.id == pluginFocusRequestId) {
+                if (entry.key == pluginFocusRequestId) {
                     pluginFocusRequestId = null
                     pluginFocusRequestViewId = View.NO_ID
                     focusRestored = true
@@ -855,13 +1028,108 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
         Unit
     }
 
+    // One addon's page, sharing the pane with the script pages. The controls that only mean
+    // something for a script - Run, and the discovery results below it - are kept away: an
+    // addon has no code to run, its "run" is the stream query Find Stream makes against it.
+    fun renderStremioAddonDetail(addonId: String) {
+        scope.launch {
+            stremioAddonManager.discoverAddons()
+            val addon = stremioAddonManager.getDiscoveredAddons().firstOrNull { it.id == addonId }
+            if (addon == null) {
+                // Removed from under us - the list is the only sensible place to land.
+                closePluginPage()
+                return@launch
+            }
+
+            detailTitle.text = addon.name
+            detailDescription.text = addon.description.orEmpty()
+            detailDescription.visibility =
+                if (addon.description.isNullOrBlank()) View.GONE else View.VISIBLE
+            detailMeta.text = buildList {
+                add(getString(R.string.plug_kind_stremio))
+                addon.version?.let { add(getString(R.string.plug_stremio_version, it)) }
+                addAll(addon.knownResources.mapNotNull { resource -> stremioResourceLabel(resource)?.let(::getString) })
+                if (addon.types.isNotEmpty()) addAll(addon.types)
+            }.joinToString("  ·  ").uppercase(Locale.US)
+
+            val enabledNow = addon.enabled
+            fun applyEnabledToggle() {
+                stremioAddonManager.setEnabled(addon.id, !enabledNow)
+                pluginFocusRequestViewId = R.id.pluginDetailEnabledRow
+                renderPluginDetail()
+                renderPluginList()
+                refreshPluginNavRows?.invoke()
+            }
+            detailEnabledBox.isChecked = enabledNow
+            detailEnabledRow.setOnClickListener {
+                // Same gate as a stream_search script: switching on is the moment the addon
+                // starts being queried for public content. Switching off never reaches out.
+                if (!enabledNow) {
+                    ensurePublicContentDisclaimerAccepted { applyEnabledToggle() }
+                } else {
+                    applyEnabledToggle()
+                }
+            }
+
+            // No discovery job - an addon publishes streams, not providers.
+            detailRunButton.visibility = View.GONE
+            detailRunButton.setOnClickListener(null)
+
+            detailUpdateLabel.text = getString(R.string.update)
+            detailUpdateButton.setOnClickListener {
+                detailUpdateLabel.text = getString(R.string.plug_updating)
+                scope.launch {
+                    // Re-fetching the manifest is the whole update: the stored file is the raw
+                    // manifest, so whatever the addon changed comes back with this one request.
+                    val message = when (val result = stremioAddonManager.installFromUrl(addon.manifestUrl)) {
+                        is StremioAddonManager.InstallResult.Installed ->
+                            getString(R.string.plug_updated_label, result.addon.name)
+                        is StremioAddonManager.InstallResult.Rejected -> result.reason
+                    }
+                    Toast.makeText(this@wirePluginsPane, message, Toast.LENGTH_LONG).show()
+                    pluginFocusRequestViewId = R.id.pluginDetailUpdateButton
+                    renderPluginDetail()
+                    renderPluginList()
+                    refreshPluginNavRows?.invoke()
+                }
+            }
+
+            detailRemoveButton.setOnClickListener {
+                AlertDialog.Builder(this@wirePluginsPane)
+                    .setTitle(getString(R.string.plug_remove_label_title, addon.name))
+                    .setMessage(getString(R.string.plug_stremio_remove_message))
+                    .setPositiveButton(getString(R.string.remove)) { _, _ ->
+                        scope.launch {
+                            stremioAddonManager.remove(addon)
+                            closePluginPage()
+                            renderPluginList()
+                            refreshPluginNavRows?.invoke()
+                        }
+                    }
+                    .setNegativeButton(getString(R.string.cancel), null)
+                    .show()
+            }
+
+            detailResults.visibility = View.GONE
+
+            if (pluginFocusRequestViewId != View.NO_ID) {
+                val target = dialogView.findViewById<View>(pluginFocusRequestViewId)
+                pluginFocusRequestViewId = View.NO_ID
+                target?.post { target.requestFocus() }
+            }
+        }
+    }
+
     // Wires the dedicated plugin page against whichever plugin is currently open. Rebuilt
     // rather than bound once: enabling, updating and running all change what it should say,
     // and a discovery run rewrites its results as it goes.
     renderPluginDetail = {
-        val id = openPluginId
-        if (id != null) scope.launch {
-            val plugin = manager.discoverScripts().firstOrNull { it.id == id }
+        val key = openPluginId
+        val addonId = key?.let { stremioIdFromUiKey(it) }
+        if (addonId != null) {
+            renderStremioAddonDetail(addonId)
+        } else if (key != null) scope.launch {
+            val plugin = manager.discoverScripts().firstOrNull { it.id == key }
             if (plugin == null) {
                 // Removed from under us - the list is the only sensible place to land.
                 closePluginPage()
@@ -1023,18 +1291,27 @@ internal suspend fun MainActivity.updatePluginFromStore(plugin: PluginScript): S
 }
 
 /**
- * Silently runs [updatePluginFromStore] over every installed script, if the user has switched
- * on Settings > Plugins > "Auto-update plugins on launch". A no-op otherwise.
+ * Silently runs [updatePluginFromStore] over every installed script, and re-fetches every
+ * installed Stremio addon's manifest, if the user has switched on Settings > Plugins >
+ * "Auto-update plugins on launch". A no-op otherwise.
+ *
+ * Both kinds live in the same list under the same toggle, so both are kept current by it - an
+ * addon has no store to be listed in, and re-fetching its manifest is exactly what the detail
+ * page's Update button does. Errors per plugin (unreachable store, rejected script, a manifest
+ * that no longer parses) are swallowed: this runs with no UI to report to, and a failed update
+ * simply leaves that plugin as it was.
  *
  * Called once per cold start, ahead of [loadScraperSiteManifest] - so a `scraper_sites` script
  * updated here takes effect on the same launch that fetched it, rather than needing a second
- * restart. Errors per-plugin (unreachable store, rejected script) are swallowed: this runs with
- * no UI to report to, and a failed update simply leaves that plugin as it was.
+ * restart.
  */
 internal suspend fun MainActivity.autoUpdateInstalledPluginsIfEnabled() {
     if (!UserPreferences.autoUpdatePlugins) return
     pluginScriptManager.discoverScripts().forEach { plugin ->
         runCatching { updatePluginFromStore(plugin) }
+    }
+    stremioAddonManager.discoverAddons().forEach { addon ->
+        runCatching { stremioAddonManager.installFromUrl(addon.manifestUrl) }
     }
 }
 
@@ -1055,20 +1332,26 @@ internal fun MainActivity.wirePluginNavRows(dialogView: View, openPluginsPane: (
 
     fun render() {
         scope.launch {
+            // Both kinds, one rail: an installed addon that only exists on the Plugins page is
+            // easy to forget about, and the row is the only place its state can be seen from
+            // navigation at all.
             val plugins = pluginScriptManager.discoverScripts()
+            val addons = stremioAddonManager.discoverAddons()
+            val rows = plugins.map { PluginInventoryRow(it.id, it.label, it.enabled, emptyList()) } +
+                addons.map { PluginInventoryRow(stremioUiKey(it), it.name, it.enabled, emptyList()) }
             children.removeAllViews()
-            for (plugin in plugins) {
+            for (entry in rows.sortedBy { it.label.lowercase(Locale.US) }) {
                 val row = layoutInflater.inflate(R.layout.item_plugin_nav_row, children, false)
-                row.findViewById<TextView>(R.id.pluginNavLabel).text = plugin.label
+                row.findViewById<TextView>(R.id.pluginNavLabel).text = entry.label
                 row.findViewById<TextView>(R.id.pluginNavState).text =
-                    if (plugin.enabled) "✓" else "○"
+                    if (entry.enabled) "✓" else "○"
                 row.setOnClickListener {
                     openPluginsPane()
-                    revealPluginInPane?.invoke(plugin.id)
+                    revealPluginInPane?.invoke(entry.key)
                 }
                 children.addView(row)
             }
-            val hasPlugins = plugins.isNotEmpty()
+            val hasPlugins = rows.isNotEmpty()
             children.visibility = if (navPluginsExpanded && hasPlugins) View.VISIBLE else View.GONE
             caret.visibility = if (hasPlugins) View.VISIBLE else View.GONE
             caret.text = if (navPluginsExpanded) "▾" else "▸"

@@ -17,6 +17,10 @@
      the manual JSON backup (Settings -> Backup) is the supported way to move them. -->
 <full-backup-content>
     <exclude domain="file" path="plugin_scripts" />
+    <!-- Stremio addons, for the same reason as the scripts above: they are user-installed
+         sources, and a manifest restored from a backup is one the user did not add on this
+         install. Whether any is enabled lives in plugin_prefs.xml, excluded below. -->
+    <exclude domain="file" path="stremio_addons" />
     <!-- Which plugins are on. Kept in its own SharedPreferences file precisely so it can be
          excluded here: backup rules work per-file, so leaving it alongside the provider configs
          (which do want backing up) meant a reinstall restored the enabled set and plugins came

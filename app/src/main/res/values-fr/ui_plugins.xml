@@ -51,6 +51,23 @@
     <string name="plug_add_plugin_store">Ajouter une boutique de plugins</string>
     <string name="plug_add_plugin_store_message">Saisissez le lien vers le catalogue d\'une boutique de plugins (un petit fichier JSON répertoriant ses scripts).</string>
 
+    <!-- Stremio addons (MainActivityPlugins / StremioAddonManager) -->
+    <string name="plug_add_stremio_addon">Ajouter une extension Stremio</string>
+    <string name="plug_enter_stremio_manifest">Saisissez le lien vers le manifeste d\'une extension Stremio</string>
+    <string name="plug_add_stremio_message">Saisissez le lien vers le manifeste d\'une extension Stremio (manifest.json), ou un lien d\'installation stremio://. Activez-la ensuite : ses flux rejoindront la recherche de flux pour vos films et séries.</string>
+    <string name="plug_stremio_couldnt_fetch">Impossible de récupérer ce manifeste</string>
+    <string name="plug_stremio_invalid_manifest">Ce lien n\'est pas un manifeste d\'extension Stremio</string>
+    <string name="plug_stremio_no_streams">%1$s ne publie aucun flux</string>
+    <string name="plug_kind_script">Script de plugin</string>
+    <string name="plug_kind_stremio">Extension Stremio</string>
+    <string name="plug_stremio_version">v%1$s</string>
+    <string name="plug_stremio_resource_stream">Flux</string>
+    <string name="plug_stremio_resource_meta">Métadonnées</string>
+    <string name="plug_stremio_resource_catalog">Catalogues</string>
+    <string name="plug_stremio_resource_subtitles">Sous-titres</string>
+    <string name="plug_stremio_remove_message">Cela supprime l\'extension. Vous pourrez la réajouter plus tard depuis l\'URL de son manifeste.</string>
+    <string name="plug_stremio_searching">Recherche dans les extensions Stremio…</string>
+
     <!-- Discover (TMDB browse) statuses (MainActivityDiscover) -->
     <string name="plug_discover_unavailable">Discover n\'est pas disponible (aucune clé TMDB configurée).</string>
     <string name="plug_couldnt_load_titles">Impossible de charger les titres. Vérifiez votre connexion.</string>
@@ -107,6 +124,6 @@
     <string name="plug_update_download_failed">Échec du téléchargement de la mise à jour</string>
     <string name="plug_backup_exported">Sauvegarde exportée</string>
     <string name="plug_export_failed">Échec de l\'exportation</string>
-    <string name="plug_imported_summary">Importé : %1$d fournisseurs, %2$d sources EPG, %3$d groupes</string>
+    <string name="plug_imported_summary">Importé : %1$d fournisseurs, %2$d sources EPG, %3$d groupes, %4$d paramètres</string>
     <string name="plug_import_failed">Échec de l\'importation</string>
 </resources>

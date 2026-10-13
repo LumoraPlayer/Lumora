@@ -1329,9 +1329,11 @@
                     android:overScrollMode="never" />
             </LinearLayout>
 
-            <!-- Pane: Plugins - companion APKs that can propose providers. Rows for both the
-                 installed plugins and a run's results are inflated at runtime
-                 (item_plugin_row / item_plugin_candidate_row) into the containers below. -->
+            <!-- Pane: Plugins - installed stream sources: JS plugin scripts (with optional
+                 provider-discovery runs) and Stremio addons, both managed from their own detail
+                 pages. Rows for the installed plugins and a discovery run's results are inflated
+                 at runtime (item_plugin_row / item_plugin_candidate_row) into the containers
+                 below. -->
             <LinearLayout
                 android:id="@+id/panePlugins"
                 android:layout_width="match_parent"
@@ -1381,7 +1383,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/settings_gap_m"
-                    android:layout_marginBottom="@dimen/settings_gap_xl"
+                    android:layout_marginBottom="@dimen/settings_gap_m"
                     android:background="@drawable/card_surface_background"
                     android:clickable="true"
                     android:focusable="true"
@@ -1403,6 +1405,39 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
                         android:text="@string/enter_apk_link"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/settings_text_caption" />
+                </LinearLayout>
+
+                <!-- The second install path: a Stremio addon is managed exactly like a script
+                     (its own row in the list below, its own detail page), it just arrives as a
+                     manifest URL instead of a .js file. -->
+                <LinearLayout
+                    android:id="@+id/settingsPluginInstallStremio"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/settings_gap_xl"
+                    android:background="@drawable/card_surface_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="@dimen/settings_gap_l"
+                    android:stateListAnimator="@animator/focus_scale">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/plug_add_stremio_addon"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/settings_text_body"
+                        android:fontFamily="@font/inter_medium" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/plug_enter_stremio_manifest"
                         android:textColor="@color/text_secondary"
                         android:textSize="@dimen/settings_text_caption" />
                 </LinearLayout>

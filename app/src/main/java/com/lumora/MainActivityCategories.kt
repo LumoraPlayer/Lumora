@@ -1720,10 +1720,11 @@ internal fun MainActivity.selectHome() {
     binding.discoverContent.visibility = View.GONE
     binding.contentRow.visibility = View.GONE
     binding.homeContent.visibility = View.VISIBLE
-    // Search on Home is only useful with something to search; with no enabled provider
-    // updateTopChromeVisibility() keeps it hidden. selectHome used to force it visible
-    // unconditionally, which is why it lingered on the empty first screen.
-    binding.homeSearchBar.visibility = if (hasProviderEnabled()) View.VISIBLE else View.GONE
+    // Search on Home is only useful with something to search - the same rule the browse
+    // bar's pill uses (hasSearchableCatalog), so the two can never disagree about it.
+    // selectHome used to force it visible unconditionally, which is why it lingered on
+    // the empty first screen.
+    binding.homeSearchBar.visibility = if (hasSearchableCatalog()) View.VISIBLE else View.GONE
     applyPanelWidth(binding.homeSearchBar, R.dimen.home_search_bar_width)
     updateTabStyles(binding.tabHome)
     homeShelfAdapter.submitList(buildHomeShelves())

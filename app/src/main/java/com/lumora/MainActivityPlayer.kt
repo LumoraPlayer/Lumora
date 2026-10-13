@@ -272,7 +272,7 @@ internal fun MainActivity.setupPlayerControls() {
         executeUpNextAdvance()
     }
     binding.upNextCancel.setOnClickListener {
-        cancelUpNext()
+        dismissUpNext()
     }
 
     // Cast — uses MediaRouteButton which shows a device picker on tap.
@@ -505,8 +505,11 @@ internal fun MainActivity.setupPlayerControls() {
                         PlaybackPositionStore.clear(this@setupPlayerControls, finishedKey)
                     }
                 }
-                // If Up Next countdown is already running, it will handle the advance.
-                if (upNextActive) return@onPlaybackStateChanged
+                // If Up Next is running it will handle the advance. A refused offer must not
+                // be second-guessed either: Cancel means the episode ends here, with Next and
+                // Back left to the viewer - the next-episode entry saved above still keeps the
+                // series on the Continue Watching / Up Next shelves.
+                if (upNextActive || upNextDismissed) return@onPlaybackStateChanged
                 // Silent fallback auto-advance when Up Next wasn't triggered
                 // (e.g. user seeks to end, skipping the 30s countdown window).
                 val queue = currentEpisodeQueue
@@ -636,7 +639,10 @@ internal fun MainActivity.cycleAspectMode() {
 /** [resumeFromMs] carries the position across a version switch (see showVersionPicker):
  *  the replacement stream is a different item with its own saved-position key, so without
  *  it switching version on a half-watched film restarts it from zero. Also suppresses the
- *  resume prompt - the user just answered that question by switching mid-playback.
+ *  resume prompt - the user just answered that question by switching mid-playback - and
+ *  moves the saved entry across to the replacement's key (see [transferPlaybackPosition]),
+ *  so the copy left behind doesn't linger as a second Continue Watching row for the same
+ *  episode/film.
  *
  *  [externalSubtitles] are sidecar tracks a caller already resolved (the Find Stream
  *  dialog); [pluginStreamAlreadyResolved] marks that same caller's URL as freshly resolved,
@@ -655,8 +661,15 @@ internal fun MainActivity.showPlayerFor(
     /** Container MIME when the source knows it - see PlayerManager.playUrl. */
     mimeType: String? = null
 ) {
+    // The copy this call is replacing - captured before nowPlayingChannel is overwritten
+    // below. The only callers that pass resumeFromMs are the version switches (manual
+    // picker, failover, quality watchdog), which replace the playing copy of one title.
+    val replacedChannel = nowPlayingChannel
     // Reset Up Next state on any new playback
     cancelUpNext()
+    // A refusal belongs to the episode that was playing: the next one - or a re-play of this
+    // one - gets its own offer (see upNextDismissed's kdoc).
+    upNextDismissed = false
     // A new title starts with no pinned subtitle and no sync/size context from the last one;
     // a retry of the same title (replayLast) deliberately keeps them.
     playerManager.clearPinnedSubtitles()
@@ -672,6 +685,12 @@ internal fun MainActivity.showPlayerFor(
     // A fresh playback session is never a continuation of a user pause.
     userPausedPlayback = false
     nowPlayingChannel = channel
+    // Mid-playback version switch: the position is handed to the replacement by hand, and
+    // the copy being left behind must not stay behind in Continue Watching as its own
+    // in-progress entry next to it.
+    if (resumeFromMs != null && replacedChannel != null) {
+        transferPlaybackPosition(replacedChannel, channel, resumeFromMs)
+    }
     // Diagnostics breadcrumb: the title only, never the URL - see SessionLog's redaction
     // rules for why stream URLs must not be quoted.
     com.lumora.diagnostics.SessionLog.event("play", "${channel.mediaType} ${channel.name}")
@@ -1999,6 +2018,38 @@ internal fun MainActivity.maybeShowResumePrompt() {
         }
         .setCancelable(false)
         .show()
+}
+
+/**
+ * Moves the resume entry from the copy being replaced to the copy taking over.
+ *
+ * A version switch hands the position across by hand ([showPlayerFor]'s resumeFromMs), but
+ * each copy keeps its own per-copy key in [PlaybackPositionStore] - so the copy left behind
+ * stayed there as its own in-progress entry and Continue Watching listed the same episode
+ * (or film) twice, once per version. Clearing that entry and re-saving the carried position
+ * under the replacement's key leaves the row showing exactly the version last watched.
+ *
+ * Only two copies of *one* title are eligible, compared through the same shared watched key
+ * that collapses provider-scoped ids elsewhere (see MainActivityWatched), and only when the
+ * outgoing copy actually has a saved entry: a live channel has none, a catch-up programme is
+ * never saved, and an episode switched away from in its first seconds may not have written
+ * one yet.
+ */
+internal fun MainActivity.transferPlaybackPosition(from: Channel, to: Channel, positionMs: Long) {
+    if (positionMs <= 0) return
+    if (from.mediaType == MediaType.LIVE || to.mediaType == MediaType.LIVE) return
+    val fromKey = streamKey(from)
+    val toKey = streamKey(to)
+    if (fromKey == toKey || fromKey.isBlank() || toKey.isBlank()) return
+    val stored = PlaybackPositionStore.get(this, fromKey) ?: return
+    val fromKeys = watchedKeysFor(from)
+    if (fromKeys.isEmpty() || watchedKeysFor(to).none { it in fromKeys }) return
+    PlaybackPositionStore.clear(this, fromKey)
+    // Written straight away rather than waiting for the first progress tick: backing out (or
+    // the process dying) in the seconds after the switch must not leave the title with no
+    // entry at all, which getAllInProgress would read as "not being watched". The old copy's
+    // duration rides along until the replacement's own progress saves supply its real one.
+    PlaybackPositionStore.save(this, toKey, positionMs, stored.durationMs, to)
 }
 
 internal fun MainActivity.saveCurrentPlaybackPosition() {

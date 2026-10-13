@@ -55,7 +55,7 @@ internal fun MainActivity.scrapersUsable(): Boolean =
 
 /**
  * True when there is *some* way to find something to play without an IPTV provider - an installed
- * `stream_search` plugin, or the built-in site scrapers.
+ * `stream_search` plugin, the built-in site scrapers, or an enabled Stremio addon.
  *
  * This is the question the app's empty-state and chrome gates are really asking. They used to ask
  * only about plugins, from when a plugin was the only provider-less source; a scraper-only setup
@@ -63,7 +63,7 @@ internal fun MainActivity.scrapersUsable(): Boolean =
  * hidden, and no way to reach content it was perfectly able to play.
  */
 internal fun MainActivity.hasProviderlessSource(): Boolean =
-    enabledStreamSearchPlugin() != null || scrapersUsable()
+    enabledStreamSearchPlugin() != null || scrapersUsable() || enabledStremioStreamAddons().isNotEmpty()
 
 /** "<site> · <host>" - the key the last-good-source memory is stored under. */
 private fun sourceKey(source: ScraperCatalog.Source) =

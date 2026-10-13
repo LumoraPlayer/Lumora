@@ -103,7 +103,7 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
                 // back - so the first catalog to land after a provider was added
                 // replaced the empty state with a blank screen.
                 binding.homeContent.visibility = View.VISIBLE
-                binding.homeSearchBar.visibility = if (hasProviderEnabled()) View.VISIBLE else View.GONE
+                binding.homeSearchBar.visibility = if (hasSearchableCatalog()) View.VISIBLE else View.GONE
                 homeShelfAdapter.submitList(buildHomeShelves())
             } else if (showingDiscover) {
                 // Discover owns the slot and has no catalog chrome to refresh - the

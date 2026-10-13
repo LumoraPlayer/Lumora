@@ -22,3 +22,13 @@ A Gradle identity check (`verifyLumoraIdentity`, wired into `preBuild` and `chec
 - Lumora is licensed under **PolyForm Noncommercial 1.0.0** (see `LICENSE`) — noncommercial use only.
 - Never remove, alter, or hide the copyright/licence notices present in every file of this repository.
 - Never present Lumora, or a modified version of it, as someone else's original work.
+
+## Git homes and mirrors
+
+Lumora is published from this one working tree to three git homes. `origin` carries three `pushurl`s, so every `git push` fans out to all of them (branches and tags); fetch/pull come from the GitHub home only. Plain pushes fan out everywhere, but a fanned-out force-push is the exception — the first home updates the tracking ref, so the others reject as stale. Force-push those individually with an explicit `--force-with-lease=<branch>:<expected-sha>`. Do not remove these `pushurl`s or downgrade the mirror setup:
+
+- GitHub (primary): https://github.com/LumoraPlayer/Lumora
+- GitLab mirror: https://gitlab.com/LumoraPlayer/Lumora
+- GitFlic mirror: https://gitflic.ru/project/lumora/lumora
+
+Tokens for all three homes live in `.git/credentials` via the repo-local `credential.helper = store --file=.git/credentials`; they are never committed. Never paste tokens into tracked files, logs, issues, or release notes. When publishing releases, keep all three homes in sync — `.github/workflows/release.yml` already publishes release assets to the GitLab and GitFlic homes through their APIs.

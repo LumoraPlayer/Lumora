@@ -566,6 +566,10 @@ class MainActivity : AppCompatActivity() {
      *  refreshed whenever Settings > Plugins is opened. */
     internal val pluginScriptManager by lazy { PluginScriptManager(this, prefs) }
     internal val pluginStoreManager by lazy { PluginStoreManager(prefs) }
+    /** Installed Stremio addons - see StremioAddonManager. Same lifecycle as the scripts above:
+     *  discovered at startup (the Find Stream gate reads the cache) and refreshed whenever
+     *  Settings > Plugins is opened. */
+    internal val stremioAddonManager by lazy { com.lumora.plugin.stremio.StremioAddonManager(this) }
     internal val jsPluginEngine by lazy { JsPluginEngine() }
     /** IntroDB client for skip segments (intro/recap/credits) - see MainActivitySkip.kt. */
     internal val introDbClient by lazy { com.lumora.skip.IntroDbClient(BaseApplication.instance.okHttpClient) }
@@ -933,6 +937,15 @@ class MainActivity : AppCompatActivity() {
     internal var upNextEpisode: Channel? = null
     internal var upNextCountdown = UP_NEXT_COUNTDOWN_SECONDS
     internal var upNextActive = false
+    /**
+     * True once the offer has been refused for the episode playing now - its Cancel button,
+     * Back, or the controls bar taking over. Without this the once-a-second trigger raised the
+     * card again on its very next tick (its condition still holds for the rest of the last
+     * minute), and STATE_ENDED's silent fallback advanced anyway, so "Cancel" cancelled
+     * nothing. Cleared by showPlayerFor, so the next episode - or a re-play of this one - gets
+     * its own offer.
+     */
+    internal var upNextDismissed = false
     internal val upNextTickRunnable = object : Runnable {
         override fun run() {
             if (upNextActive) {
@@ -1150,6 +1163,10 @@ class MainActivity : AppCompatActivity() {
         // because that check ran against the still-empty pre-discovery cache.
         val pluginDiscoveryOnStart = scope.launch {
             pluginScriptManager.discoverScripts()
+            // The stream resource is the only part of a Stremio addon Lumora uses, and the
+            // Find Stream gate (canFindStream) reads this cache - so an addon-only setup must
+            // have it loaded before the gate is asked, exactly like the scripts above.
+            stremioAddonManager.discoverAddons()
             // Opt-in only (Settings > Plugins). Ahead of loadScraperSiteManifest() so a
             // scraper_sites update fetched here is the one that gets applied below, not one
             // launch later.
@@ -1774,10 +1791,10 @@ class MainActivity : AppCompatActivity() {
         if (activeSettingsOverlay != null && openPluginId != null) closeOpenPluginPage?.invoke()
         else if (activeSettingsOverlay != null) activeSettingsOverlay?.dismiss()
         else if (activeSearchOverlay != null) activeSearchOverlay?.dismiss()
-        // Up Next: Back dismisses the prompt (the same outcome as its Cancel button) and
+        // Up Next: Back refuses the prompt (the same outcome as its Cancel button) and
         // leaves playback running - it must not fall through to hidePlayer(), which would
         // stop the episode the card is offering to continue from.
-        else if (isPlayerVisible && upNextActive) { cancelUpNext() }
+        else if (isPlayerVisible && upNextActive) { dismissUpNext() }
         else if (isPlayerVisible && isPlayerSideMenuOpen()) { closeSideMenu() }
         else if (isPlayerVisible) { hidePlayer(); restoreSearchIfPending() }
         else if (isContentDetailVisible) { hideContentDetail(); restoreSearchIfPending() }
@@ -2497,7 +2514,7 @@ class MainActivity : AppCompatActivity() {
                     // zeroes read as a successful-but-empty import either way (a corrupt or
                     // previously-unreadable backup looked identical to "nothing to restore").
                     val msg = result?.errorMessage?.let { getString(R.string.plug_import_failed_reason, it) }
-                        ?: result?.let { getString(R.string.plug_imported_summary, it.providersImported, it.epgSourcesImported, it.customGroupsImported) }
+                        ?: result?.let { getString(R.string.plug_imported_summary, it.providersImported, it.epgSourcesImported, it.customGroupsImported, it.settingsImported) }
                         ?: getString(R.string.plug_import_failed)
                     Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
                     // A restore the app never applies looks like a restore that never happened.

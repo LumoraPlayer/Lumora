@@ -47,7 +47,7 @@ object ScraperSiteManifest {
         val language: String,
         /** Anime-only catalogue - cannot answer for a live-action title. */
         val anime: Boolean,
-        /** Search goes through the Cloudflare WebView bypass; held back to a second wave. */
+        /** The find pass needs the Cloudflare WebView bypass (search or source resolution). */
         val heavy: Boolean,
     )
 

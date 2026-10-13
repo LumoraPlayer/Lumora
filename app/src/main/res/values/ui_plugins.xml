@@ -51,6 +51,24 @@
     <string name="plug_add_plugin_store">Add plugin store</string>
     <string name="plug_add_plugin_store_message">Enter the link to a plugin store\'s catalog (a small JSON file listing its scripts).</string>
 
+    <!-- Stremio addons (MainActivityPlugins / StremioAddonManager).
+         An installed kind lives in the same list as the JS scripts, tagged with its kind. -->
+    <string name="plug_add_stremio_addon">Add Stremio addon</string>
+    <string name="plug_enter_stremio_manifest">Enter the link to a Stremio addon\'s manifest</string>
+    <string name="plug_add_stremio_message">Enter the link to a Stremio addon\'s manifest (manifest.json), or a stremio:// install link. Enable it afterwards and its streams join Find Stream for your films and series.</string>
+    <string name="plug_stremio_couldnt_fetch">Couldn\'t fetch that manifest</string>
+    <string name="plug_stremio_invalid_manifest">That link isn\'t a Stremio addon manifest</string>
+    <string name="plug_stremio_no_streams">%1$s doesn\'t publish streams</string>
+    <string name="plug_kind_script">Plugin script</string>
+    <string name="plug_kind_stremio">Stremio addon</string>
+    <string name="plug_stremio_version">v%1$s</string>
+    <string name="plug_stremio_resource_stream">Streams</string>
+    <string name="plug_stremio_resource_meta">Metadata</string>
+    <string name="plug_stremio_resource_catalog">Catalogs</string>
+    <string name="plug_stremio_resource_subtitles">Subtitles</string>
+    <string name="plug_stremio_remove_message">This removes the addon. You can add it again later from its manifest URL.</string>
+    <string name="plug_stremio_searching">Searching Stremio addons…</string>
+
     <!-- Discover (TMDB browse) statuses (MainActivityDiscover) -->
     <string name="plug_discover_unavailable">Discover is unavailable (no TMDB key configured).</string>
     <string name="plug_couldnt_load_titles">Couldn\'t load titles. Check your connection.</string>
@@ -112,7 +130,7 @@
     <string name="plug_update_download_failed">Update download failed</string>
     <string name="plug_backup_exported">Backup exported</string>
     <string name="plug_export_failed">Export failed</string>
-    <string name="plug_imported_summary">Imported: %1$d providers, %2$d EPG sources, %3$d groups</string>
+    <string name="plug_imported_summary">Imported: %1$d providers, %2$d EPG sources, %3$d groups, %4$d settings</string>
     <string name="plug_import_failed">Import failed</string>
     <string name="plug_import_failed_reason">Import failed: %1$s</string>
 </resources>

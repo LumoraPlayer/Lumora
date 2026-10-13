@@ -326,6 +326,7 @@ internal fun MainActivity.clearDigitBuffer() {
 // ── Up Next / Auto-Advance ────────────────────
 internal fun MainActivity.checkUpNextTrigger() {
     if (upNextActive) return // already showing
+    if (upNextDismissed) return // refused for this episode - see the field's kdoc
     if (!playerManager.isPlaying) return
     if (currentEpisodeQueueIndex < 0) return // not in an episode queue
     val nextIdx = currentEpisodeQueueIndex + 1
@@ -377,6 +378,17 @@ internal fun MainActivity.executeUpNextAdvance() {
     // Restore the queue so Next/Prev work for subsequent episodes
     currentEpisodeQueue = queue
     currentEpisodeQueueIndex = idx + 1
+}
+
+/**
+ * The card's Cancel, Back on the card, and the controls bar taking over: the offer is refused
+ * for the episode playing, not merely hidden. A plain [cancelUpNext] would have the trigger
+ * raise the card again a second later (and the end-of-episode fallback advance regardless), so
+ * refusing it is what makes the Cancel button mean anything.
+ */
+internal fun MainActivity.dismissUpNext() {
+    upNextDismissed = true
+    cancelUpNext()
 }
 
 internal fun MainActivity.cancelUpNext() {
@@ -469,11 +481,12 @@ internal fun MainActivity.showControls(takeFocus: Boolean = true) {
     if (isPlayerSideMenuOpen()) closeSideMenu()
     // Up Next shares the bottom-right corner with the controls bar's track buttons -
     // don't let both render at once. Showing the bar is a deliberate "I'm taking over"
-    // act, so it dismisses the offer outright rather than only hiding the card: leaving
-    // upNextActive set with the card gone kept every upNextActive guard in onKeyDown
-    // active (the bar's keys dead), parked the countdown and suppressed STATE_ENDED's
-    // auto-advance.
-    if (upNextActive) cancelUpNext()
+    // act, so the offer is refused outright rather than only hidden: a plain hide had
+    // the trigger raise the card again a second later, which took the bar straight back
+    // down and left no way to use the controls in the last minute. Refusing also clears
+    // upNextActive - leaving it set with the card gone kept every upNextActive guard in
+    // onKeyDown active (the bar's keys dead) and parked the countdown.
+    if (upNextActive) dismissUpNext()
     binding.controlsOverlay.visibility = View.VISIBLE
     // Cheap re-link (~10 children) each reveal, so the row is never navigated with a chain
     // left stale by a button that changed visibility since setup.

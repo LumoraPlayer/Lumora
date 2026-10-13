@@ -1367,8 +1367,9 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
 private val EPISODE_NAME_PREFIX_REGEX = Regex("""^S\d+E\d+ · """)
 private val EPISODE_SEASON_REGEX = Regex("""^S(\d+)E\d+""")
 /** Trailing form, the way m3u_plus panels bake it into the title ("Show (2026) S01E02")
- *  - the anchored pattern above never matches those. */
-private val EPISODE_SEASON_TRAIL_REGEX = Regex("""(?i)\bS(\d+)E\d+""")
+ *  - the anchored pattern above never matches those. Space-tolerant: a family of panels
+ *  writes the marker spaced ("Show S01 E02"), same shape the series-marker regex reads. */
+private val EPISODE_SEASON_TRAIL_REGEX = Regex("""(?i)\bS(\d+)\s*E\d+""")
 
 /** The season an episode belongs to. A Channel has an episodeNum but no season field, so
  *  it's read back out of the "S04E01 · " marker its provider baked into the name, or out

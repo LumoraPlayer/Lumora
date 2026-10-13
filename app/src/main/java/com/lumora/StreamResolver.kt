@@ -13,12 +13,16 @@ import com.lumora.plugin.PluginSubtitle
 import com.lumora.plugin.ResolveResult
 import com.lumora.plugin.TorrentResult
 import com.lumora.plugin.js.PluginScript
+import com.lumora.plugin.stremio.StremioAddon
+import com.lumora.plugin.stremio.StremioProtocol
+import com.lumora.plugin.stremio.StremioStream
 import com.lumora.scraper.bridge.ScraperCatalog
 import com.lumora.scraper.bridge.ScraperSiteStore
 import com.lumora.util.cleanVodTitle
 import com.lumora.util.extractYearFromName
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 private const val FIND_STREAM_PREFS = "lumora_scraper_prefs"
@@ -35,16 +39,19 @@ private const val STALL_TIMEOUT_MS = 20_000L
 /**
  * Find Stream: one search across every source Lumora has, played best-first without asking.
  *
- * There are two kinds of source and they used to be mutually exclusive - an installed
+ * There are three kinds of source and they used to be mutually exclusive - an installed
  * `stream_search` plugin won outright, and the ~49 built-in scraper sites were never consulted
  * while one was enabled. That was a bug in the shape of a design decision: with the torrent
  * plugin installed the site scrapers may as well not have existed.
  *
- * Now both run concurrently and their results go into one ranked queue.
+ * Now all three run concurrently and their results go into one ranked queue: the JS plugin (its
+ * own token/resolve protocol), the built-in site scrapers, and every enabled Stremio addon (a
+ * plain `/stream/{type}/{id}.json` query against each - see [StremioAddon]).
  *
- * **Site sources are preferred over torrents outright** - they start in about a second, where a
- * torrent has to find peers and buffer first. Torrents are what gets tried when no site carried
- * the title.
+ * **Web sources are preferred over torrents outright** - site links and a Stremio addon's direct
+ * stream URLs start in about a second, where a torrent has to find peers and buffer first.
+ * Torrents (the plugin's results, and Stremio's infoHash answers) are what gets tried when no
+ * web source carried the title.
  *
  * **Within the torrents, quality first and seeders second.** A 200-seeder CAM is a worse watch
  * than a 3-seeder BluRay, so seeders only break ties inside a quality tier - see [StreamQuality].
@@ -76,7 +83,11 @@ internal class StreamResolver(
     fun start() {
         val plugin = activity.enabledStreamSearchPlugin(item)
         val siteProviders = ScraperSiteStore.activeProviders(activity)
-        if (plugin == null && siteProviders.isEmpty()) {
+        // Stremio addons are the third kind of source, and there can be several enabled at once
+        // - one per indexer is the normal setup - so they get a list where the other two get a
+        // single answer.
+        val stremioAddons = activity.enabledStremioStreamAddons(item)
+        if (plugin == null && siteProviders.isEmpty() && stremioAddons.isEmpty()) {
             activity.scraperToast(activity.getString(R.string.scraper_no_sources))
             return
         }
@@ -121,7 +132,8 @@ internal class StreamResolver(
         var searchesDone = 0
         var attempts = 0
         var playbackStarted = false
-        val expectedSearches = (if (plugin != null) 1 else 0) + (if (siteProviders.isNotEmpty()) 1 else 0)
+        val expectedSearches = (if (plugin != null) 1 else 0) + (if (siteProviders.isNotEmpty()) 1 else 0) +
+            (if (stremioAddons.isNotEmpty()) 1 else 0)
         lateinit var searchJob: Job
 
         /** Stops watching the current attempt, whether it succeeded or is being abandoned. */
@@ -139,6 +151,13 @@ internal class StreamResolver(
             .setOnDismissListener {
                 if (!playbackStarted) {
                     searchJob.cancel()
+                    // A native-torrent resolve (a plugin magnet or a Stremio infoHash) does not
+                    // stop when its coroutine is cancelled - TorrentEngine.start() blocks until
+                    // TorrentEngine.stop() is called. Only reachable before any playback started
+                    // (a successful resolve dismisses this dialog first), so nothing live is
+                    // being torn down; without this, cancelling mid-resolve left the engine
+                    // downloading unattended.
+                    activity.stopActiveTorrentSession()
                     // A dismiss mid-trial leaves the watchdog armed and the player listener
                     // attached - the attempt would keep being watched (and could still advance
                     // the queue) after the dialog is gone.
@@ -317,6 +336,46 @@ internal class StreamResolver(
                             )
                         }
                     }
+
+                    is FoundSource.FromStremio -> {
+                        val stream = next.stream
+                        val directUrl = stream.url
+                        if (directUrl != null) {
+                            // A direct URL is a web source like a site link - nothing to resolve,
+                            // just open it. Its headers are what the addon says the CDN wants
+                            // (behaviorHints.proxyHeaders.request), and its subtitles are
+                            // sideloaded the same way a plugin's are.
+                            trying = false
+                            if (playbackStarted) return@launch
+                            startPlayback(
+                                next, directUrl, stream.headers, stream.subtitles, null,
+                                hlsMimeIfLooksLikeHls(directUrl)
+                            )
+                        } else {
+                            // An infoHash stream is a torrent like the plugin's own: the same
+                            // native engine and debrid-first path, picked by season/episode the
+                            // way a magnet from the torrent plugin is. `fileIdx` is deliberately
+                            // not consulted - the engine's own matcher ("S03E03", "3x03", else the
+                            // largest video) is more robust than an index into a file list the
+                            // addon may have numbered differently.
+                            val magnet = StremioProtocol.magnetFor(stream)
+                            val resolved = if (magnet == null) {
+                                null
+                            } else {
+                                activity.resolveTorrentStream(magnet, season, episode) { line ->
+                                    activity.runOnUiThread { if (!playbackStarted) detail.text = line }
+                                }
+                            }
+                            trying = false
+                            if (playbackStarted) return@launch
+                            when (resolved) {
+                                is ResolveResult.Ready -> startPlayback(
+                                    next, resolved.url, resolved.headers, resolved.subtitles, null, null
+                                )
+                                else -> tryNext()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -399,17 +458,63 @@ internal class StreamResolver(
                     activity.runOnUiThread { searchesDone++; tryNext() }
                 }
             }
+            if (stremioAddons.isNotEmpty()) {
+                launch {
+                    // Same cancellation handling as the two searches above: a dismissed dialog
+                    // must not advance the queue via the trailing tryNext().
+                    try {
+                        // The id lookup is shared by every addon - one TMDB resolve, not one per
+                        // addon - and an addon that declares no id shape Lumora can produce is
+                        // skipped here rather than queried with something it will 404 on.
+                        val baseIds = activity.stremioBaseIds(item, isSeries)
+                        if (baseIds.isNotEmpty()) {
+                            activity.runOnUiThread {
+                                if (found.isEmpty()) status.text = activity.getString(R.string.plug_stremio_searching)
+                            }
+                            val requestType = if (isSeries) "series" else "movie"
+                            // One coroutine per addon: they are independent servers, and
+                            // whichever answers first is what gets tried first. coroutineScope
+                            // holds this search open until every one of them has answered.
+                            coroutineScope {
+                                // Labelled because the outer search is itself a `launch` - a
+                                // bare return@launch here would be ambiguous (and would return
+                                // from the wrong coroutine if Kotlin picked the outer one).
+                                for (addon in stremioAddons) launch addonQuery@{
+                                    val base = baseIds.firstOrNull { StremioProtocol.acceptsId(addon, it) }
+                                        ?: return@addonQuery
+                                    val id = StremioProtocol.requestId(base, isSeries, season, episode)
+                                    val streams = activity.stremioAddonManager.fetchStreams(addon, requestType, id)
+                                    streams.forEach { stream -> onFound(FoundSource.FromStremio(addon, stream)) }
+                                }
+                            }
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Swallowed exactly as the old runCatching did; the queue is advanced by
+                        // tryNext() below regardless of a single search's failure.
+                    }
+                    activity.runOnUiThread { searchesDone++; tryNext() }
+                }
+            }
         }
     }
 }
 
-/** One playable candidate, from either kind of source. */
+/** One playable candidate, from any kind of source. */
 internal sealed class FoundSource {
     abstract val title: String
     abstract val score: Int
     abstract val seeders: Int
     /** Short provenance line, shown under the status while this source is being tried. */
     abstract val detail: String
+    /**
+     * True when opening this source's URL is the whole job - a site link or a Stremio addon's
+     * direct stream URL starts playing immediately, where a torrent has to find peers and buffer
+     * first. Drives the queue order: everything [webStart] is tried before every torrent, and
+     * only within a group do last-good/quality/seeders decide (see [ranking]).
+     */
+    open val webStart: Boolean get() = false
 
     data class FromPlugin(
         val plugin: PluginScript,
@@ -433,11 +538,32 @@ internal sealed class FoundSource {
         // being guessed at from a host name that says nothing about the encode.
         override val score get() = StreamQuality.UNKNOWN
         override val seeders get() = 0
+        override val webStart get() = true
         override val detail
             get() = listOfNotNull(
                 source.providerName,
                 runCatching { android.net.Uri.parse(source.server.src).host }.getOrNull(),
                 source.matchedTitle,
+            ).joinToString("  ·  ")
+    }
+
+    /** One stream a Stremio addon returned for this title. */
+    data class FromStremio(val addon: StremioAddon, val stream: StremioStream) : FoundSource() {
+        // The addon's detailed line first: it carries the release quality that the queue ranks
+        // by, where `name` is often just the addon's own short label. The addon's name is the
+        // fallback, so a bare answer is still attributable to the plugin that produced it.
+        override val title get() = stream.title ?: stream.name ?: addon.name
+        override val score get() = StreamQuality.score(stream.title, stream.name)
+        // No portable seeder field in the format - aggregators print seeders inside their own
+        // title text, if anywhere - so Stremio torrents rank on quality alone, not on a number
+        // parsed out of display text.
+        override val seeders get() = 0
+        override val webStart get() = stream.url != null
+        override val detail
+            get() = listOfNotNull(
+                addon.name,
+                stream.name?.takeIf { it != addon.name },
+                StreamQuality.label(stream.title, stream.name),
             ).joinToString("  ·  ")
     }
 }
@@ -446,6 +572,7 @@ internal sealed class FoundSource {
 internal fun FoundSource.key(): String = when (this) {
     is FoundSource.FromPlugin -> "plugin:${plugin.id}:${result.title}"
     is FoundSource.FromSite -> "site:${source.providerName} · ${source.server.name}"
+    is FoundSource.FromStremio -> "stremio:${addon.id}:${stream.title ?: stream.name ?: stream.identity()}"
 }
 
 /**
@@ -496,26 +623,29 @@ internal fun streamSearchTitle(name: String): String {
 internal fun streamSearchYear(item: Channel): String? =
     item.year?.takeIf { it.isNotBlank() } ?: extractYearFromName(item.name)
 
-/** True when anything at all can source a stream for [item]. */
+/** True when anything at all can source a stream for [item] - an enabled JS stream_search
+ *  plugin, the built-in site scrapers, or an enabled Stremio addon that publishes streams. */
 internal fun MainActivity.canFindStream(item: Channel): Boolean =
     (item.mediaType == MediaType.MOVIE || item.mediaType == MediaType.SERIES) &&
-        (enabledStreamSearchPlugin(item) != null || scrapersUsable())
+        (enabledStreamSearchPlugin(item) != null || scrapersUsable() || enabledStremioStreamAddons(item).isNotEmpty())
 
 /**
  * Best-first ordering.
  *
- * **Site sources come before torrents, always.** A site link starts playing in about a second; a
- * torrent has to find peers and buffer before the first frame, and on a weak swarm it may never
- * get there. So torrents are the fallback for when no site carried the title, not a competitor
- * ranked alongside them - which also means a site's lack of quality metadata can no longer cost
- * it against a torrent that advertises BluRay.
+ * **Web sources come before torrents, always.** A site link or a Stremio addon's direct stream
+ * URL starts playing in about a second; a torrent has to find peers and buffer before the first
+ * frame, and on a weak swarm it may never get there. So torrents are the fallback for when no web
+ * source carried the title, not a competitor ranked alongside them - which also means a web
+ * source's lack of quality metadata can no longer cost it against a torrent that advertises
+ * BluRay.
  *
  * Within each group: a source that played last time wins - a setup that works should keep working
  * rather than re-deriving the answer - then dub preference when the user asked for it, then
- * quality tier, then seeders as the tie-break inside a tier.
+ * quality tier, then seeders as the tie-break inside a tier (Stremio's format exposes no seeder
+ * field, so its torrents tie there at 0 and are ordered by quality alone).
  */
 internal fun ranking(lastGood: String?, preferDub: Boolean): Comparator<FoundSource> =
-    compareByDescending<FoundSource> { it is FoundSource.FromSite }
+    compareByDescending<FoundSource> { it.webStart }
         .thenByDescending { it.key() == lastGood }
         .thenByDescending {
             preferDub && (it as? FoundSource.FromPlugin)?.result?.audio == "dub"

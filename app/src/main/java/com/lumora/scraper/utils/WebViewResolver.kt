@@ -77,6 +77,7 @@ class WebViewResolver(private val context: Context) {
         shouldAllowNavigation: ((url: String, isMainFrame: Boolean) -> Boolean)? = null,
         pageReadyScriptProvider: ((currentUrl: String, html: String, cookies: String) -> String?)? = null,
         showImmediately: Boolean = false,
+        silent: Boolean = false,
     ): String {
         return getResult(
             url,
@@ -85,7 +86,8 @@ class WebViewResolver(private val context: Context) {
             shouldAllowNavigation,
             null,
             pageReadyScriptProvider,
-            showImmediately
+            showImmediately,
+            silent
         ).html
     }
 
@@ -97,6 +99,13 @@ class WebViewResolver(private val context: Context) {
         valueScript: String? = null,
         pageReadyScriptProvider: ((currentUrl: String, html: String, cookies: String) -> String?)? = null,
         showImmediately: Boolean = false,
+        /**
+         * Never raise the visible challenge dialog. Set by callers whose page runs an
+         * *invisible* challenge widget: there is nothing on that page anyone could click, so
+         * the dialog is noise at best - the caller's own [completion] decides when the run is
+         * done and treats a miss as a failed site like any other.
+         */
+        silent: Boolean = false,
     ): Result = mutex.withLock {
         Log.d(TAG, "[WebView] Fetching: $url (IsTV: $isTv)")
         pollingCount = 0
@@ -112,6 +121,7 @@ class WebViewResolver(private val context: Context) {
                         valueScript,
                         pageReadyScriptProvider,
                         showImmediately,
+                        silent,
                         continuation
                     )
                 }
@@ -134,6 +144,7 @@ class WebViewResolver(private val context: Context) {
         valueScript: String?,
         pageReadyScriptProvider: ((currentUrl: String, html: String, cookies: String) -> String?)?,
         showImmediately: Boolean,
+        silent: Boolean,
         continuation: kotlinx.coroutines.CancellableContinuation<Result>
     ) {
         webView = WebView(context).apply {
@@ -214,7 +225,8 @@ class WebViewResolver(private val context: Context) {
                                 completion,
                                 continuation,
                                 valueScript,
-                                pageReadyScriptProvider
+                                pageReadyScriptProvider,
+                                silent
                             )
                         }
                     }, 1500)
@@ -223,7 +235,7 @@ class WebViewResolver(private val context: Context) {
         }
         Log.d(TAG, "[WebView] Opened")
 
-        if (showImmediately && activityContext != null) {
+        if (showImmediately && !silent && activityContext != null) {
             deferredLoadUrl = url
             deferredLoadHeaders = headers
             showVisibleChallenge(continuation)
@@ -257,6 +269,7 @@ class WebViewResolver(private val context: Context) {
         continuation: kotlinx.coroutines.CancellableContinuation<Result>,
         valueScript: String? = null,
         pageReadyScriptProvider: ((currentUrl: String, html: String, cookies: String) -> String?)? = null,
+        silent: Boolean = false,
     ) {
         if (continuation.isCompleted || webView == null) return
 
@@ -300,7 +313,7 @@ class WebViewResolver(private val context: Context) {
             }
 
             // Se dopo 2 polling (circa 3-4 secondi) non c'è contenuto, mostriamo il dialog per sbloccare
-            if (dialog == null && activityContext != null && (isChallenge || (pollingCount >= 2 && !hasContent))) {
+            if (!silent && dialog == null && activityContext != null && (isChallenge || (pollingCount >= 2 && !hasContent))) {
                 Log.d(TAG, "[WebView] Visible challenge UI needed")
                 showVisibleChallenge(continuation)
             }
@@ -314,7 +327,8 @@ class WebViewResolver(private val context: Context) {
                         completion,
                         continuation,
                         valueScript,
-                        pageReadyScriptProvider
+                        pageReadyScriptProvider,
+                        silent
                     )
                 }, 2000)
             } else {

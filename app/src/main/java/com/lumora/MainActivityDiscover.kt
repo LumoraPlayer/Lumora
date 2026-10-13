@@ -1297,8 +1297,9 @@ internal fun MainActivity.seriesContinueItems(): List<Channel> {
  * parent id, or a show since removed). Those keep the name the snapshot was saved with rather
  * than getting a half-built label.
  */
-/** Anywhere in a name, not just at the front - see [tileSeasonNumber]. */
-internal val ANY_SEASON_MARKER_REGEX = Regex("""(?i)\bS(\d{1,2})E\d{1,3}\b""")
+/** Anywhere in a name, not just at the front - glued or spaced ("S03E03", "S03 E03"),
+ *  see [tileSeasonNumber]. */
+internal val ANY_SEASON_MARKER_REGEX = Regex("""(?i)\bS(\d{1,2})\s*E\d{1,3}\b""")
 
 /**
  * The season number to print on a Continue Watching tile, or null if nothing states one.

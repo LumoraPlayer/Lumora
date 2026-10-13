@@ -1314,7 +1314,7 @@ internal fun MainActivity.showProviderSettings() {
                     Toast.makeText(
                         this@showProviderSettings,
                         result.errorMessage?.let { getString(R.string.sett_import_failed_reason, it) }
-                            ?: getString(R.string.sett_imported_summary, result.providersImported, result.epgSourcesImported, result.customGroupsImported),
+                            ?: getString(R.string.sett_imported_summary, result.providersImported, result.epgSourcesImported, result.customGroupsImported, result.settingsImported),
                         Toast.LENGTH_LONG
                     ).show()
                     if (result.errorMessage == null) applyImportedConfiguration()

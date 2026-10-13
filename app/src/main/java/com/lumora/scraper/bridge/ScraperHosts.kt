@@ -40,7 +40,7 @@ object ScraperHosts {
      * Providers that need the slash add it themselves, as they did with their own constants.
      *
      * [name] is nullable on purpose. Providers are Kotlin `object`s whose `name` is itself a
-     * property, and `Provider.providers` touches all ~68 of them at once, so a host read that
+     * property, and `Provider.providers` touches all ~69 of them at once, so a host read that
      * happens during a provider's own `<clinit>` can arrive before that object's `name` has been
      * assigned - it is genuinely null there, whatever the declared type says. Taking a non-null
      * String meant Kotlin's parameter intrinsic threw an NPE inside the static initialiser, which
@@ -56,7 +56,7 @@ object ScraperHosts {
      * their base URL straight to `Retrofit.Builder().baseUrl(...)`, and that rejects a value with
      * no scheme with `IllegalArgumentException`. Several providers build their service in a
      * property initialiser, so the throw happens inside `<clinit>` and comes out as
-     * `ExceptionInInitializerError` - and because `Provider.providers` references all ~68
+     * `ExceptionInInitializerError` - and because `Provider.providers` references all ~69
      * provider objects, one unconfigured site took the whole app down on launch.
      *
      * A syntactically valid URL keeps construction working and pushes the failure to where it

@@ -302,9 +302,13 @@ fun groupDuplicateSeries(series: List<Channel>): Pair<List<Channel>, Map<String,
 
 /** Trailing season/episode marker the way m3u_plus panels bake it into the display
  *  title: "Ilusão Mortal (2026) S01E02", "Uma Fortuna (2026) [L] S01E06".
+ *  The whitespace between season and episode is optional because a whole family of
+ *  panels writes the spaced form - "Fear the Walking Dead S01 E01", on every one of
+ *  its ~250k series rows. Without the `\s*` none of those read as markers at all:
+ *  every episode stayed an individual dead-end card, and no show ever collapsed.
  *  Trailing-anchored on purpose: an SxxExx-shaped token mid-title is part of the
  *  title, not the episode tag. */
-private val M3U_EPISODE_SUFFIX_REGEX = Regex("""(?i)\bS(\d{1,2})E(\d{1,3})\b\s*$""")
+private val M3U_EPISODE_SUFFIX_REGEX = Regex("""(?i)\bS(\d{1,2})\s*E(\d{1,3})\b\s*$""")
 
 /** Marker match, or null when the name has none (or states S00/a zero episode). The
  *  digit-tail gate is exact, not a heuristic: the regex can only match a name whose
@@ -325,20 +329,28 @@ fun m3uEpisodeTag(name: String): Pair<Int, Int>? {
     return m.groupValues[1].toInt() to m.groupValues[2].toInt()
 }
 
+/** The part of an episode row's name in front of its marker, with a hanging
+ *  separator dash removed: "RoOT - Route of OddTaxi - S01 E01" is the show
+ *  "RoOT - Route of OddTaxi", not "... OddTaxi -" (dash-separated markers are a
+ *  small but real share of rows, and the leftover dash reads as part of the name
+ *  on the show card and in title-matched lookups). */
+private fun episodeTitleBefore(name: String, marker: MatchResult): String =
+    name.substring(0, marker.range.first).trim().trimEnd('-', '–', '—').trimEnd()
+
 /** Grouping key of the SHOW an m3u_plus episode row belongs to: the title minus its
  *  trailing episode marker, through the same normalisation as everything else, so a
  *  collapsed show card keys identically to an Xtream copy of the same show. Null when
  *  the name carries no episode marker. */
 fun seriesShowKey(name: String): String? {
     val m = episodeMarkerMatch(name) ?: return null
-    return normalizeTitleForGrouping(name.substring(0, m.range.first)).ifBlank { null }
+    return normalizeTitleForGrouping(episodeTitleBefore(name, m)).ifBlank { null }
 }
 
 /** Display title of the show an episode row belongs to: marker off, everything else
  *  (year included) kept, so withResolvedYear still finds the year downstream. */
 fun seriesShowTitle(name: String): String {
     val m = episodeMarkerMatch(name) ?: return name
-    return name.substring(0, m.range.first).trim()
+    return episodeTitleBefore(name, m)
 }
 
 /** Prefix of a collapsed M3U show card's id (and of its episode rows' categoryId). */

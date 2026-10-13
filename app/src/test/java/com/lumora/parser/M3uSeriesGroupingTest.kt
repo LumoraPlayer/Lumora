@@ -52,6 +52,17 @@ class M3uSeriesGroupingTest {
     }
 
     @Test
+    fun `spaced episode marker stamps like the glued form`() {
+        // A family of panels writes the marker with a space between season and episode
+        // ("Fear the Walking Dead S01 E01" - the real shape of an entire reported
+        // playlist); the glued-only regex read none of those rows as episodes.
+        val ep = seriesEntry("Fear the Walking Dead S01 E02")
+        assertEquals(MediaType.SERIES, ep.mediaType)
+        assertEquals(2, ep.episodeNum)
+        assertEquals(m3uShowId("fear the walking dead"), ep.categoryId)
+    }
+
+    @Test
     fun `series row without marker stays a plain show-level item`() {
         val show = seriesEntry("Some Show (2026)")
         assertNull(show.episodeNum)
@@ -94,6 +105,23 @@ class M3uSeriesGroupingTest {
         assertNull(m3uEpisodeTag("S01E01 Origins (2026)"))
     }
 
+    @Test
+    fun `episode tag parses the spaced marker too`() {
+        assertEquals(3 to 12, m3uEpisodeTag("Some Show (2026) S03 E12"))
+        // Both shapes key and title the same show.
+        assertEquals(
+            seriesShowKey("Some Show (2026) S01E01"),
+            seriesShowKey("Some Show (2026) S01 E01")
+        )
+        assertEquals("Some Show (2026)", seriesShowTitle("Some Show (2026) S03 E12"))
+    }
+
+    @Test
+    fun `dash left by the marker is not part of the show title`() {
+        assertEquals("RoOT - Route of OddTaxi", seriesShowTitle("RoOT - Route of OddTaxi - S01 E01"))
+        assertEquals("root - route of oddtaxi", seriesShowKey("RoOT - Route of OddTaxi - S01 E01"))
+    }
+
     // ── collapse ──
 
     private fun epRow(show: String, season: Int, episode: Int, provider: String = "prov-1"): Channel {
@@ -128,6 +156,20 @@ class M3uSeriesGroupingTest {
         // Episodes stay addressable - the detail screen matches them by this id.
         assertEquals(card.id, rows[0].categoryId)
         assertEquals(card.id, rows[1].categoryId)
+    }
+
+    @Test
+    fun `spaced episode rows collapse into one show card and list back`() {
+        val rows = listOf(
+            seriesEntry("Fear the Walking Dead S01 E01", "http://ex.com/1.mp4").copy(sourceProviderId = "p1"),
+            seriesEntry("Fear the Walking Dead S01 E02", "http://ex.com/2.mp4").copy(sourceProviderId = "p1")
+        )
+        val collapsed = collapseM3uEpisodeRows(rows)
+        assertEquals(1, collapsed.size)
+        assertEquals("Fear the Walking Dead", collapsed.single().name)
+        val seasons = m3uSeasonsFrom(rows, collapsed.single().id, "p1")
+        assertEquals(listOf("Season 1"), seasons.map { it.first })
+        assertEquals(listOf(1, 2), seasons.single().second.map { it.episodeNum })
     }
 
     @Test
@@ -242,6 +284,9 @@ class M3uSeriesGroupingTest {
         assertNull(m3uEpisodeTag("Show (2026) S123E45"))
         assertNull(m3uEpisodeTag("S01E01 Origins (2026)"))
         assertNull(m3uEpisodeTag("Show (2026) S00E05"))
+        // The spaced shape follows the same rules.
+        assertNull(m3uEpisodeTag("S01 E01 Origins (2026)"))
+        assertNull(m3uEpisodeTag("Show (2026) S00 E05"))
     }
 
     // ── title matcher: a series opened without the m3u show id ──

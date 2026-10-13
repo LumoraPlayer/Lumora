@@ -73,7 +73,13 @@ internal fun MainActivity.hasProviderEnabled(): Boolean =
  *  an enabled stream_search plugin to find content through (Discover/anime tabs, Find
  *  Stream) - with neither, they point at nothing, so hide them and leave just the Settings
  *  button as the way in. The empty state carries its own Settings/Demo actions. Settings and
- *  refresh stay visible so the user can always get back to configuring one. */
+ *  refresh stay visible so the user can always get back to configuring one.
+ *
+ *  The Search pill is the one exception, gated in [applySimpleModeUi] on there being a
+ *  catalogue to search (see [hasSearchableCatalog]) rather than on anything to browse: it
+ *  searches the local lists and the guide, so a plugin-only setup with no such catalogue
+ *  (torrent/addon-only) could only ever get "no results" from it. The tabs stay there -
+ *  Discover is exactly where that setup browses. */
 internal fun MainActivity.updateTopChromeVisibility() {
     val enabled = hasProviderEnabled() || hasProviderlessSource()
     if (!enabled) binding.homeSearchBar.visibility = View.GONE
@@ -86,8 +92,9 @@ internal fun MainActivity.updateTopChromeVisibility() {
  *  Settings and Refresh sit in the same scroller now (so the chrome reads as one bar), so
  *  hiding the scroller would take them with it, and "no provider" is exactly the state
  *  where Settings must stay reachable. Showing is only lifting the blanket hide: the
- *  per-item rules (Downloads is phone-only, Catch Up needs an archive, simple mode shows
- *  Live + Catch Up alone) are re-applied by the caller straight after. */
+ *  per-item rules (Downloads is phone-only, Catch Up needs an archive, Search needs an
+ *  enabled provider, simple mode shows Live + Catch Up alone) are re-applied by the caller
+ *  straight after. */
 internal fun MainActivity.setBrowseTabsVisible(visible: Boolean) {
     val vis = if (visible) View.VISIBLE else View.GONE
     for (tab in listOf(
@@ -98,18 +105,48 @@ internal fun MainActivity.setBrowseTabsVisible(visible: Boolean) {
     }
 }
 
-/** Settings' LEFT target, which depends on what is actually on screen to its left:
- *  Downloads (phone), else Search, else Home (simple mode's rightmost tab), else nothing
- *  left of it at all. An explicit nextFocusLeftId pointing at a GONE view resolves to
- *  nothing and eats the press, so it can't be left to the XML default. */
+/** Settings' LEFT target, which depends on what is actually on screen to its left, plus the
+ *  interior links that hiding a pill leaves dangling. The row order is Live, Series, Films,
+ *  Home, Discover, Search, Downloads, then Settings, so walking it backwards is what finds
+ *  the pill immediately left of Settings however much of the row is hidden - a plugin-only
+ *  setup keeps Series/Films/Discover and drops everything from Home leftwards. An explicit
+ *  nextFocusLeftId pointing at a GONE view resolves to nothing and eats the press on API 25
+ *  (Fire TV 7.1) - newer FocusFinder walks past it, but the oldest supported devices don't -
+ *  so it can't be left to the XML default. */
 internal fun MainActivity.updateChromeFocusChain() {
     binding.btnSettings.nextFocusLeftId = when {
         binding.tabDownloads.visibility == View.VISIBLE -> R.id.tabDownloads
         binding.btnSearch.visibility == View.VISIBLE -> R.id.btnSearch
+        binding.tabDiscover.visibility == View.VISIBLE -> R.id.tabDiscover
         binding.tabHome.visibility == View.VISIBLE -> R.id.tabHome
+        binding.tabFilms.visibility == View.VISIBLE -> R.id.tabFilms
+        binding.tabSeries.visibility == View.VISIBLE -> R.id.tabSeries
+        binding.tabLive.visibility == View.VISIBLE -> R.id.tabLive
         else -> R.id.btnSettings
     }
+    // Search can be hidden with Discover and/or Downloads still on screen (its own gate is
+    // the provider, theirs is the plugin), so both neighbours' links into it have to be
+    // re-pointed at whatever is actually next along the row.
+    binding.tabDiscover.nextFocusRightId = when {
+        binding.btnSearch.visibility == View.VISIBLE -> R.id.btnSearch
+        binding.tabDownloads.visibility == View.VISIBLE -> R.id.tabDownloads
+        else -> R.id.btnSettings
+    }
+    binding.tabDownloads.nextFocusLeftId = when {
+        binding.btnSearch.visibility == View.VISIBLE -> R.id.btnSearch
+        binding.tabDiscover.visibility == View.VISIBLE -> R.id.tabDiscover
+        binding.tabHome.visibility == View.VISIBLE -> R.id.tabHome
+        else -> R.id.tabDownloads
+    }
 }
+
+/** True when the search overlay has anything to walk: it searches the live, film and series
+ *  lists the providers filled - plus the anime catalogue, when an anime plugin supplied one,
+ *  which is why this is not simply [hasProviderEnabled]: a plugin-only anime setup genuinely
+ *  has titles to find. A torrent/addon-only setup has none, and the pill would only ever
+ *  answer "no results" - the dead end hiding it avoids. */
+internal fun MainActivity.hasSearchableCatalog(): Boolean =
+    liveChannels.isNotEmpty() || filmList.isNotEmpty() || seriesList.isNotEmpty()
 
 /** Simple mode is "TV only": Live TV and Home stay reachable (Catch Up through its own
  *  small chip, not a tab), Series/Films/Discover/Downloads/Search go - there is nothing to
@@ -251,12 +288,45 @@ internal fun MainActivity.applySimpleModeUi() {
             updateCatchupTabVisibility()
             updateDiscoverTabVisibility()
             updateProviderOnlyTabsVisibility()
+            // Search is the one browse pill a plugin can't stand in for: it walks the local
+            // catalogue (channels, films, series) and the guide, so with nothing in those it
+            // could only ever answer "no results" - see hasSearchableCatalog for why the rule
+            // is the lists' content, not merely "a provider is enabled" (an anime plugin with
+            // nothing configured still fills the series list). The tabs stay, because Discover
+            // (and the Discover-backed Series/Films shelves) is where a plugin-only setup
+            // browses.
+            binding.btnSearch.visibility =
+                if (hasSearchableCatalog()) View.VISIBLE else View.GONE
         }
         // Back to the full-row chain: Live -> Series -> Films -> Home -> Discover.
         binding.tabLive.nextFocusLeftId = R.id.tabDownloads
         binding.tabLive.nextFocusRightId = R.id.tabSeries
     }
+    updateSideMenuSearchVisibility()
     updateChromeFocusChain()
+}
+
+/** Mirrors the browse bar's Search visibility into the player's side menu, which copies the
+ *  bar's rows - the side menu's row opens the same search, so it would open the same dead
+ *  end (there is nothing to search) without leaving playback first. The rows on either side
+ *  are re-linked at the same time: a GONE nextFocus target eats the UP/DOWN press on API 25
+ *  (Fire TV 7.1), so the walk has to skip the hidden row. Downloads is phone-only, so the
+ *  fallback differs per side and per device. */
+internal fun MainActivity.updateSideMenuSearchVisibility() {
+    val searchVisible = binding.btnSearch.visibility == View.VISIBLE
+    binding.navSearch.visibility = if (searchVisible) View.VISIBLE else View.GONE
+    val downloadsVisible = binding.navDownloads.visibility == View.VISIBLE
+    binding.navDiscover.nextFocusDownId = when {
+        searchVisible -> R.id.navSearch
+        downloadsVisible -> R.id.navDownloads
+        else -> R.id.navSettings
+    }
+    binding.navDownloads.nextFocusUpId = if (searchVisible) R.id.navSearch else R.id.navDiscover
+    binding.navSettings.nextFocusUpId = when {
+        downloadsVisible -> R.id.navDownloads
+        searchVisible -> R.id.navSearch
+        else -> R.id.navDiscover
+    }
 }
 
 /** Discover (TMDB browse) is only useful once there's nothing else to browse: with an
@@ -444,6 +514,10 @@ internal fun MainActivity.isCatalogStale(): Boolean {
  *  looks like it did nothing - which is exactly how "the export makes a file but the import
  *  loads nothing" reads from the couch. */
 internal fun MainActivity.applyImportedConfiguration() {
+    // A restored UI language otherwise waits for the next launch to show (onCreate applies it
+    // there) and the import is supposed to be visible without a restart. AppCompatDelegate
+    // no-ops when the language did not change, so an ordinary import does not recreate anything.
+    applyUiLanguageOverride(uiLanguageCode())
     refreshIptvProviderList.invoke()
     loadAllConfiguredProviders(forceRefresh = true)
 }
