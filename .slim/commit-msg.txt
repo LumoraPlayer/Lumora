@@ -1,0 +1,50 @@
+feat(sports): the guide's own sport on the board, and live games two to a line
+
+The board could only show what the fixture feeds carry, which pushed the rest of
+today's sport off the screen: a Grand Prix, a golf round or a league match that a
+provider titles only by competition are all things the guide knows about and the
+feeds have no product for. Both guide paths were also throwing the source's own
+blurb away - XMLTV's <desc> was parsed and then dropped, Xtream's description was
+never read - and that blurb is exactly where those listings name the event, and
+where an "SPFL 26/27" row names the two clubs.
+
+**Guide text, end to end.** `epg_programs` gains `description` (DB v5, migrated
+by adding the column), written through one normaliser (`guideDescription`:
+trimmed, blank -> null, capped at 500 chars) by both the XMLTV sync and the
+Xtream fetch. A channel's guide now comes from the panel's whole stored table
+(`get_simple_data_table`) rather than the short EPG: four entries against 140-380
+on the panel this was measured against, which is what left the timeline dry a
+couple of hours ahead and refetched rows on every scroll. Panels that file a
+guide under one of a channel's quality variants are met by the same channel *by
+name* (a few candidates, capped), and the epoch-shift measurement still comes
+from a short EPG - a whole table starts days ago, so measuring there would read
+zero and leave a clock-shifted panel's guide hours out.
+
+**The guide's own sport.** GuideEvents picks the listings that read as live sport
+on the user's channels, GuideSports classifies them (guide-shaped titles and
+blurbs, channel names as the weaker hint), and the board shows them under "On
+now" with the listing's own blurb - de-duplicated against the fixture matcher's
+matches, so a game never appears twice. Formula 1 and Golf join Sport as
+guide-only entries: no host, no key, no request, and `hasKey` refuses to spend a
+key on them however the key list is written. The filter row carries a glyph and a
+count per sport ("Football 25"), with the five the board always shows first.
+
+**Matching.** The matcher's second chance is the description: a title-only "NHL"
+row whose blurb names both sides scores 75, kept below a title that names them so
+the stronger evidence still wins, with the cross-sport, women's-listing and
+talk-show guards reading the blurb too. The kick-off window compared guide
+seconds against fixture millis - which rejected every row and silently cost the
+competition tier every match - so the window is in seconds now. Live rows also
+stop printing "LIVE LIVE" when a provider's own status word repeats the badge.
+
+**Live now, two to a line.** Games in play are half-width cards
+(item_sports_live_card.xml: the same views and the same ids as the full-width
+row, so one holder binds both, with the competition sharing the last line with
+the channel chip), laid out on a two-column grid. Only the live section uses both
+columns, and the pair carries a gutter that keeps its outer edges in line with
+the full-width rows. Upcoming, finished and guide rows keep the full width - the
+only shape a table reads down - and a screen too narrow for two cards (a phone)
+falls back to one row per line rather than ellipsising the sides a card is about.
+
+Tests: the matcher against the guide titles read off a device and the new
+description tier, and the guide classifier.
