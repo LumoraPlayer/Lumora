@@ -253,7 +253,14 @@ class QrPairingManager(private val context: Context) {
                         }
                     } else {
                         onProviderReceived?.invoke(type, form)
-                        writeHtml(c.getOutputStream(), 200, successPage("Provider details received! Check your TV."))
+                        writeHtml(
+                            c.getOutputStream(),
+                            200,
+                            successPage(
+                                if (type == "stremio") "Addon link sent! Check your TV."
+                                else "Provider details received! Check your TV."
+                            )
+                        )
                     }
                 }
                 else -> writeHtml(c.getOutputStream(), 404, "Not found")
@@ -373,7 +380,9 @@ class QrPairingManager(private val context: Context) {
 
     // ── HTML Pages ───────────────────────────────────────────
 
-    private fun formPage(token: String, presetType: String = "m3u"): String = """
+    private fun formPage(token: String, presetType: String = "m3u"): String {
+        if (presetType == "stremio") return stremioFormPage(token)
+        return """
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -514,6 +523,45 @@ document.getElementById('jellyfinPasswordFields').classList.toggle('active',m===
 document.getElementById('jellyfinQuickConnectHint').classList.toggle('active',m==='quickconnect');syncEnabledFields();}
 syncEnabledFields();
 </script>
+</body></html>
+""".trimIndent()
+    }
+
+    /**
+     * The phone form for one Stremio addon: a single link field, because that is the whole
+     * of an "install" for an addon. Same look and same contract as the provider form (token,
+     * POST /submit), so the TV side handles both kinds of submission identically.
+     */
+    private fun stremioFormPage(token: String): String = """
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lumora - Stremio addon</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0d0d0d;color:#eee;margin:0;padding:16px}
+main{max-width:520px;margin:20px auto;background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:24px}
+h1{margin:0 0 4px;font-size:22px;color:#fff} p{color:#9e9e9e;margin:4px 0 16px;line-height:1.4}
+label{display:block;margin-top:16px;font-size:14px;font-weight:600;color:#ccc}
+input{width:100%;margin-top:6px;padding:14px;border-radius:10px;border:1px solid #444;background:#0d0d0d;color:#fff;font-size:16px}
+input:focus{outline:none;border-color:#2979ff;box-shadow:0 0 0 2px rgba(41,121,255,0.3)}
+button{width:100%;margin-top:24px;padding:16px;border:0;border-radius:12px;background:#2979ff;color:#fff;font-weight:700;font-size:17px}
+button:active{background:#1565c0}
+.hint{font-size:13px;color:#777;margin-top:4px}
+</style></head>
+<body>
+<main>
+<h1>Add Stremio Addon</h1>
+<p>Paste the addon's manifest link (usually ending in manifest.json) or a stremio:// install link. It is sent straight to your TV over your local network.</p>
+<form method="post" action="/submit">
+<input type="hidden" name="token" value="${token.escapeHtml()}">
+<input type="hidden" name="type" value="stremio">
+<label>Manifest link</label>
+<input name="url" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="https://example.com/manifest.json" required>
+<div class="hint">On most addon sites you configure the addon first, then copy the link it generates.</div>
+<button type="submit">Send to TV</button>
+</form>
+</main>
 </body></html>
 """.trimIndent()
 

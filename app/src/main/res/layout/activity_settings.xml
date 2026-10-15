@@ -1670,6 +1670,39 @@
                         android:textSize="@dimen/settings_text_caption" />
                 </LinearLayout>
 
+                <!-- The store: Stremio's own catalogues (official + community), so most users
+                     never need a manifest URL at all - one press installs from the list. Kept
+                     above the manual row because it is the easier path. -->
+                <LinearLayout
+                    android:id="@+id/settingsStremioStore"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/settings_gap_m"
+                    android:background="@drawable/card_surface_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="@dimen/settings_gap_l"
+                    android:stateListAnimator="@animator/focus_scale">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/plug_stremio_store"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/settings_text_body"
+                        android:fontFamily="@font/inter_medium" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/plug_stremio_store_caption"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/settings_text_caption" />
+                </LinearLayout>
+
                 <!-- The second install path: a Stremio addon is managed exactly like a script
                      (its own row in the list below, its own detail page), it just arrives as a
                      manifest URL instead of a .js file. -->

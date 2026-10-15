@@ -71,6 +71,16 @@ class StremioAddonManager(
         data class Rejected(val reason: String) : InstallResult()
     }
 
+    /** One addon as the store offers it: enough for a row and one-press install. */
+    data class StoreAddon(
+        val id: String,
+        val name: String,
+        val description: String,
+        val manifestUrl: String,
+        /** From the official catalogue rather than the community one - shown as a tag. */
+        val official: Boolean
+    )
+
     /**
      * Re-reads the installed addons off disk and returns them, name-sorted. Also prunes enabled
      * ids with no addon behind them, for the same reason
@@ -97,6 +107,44 @@ class StremioAddonManager(
 
     /** The last [discoverAddons] result - what the Find Stream gate and the settings list read. */
     fun getDiscoveredAddons(): List<StremioAddon> = addons
+
+    /**
+     * The store: Stremio's two keyless catalogues - the official starter set and the
+     * community list Stremio's own addon browser reads - flattened into installable
+     * entries. Only addons that publish streams are offered, matching [installFromUrl]'s
+     * gate; a row that could never install is worse than no row.
+     */
+    suspend fun fetchStoreCatalog(): List<StoreAddon> = withContext(Dispatchers.IO) {
+        val entries = LinkedHashMap<String, StoreAddon>()
+        for ((url, official) in listOf(COMMUNITY_STORE_URL to false, OFFICIAL_STORE_URL to true)) {
+            val text = fetchText(httpClient, url) ?: continue
+            runCatching {
+                val addons = JsonParser.parseString(text).asJsonObject.getAsJsonArray("addons")
+                for (element in addons) {
+                    val obj = element.asJsonObject
+                    val manifest = obj.getAsJsonObject("manifest") ?: continue
+                    val id = manifest.get("id")?.asString ?: continue
+                    val transportUrl = obj.get("transportUrl")?.asString ?: continue
+                    val streams = manifest.get("resources")?.asJsonArray?.any { r ->
+                        (r.isJsonPrimitive && r.asString == StremioProtocol.RESOURCE_STREAM) ||
+                            (r.isJsonObject && r.asJsonObject.get("name")?.asString == StremioProtocol.RESOURCE_STREAM)
+                    } ?: false
+                    if (!streams) continue
+                    entries.putIfAbsent(
+                        id,
+                        StoreAddon(
+                            id = id,
+                            name = manifest.get("name")?.asString ?: id,
+                            description = manifest.get("description")?.asString.orEmpty(),
+                            manifestUrl = transportUrl,
+                            official = official
+                        )
+                    )
+                }
+            }
+        }
+        entries.values.toList()
+    }
 
     fun isEnabled(addonId: String): Boolean = addonId in enabledAddonIds()
 
@@ -222,5 +270,9 @@ class StremioAddonManager(
         const val MAX_RESPONSE_BYTES = 8L * 1024 * 1024
         /** Per-addon bound on a stream query - the other sources are what the dialog waits on. */
         const val STREAM_TIMEOUT_SEC = 10L
+        /** The two public catalogues behind Stremio's own addon browser: the community list,
+         *  where the streaming addons live, and the official starter set. */
+        const val COMMUNITY_STORE_URL = "https://v3-cinemeta.strem.io/addon_catalog/all/community.json"
+        const val OFFICIAL_STORE_URL = "https://v3-cinemeta.strem.io/addon_catalog/all/official.json"
     }
 }

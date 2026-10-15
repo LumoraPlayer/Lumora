@@ -594,6 +594,13 @@ class MainActivity : AppCompatActivity() {
     /** Rebuilds those child rows - the pane calls it after anything that changes a plugin's
      *  enabled state or removes one, so the rail doesn't go stale behind it. */
     internal var refreshPluginNavRows: (() -> Unit)? = null
+    /** Set by the Plugins pane so an addon installed from the phone - the QR flow's link
+     *  arrives through QrPairingManager, outside that pane's own functions - still refreshes
+     *  the list the way an in-pane install does. Nulled when Settings closes with the rest. */
+    internal var refreshPluginList: (() -> Unit)? = null
+    /** Set while the Plugins pane's Stremio QR dialog is open: hands the phone's manifest
+     *  link to the dialog that asked for it (see QrPairingManager's submit handler). */
+    internal var stremioQrReceived: ((String) -> Unit)? = null
     /** Installed JS plugin scripts - see PluginScriptManager. Discovered once at startup and
      *  refreshed whenever Settings > Plugins is opened. */
     internal val pluginScriptManager by lazy { PluginScriptManager(this, prefs) }

@@ -1081,6 +1081,16 @@ internal fun MainActivity.showProviderSettings() {
         runOnUiThread {
             qrStatus.text = getString(R.string.sett_provider_received)
             when (type) {
+                "stremio" -> {
+                    // The phone submitted an addon link. The Plugins pane's QR dialog owns
+                    // the install while it is open (its list has to refresh); a link that
+                    // arrives after that dialog closed still installs, so the phone's
+                    // "sent to your TV" is never a lie.
+                    val url = form["url"]?.takeIf { it.isNotBlank() } ?: return@runOnUiThread
+                    val dialogHandler = stremioQrReceived
+                    if (dialogHandler != null) dialogHandler.invoke(url)
+                    else installStremioAddonFromPhone(url)
+                }
                 "m3u" -> {
                     val rawM3u = form["m3uUrl"] ?: return@runOnUiThread
                     val url = rawM3u.trim().let { if (isLocalFileUrl(it)) it else normalizeServerUrl(it) }
@@ -2241,6 +2251,8 @@ internal fun MainActivity.showProviderSettings() {
         // whole inflated settings tree and would touch detached views on the next call.
         revealPluginInPane = null
         refreshPluginNavRows = null
+        refreshPluginList = null
+        stremioQrReceived = null
         closeOpenPluginPage = null
         openPluginId = null
         liveDiscoveryStatusView = null

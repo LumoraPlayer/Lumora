@@ -66,6 +66,15 @@
     <string name="plug_add_stremio_addon">Add Stremio addon</string>
     <string name="plug_enter_stremio_manifest">Enter the link to a Stremio addon\'s manifest</string>
     <string name="plug_add_stremio_message">Enter the link to a Stremio addon\'s manifest (manifest.json), or a stremio:// install link. Enable it afterwards and its streams join Find Stream for your films and series.</string>
+    <string name="plug_stremio_store">Stremio addon store</string>
+    <string name="plug_stremio_store_caption">Browse the official and community catalogues</string>
+    <string name="plug_stremio_store_empty">Couldn\'t load the addon catalogue</string>
+    <string name="plug_stremio_store_count">%1$d addons</string>
+    <string name="plug_stremio_official">Official catalogue</string>
+    <string name="plug_stremio_community">Community catalogue</string>
+    <string name="plug_add_via_phone_qr">Add on your phone (QR)</string>
+    <string name="plug_stremio_qr_scan">Scan with your phone, then paste the addon\'s manifest link</string>
+    <string name="plug_stremio_qr_received">Addon link received - installing…</string>
     <string name="plug_stremio_couldnt_fetch">Couldn\'t fetch that manifest</string>
     <string name="plug_stremio_invalid_manifest">That link isn\'t a Stremio addon manifest</string>
     <string name="plug_stremio_no_streams">%1$s doesn\'t publish streams</string>

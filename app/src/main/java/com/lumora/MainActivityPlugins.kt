@@ -715,6 +715,9 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
     val detailCandidateList = dialogView.findViewById<LinearLayout>(R.id.pluginDetailCandidateList)
 
     lateinit var renderPluginList: () -> Unit
+    // Exposed to MainActivity for the phone (QR) install path, which lands outside this
+    // pane's own functions; in-pane callbacks call the local directly.
+    refreshPluginList = { renderPluginList() }
     lateinit var renderPluginDetail: () -> Unit
 
     fun openPluginPage(id: String) {
@@ -818,6 +821,56 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
         }
     }
 
+    /** The QR route into the same install: a phone page takes one manifest link and posts it
+     *  back; the dialog hands it to the same code the typed path uses. */
+    fun showStremioQrDialog() {
+        qrManager.stop()
+        val density = resources.displayMetrics.density
+        val qrImage = ImageView(this)
+        val status = TextView(this).apply {
+            setTextColor(getColor(R.color.text_secondary))
+            text = getString(R.string.sett_starting_server)
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            val pad = (24 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            addView(qrImage, LinearLayout.LayoutParams((220 * density).toInt(), (220 * density).toInt()))
+            addView(
+                status,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = (14 * density).toInt() }
+            )
+        }
+        val qrDialog = AlertDialog.Builder(this)
+            .setTitle(getString(R.string.plug_add_via_phone_qr))
+            .setView(container)
+            .setNegativeButton(getString(R.string.cancel), null)
+            .create()
+        qrDialog.setOnDismissListener {
+            qrManager.stop()
+            stremioQrReceived = null
+        }
+        stremioQrReceived = { url ->
+            status.text = getString(R.string.plug_stremio_qr_received)
+            qrDialog.dismiss()
+            installStremioAddonFromPhone(url)
+        }
+        qrDialog.show()
+        scope.launch {
+            val result = qrManager.start(providerType = "stremio")
+            if (result == null) {
+                status.text = getString(R.string.sett_could_not_start_server)
+                return@launch
+            }
+            qrImage.setImageBitmap(result.qrBitmap)
+            status.text = getString(R.string.plug_stremio_qr_scan)
+        }
+    }
+
     fun showAddStremioAddonDialog() {
         val input = EditText(this).apply {
             hint = "https://example.com/manifest.json"
@@ -831,8 +884,83 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
             .setMessage(getString(R.string.plug_add_stremio_message))
             .setView(container)
             .setPositiveButton(getString(R.string.add)) { _, _ -> fetchAndAddStremioAddon(input.text.toString().trim()) }
+            .setNeutralButton(getString(R.string.plug_add_via_phone_qr)) { _, _ -> showStremioQrDialog() }
             .setNegativeButton(getString(R.string.cancel), null)
             .show()
+    }
+
+    /** The catalogue behind the store row: one press installs; re-pressing an installed
+     *  addon re-fetches its manifest, which is the same update path the typed flow has. */
+    fun showStremioStoreDialog() {
+        val status = TextView(this).apply {
+            text = getString(R.string.loading)
+            setTextColor(getColor(R.color.text_secondary))
+        }
+        val resultsHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(status)
+            addView(resultsHost)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.plug_stremio_store))
+            .setView(ScrollView(this).apply { addView(container) })
+            .setNegativeButton(getString(R.string.close), null)
+            .show()
+
+        scope.launch {
+            val installedIds = stremioAddonManager.discoverAddons().map { it.id }.toSet()
+            val catalog = stremioAddonManager.fetchStoreCatalog()
+            if (catalog.isEmpty()) {
+                status.text = getString(R.string.plug_stremio_store_empty)
+                return@launch
+            }
+            status.text = getString(R.string.plug_stremio_store_count, catalog.size)
+            for (entry in catalog) {
+                val row = layoutInflater.inflate(R.layout.item_plugin_candidate_row, resultsHost, false)
+                row.findViewById<TextView>(R.id.candidateName).text = entry.name
+                row.findViewById<TextView>(R.id.candidateDetail).text = listOfNotNull(
+                    entry.description.takeIf { it.isNotBlank() },
+                    getString(if (entry.official) R.string.plug_stremio_official else R.string.plug_stremio_community)
+                ).joinToString("\n")
+                row.findViewById<View>(R.id.candidateVerified).visibility = View.GONE
+                val addButton = row.findViewById<View>(R.id.candidateAddButton)
+                val addLabel = row.findViewById<TextView>(R.id.candidateAddLabel)
+                val alreadyInstalled = entry.id in installedIds
+                val idleLabel = if (alreadyInstalled) getString(R.string.update) else getString(R.string.add)
+                addLabel.text = idleLabel
+                addButton.setOnClickListener {
+                    addButton.isEnabled = false
+                    addLabel.text = getString(R.string.plug_installing)
+                    scope.launch {
+                        when (val result = stremioAddonManager.installFromUrl(entry.manifestUrl)) {
+                            is StremioAddonManager.InstallResult.Installed -> {
+                                addLabel.text = if (alreadyInstalled) getString(R.string.plug_updated) else getString(R.string.plug_added)
+                                addButton.isEnabled = true
+                                // The same toast the typed path shows: an addon lands
+                                // switched off until it is enabled, and the message says so.
+                                Toast.makeText(
+                                    this@wirePluginsPane,
+                                    if (result.addon.enabled) getString(R.string.plug_added_label, result.addon.name)
+                                    else getString(R.string.plug_added_label_enable, result.addon.name),
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                renderPluginList()
+                                refreshPluginNavRows?.invoke()
+                            }
+                            is StremioAddonManager.InstallResult.Rejected -> {
+                                addLabel.text = idleLabel
+                                addButton.isEnabled = true
+                                Toast.makeText(this@wirePluginsPane, result.reason, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                }
+                resultsHost.addView(row)
+            }
+        }
     }
 
     dialogView.findViewById<View>(R.id.settingsPluginInstallUrl)?.setOnClickListener {
@@ -840,6 +968,9 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
     }
     dialogView.findViewById<View>(R.id.settingsPluginInstallStremio)?.setOnClickListener {
         showAddStremioAddonDialog()
+    }
+    dialogView.findViewById<View>(R.id.settingsStremioStore)?.setOnClickListener {
+        showStremioStoreDialog()
     }
     wirePluginStoresSection(dialogView, manager) { renderPluginList() }
 
@@ -1422,6 +1553,28 @@ internal fun MainActivity.wirePluginNavRows(dialogView: View, openPluginsPane: (
  * their own fork, ...) and remove any they added. [onInstalled] refreshes the plain
  * installed-plugin list above once something new lands.
  */
+/**
+ * Installs a Stremio addon by manifest link without the Plugins pane in scope: the phone-QR
+ * submission can arrive while that pane is behind the QR dialog (or just rebuilt), and the
+ * link must not be dropped because a local renderer is out of reach. The pane refreshes
+ * through [refreshPluginList]/[refreshPluginNavRows] when it is alive.
+ */
+internal fun MainActivity.installStremioAddonFromPhone(url: String) {
+    scope.launch {
+        when (val result = stremioAddonManager.installFromUrl(url)) {
+            is StremioAddonManager.InstallResult.Installed -> {
+                val message = if (result.addon.enabled) getString(R.string.plug_added_label, result.addon.name)
+                else getString(R.string.plug_added_label_enable, result.addon.name)
+                Toast.makeText(this@installStremioAddonFromPhone, message, Toast.LENGTH_LONG).show()
+                refreshPluginList?.invoke()
+                refreshPluginNavRows?.invoke()
+            }
+            is StremioAddonManager.InstallResult.Rejected ->
+                Toast.makeText(this@installStremioAddonFromPhone, result.reason, Toast.LENGTH_LONG).show()
+        }
+    }
+}
+
 internal fun MainActivity.wirePluginStoresSection(dialogView: View, manager: PluginScriptManager, onInstalled: () -> Unit) {
     val listContainer = dialogView.findViewById<LinearLayout>(R.id.settingsPluginStoreList)
     val listEmpty = dialogView.findViewById<View>(R.id.settingsPluginStoreListEmpty)
