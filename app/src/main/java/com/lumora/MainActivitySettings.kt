@@ -31,6 +31,7 @@ import com.lumora.util.localFileDisplayName
 import com.lumora.data.local.entity.EpgSourceEntity
 import com.lumora.data.backup.BackupManager
 import com.lumora.data.MediaServerStore
+import com.lumora.localfiles.hasLocalFilesAccess
 import com.lumora.shares.SmbUrl
 import com.lumora.data.remote.jellyfin.JellyfinProvider
 import com.lumora.data.remote.plex.PlexProvider
@@ -1470,6 +1471,34 @@ internal fun MainActivity.showProviderSettings() {
         val servers = mediaServers()
         iptvProviderListEmpty.visibility =
             if (list.isEmpty() && servers.isEmpty()) View.VISIBLE else View.GONE
+        // Local files: not a provider (nothing to configure, test or remove) but the same
+        // browse-and-play shape as the shares below it, so it leads the same list. Its
+        // subtitle carries the one piece of state it has - whether the system's all-files
+        // grant is in place, which is also what Browse checks before opening.
+        run {
+            val row = layoutInflater.inflate(R.layout.item_iptv_provider_row, iptvProviderListContainer, false)
+            row.findViewById<View>(R.id.rowEnabled).visibility = View.GONE
+            listOf(R.id.rowTvBox, R.id.rowMoviesBox, R.id.rowSeriesBox).forEach {
+                row.findViewById<View>(it).visibility = View.GONE
+            }
+            row.findViewById<TextView>(R.id.rowName).text = getString(R.string.sett_local_files)
+            row.findViewById<TextView>(R.id.rowDetail).text = if (hasLocalFilesAccess(this)) {
+                getString(R.string.sett_local_files_detail)
+            } else {
+                getString(R.string.sett_local_files_needs_access)
+            }
+            row.findViewById<View>(R.id.rowEditButton).visibility = View.GONE
+            row.findViewById<View>(R.id.rowRemoveButton).visibility = View.GONE
+            val browseButton = row.findViewById<View>(R.id.rowBrowseButton)
+            browseButton.visibility = View.VISIBLE
+            // The row's other boxes are gone, so the XML focus chain would dead-end on them -
+            // rewire root -> Browse, and clear Browse's own Edit hint (also gone).
+            row.findViewById<View>(R.id.rowRoot).nextFocusRightId = R.id.rowBrowseButton
+            browseButton.nextFocusLeftId = R.id.rowRoot
+            browseButton.nextFocusRightId = View.NO_ID
+            browseButton.setOnClickListener { browseLocalFiles() }
+            iptvProviderListContainer.addView(row)
+        }
         for (cfg in list) {
             val row = layoutInflater.inflate(R.layout.item_iptv_provider_row, iptvProviderListContainer, false)
             val enabledBox = row.findViewById<CheckBox>(R.id.rowEnabled)
@@ -1650,7 +1679,7 @@ internal fun MainActivity.showProviderSettings() {
                         // close it now rather than keeping a live connection to a server the
                         // user just removed.
                         com.lumora.shares.SmbSessions.close(server.id)
-                        ensureShareBrowserDismissed()
+                        ensureFileBrowserDismissed()
                         renderIptvProviderList()
                         focusWhenReady(addIptvProviderButton)
                         loadAllConfiguredProviders(forceRefresh = true)
@@ -2170,9 +2199,9 @@ internal fun MainActivity.showProviderSettings() {
     binding.emptyState.visibility = View.GONE
     dialog.setOnDismissListener {
         qrManager.stop()
-        // The share browser lives in the same slot above this dialog; closing Settings takes
+        // The file browser lives in the same slot above this dialog; closing Settings takes
         // it down too instead of leaving a detached listing behind a GONE container.
-        ensureShareBrowserDismissed()
+        ensureFileBrowserDismissed()
         // A discovery run only exists to fill in this pane - closing Settings unbinds the
         // plugin rather than leaving another app's service bound with nowhere to report.
         pluginDiscoveryJob?.cancel()

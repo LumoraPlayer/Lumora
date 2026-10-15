@@ -441,14 +441,19 @@ class MainActivity : AppCompatActivity() {
     internal val trackController = PlayerTrackController()
     internal val qrManager by lazy { QrPairingManager(this) }
     internal var activeSettingsOverlay: FullScreenOverlay? = null
-    /** The share browser (SMB/WebDAV) while it is open. It stacks above the settings dialog
-     *  in the same slot, so Back has to reach the browser first - see [shareBrowserBack]. */
-    internal var activeShareBrowser: FullScreenOverlay? = null
-    /** Back-key handling for the share browser: returns true when the press was consumed
-     *  (either by walking up a folder, or by closing the browser at the share root). Null
-     *  while no browser is open. Consulted by handleBackNavigation() before any other
-     *  overlay, because the browser is the topmost one. */
-    internal var shareBrowserBack: (() -> Boolean)? = null
+    /** The file browser (SMB/WebDAV shares or local storage) while it is open. It stacks
+     *  above the settings dialog in the same slot, so Back has to reach the browser first -
+     *  see [fileBrowserBack]. */
+    internal var activeFileBrowser: FullScreenOverlay? = null
+    /** Back-key handling for the file browser: returns true when the press was consumed
+     *  (either by walking up a folder, or by closing the browser at the root). Null while no
+     *  browser is open. Consulted by handleBackNavigation() before any other overlay,
+     *  because the browser is the topmost one. */
+    internal var fileBrowserBack: (() -> Boolean)? = null
+    /** Armed when the Local files browser sends the user to the system's "All files access"
+     *  toggle; onResume opens the browser if the grant came back, and clears the flag either
+     *  way so one arm can only ever fire once. */
+    internal var localFilesOpenAfterGrant = false
     /** Set by showProviderSettings to its local renderIptvProviderList, so the plugin-discovery
      *  pane (a sibling scope in the same settings screen) can refresh the provider list after it
      *  adds a discovered provider - otherwise the new provider is saved but the list stays stale. */
@@ -1757,6 +1762,16 @@ class MainActivity : AppCompatActivity() {
         // was backgrounded falls into this branch, and starting the inline preview then ran a
         // second player behind the fullscreen one - two surfaces and two audio sources.
         else if (activeTab == 0 && !isPlayerVisible) showLivePreviewPane()
+        // The Local files browser sent the user to the system's "All files access" toggle;
+        // coming back with the grant opens the browser they asked for, and refreshes the row
+        // behind it (its subtitle shows the access state).
+        if (localFilesOpenAfterGrant) {
+            localFilesOpenAfterGrant = false
+            if (com.lumora.localfiles.hasLocalFilesAccess(this)) {
+                refreshIptvProviderList()
+                showLocalFilesBrowser()
+            }
+        }
     }
 
     override fun onPause() {
@@ -1885,12 +1900,12 @@ class MainActivity : AppCompatActivity() {
     /** Unwinds one level of navigation. Returns false when there's nothing left above the
      *  current screen, i.e. Back should leave the app. */
     private fun handleBackNavigation(): Boolean {
-        // The share browser is the topmost thing in the settings slot: Back walks up one
+        // The file browser is the topmost thing in the settings slot: Back walks up one
         // folder while it can, and closes the browser (revealing Settings behind it) at the
-        // share root. Only once no browser is open does Back reach the settings dialog.
-        // Gated on !isPlayerVisible: the browser stays attached behind a playing share file,
+        // root. Only once no browser is open does Back reach the settings dialog.
+        // Gated on !isPlayerVisible: the browser stays attached behind a playing file,
         // and Back there belongs to the player (close/unwind), not to folder navigation.
-        if (!isPlayerVisible && shareBrowserBack?.invoke() == true) return true
+        if (!isPlayerVisible && fileBrowserBack?.invoke() == true) return true
         // A plugin's page is a level inside Settings, not a screen of its own - Back goes up to
         // the plugin list first rather than dropping the user out of Settings entirely.
         if (activeSettingsOverlay != null && openPluginId != null) closeOpenPluginPage?.invoke()

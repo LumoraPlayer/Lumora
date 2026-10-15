@@ -252,6 +252,18 @@
     <string name="sett_share_saved">Share saved.</string>
     <string name="sett_share_disabled">Enable the share first, then browse it.</string>
     <string name="sett_remove_share_message">The share and its saved sign-in will be removed. Playback history is kept.</string>
+    <!-- Local files (Settings > Providers): browsing this device plus any USB drive through
+         the same browser as the shares, gated on the system's "All files access" grant. -->
+    <string name="sett_local_files">Local files</string>
+    <string name="sett_local_files_detail">Browse this device and USB drives</string>
+    <string name="sett_local_files_needs_access">All files access needed — tap Browse</string>
+    <string name="sett_local_internal">Internal storage</string>
+    <string name="sett_local_usb">USB storage</string>
+    <string name="sett_local_access_title">All files access</string>
+    <string name="sett_local_access_message">Lumora needs All files access to browse this device\'s storage and any connected USB drives. Grant it on the next screen, then come back — the browser opens by itself.</string>
+    <string name="sett_local_access_open">Open settings</string>
+    <string name="sett_local_access_revoked">All files access is needed to read this folder — grant it in Settings, then reopen the browser.</string>
+    <string name="sett_local_list_error">Could not read this folder: %1$s</string>
     <string name="change">Change</string>
     <string name="show_phone_qr_pairing_code">Show phone QR pairing code</string>
     <string name="or_enter_manually">OR enter manually</string>
