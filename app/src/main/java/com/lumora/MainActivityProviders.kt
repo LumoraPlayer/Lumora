@@ -27,6 +27,8 @@ import com.lumora.data.remote.stalker.StalkerProvider
 import com.lumora.diagnostics.SessionLog
 import com.lumora.plugin.js.JsPluginContract
 import com.lumora.plugin.js.PluginScriptManager
+import com.lumora.scraper.utils.DnsResolver
+import com.lumora.scraper.utils.UserPreferences
 import kotlinx.coroutines.*
 import kotlinx.coroutines.CancellationException
 
@@ -604,6 +606,11 @@ internal fun MainActivity.applyImportedConfiguration() {
     // play reconnects with the imported values.
     com.lumora.shares.SmbSessions.closeAll()
     refreshIptvProviderList.invoke()
+    // The Streaming sites pane's settings live in the scraper side's own prefs file: re-render
+    // the open pane from the imported values, and point the DNS resolver - which caches its
+    // built DoH client - at whatever DoH the restore left behind.
+    refreshScraperSettings.invoke()
+    DnsResolver.setDnsUrl(UserPreferences.dohProviderUrl)
     loadAllConfiguredProviders(forceRefresh = true)
 }
 

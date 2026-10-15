@@ -47,7 +47,9 @@ object UserPreferences {
     private const val KEY_CURRENT_PROVIDER = "current_provider"
     private const val KEY_PROVIDER_LANGUAGE = "provider_language"
     private const val KEY_PROVIDER_CACHE = "provider_cache"
-    private const val KEY_DOH_PROVIDER_URL = "doh_provider_url"
+    // Internal, not private: the backup's settings allowlist (BACKED_UP_SCRAPER_SETTINGS)
+    // carries the DoH choice, and it names the key through this constant.
+    internal const val KEY_DOH_PROVIDER_URL = "doh_provider_url"
     private const val KEY_TMDB_API_KEY = "tmdb_api_key"
     private const val KEY_ENABLE_TMDB = "enable_tmdb"
     private const val KEY_SERVER_AUTO_SUBTITLES_DISABLED = "server_auto_subtitles_disabled"

@@ -24,7 +24,8 @@ class BackupSettingsTest {
         val written = mapOf(
             "hide_adult_categories" to encodeSetting(SettingType.BOOLEAN, true),
             "subtitle_text_size" to encodeSetting(SettingType.INT, 2),
-            "ui_language" to encodeSetting(SettingType.STRING, "fr")
+            "ui_language" to encodeSetting(SettingType.STRING, "fr"),
+            "disabled_sites" to encodeSetting(SettingType.STRING_SET, setOf("twoembed", "vidlink"))
         )
 
         val parsed: Map<String, BackupManager.SettingBackup> =
@@ -34,6 +35,7 @@ class BackupSettingsTest {
         assertEquals(true, decodeSetting(SettingType.BOOLEAN, parsed.getValue("hide_adult_categories")))
         assertEquals(2, decodeSetting(SettingType.INT, parsed.getValue("subtitle_text_size")))
         assertEquals("fr", decodeSetting(SettingType.STRING, parsed.getValue("ui_language")))
+        assertEquals(setOf("twoembed", "vidlink"), decodeSetting(SettingType.STRING_SET, parsed.getValue("disabled_sites")))
     }
 
     @Test
@@ -45,6 +47,13 @@ class BackupSettingsTest {
         assertNull(decodeSetting(SettingType.INT, BackupManager.SettingBackup("int", "not a number")))
         assertNull(decodeSetting(SettingType.BOOLEAN, BackupManager.SettingBackup("boolean", "1")))
         assertNull(decodeSetting(SettingType.INT, BackupManager.SettingBackup("int", "2.0")))
+        // A string set must be a JSON array of strings - nothing else, including a value
+        // carrying the wrong type tag.
+        assertNull(decodeSetting(SettingType.STRING_SET, BackupManager.SettingBackup("stringSet", "not json")))
+        assertNull(decodeSetting(SettingType.STRING_SET, BackupManager.SettingBackup("stringSet", "[\"ok\", 7]")))
+        assertNull(decodeSetting(SettingType.STRING_SET, BackupManager.SettingBackup("string", "[\"ok\"]")))
+        // An empty array is a valid set (the user re-enabled every site).
+        assertEquals(emptySet<String>(), decodeSetting(SettingType.STRING_SET, BackupManager.SettingBackup("stringSet", "[]")))
     }
 
     @Test
@@ -74,12 +83,31 @@ class BackupSettingsTest {
     }
 
     @Test
+    fun `the scraper settings allowlist carries the Streaming sites pane and no runtime state`() {
+        // The pane's three controls, in the scraper side's own prefs file.
+        assertEquals(SettingType.BOOLEAN, BACKED_UP_SCRAPER_SETTINGS["scraper_enabled"])
+        assertEquals(SettingType.STRING_SET, BACKED_UP_SCRAPER_SETTINGS["disabled_sites"])
+        assertEquals(SettingType.STRING, BACKED_UP_SCRAPER_SETTINGS["doh_provider_url"])
+
+        // Per-site runtime state, the rotating domains and the scraper's own TMDB key stay out.
+        assertNull(BACKED_UP_SCRAPER_SETTINGS["provider_cache"])
+        assertNull(BACKED_UP_SCRAPER_SETTINGS["tmdb_api_key"])
+        assertNull(BACKED_UP_SCRAPER_SETTINGS["current_provider"])
+        assertNull(BACKED_UP_SCRAPER_SETTINGS["provider_language"])
+        assertNull(BACKED_UP_SCRAPER_SETTINGS["bypass_ws_advertised_host"])
+        assertNull(BACKED_UP_SCRAPER_SETTINGS["streamingcommunity_domain"])
+    }
+
+    @Test
     fun `a backup carrying settings still verifies its raw checksum`() {
         val data = BackupManager.BackupData(
             settings = mapOf(
                 "hide_adult_categories" to encodeSetting(SettingType.BOOLEAN, false),
                 "ui_language" to encodeSetting(SettingType.STRING, "de"),
                 "av_offset_ms" to encodeSetting(SettingType.INT, -250)
+            ),
+            scraperSettings = mapOf(
+                "disabled_sites" to encodeSetting(SettingType.STRING_SET, setOf("voe"))
             )
         )
         val blank = gson.toJson(data)
@@ -113,5 +141,6 @@ class BackupSettingsTest {
 
         val parsed = gson.fromJson(oldFile, BackupManager.BackupData::class.java)
         assertTrue(parsed.settings.isNullOrEmpty())
+        assertTrue(parsed.scraperSettings.isNullOrEmpty())
     }
 }

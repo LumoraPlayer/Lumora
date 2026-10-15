@@ -461,6 +461,12 @@ class MainActivity : AppCompatActivity() {
      *  pane (a sibling scope in the same settings screen) can refresh the provider list after it
      *  adds a discovered provider - otherwise the new provider is saved but the list stays stale. */
     internal var refreshIptvProviderList: () -> Unit = {}
+    /** Set by showProviderSettings to re-render the Streaming sites pane. That pane's settings
+     *  (master switch, per-site toggles, DoH) live in the scraper side's own prefs file, so a
+     *  settings import needs the already-built rows re-rendered from what the restore wrote -
+     *  otherwise a successful restore of them looks like it never happened until Settings is
+     *  closed and reopened. */
+    internal var refreshScraperSettings: () -> Unit = {}
     internal var activeSearchOverlay: FullScreenOverlay? = null
     /** The Live TV tab's dropdown (Live TV / Catch Up) while it is open, so a pane switch
      *  or a second press on the tab can close it instead of leaving it hanging over the

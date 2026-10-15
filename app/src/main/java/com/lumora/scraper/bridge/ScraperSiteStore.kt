@@ -18,11 +18,14 @@ import com.lumora.scraper.providers.Provider
  */
 object ScraperSiteStore {
 
-    private const val PREFS_NAME = "lumora_scraper_prefs"
-    private const val KEY_DISABLED = "disabled_sites"
+    // Internal, not private: the backup's settings allowlist (BACKED_UP_SCRAPER_SETTINGS)
+    // carries these values by key, so it names them through these constants and the two can
+    // never drift apart.
+    internal const val PREFS_NAME = "lumora_scraper_prefs"
+    internal const val KEY_DISABLED = "disabled_sites"
 
     /** Master switch. Off means the scrapers are never consulted at all. */
-    private const val KEY_ENABLED = "scraper_enabled"
+    internal const val KEY_ENABLED = "scraper_enabled"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

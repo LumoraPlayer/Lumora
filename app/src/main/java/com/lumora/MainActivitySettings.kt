@@ -2165,6 +2165,9 @@ internal fun MainActivity.showProviderSettings() {
     wirePluginNavRows(dialogView) { selectSection(7) }
 
     wireScraperSettingsPane(dialogView)
+    // Exposed so applyImportedConfiguration() can re-render the pane in place after a backup
+    // import - the pane reads the scraper side's prefs file, which the restore writes.
+    refreshScraperSettings = { wireScraperSettingsPane(dialogView) }
 
     // About pane
     dialogView.findViewById<TextView>(R.id.settingsAppVersion).text = try {
@@ -2247,6 +2250,9 @@ internal fun MainActivity.showProviderSettings() {
         activeSettingsOverlay = null
         applyStatus()
         refreshIptvProviderList = {}
+        // Closes over the dismissed tree like the plugin lambdas below - held past dismiss it
+        // would leak the whole inflated settings tree and touch detached views.
+        refreshScraperSettings = {}
         // Both close over views in the dismissed dialog - holding them past this leaks the
         // whole inflated settings tree and would touch detached views on the next call.
         revealPluginInPane = null

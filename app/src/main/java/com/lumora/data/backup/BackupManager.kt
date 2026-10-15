@@ -40,8 +40,12 @@ import com.lumora.model.IptvProviderConfig
 import com.lumora.model.MediaServerConfig
 import com.lumora.player.PlayerManager
 import com.lumora.player.playback.AvOffsetManager
+import com.lumora.scraper.bridge.ScraperSiteStore
+import com.lumora.scraper.utils.UserPreferences
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonElement
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
@@ -86,14 +90,19 @@ internal fun backupMd5(input: String): String {
  * JSON number as a Double, and a `getInt` read of a Double - or vice versa - throws
  * ClassCastException. Restoring each value through the getter/putter pair matching the type it
  * was written with keeps the type intact across machines.
+ *
+ * [STRING_SET] is the `getStringSet`/`putStringSet` pair (the scraper sites the user switched
+ * off); its value travels as a JSON array in [BackupManager.SettingBackup.value], which is a
+ * single string - see [encodeSetting].
  */
-internal enum class SettingType { BOOLEAN, INT, STRING }
+internal enum class SettingType { BOOLEAN, INT, STRING, STRING_SET }
 
 /** The wire name for [SettingType], written into [BackupManager.SettingBackup.type]. */
 internal fun SettingType.wireName(): String = when (this) {
     SettingType.BOOLEAN -> "boolean"
     SettingType.INT -> "int"
     SettingType.STRING -> "string"
+    SettingType.STRING_SET -> "stringSet"
 }
 
 /**
@@ -111,6 +120,9 @@ internal fun SettingType.wireName(): String = when (this) {
  *
  * The parental PIN (salt + hash, never the raw PIN) is carried on purpose: without it a restored
  * "hide adult" filter could be switched back off without the PIN that protected it.
+ *
+ * This list covers "iptv_prefs"; settings the scraper side keeps in its own file have their own
+ * allowlist, see [BACKED_UP_SCRAPER_SETTINGS].
  *
  * Internal rather than private so the backup tests can pin the allowlist boundary (settings in,
  * credentials out).
@@ -153,11 +165,38 @@ internal val BACKED_UP_SETTINGS: Map<String, SettingType> = mapOf(
     PREF_UPDATE_CHECKS to SettingType.BOOLEAN
 )
 
+/**
+ * The second settings allowlist: the choices the ported scraper stack keeps in its own
+ * SharedPreferences file (`lumora_scraper_prefs`, see [ScraperSiteStore] and [UserPreferences])
+ * rather than in "iptv_prefs". Together these are the Streaming sites pane's controls: the
+ * master switch, the per-site toggles and the DoH endpoint.
+ *
+ * Same contract and same reasoning as [BACKED_UP_SETTINGS]. It is an allowlist for the same
+ * reason too: the rest of that file is per-site runtime state (rotating domains, the provider
+ * scratch cache, the scraper's own TMDB key) with a different lifetime and no business
+ * travelling in a backup.
+ */
+internal val BACKED_UP_SCRAPER_SETTINGS: Map<String, SettingType> = mapOf(
+    ScraperSiteStore.KEY_ENABLED to SettingType.BOOLEAN,
+    ScraperSiteStore.KEY_DISABLED to SettingType.STRING_SET,
+    UserPreferences.KEY_DOH_PROVIDER_URL to SettingType.STRING
+)
+
+/** Serializer for [SettingType.STRING_SET] values: a set cannot ride in the single
+ *  [BackupManager.SettingBackup.value] string as plain text, so it travels as a JSON array.
+ *  Separate from the pretty-printing serializer the file itself uses - this one produces
+ *  embedded text and exists only for the set <-> array mapping. */
+private val settingJson = Gson()
+private val jsonElementListType = object : TypeToken<List<JsonElement>>() {}.type
+
 /** Encodes a raw pref value into the string form the backup carries. */
 internal fun encodeSetting(type: SettingType, value: Any): BackupManager.SettingBackup = when (type) {
     SettingType.BOOLEAN -> BackupManager.SettingBackup(type.wireName(), (value as Boolean).toString())
     SettingType.INT -> BackupManager.SettingBackup(type.wireName(), (value as Int).toString())
     SettingType.STRING -> BackupManager.SettingBackup(type.wireName(), value as String)
+    // Sorted so one set of sites always produces the same text. The checksum hashes the raw
+    // file, so this is not needed for correctness - it just keeps backups diff-friendly.
+    SettingType.STRING_SET -> BackupManager.SettingBackup(type.wireName(), settingJson.toJson((value as Set<String>).sorted()))
 }
 
 /** The typed value [backup] carries, parsed against [type]; null when the type tag does not
@@ -168,22 +207,38 @@ internal fun decodeSetting(type: SettingType, backup: BackupManager.SettingBacku
         SettingType.BOOLEAN -> backup.value.toBooleanStrictOrNull()
         SettingType.INT -> backup.value.toIntOrNull()
         SettingType.STRING -> backup.value
+        // Strict like the scalars above: every element must be a JSON string or the whole value
+        // is skipped - a partially-read site list would silently switch sites it never named on
+        // or off. Anything that is not a JSON array of strings fails here.
+        SettingType.STRING_SET -> runCatching {
+            val elements: List<JsonElement>? = settingJson.fromJson(backup.value, jsonElementListType)
+            if (elements != null && elements.all { it.isJsonPrimitive && it.asJsonPrimitive.isString }) {
+                elements.map { it.asString }.toSet()
+            } else {
+                null
+            }
+        }.getOrNull()
     }
 }
 
 /**
- * Snapshots the backed-up settings from [prefs]. Keys that were never written are skipped
- * outright: every reader has its own default, and recording defaults as if the user had chosen
- * them is exactly the absent-means-untouched contract's business.
+ * Snapshots the backed-up settings from [prefs], honouring [allowlist]. Keys that were never
+ * written are skipped outright: every reader has its own default, and recording defaults as if
+ * the user had chosen them is exactly the absent-means-untouched contract's business.
  */
-internal fun collectBackupSettings(prefs: SharedPreferences): Map<String, BackupManager.SettingBackup> {
+internal fun collectBackupSettings(
+    prefs: SharedPreferences,
+    allowlist: Map<String, SettingType> = BACKED_UP_SETTINGS,
+): Map<String, BackupManager.SettingBackup> {
     val out = sortedMapOf<String, BackupManager.SettingBackup>()
-    for ((key, type) in BACKED_UP_SETTINGS) {
+    for ((key, type) in allowlist) {
         if (!prefs.contains(key)) continue
         out[key] = when (type) {
             SettingType.BOOLEAN -> encodeSetting(type, prefs.getBoolean(key, false))
             SettingType.INT -> encodeSetting(type, prefs.getInt(key, 0))
             SettingType.STRING -> encodeSetting(type, prefs.getString(key, "").orEmpty())
+            // getStringSet can hand back the set the prefs file itself owns; copy before encoding.
+            SettingType.STRING_SET -> encodeSetting(type, prefs.getStringSet(key, emptySet())?.toSet().orEmpty())
         }
     }
     return out
@@ -192,22 +247,27 @@ internal fun collectBackupSettings(prefs: SharedPreferences): Map<String, Backup
 /**
  * Writes [settings] back into [prefs], returning how many values were applied.
  *
- * Only keys in [BACKED_UP_SETTINGS] are honoured, and only when the value's type tag matches
+ * Only keys in the given [allowlist] are honoured, and only when the value's type tag matches
  * the catalogue's - a hand-edited or foreign backup naming another pref (a provider JSON, a
  * token) must not be able to write it. A value that fails to parse is skipped rather than
  * aborting the import, so one bad setting cannot cost the user every other section.
  */
-internal fun restoreBackupSettings(prefs: SharedPreferences, settings: Map<String, BackupManager.SettingBackup>): Int {
+internal fun restoreBackupSettings(
+    prefs: SharedPreferences,
+    settings: Map<String, BackupManager.SettingBackup>,
+    allowlist: Map<String, SettingType> = BACKED_UP_SETTINGS,
+): Int {
     if (settings.isEmpty()) return 0
     val editor = prefs.edit()
     var restored = 0
     for ((key, backup) in settings) {
-        val type = BACKED_UP_SETTINGS[key] ?: continue
+        val type = allowlist[key] ?: continue
         val value = decodeSetting(type, backup) ?: continue
         when (type) {
             SettingType.BOOLEAN -> editor.putBoolean(key, value as Boolean)
             SettingType.INT -> editor.putInt(key, value as Int)
             SettingType.STRING -> editor.putString(key, value as String)
+            SettingType.STRING_SET -> editor.putStringSet(key, value as Set<String>)
         }
         restored++
     }
@@ -254,6 +314,10 @@ class BackupManager(private val context: Context) {
         // App settings, keyed by their SharedPreferences key. Absent on backups written before
         // this section existed (null/empty leaves the device's own settings alone).
         val settings: Map<String, SettingBackup>? = emptyMap(),
+        // The scraper side's settings - the Streaming sites pane (master switch, per-site
+        // toggles, DoH), which live in their own prefs file. Separate from `settings` because
+        // the two restore through different files; same absent-means-untouched contract.
+        val scraperSettings: Map<String, SettingBackup>? = emptyMap(),
         val epgSources: List<EpgSourceBackup>? = emptyList(),
         val customGroups: List<CustomGroupBackup>? = emptyList(),
         // Legacy field, always empty in practice (the old export hardcoded it). Favorites are
@@ -303,8 +367,9 @@ class BackupManager(private val context: Context) {
     )
 
     /** One app setting. [type] is the SharedPreferences type the value was stored as (one of
-     *  [SettingType]'s wire names - "boolean", "int", "string") and [value] its text form;
-     *  restore parses it back against [type] so a number never comes back as a Double. */
+     *  [SettingType]'s wire names - "boolean", "int", "string", "stringSet") and [value] its
+     *  text form (a JSON array for "stringSet"); restore parses it back against [type] so a
+     *  number never comes back as a Double and a set never comes back as a plain string. */
     data class SettingBackup(
         val type: String, val value: String
     )
@@ -464,6 +529,7 @@ class BackupManager(private val context: Context) {
     private suspend fun countExistingData(): Int {
         val db = LumoraDatabase.getInstance(context)
         val prefs = context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+        val scraperPrefs = context.getSharedPreferences(ScraperSiteStore.PREFS_NAME, Context.MODE_PRIVATE)
         var count = 0
         count += IptvProviderStore.load(prefs).size
         count += MediaServerStore.load(prefs).size
@@ -473,11 +539,15 @@ class BackupManager(private val context: Context) {
         count += db.customGroupDao().getAll().size
         count += db.watchHistoryDao().getRecent().size
         count += db.recordingDao().getAll().size
+        // The scraper file travels in a backup too, so any saved Streaming sites setting is
+        // data a restore would replace and counts like the stores above.
+        if (BACKED_UP_SCRAPER_SETTINGS.keys.any { scraperPrefs.contains(it) }) count++
         return count
     }
 
     private suspend fun collectBackupData(db: LumoraDatabase): BackupData {
         val prefs = context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+        val scraperPrefs = context.getSharedPreferences(ScraperSiteStore.PREFS_NAME, Context.MODE_PRIVATE)
         val epgSources = db.epgSourceDao().getAll()
         val customGroups = db.customGroupDao().getAll()
         // getAll, not getRecent: the LIMIT 50 read truncated every backup to the 50 most
@@ -500,6 +570,7 @@ class BackupManager(private val context: Context) {
             iptvProviders = IptvProviderStore.load(prefs).map { it.toBackup() },
             mediaServers = MediaServerStore.load(prefs).map { it.toBackup() },
             settings = collectBackupSettings(prefs),
+            scraperSettings = collectBackupSettings(scraperPrefs, BACKED_UP_SCRAPER_SETTINGS),
             epgSources = epgSources.map { EpgSourceBackup(
                 id = it.id, name = it.name, url = it.url,
                 enabled = it.enabled, priority = it.priority,
@@ -542,6 +613,7 @@ class BackupManager(private val context: Context) {
     private suspend fun restoreBackupData(data: BackupData): ImportResult {
         val db = LumoraDatabase.getInstance(context)
         val prefs = context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+        val scraperPrefs = context.getSharedPreferences(ScraperSiteStore.PREFS_NAME, Context.MODE_PRIVATE)
         // gson.fromJson answers null for every array that is absent from the file - backups
         // written before a field existed, so Kotlin's emptyList defaults never apply. Null
         // means "absent": per the contract below, an absent list leaves what the device
@@ -551,6 +623,7 @@ class BackupManager(private val context: Context) {
         val iptvProviders = data.iptvProviders.orEmpty()
         val mediaServers = data.mediaServers.orEmpty()
         val settings = data.settings.orEmpty()
+        val scraperSettings = data.scraperSettings.orEmpty()
         val favoriteSeries = data.favoriteSeries.orEmpty()
         val favoriteChannels = data.favoriteChannels.orEmpty()
         val epgSources = data.epgSources.orEmpty()
@@ -579,8 +652,13 @@ class BackupManager(private val context: Context) {
 
         // Restore the app's saved settings. Unlike the list sections, an old backup without
         // the section leaves the device's settings alone, and a present map only writes the
-        // keys it carries - a backup taken before some setting existed cannot reset it.
-        result = result.copy(settingsImported = restoreBackupSettings(prefs, settings))
+        // keys it carries - a backup taken before some setting existed cannot reset it. The
+        // scraper side's file restores through its own allowlist the same way (the Streaming
+        // sites pane), with both files' counts folded into the one summary figure.
+        result = result.copy(
+            settingsImported = restoreBackupSettings(prefs, settings) +
+                restoreBackupSettings(scraperPrefs, scraperSettings, BACKED_UP_SCRAPER_SETTINGS)
+        )
 
         result = result.copy(providersImported = iptvProviders.size + mediaServers.size)
 
