@@ -22,6 +22,11 @@
 ### Translations
 - **Every locale gains the missing screenfuls.** The sports section plus debrid, diagnostics, network shares, Simkl, skip segments and subtitles - around 190 keys per language, each with its own plural categories, brand names left untranslated, and every format specifier audited against the English source.
 
+### Fixes
+- **The guide's times sit on the clock's half-hours again.** The ruler was labelled from the current minute - "Now", 12:17, 12:47 for a guide opened at 11:47 - so its times never matched the usual :00/:30 marks or the programme blocks beneath them; it is now anchored to the half-hour, with a "Now" lead cell running to the next mark and the blocks lining up under it.
+- **The Live TV rail lists categories in the provider's own order.** The sidebar used to float sport/UK names to the top and alphabetise the rest, scrambling the order the panel itself lists them in.
+- **Cards scrolled off the top of the Sports board hide behind the mode pills and sport chips** instead of painting over them.
+
 ## 5.3
 
 ### Updates
