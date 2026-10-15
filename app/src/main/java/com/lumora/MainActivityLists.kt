@@ -374,24 +374,46 @@ internal fun MainActivity.selectTab(index: Int) {
 
 internal fun MainActivity.buildGuideHeader() {
     val density = resources.displayMetrics.density
-    val slotWidthPx = (30 * LiveGuideAdapter.MINUTE_WIDTH_DP * density).toInt()
+    val unitPx = LiveGuideAdapter.MINUTE_WIDTH_DP * density
     val timeFmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-    val calendar = java.util.Calendar.getInstance()
+    // Every program row starts flush at "now" (see LiveGuideAdapter.renderPrograms), so the
+    // ruler is anchored the same way: a lead cell running from now to the next half-hour
+    // mark, then half-hour cells sitting on the clock's usual :00/:30 boundaries. Labelling
+    // fixed cells now+30k instead (the old ruler) put every time off the clock by however
+    // many minutes past the boundary the guide happened to be opened - 11:47, 12:17, 12:47.
+    val nowMs = System.currentTimeMillis()
+    val halfHourMs = 30 * 60_000L
+    val nextHalfHourMs = (nowMs / halfHourMs + 1) * halfHourMs
+    // The same minute-floor the program block widths use ((stop - now) / 60_000 in
+    // renderPrograms), so a label and the edge of the block starting at its time agree
+    // instead of drifting a minute apart.
+    val leadMinutes = ((nextHalfHourMs - nowMs) / 60_000L).toInt()
+    // A clipped "Now" reads as a glitch worse than no label: only show it when the lead
+    // cell is wide enough for the word (36dp covers 14sp text plus the start padding).
+    val nowFits = leadMinutes * LiveGuideAdapter.MINUTE_WIDTH_DP >= 36f
 
     binding.guideHeaderRow.removeAllViews()
     repeat(24) { index ->
+        // Within the last minute before a boundary the lead cell floors to zero minutes;
+        // drop it rather than adding an empty view.
+        if (index == 0 && leadMinutes <= 0) return@repeat
         val label = TextView(this).apply {
-            text = if (index == 0) getString(R.string.list_now) else timeFmt.format(calendar.time)
+            text = when {
+                index == 0 -> if (nowFits) getString(R.string.list_now) else ""
+                else -> timeFmt.format(java.util.Date(nextHalfHourMs + (index - 1) * halfHourMs))
+            }
             setTextColor(getColor(R.color.text_tertiary))
             // Built in code, so it needs the dimen read explicitly to pick up the
             // large-screen tier that the XML-inflated guide rows below it get for free.
             setTextSize(TypedValue.COMPLEX_UNIT_PX, resources.getDimension(R.dimen.guide_program_text))
             gravity = android.view.Gravity.CENTER_VERTICAL
             setPadding((6 * density).toInt(), 0, 0, 0)
-            layoutParams = LinearLayout.LayoutParams(slotWidthPx, LinearLayout.LayoutParams.MATCH_PARENT)
+            layoutParams = LinearLayout.LayoutParams(
+                (if (index == 0) leadMinutes * unitPx else 30 * unitPx).toInt(),
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
         }
         binding.guideHeaderRow.addView(label)
-        calendar.add(java.util.Calendar.MINUTE, 30)
     }
     liveAdapter.attachHeader(binding.guideHeaderScroll)
 }
