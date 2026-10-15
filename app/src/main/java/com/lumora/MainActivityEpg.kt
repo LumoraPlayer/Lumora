@@ -401,7 +401,16 @@ internal fun MainActivity.checkUpNextTrigger() {
     if (nextIdx !in currentEpisodeQueue.indices) return // no next episode
     val duration = playerManager.duration
     val position = playerManager.currentPosition
-    if (duration <= 0 || duration - position > MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L) return // more than the countdown window left
+    if (duration <= 0) return
+    // Where playback should move on: the episode's own end, or - when IntroDB knows it - the
+    // start of the credits, so a contributed timestamp skips the credits instead of the
+    // fixed last minute cutting into them. The lookup is background and lands when it lands,
+    // so this is re-decided every tick; no connection, no contribution, or a timestamp that
+    // makes no sense for the media all leave the end-of-episode target in charge.
+    val creditsStart = currentSkipSegments.firstOrNull { it.type == "credits" }
+        ?.startMs?.takeIf { it > 0 && it < duration }
+    val advanceAt = creditsStart ?: duration
+    if (advanceAt - position > MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L) return // more than the countdown window left
     upNextEpisode = currentEpisodeQueue[nextIdx]
     showUpNextOverlay()
 }

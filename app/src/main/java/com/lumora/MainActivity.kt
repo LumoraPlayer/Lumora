@@ -1098,11 +1098,13 @@ class MainActivity : AppCompatActivity() {
         internal const val REQUEST_PICK_M3U = 2003
         private const val EDGE_SWIPE_ZONE_DP = 24f
         private const val EDGE_SWIPE_THRESHOLD_DP = 64f
-        /** How long before an episode ends the Up Next overlay appears, and therefore what the
-         *  countdown starts at - one value, because the countdown has to reach zero exactly as
-         *  the episode does (that is what makes auto-advance land on the end rather than cut
-         *  in early). 60s gives time to read the next episode's title and hit Play now, or to
-         *  cancel, without having to catch it inside the closing seconds. */
+        /** How long before playback should move on the Up Next overlay appears, and therefore
+         *  what the countdown starts at - one value, because the countdown has to reach zero
+         *  exactly at the point it advances on (that is what makes auto-advance land on the
+         *  target rather than cut in early). 60s gives time to read the next episode's title
+         *  and hit Play now, or to cancel, without having to catch it inside the closing
+         *  seconds. The target is the episode's end, or the credits' start when IntroDB knows
+         *  it - see checkUpNextTrigger. */
         internal const val UP_NEXT_COUNTDOWN_SECONDS = 60
     }
 
