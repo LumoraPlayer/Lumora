@@ -86,7 +86,11 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
         // Picking a title also leaves the pane showing this search, so Back from the detail
         // screen lands on the results rather than on whatever was there before the overlay.
         activeSearchOverlay?.dismiss()
-        binding.discoverSearchInput.setText(input.text.toString().trim())
+        // The inline pill goes back to its hint: a pick commits the search, and a later open
+        // should start fresh instead of showing the last query forever - the query used to
+        // be written in here and re-seeded into the field, which read as "the search never
+        // clears". The results stay on the pane either way.
+        binding.discoverSearchInput.setText("")
         discoverTypeFilter = null
         updateDiscoverFilterChipStyles()
         discoverLibrarySources = shownBadges
@@ -168,10 +172,10 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
             scheduleSearch(s?.toString()?.trim().orEmpty())
         }
     })
-    // Re-opening the overlay starts from whatever is currently being browsed, so refining a
-    // query means editing it rather than retyping it letter by letter on a remote. Set after
-    // the watcher is attached so the existing query is searched again on open too.
-    input.setText(binding.discoverSearchInput.text.toString())
+    // The overlay always opens empty: the pill is cleared once a pick commits the search
+    // (see the pick handler above), so there is no previous query left to seed the field
+    // with. setText("") still runs the watcher once, which is what paints the idle prompt.
+    input.setText("")
 
     keyboard.onKey = { ch -> input.setText(input.text.toString() + ch) }
     keyboard.onBackspace = { input.setText(input.text.toString().dropLast(1)) }
