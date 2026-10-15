@@ -1957,6 +1957,14 @@ internal fun MainActivity.showProviderSettings() {
         getString(R.string.sett_subtitles_caption),
         PREF_SUBTITLES_ENABLED
     ))
+    // Live TV rail order: the provider's own vs A-Z. Rebuild the rows immediately, so the
+    // rail behind the Settings dialog carries the new order the moment the tick changes.
+    filtersPane.addView(dubCheckBoxRow(
+        getString(R.string.sett_categories_alphabetical),
+        getString(R.string.sett_categories_alphabetical_caption),
+        PREF_ALPHABETICAL_LIVE_CATEGORIES,
+        onToggle = { if (allChannels.isNotEmpty()) scope.launch { rebuildCategoriesForActiveTab() } }
+    ))
 
     // Playback pane: skip-intro rows. Appended in code because the pane's own rows are
     // declared in XML and this keeps the IntroDB feature self-contained - one place that

@@ -651,7 +651,8 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
 
 /** Pure ordering pipeline behind the sidebar - shared with the Series/Films poster
  *  shelves (see computeDerivedContent) so both render the same categories in the same
- *  order, by construction. No prefs/state reads: every caller passes its own snapshots. */
+ *  order, by construction. The category-order preference is the one pref read here, folded
+ *  into the fingerprint below; every other input is passed in as a snapshot. */
 internal fun MainActivity.buildCategoryRows(
     list: List<Channel>,
     versionsById: Map<String, List<Channel>>,
@@ -668,6 +669,9 @@ internal fun MainActivity.buildCategoryRows(
         // clustering walks every live channel name twice) was the last multi-second item
         // on a cold start. Restore the last result whenever every input still matches.
         val startedAt = System.currentTimeMillis()
+        // The one preference this pass reads - folded into the fingerprint below so toggling
+        // it invalidates the cached rows like any other input would.
+        val alphabeticalLiveCategories = prefs.getBoolean(PREF_ALPHABETICAL_LIVE_CATEGORIES, false)
         val fingerprint = DerivedCache.catalogFingerprint(
             list,
             // The rows are a function of this function's *code* as much as of its
@@ -682,7 +686,7 @@ internal fun MainActivity.buildCategoryRows(
             // emits changes.
             "rows:$tab:${BuildConfig.VERSION_CODE}.$CATEGORY_ROWS_LOGIC_VERSION:${pinned.hashCode()}:${hiddenIds.hashCode()}:" +
                 "${expanded.hashCode()}:${animeSections.hashCode()}:${favoriteChannelIds.hashCode()}:" +
-                "${versionsById.size}:$useClassicLayout:$categorize"
+                "${versionsById.size}:$useClassicLayout:$categorize:$alphabeticalLiveCategories"
         )
         DerivedCache.loadRows(this, tab, fingerprint)?.let { cached ->
             perf("buildCategoryRows(cached,tab=$tab)", startedAt, "${cached.rows.size} rows")
@@ -1256,11 +1260,14 @@ internal fun MainActivity.buildCategoryRows(
         result += brandRows
         result += bucketRows
         if (tab == 0) result.add(allRow)
-        // Provider order, not alphabetical: the remaining rows keep the order the provider's
-        // own category list arrives in (first-seen channel order), which is the order people
-        // already know from the panel they came from. Live TV used to float sport/UK names to
-        // the top and sort the rest by name, which scrambled that order.
-        result += unpinnedRows
+        // Provider order by default - the order the provider's own category list arrives in
+        // (first-seen channel order) is the order people know from the panel they came from.
+        // Settings > Filters can ask for A-Z instead, for finding a category by name.
+        result += if (tab == 0 && alphabeticalLiveCategories) {
+            unpinnedRows.sortedBy { it.name.lowercase() }
+        } else {
+            unpinnedRows
+        }
         // Legacy shelf pin/hide prefs stored shelf titles ("KIDS & FAMILY"); rows are
         // now keyed by id. Fold any stored value that names a real row (case-
         // insensitively) into that row's id so pre-migration pins/hides keep working.

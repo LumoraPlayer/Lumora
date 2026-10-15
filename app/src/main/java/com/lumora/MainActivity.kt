@@ -81,6 +81,9 @@ import kotlinx.coroutines.*
 
 internal const val PREF_HIDE_NON_ENGLISH = "hide_non_english_vod"
 internal const val PREF_HIDE_ADULT = "hide_adult_categories"
+/** Live TV's category rail sorted A-Z instead of the provider's own order (Settings >
+ *  Filters). Off by default - provider order is what the panel it came from shows. */
+internal const val PREF_ALPHABETICAL_LIVE_CATEGORIES = "alphabetical_live_categories"
 /** Series the user has taken off Up Next, by parent series id (qualified, as an episode's
  *  categoryId carries it). Up Next is derived from watch state rather than chosen, so the only
  *  way to say "not this one" is to remember the refusal - a removal that lived in memory would
