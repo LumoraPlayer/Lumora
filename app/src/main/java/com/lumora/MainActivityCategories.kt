@@ -338,16 +338,6 @@ internal fun MainActivity.toggleProgramReminder(channel: Channel, program: Xtrea
     liveAdapter.notifyDataSetChanged()
 }
 
-internal fun MainActivity.liveCategoryPriority(name: String): Int {
-    if (isAdultCategory(name)) return 3
-    val lower = name.lowercase()
-    return when {
-        lower.contains("sport") -> 0
-        lower.contains("uk") -> 1
-        else -> 2
-    }
-}
-
 /** Building the category list scans the whole active tab's content - real work on a big catalog. */
 /** rebuildCategoriesForActiveTab() plus submitting the result to the sidebar - split out
  *  so callers that need to inspect/compute a target category *before* anything renders
@@ -1266,14 +1256,11 @@ internal fun MainActivity.buildCategoryRows(
         result += brandRows
         result += bucketRows
         if (tab == 0) result.add(allRow)
-        // Live TV is mainly watched for sport, then UK channels - surface those first.
-        result += if (tab == 0) {
-            unpinnedRows.sortedWith(compareBy({ liveCategoryPriority(it.name) }, { it.name.lowercase() }))
-        } else {
-            // Already unit-sorted above (grouped categories first, then leaves,
-            // alphabetical within each) - re-sorting here would undo that.
-            unpinnedRows
-        }
+        // Provider order, not alphabetical: the remaining rows keep the order the provider's
+        // own category list arrives in (first-seen channel order), which is the order people
+        // already know from the panel they came from. Live TV used to float sport/UK names to
+        // the top and sort the rest by name, which scrambled that order.
+        result += unpinnedRows
         // Legacy shelf pin/hide prefs stored shelf titles ("KIDS & FAMILY"); rows are
         // now keyed by id. Fold any stored value that names a real row (case-
         // insensitively) into that row's id so pre-migration pins/hides keep working.
@@ -2199,7 +2186,7 @@ internal fun MainActivity.formatTime(ms: Long): String {
  *  7: quality tiers merge before clustering, cluster children feed the genre buckets, a
  *     bucket over one category promotes it instead of wrapping it, and the thin tail
  *     folds into one "Other" row. */
-private const val CATEGORY_ROWS_LOGIC_VERSION = 12
+private const val CATEGORY_ROWS_LOGIC_VERSION = 13
 
 /** Films/Series rail: a category with fewer titles than this sorts below the full ones.
  *  Counts are per-row, so a merged/clustered parent is judged on its members' total. */
