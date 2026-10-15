@@ -1823,7 +1823,6 @@ internal fun MainActivity.showProviderSettings() {
         val items = arrayOf(
             getString(R.string.sett_external_player_summary, externalPlayerSummary(this)),
             getString(R.string.sett_suggest_external_player_on_problems, if (prefs.getBoolean(PREF_SUGGEST_EXTERNAL_PLAYER, true)) getString(R.string.sett_on) else getString(R.string.sett_off)),
-            getString(R.string.sett_live_preview, if (isLivePreviewEnabled()) getString(R.string.sett_on) else getString(R.string.sett_off)),
             getString(R.string.legal_notice_title)
         )
         AlertDialog.Builder(this@showProviderSettings)
@@ -1836,16 +1835,9 @@ internal fun MainActivity.showProviderSettings() {
                         prefs.edit().putBoolean(PREF_SUGGEST_EXTERNAL_PLAYER, on).apply()
                         Toast.makeText(this@showProviderSettings, getString(R.string.sett_suggest_external_player, if (on) getString(R.string.sett_on) else getString(R.string.sett_off)), Toast.LENGTH_SHORT).show()
                     }
-                    2 -> {
-                        // Issue #9: browse the guide without auto-playing every focused
-                        // channel. Turning it off also stops the preview that's playing
-                        // now, so the change takes effect without leaving the guide.
-                        val on = !isLivePreviewEnabled()
-                        prefs.edit().putBoolean(PREF_LIVE_PREVIEW, on).apply()
-                        if (!on) releaseLivePreview()
-                        Toast.makeText(this@showProviderSettings, getString(R.string.sett_live_preview, if (on) getString(R.string.sett_on) else getString(R.string.sett_off)), Toast.LENGTH_SHORT).show()
-                    }
-                    3 -> showLegalNotice()
+                    // Live channel preview moved to Filters as a proper checkbox row - one
+                    // control per preference.
+                    2 -> showLegalNotice()
                 }
             }
             .setPositiveButton(getString(R.string.close), null)
@@ -1964,6 +1956,30 @@ internal fun MainActivity.showProviderSettings() {
         getString(R.string.sett_categories_alphabetical_caption),
         PREF_ALPHABETICAL_LIVE_CATEGORIES,
         onToggle = { if (allChannels.isNotEmpty()) scope.launch { rebuildCategoriesForActiveTab() } }
+    ))
+    // Live channel preview as a first-class row: this switch used to exist only as one line
+    // inside the "Playback settings" dialog, which is not where anyone asking "stop channels
+    // auto-playing when I open a playlist" would look. Off stops a channel starting while
+    // browsing or opening a category; OK still opens the channel fullscreen.
+    filtersPane.addView(dubCheckBoxRow(
+        getString(R.string.sett_live_preview_title),
+        getString(R.string.sett_live_preview_caption),
+        PREF_LIVE_PREVIEW,
+        default = true,
+        onToggle = { on ->
+            if (on) {
+                // Re-arm the pane where it makes sense to see it again (Live TV, player
+                // closed); focus is untouched.
+                if (activeTab == 0 && !isPlayerVisible) {
+                    showLivePreviewPane()
+                    lastFocusedLiveChannel?.let { requestPreviewLoad(it) }
+                }
+            } else {
+                // Take the preview that is playing right now down with it, so the change is
+                // visible without leaving Settings.
+                releaseLivePreview()
+            }
+        }
     ))
 
     // Playback pane: skip-intro rows. Appended in code because the pane's own rows are

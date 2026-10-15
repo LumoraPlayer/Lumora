@@ -107,6 +107,8 @@
     <string name="sett_subtitles_caption">Show subtitles on all playback</string>
     <string name="sett_categories_alphabetical">Sort Live TV categories A–Z</string>
     <string name="sett_categories_alphabetical_caption">Off keeps the provider\'s own order</string>
+    <string name="sett_live_preview_title">Live channel preview</string>
+    <string name="sett_live_preview_caption">Off stops a channel starting while you browse or open a playlist</string>
 
     <!-- MainActivitySettings.kt - General pane -->
     <string name="sett_simple_mode">Simple mode</string>
