@@ -16,6 +16,7 @@ import com.lumora.model.MediaType
 import com.lumora.plugin.js.PluginScript
 import com.lumora.ui.attachBlinkingCursor
 import com.lumora.util.cleanVodTitle
+import com.lumora.util.normalizeTitleForGrouping
 import com.lumora.util.versionGroupContaining
 import com.lumora.util.isAdultCategory
 import kotlinx.coroutines.*
@@ -738,15 +739,32 @@ internal fun MainActivity.resolveHomeTileSeries(channel: Channel): Channel? {
                 (channel.sourceProviderId == null || it.sourceProviderId == channel.sourceProviderId)
         }?.let { return it }
     }
+    val candidates = allChannels.filter {
+        it.mediaType == MediaType.SERIES &&
+            it.isJellyfin == channel.isJellyfin && it.isPlex == channel.isPlex &&
+            (channel.sourceProviderId == null || it.sourceProviderId == channel.sourceProviderId)
+    }
     // Name-prefix fallback for old snapshots: "Series Name · S01E02 · Title", longest
-    // name wins. Same-provider guard only when the snapshot knows its provider.
-    return allChannels
-        .filter {
-            it.mediaType == MediaType.SERIES &&
-                it.isJellyfin == channel.isJellyfin && it.isPlex == channel.isPlex &&
-                (channel.sourceProviderId == null || it.sourceProviderId == channel.sourceProviderId)
+    // name wins.
+    candidates.filter { it.name.isNotBlank() && channel.name.startsWith(it.name + " · ") }
+        .maxByOrNull { it.name.length }?.let { return it }
+    // Some panels write the show and the marker with no separator ("Marshals (2026)
+    // S02E02"), so the part before the first season/episode marker is the show - a snapshot
+    // like that must not fall through to direct play purely because of the missing "·".
+    // Exact title match first (case-insensitive), then the same normalised identity the
+    // watched keys use, so the show's copy on another provider joins in too.
+    val name = cleanVodTitle(channel.name)
+    val marker = ANY_SEASON_MARKER_REGEX.find(name) ?: return null
+    val prefix = name.substring(0, marker.range.first).trim().trim('-', '·', ':').trim()
+    if (prefix.isBlank()) return null
+    val prefixKey = normalizeTitleForGrouping(prefix)
+    if (prefixKey.isBlank()) return null
+    return candidates
+        .filter { it.name.isNotBlank() }
+        .filter { candidate ->
+            val title = cleanVodTitle(candidate.name)
+            title.equals(prefix, ignoreCase = true) || normalizeTitleForGrouping(title) == prefixKey
         }
-        .filter { it.name.isNotBlank() && channel.name.startsWith(it.name + " · ") }
         .maxByOrNull { it.name.length }
 }
 
@@ -1326,19 +1344,18 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
     val wanted = items.mapNotNullTo(HashSet()) { item ->
         item.categoryId?.takeIf { it.isNotBlank() && item.episodeNum != null }
     }
-    if (wanted.isEmpty()) return items
     // One pass over the catalogue for the whole row. resolveHomeTileSeries scans allChannels
     // per call, which is fine for the single lookup a click does but not for a shelf rebuild:
     // a six-figure catalogue times a row of tiles is millions of comparisons on the main
     // thread. Candidates are grouped by id because the source guards below still have to run -
-    // ids are provider-scoped, so collisions are only possible across providers.
+    // ids are provider-scoped, so collisions are only possible across providers. Tiles the id
+    // index misses fall back to the name-based resolve below, one scan each - see there.
     val candidates = HashMap<String, MutableList<Channel>>()
     for (ch in allChannels) {
         if (ch.mediaType != MediaType.SERIES) continue
         if (ch.id !in wanted) continue
         candidates.getOrPut(ch.id) { mutableListOf() }.add(ch)
     }
-    if (candidates.isEmpty()) return items
 
     // One tile per episode, whichever copy was watched last. The position store keys per copy
     // (provider-scoped id, or the url when an id is blank), so the same episode carried by
@@ -1351,11 +1368,18 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
     val seenEpisodes = HashSet<String>()
     return items.mapNotNull { item ->
         val episode = item.episodeNum ?: return@mapNotNull item
-        val seriesId = item.categoryId?.takeIf { it.isNotBlank() } ?: return@mapNotNull item
-        val series = candidates[seriesId]?.firstOrNull {
-            it.isJellyfin == item.isJellyfin && it.isPlex == item.isPlex &&
-                (item.sourceProviderId == null || it.sourceProviderId == item.sourceProviderId)
-        } ?: return@mapNotNull item
+        val seriesId = item.categoryId?.takeIf { it.isNotBlank() }
+        val series = seriesId?.let { id ->
+            candidates[id]?.firstOrNull {
+                it.isJellyfin == item.isJellyfin && it.isPlex == item.isPlex &&
+                    (item.sourceProviderId == null || it.sourceProviderId == item.sourceProviderId)
+            }
+        }
+            // The id index only holds snapshots whose stamped parent id still names a
+            // catalogue series; an older save or a since-relisted show falls back to the
+            // same name-based resolution clicking uses.
+            ?: resolveHomeTileSeries(item)
+            ?: return@mapNotNull item
         val seriesName = cleanVodTitle(series.name).ifBlank { return@mapNotNull item }
         val season = tileSeasonNumber(item)
         // Null-season and season-1 spellings name the same episode (see episodeWatchedKeys) -
