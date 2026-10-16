@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.view.View
 import android.widget.*
 import com.lumora.cache.ChannelCache
+import com.lumora.cache.PlaybackPositionStore
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.model.Provider
@@ -1203,11 +1204,22 @@ internal fun MainActivity.checkRedditDiscoveredProviders() {
         val removedIds = dead.map { it.id }.toSet()
         // One write for the lot, so an interleaved writer can't land between two removes.
         IptvProviderStore.save(prefs, IptvProviderStore.load(prefs).filterNot { it.id in removedIds })
+        // The snapshots behind Continue Watching (and its Up Next trails) are recipes for
+        // streams this panel served; with the panel gone they can only spin on connect.
+        // Pruned here, at the one moment the app knows both the provider ids and the URLs
+        // that identify its older, provenance-less snapshots.
+        val pruned = PlaybackPositionStore.pruneForRemovedProviders(
+            this@checkRedditDiscoveredProviders,
+            removedIds,
+            dead.mapNotNull { it.url }
+        )
         // In the session log, so a provider that "disappeared" can be accounted for from the
         // diagnostics screen.
         SessionLog.event(
             "providers",
-            "removed ${dead.size} non-working scanner-found provider(s): ${dead.joinToString(", ") { it.name }}"
+            "removed ${dead.size} non-working scanner-found provider(s): " +
+                "${dead.joinToString(", ") { it.name}}" +
+                (if (pruned > 0) "; dropped $pruned stale watch-progress entr${if (pruned == 1) "y" else "ies"}" else "")
         )
         refreshIptvProviderList.invoke()
         loadAllConfiguredProviders()

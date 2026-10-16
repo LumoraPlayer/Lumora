@@ -29,6 +29,7 @@
 - **The guide's times sit on the clock's half-hours again.** The ruler was labelled from the current minute - "Now", 12:17, 12:47 for a guide opened at 11:47 - so its times never matched the usual :00/:30 marks or the programme blocks beneath them; it is now anchored to the half-hour, with a "Now" lead cell running to the next mark and the blocks lining up under it.
 - **The Live TV rail lists categories in the provider's own order.** The sidebar used to float sport/UK names to the top and alphabetise the rest, scrambling the order the panel itself lists them in.
 - **Cards scrolled off the top of the Sports board hide behind the mode pills and sport chips** instead of painting over them.
+- **A removed dead panel now takes its watch progress with it.** The launch health check deletes scanner-found providers that stopped answering, but their Continue Watching snapshots stayed behind - a snapshot points straight at the stream its panel served, so its tile just spun on a dead host until the player gave up. Removal now drops those entries (by provider id, or by URL host for snapshots saved before provenance existed) and says how many in the session log.
 
 ## 5.3
 

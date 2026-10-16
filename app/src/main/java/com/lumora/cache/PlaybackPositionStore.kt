@@ -7,6 +7,7 @@ import android.os.Looper
 import android.util.Log
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -118,6 +119,44 @@ object PlaybackPositionStore {
         // still pending let that persist rewrite the old data afterwards, resurrecting
         // "cleared" history on the next load. FIFO ordering makes the wipe stick.
         writeExecutor.execute { runCatching { File(context.filesDir, FILE_NAME).delete() } }
+    }
+
+    /**
+     * Drops the watch progress of providers that were just removed, returning how many
+     * entries went.
+     *
+     * A snapshot is a self-contained recipe for a stream - id, name, URL - so it keeps
+     * working when the panel behind it does, and dead-ends forever when the panel doesn't.
+     * A removed provider's Continue Watching tile would spin on connect until the player
+     * gave up (and its Up Next trail would dangle too), every time it was pressed.
+     *
+     * [removedProviderIds] is compared against the snapshot's `sourceProviderId` - exact,
+     * for entries saved since that field existed. Entries older than that carry no
+     * provenance at all, so those are only dropped when the snapshot's URL points at the
+     * same host and port as one of the removed providers' own base URLs
+     * ([removedBaseUrls]); a stream served from anywhere else (a plugin's CDN, an M3U whose
+     * playlist and streams live on different hosts) is left alone.
+     */
+    fun pruneForRemovedProviders(context: Context, removedProviderIds: Set<String>, removedBaseUrls: List<String>): Int {
+        if (removedProviderIds.isEmpty() && removedBaseUrls.isEmpty()) return 0
+        val map = ensureLoaded(context)
+        val removedHostPorts = removedBaseUrls.mapNotNull { base ->
+            runCatching { base.toHttpUrlOrNull()?.let { "${it.host}:${it.port}" } }.getOrNull()
+        }.toSet()
+        val doomed = map.filterValues { position ->
+            val channel = position.channel ?: return@filterValues false
+            val owner = channel.sourceProviderId
+            if (owner != null) owner in removedProviderIds
+            else {
+                val hostPort = channel.url.takeIf { it.isNotBlank() }
+                    ?.let { runCatching { it.toHttpUrlOrNull()?.let { url -> "${url.host}:${url.port}" } }.getOrNull() }
+                hostPort != null && hostPort in removedHostPorts
+            }
+        }.keys
+        if (doomed.isEmpty()) return 0
+        doomed.forEach(map::remove)
+        writeExecutor.execute { persist(context, map) }
+        return doomed.size
     }
 
     /** Most recently-completed episode snapshot per series, only for series with no
