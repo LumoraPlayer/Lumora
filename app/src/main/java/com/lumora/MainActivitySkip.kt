@@ -82,9 +82,9 @@ internal fun MainActivity.resetSkipSegments() {
 internal fun MainActivity.updateSkipSegmentUi() {
     if (!isPlayerVisible) return
     val channel = nowPlayingChannel ?: return
-    // The Up Next card owns the bottom-end corner in the same last minute a credits segment
-    // covers - two offers stacked there is one too many, and Up Next is the one that moves
-    // playback on.
+    // The Up Next pill owns the bottom-end corner - two offers stacked there is one too
+    // many, and the pill is the one that moves playback on. (It exists for episodes with no
+    // credits segment; a credits segment suppresses it entirely, see checkUpNextTrigger.)
     if (upNextActive) {
         if (binding.btnSkipSegment.visibility != View.GONE) binding.btnSkipSegment.visibility = View.GONE
         activeSkipSegment = null
@@ -123,7 +123,17 @@ internal fun MainActivity.updateSkipSegmentUi() {
 
 /** The button's click handler. */
 internal fun MainActivity.skipActiveSegment() {
-    performSkipSegment(activeSkipSegment ?: return)
+    // The cached segment is the fast path; the once-a-second tick can outlive it (the chain
+    // stops with playback at the very end, and a pause on the last frame leaves whatever was
+    // shown standing), so recompute against the current position before giving up - and with
+    // nothing live, the episode's last credits segment is still what the pill stood for.
+    val segment = activeSkipSegment
+        ?: currentSkipSegments.firstOrNull {
+            it.contains(playerManager.currentPosition, playerManager.duration) && it.key != dismissedSkipSegmentKey
+        }
+        ?: currentSkipSegments.lastOrNull { it.type == "credits" && it.key != dismissedSkipSegmentKey }
+    if (segment == null) return
+    performSkipSegment(segment)
 }
 
 /** Seeks past [segment] and marks it spent, so re-entering its window (a manual rewind, a
@@ -133,6 +143,13 @@ private fun MainActivity.performSkipSegment(segment: SkipSegment) {
     dismissedSkipSegmentKey = segment.key
     activeSkipSegment = null
     binding.btnSkipSegment.visibility = View.GONE
+    // The credits are where an episode ends, and this is the app's one-press "next episode":
+    // with a chain behind the episode, pressing Skip Credits moves to the episode after it
+    // outright. Seeking into the last second and leaving the advance to the end-of-item path
+    // is what made the press look broken - reporting the skip shows the controls bar, and
+    // showing the controls bar refuses the Up Next offer (see showControls), which
+    // deliberately disables that fallback - so the episode then sat finished, nothing moving.
+    if (segment.type == "credits" && advanceToNextEpisode()) return
     val duration = playerManager.duration
     val end = segment.effectiveEndMs(duration)
     // Stop a second short of the media's own end: landing exactly on it races the player's

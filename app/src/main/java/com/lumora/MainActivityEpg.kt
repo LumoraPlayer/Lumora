@@ -402,15 +402,13 @@ internal fun MainActivity.checkUpNextTrigger() {
     val duration = playerManager.duration
     val position = playerManager.currentPosition
     if (duration <= 0) return
-    // Where playback should move on: the episode's own end, or - when IntroDB knows it - the
-    // start of the credits, so a contributed timestamp skips the credits instead of the
-    // fixed last minute cutting into them. The lookup is background and lands when it lands,
-    // so this is re-decided every tick; no connection, no contribution, or a timestamp that
-    // makes no sense for the media all leave the end-of-episode target in charge.
-    val creditsStart = currentSkipSegments.firstOrNull { it.type == "credits" }
-        ?.startMs?.takeIf { it > 0 && it < duration }
-    val advanceAt = creditsStart ?: duration
-    if (advanceAt - position > MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L) return // more than the countdown window left
+    // A credits segment means the end zone already has its one offer: the Skip Credits pill
+    // (MainActivitySkip), which moves straight to the next episode when the queue has one.
+    // The countdown stands down for the whole episode in that case - two offers in the same
+    // corner on the same minute is what this exists to prevent. Everything IntroDB has no
+    // credits start for keeps the countdown, which still advances at the episode's end.
+    if (currentSkipSegments.any { it.type == "credits" }) return
+    if (duration - position > MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L) return // more than the countdown window left
     upNextEpisode = currentEpisodeQueue[nextIdx]
     showUpNextOverlay()
 }
@@ -418,50 +416,73 @@ internal fun MainActivity.checkUpNextTrigger() {
 internal fun MainActivity.showUpNextOverlay() {
     upNextActive = true
     upNextCountdown = MainActivity.UP_NEXT_COUNTDOWN_SECONDS
-    binding.upNextTitle.text = upNextEpisode?.name ?: ""
-    binding.upNextCountdown.text = upNextCountdown.toString()
-    // The card shares the bottom-right corner with the controls bar's track buttons, and
+    binding.upNextOverlay.text = upNextPillText()
+    // The pill shares the bottom-right corner with the controls bar's track buttons, and
     // showControls()/hideControls() treat the two as mutually exclusive - but at episode end
     // the bar can still be up. Take it down here or both render and its buttons compete with
-    // Play Now / Cancel for the D-pad.
+    // the pill for the D-pad.
     binding.controlsOverlay.visibility = View.GONE
     mainHandler.removeCallbacks(hideControlsRunnable)
+    // The Skip pill is the end zone's other offer; a segment can arrive between ticks, so
+    // take it down now rather than leaving both in the corner until the next one.
+    binding.btnSkipSegment.visibility = View.GONE
+    activeSkipSegment = null
     binding.upNextOverlay.visibility = View.VISIBLE
-    // Focus only lands reliably once the card is laid out; a same-frame requestFocus after
+    // Focus only lands reliably once the view is laid out; a same-frame requestFocus after
     // flipping visibility can silently no-op, leaving focus on a control-bar button that is
     // now GONE (or on the video), which is what made DOWN/UP walk the wrong tree.
-    binding.upNextPlayNow.post { binding.upNextPlayNow.requestFocus() }
+    binding.upNextOverlay.post { binding.upNextOverlay.requestFocus() }
     mainHandler.post(upNextTickRunnable)
 }
 
-internal fun MainActivity.updateUpNextOverlay() {
-    binding.upNextCountdown.text = upNextCountdown.toString()
+/** The pill's label: "Up Next · S01E06 · 27s", the episode marker when the episode states one. */
+private fun MainActivity.upNextPillText(): String {
+    val next = upNextEpisode
+    val marker = next?.episodeNum?.let { episode ->
+        val season = tileSeasonNumber(next)
+        if (season != null) "S%02dE%02d".format(season, episode) else "E%02d".format(episode)
+    }
+    return listOfNotNull(getString(R.string.up_next), marker, "${upNextCountdown}s").joinToString(" · ")
 }
 
-internal fun MainActivity.executeUpNextAdvance() {
-    cancelUpNextCountdown()
-    val nextEp = upNextEpisode ?: return
-    upNextEpisode = null
-    upNextActive = false
-    binding.upNextOverlay.visibility = View.GONE
-    // Stopping the current player triggers STATE_ENDED, which would also try to
-    // advance if we don't clear the queue first.
-    val queue = currentEpisodeQueue
-    val idx = currentEpisodeQueueIndex
-    currentEpisodeQueue = emptyList()
-    currentEpisodeQueueIndex = -1
-    skipResumePrompt = true
-    showPlayerFor(nextEp)
-    // Restore the queue so Next/Prev work for subsequent episodes
-    currentEpisodeQueue = queue
-    currentEpisodeQueueIndex = idx + 1
+internal fun MainActivity.updateUpNextOverlay() {
+    binding.upNextOverlay.text = upNextPillText()
 }
 
 /**
- * The card's Cancel, Back on the card, and the controls bar taking over: the offer is refused
- * for the episode playing, not merely hidden. A plain [cancelUpNext] would have the trigger
- * raise the card again a second later (and the end-of-episode fallback advance regardless), so
- * refusing it is what makes the Cancel button mean anything.
+ * Moves playback to the episode after the one playing - the shared action behind the Up Next
+ * countdown, the pill's own press, and pressing Skip Credits while the credits roll. False
+ * when there is no next episode (last of the series, or playback outside a queue).
+ */
+internal fun MainActivity.advanceToNextEpisode(): Boolean {
+    val idx = currentEpisodeQueueIndex
+    val next = upNextEpisode
+        ?: currentEpisodeQueue.getOrNull(if (idx >= 0) idx + 1 else -1)
+        ?: return false
+    cancelUpNext()
+    // Stopping the current player triggers STATE_ENDED, which would also try to advance if
+    // we don't clear the queue first.
+    val queue = currentEpisodeQueue
+    currentEpisodeQueue = emptyList()
+    currentEpisodeQueueIndex = -1
+    skipResumePrompt = true
+    showPlayerFor(next)
+    // Restore the queue so Next/Prev work for subsequent episodes
+    currentEpisodeQueue = queue
+    currentEpisodeQueueIndex = if (idx >= 0) idx + 1
+        else queue.indexOfFirst { it.id.ifBlank { it.url } == next.id.ifBlank { next.url } }
+    return true
+}
+
+internal fun MainActivity.executeUpNextAdvance() {
+    if (!advanceToNextEpisode()) cancelUpNext()
+}
+
+/**
+ * Back on the pill, and the controls bar taking over: the offer is refused for the episode
+ * playing, not merely hidden. A plain [cancelUpNext] would have the trigger raise the pill
+ * again a second later (and the end-of-episode fallback advance regardless), so refusing it
+ * is what makes a cancel mean anything.
  */
 internal fun MainActivity.dismissUpNext() {
     upNextDismissed = true

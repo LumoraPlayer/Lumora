@@ -269,13 +269,9 @@ internal fun MainActivity.setupPlayerControls() {
             .let(::showControlsDialog)
     }
 
-    // Up Next - Play Now / Cancel buttons
-    binding.upNextPlayNow.setOnClickListener {
-        cancelUpNextCountdown()
-        executeUpNextAdvance()
-    }
-    binding.upNextCancel.setOnClickListener {
-        dismissUpNext()
+    // Up Next pill — press advances now; Back cancels the offer (handleBackNavigation).
+    binding.upNextOverlay.setOnClickListener {
+        if (!advanceToNextEpisode()) cancelUpNext()
     }
 
     // Cast — uses MediaRouteButton which shows a device picker on tap.
