@@ -115,7 +115,7 @@
             android:orientation="horizontal"
             android:paddingStart="@dimen/toolbar_padding_horizontal"
             android:paddingEnd="@dimen/toolbar_padding_horizontal"
-            android:paddingTop="4dp"
+            android:paddingTop="@dimen/toolbar_padding_top"
             android:paddingBottom="6dp">
 
             <!-- Left group: brand + tab scroller. weight=1 absorbs the free middle of the
@@ -687,6 +687,7 @@
                 android:layout_marginStart="@dimen/chrome_cluster_gap"
                 android:background="@drawable/bg_tab_item"
                 android:clickable="true"
+                android:contentDescription="@string/settings"
                 android:focusable="true"
                 android:gravity="center"
                 android:layerType="none"
@@ -699,6 +700,7 @@
                 android:stateListAnimator="@animator/focus_scale_flat">
 
                 <ImageView
+                    android:id="@+id/btnSettingsIcon"
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:src="@drawable/ic_settings"
@@ -985,6 +987,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:layout_marginBottom="10dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
@@ -1000,6 +1004,8 @@
                     android:layout_gravity="center_horizontal"
                     android:background="@drawable/bg_input"
                     android:clickable="true"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
                     android:focusable="true"
                     android:nextFocusUp="@id/tabDiscover"
                     android:gravity="center_vertical"
@@ -2091,9 +2097,9 @@
 
                     <!-- marginEnd is 0dp off-TV; on TV it pulls the rows in from the full
                          panel width, which was far wider than a row's actual content. -->
-                    <!-- FullHeightRecyclerView, not a plain RecyclerView: inside a ScrollView a
-                         plain one measures itself to a single row. See that class. -->
-                    <com.lumora.view.FullHeightRecyclerView
+                    <!-- Bounded height keeps this nested list scrollable and recycled instead
+                         of measuring every episode in a long season at once. -->
+                    <com.lumora.view.BoundedHeightRecyclerView
                         android:id="@+id/detailItemsList"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -2101,7 +2107,7 @@
                         android:layout_marginEnd="@dimen/detail_list_end_inset"
                         android:clipChildren="false"
                         android:clipToPadding="false"
-                        android:nestedScrollingEnabled="false"
+                        android:nestedScrollingEnabled="true"
                         android:overScrollMode="never"
                         android:visibility="gone" />
                 </LinearLayout>
@@ -2427,19 +2433,28 @@
             android:layout_height="match_parent"
             android:animateLayoutChanges="true"
             android:background="@android:color/transparent"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:orientation="vertical"
             android:visibility="visible">
 
-            <RelativeLayout
+            <!-- Keep the now-playing identity in the top strip instead of stacking it above
+                 the bottom controls. This leaves the transport/timeline/options together in
+                 a much shallower control surface. -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="64dp"
+                android:layout_height="wrap_content"
                 android:background="@drawable/grad_player_top"
-                android:paddingHorizontal="16dp">
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="@dimen/player_controls_safe_horizontal_inset"
+                android:paddingVertical="@dimen/player_controls_safe_vertical_inset">
                 <ImageButton
                     android:id="@+id/btnBack"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
-                    android:layout_centerVertical="true"
                     android:background="@drawable/bg_toolbar_button"
                     android:clickable="true"
                     android:contentDescription="@string/plug_back"
@@ -2454,9 +2469,7 @@
                     android:id="@+id/btnPlayerMenu"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
-                    android:layout_centerVertical="true"
-                    android:layout_marginStart="12dp"
-                    android:layout_toEndOf="@id/btnBack"
+                    android:layout_marginStart="8dp"
                     android:background="@drawable/bg_toolbar_button"
                     android:clickable="true"
                     android:contentDescription="@string/player_menu"
@@ -2465,7 +2478,77 @@
                     android:stateListAnimator="@animator/focus_scale"
                     android:src="@drawable/ic_menu"
                     android:tint="@color/text_primary" />
-            </RelativeLayout>
+
+                <FrameLayout
+                    android:id="@+id/playerLogoBox"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/shape_logo_box"
+                    android:clipToOutline="true"
+                    android:elevation="2dp">
+
+                    <TextView
+                        android:id="@+id/playerChannelInitial"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_subhead"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:id="@+id/playerChannelLogo"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:padding="6dp"
+                        android:scaleType="fitCenter"
+                        android:visibility="gone" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/playerChannelName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_subhead"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/playerSubtitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/text_caption"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/playerLiveBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/pill_live"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:text="@string/live_badge"
+                    android:textAllCaps="true"
+                    android:textColor="@android:color/white"
+                    android:textSize="@dimen/text_tiny"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
             <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
 
@@ -2473,98 +2556,26 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/grad_player_bottom"
-                android:paddingTop="10dp">
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:paddingTop="6dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_margin="6dp"
+                    android:layout_margin="@dimen/player_controls_safe_margin"
                     android:background="@drawable/bg_player_bottom"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
                     android:orientation="vertical"
                     android:paddingHorizontal="12dp"
                     android:paddingVertical="4dp">
 
-                    <!-- Info card: logo + program title/time on the left, channel name + badges on the right -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <FrameLayout
-                            android:id="@+id/playerLogoBox"
-                            android:layout_width="36dp"
-                            android:layout_height="36dp"
-                            android:background="@drawable/shape_logo_box"
-                            android:clipToOutline="true"
-                            android:elevation="2dp">
-
-                            <TextView
-                                android:id="@+id/playerChannelInitial"
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent"
-                                android:gravity="center"
-                                android:textColor="@color/text_primary"
-                                android:textSize="@dimen/text_subhead"
-                                android:textStyle="bold" />
-
-                            <ImageView
-                                android:id="@+id/playerChannelLogo"
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent"
-                                android:padding="6dp"
-                                android:scaleType="fitCenter"
-                                android:visibility="gone" />
-                        </FrameLayout>
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="12dp"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:id="@+id/playerChannelName"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:ellipsize="end"
-                                android:maxLines="1"
-                                android:textColor="@color/text_primary"
-                                android:textSize="@dimen/text_subhead"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:id="@+id/playerSubtitle"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:ellipsize="end"
-                                android:maxLines="1"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="@dimen/text_caption"
-                                android:visibility="gone" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:id="@+id/playerLiveBadge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:background="@drawable/pill_live"
-                            android:paddingHorizontal="10dp"
-                            android:paddingVertical="4dp"
-                            android:text="@string/live_badge"
-                            android:textAllCaps="true"
-                            android:textColor="@android:color/white"
-                            android:textSize="@dimen/text_tiny"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
                         android:gravity="center"
                         android:orientation="horizontal">
                         <ImageButton
@@ -2662,7 +2673,7 @@
                     <FrameLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp">
+                        android:layout_marginTop="1dp">
                         <TextView
                             android:id="@+id/currentTime"
                             android:layout_width="wrap_content"
@@ -2695,14 +2706,20 @@
                     <HorizontalScrollView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
+                        android:layout_marginTop="2dp"
+                        android:clipChildren="true"
+                        android:clipToPadding="false"
                         android:overScrollMode="never"
+                        android:paddingHorizontal="4dp"
+                        android:paddingVertical="4dp"
                         android:scrollbars="none">
 
                         <LinearLayout
                             android:id="@+id/playerTrackButtons"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 

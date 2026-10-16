@@ -17,16 +17,17 @@ import com.lumora.model.ContentShelf
 import com.lumora.model.MediaType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.lumora.util.PosterLoader
 import com.lumora.util.cleanVodTitle
+import com.lumora.util.resetFocusTransform
 
-/** Vertical stack of horizontally-scrolling category shelves. D-pad UP/DOWN
- *  between shelf rows is handled by RecyclerView, but UP from the top shelf to the tab bar
- *  is intercepted manually - RecyclerView.focusSearch scopes itself as root, so a target
- *  outside the RecyclerView never resolves via nextFocusUpId (see PosterGridAdapter). */
+/** Vertical stack of horizontally-scrolling category shelves. Explicit key handling bridges
+ *  the nested shelf/poster RecyclerViews to their header controls and the tab/search row. */
 class ShelfAdapter(
     private val onItemClick: (Channel) -> Unit,
     /** Long-press on a poster - favourites the item (see MainActivity.toggleFavoriteVodItem).
@@ -35,7 +36,7 @@ class ShelfAdapter(
     private val onItemLongClick: ((Channel) -> Unit)? = null,
     private val onPinClick: (ContentShelf) -> Unit = {},
     private val onHideClick: (ContentShelf) -> Unit = {},
-    private val onSeeAllClick: (ContentShelf) -> Unit = {},
+    private val onSeeAllClick: ((ContentShelf) -> Unit)? = null,
     // Pinning only means something for real provider categories (Series/Films) - the
     // synthetic Home shelves (Continue Watching/Recently Played/Favorites) already have
     // a fixed, meaningful order, so the star has nothing to do there.
@@ -78,9 +79,21 @@ class ShelfAdapter(
             // this shelf to position 0 without rebinding it, and a bind-time flag then left
             // its posters' D-pad UP dead-ending (see the listener below).
             posterAdapter.isTopShelfProvider = { bindingAdapterPosition == 0 }
-            seeAllButton.setOnClickListener { current?.let(onSeeAllClick) }
+            posterAdapter.topShelfHeaderActionProvider = { firstVisibleHeaderAction() }
+            seeAllButton.setOnClickListener { current?.let { onSeeAllClick?.invoke(it) } }
             pinButton.setOnClickListener { current?.let(onPinClick) }
             hideButton.setOnClickListener { current?.let(onHideClick) }
+            listOf(seeAllButton, pinButton, hideButton).forEach { button ->
+                button.setOnKeyListener { _, keyCode, event ->
+                    if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                    when (keyCode) {
+                        android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                            if (bindingAdapterPosition == 0) focusOutsideTopShelf() else false
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusFirstPoster()
+                        else -> false
+                    }
+                }
+            }
             // Static glyph (✕) - label it once; only the pin star swaps per state.
             hideButton.contentDescription = hideButton.context.getString(R.string.hide_shelf)
         }
@@ -88,6 +101,7 @@ class ShelfAdapter(
         fun bind(shelf: ContentShelf) {
             current = shelf
             titleText.text = "${shelf.title} (${shelf.items.size})"
+            seeAllButton.visibility = if (onSeeAllClick != null) View.VISIBLE else View.GONE
             // Pin star hidden for shelves whose category is inert (Newest / Jellyfin / Plex /
             // classic toggle) - pinning them does nothing, so a star would read as broken.
             if (showPinButton && shelf.categoryId !in NON_PINNABLE_CATEGORY_IDS) {
@@ -105,6 +119,26 @@ class ShelfAdapter(
             posterAdapter.topRowFocusUpTargetId = topRowFocusUpTargetId
             posterAdapter.submitList(shelf.items)
         }
+
+        private fun firstVisibleHeaderAction(): View? =
+            listOf(seeAllButton, pinButton, hideButton)
+                .firstOrNull { it.visibility == View.VISIBLE && it.isFocusable }
+
+        private fun focusOutsideTopShelf(): Boolean {
+            val root = itemView.rootView
+            val search = root.findViewById<View>(R.id.homeSearchBar)?.takeIf { it.isShown }
+            val target = search ?: topRowFocusUpTargetId.takeIf { it != View.NO_ID }
+                ?.let { root.findViewById<View>(it) }
+            return target?.takeIf { it.isShown }?.requestFocus() ?: true
+        }
+
+        private fun focusFirstPoster(): Boolean {
+            if (posterAdapter.itemCount == 0) return false
+            itemsList.scrollToPosition(0)
+            fun attempt(): Boolean = itemsList.layoutManager?.findViewByPosition(0)?.requestFocus() == true
+            itemsList.post { if (!attempt()) itemsList.post { attempt() } }
+            return true
+        }
     }
 
     class DiffCallback : DiffUtil.ItemCallback<ContentShelf>() {
@@ -119,6 +153,8 @@ private class ShelfPosterAdapter(
 ) : ListAdapter<Channel, ShelfPosterAdapter.ViewHolder>(DiffCallback()) {
 
     var topRowFocusUpTargetId: Int = View.NO_ID
+    /** First visible action in a top shelf's header, resolved live by its owning holder. */
+    var topShelfHeaderActionProvider: (() -> View?)? = null
     /** Whether this shelf currently sits at the top of the outer list, resolved live by the
      *  owning shelf holder - a DiffUtil move does not rebind the moved shelf, so a value
      *  captured at bind time goes stale and swallows UP. */
@@ -150,10 +186,16 @@ private class ShelfPosterAdapter(
         holder.bind(getItem(position))
     }
 
+    override fun onViewRecycled(holder: ViewHolder) {
+        holder.cancelPendingLoad()
+        super.onViewRecycled(holder)
+    }
+
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val posterImage: ImageView = itemView.findViewById(R.id.itemPoster)
         private val titleText: TextView = itemView.findViewById(R.id.itemTitle)
         private var current: Channel? = null
+        private var imageJob: Job? = null
 
         init {
             itemView.setOnClickListener { current?.let(onItemClick) }
@@ -165,6 +207,10 @@ private class ShelfPosterAdapter(
                     keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
                     isTopShelfProvider()
                 ) {
+                    val headerAction = topShelfHeaderActionProvider?.invoke()
+                    if (headerAction != null && headerAction.isShown && headerAction.requestFocus()) {
+                        return@setOnKeyListener true
+                    }
                     val root = v.rootView
                     // Home's search bar sits directly above the shelves when visible -
                     // prefer it over the tab so the bar stays reachable via D-pad.
@@ -179,6 +225,8 @@ private class ShelfPosterAdapter(
         }
 
         fun bind(channel: Channel) {
+            itemView.resetFocusTransform()
+            cancelPendingLoad()
             current = channel
             // See PosterGridAdapter.bind - the id is what returns focus here after the
             // detail screen closes.
@@ -196,10 +244,16 @@ private class ShelfPosterAdapter(
             if (url.isNullOrBlank()) return
             PosterLoader.getCached(url)?.let { posterImage.setImageBitmap(it); return }
 
-            scope.launch {
+            imageJob = scope.launch {
+                delay(PosterLoader.LOAD_DEBOUNCE_MS)
                 val bitmap = PosterLoader.fetch(url)
                 if (bitmap != null && current === channel) posterImage.setImageBitmap(bitmap)
             }
+        }
+
+        fun cancelPendingLoad() {
+            imageJob?.cancel()
+            imageJob = null
         }
     }
 

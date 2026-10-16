@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.lumora.R
+import com.lumora.util.resetFocusTransform
 
 /**
  * One row of the Catch Up list. The screen walks channel -> day -> programme and every
@@ -119,6 +120,7 @@ class CatchupAdapter(
         }
 
         fun bind(row: CatchupRow) {
+            itemView.resetFocusTransform()
             current = row
             title.text = row.title
             meta.text = row.meta.orEmpty()

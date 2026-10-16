@@ -10,7 +10,7 @@
     android:id="@+id/rowRoot"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/bg_category_panel"
+    android:background="@drawable/card_surface_background"
     android:clickable="true"
     android:clipChildren="false"
     android:clipToPadding="false"

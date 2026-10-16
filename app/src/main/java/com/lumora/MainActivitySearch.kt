@@ -108,22 +108,29 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
         }
     }
     resultsAdapter.spanCount = dialogSpanCount
-    // P0-1: UP from the top row used to target the non-focusable query field (a dead
-    // key - requestFocus failed silently while the press was consumed). Target the
-    // keyboard itself instead: it's focusable, and the next D-pad press enters the
-    // keys via normal focus search. Only meaningful while the app keyboard is shown.
-    if (!touchDevice) {
-        resultsAdapter.topRowFocusUpTargetId = R.id.searchKeyboard
-        // P0-1: LEFT from the first column must also return to the keyboard - default
-        // focus search can't cross out of the RecyclerView into the keyboard.
-        resultsAdapter.leftFocusTarget = keyboard
-    }
     resultsAdapter.posterHeightDimen = R.dimen.search_poster_image_height
     resultsList.adapter = resultsAdapter
+
+    fun selectedFilterChipId(): Int = when (searchFilter) {
+        MainActivity.SearchFilter.ALL -> R.id.searchFilterAll
+        MainActivity.SearchFilter.LIVE -> R.id.searchFilterLive
+        MainActivity.SearchFilter.MOVIE -> R.id.searchFilterFilms
+        MainActivity.SearchFilter.SERIES -> R.id.searchFilterSeries
+    }
+
+    fun updateSearchFocusTargets(filtersVisible: Boolean) {
+        if (touchDevice) return
+        val filterId = selectedFilterChipId()
+        resultsAdapter.topRowFocusUpTargetId = if (filtersVisible) filterId else R.id.searchKeyboard
+        keyboard.bottomRowDownTarget = if (filtersVisible) searchView.findViewById(filterId) else resultsList
+    }
+
     if (!touchDevice) {
-        // P2-7: DOWN from the keyboard's bottom row (and the K/L columns with nothing
-        // below them) lands on the first result row.
-        keyboard.bottomRowDownTarget = resultsList
+        // LEFT from the first result column must return to the keyboard: default focus search
+        // cannot cross out of the RecyclerView. UP/DOWN use the currently visible search
+        // surface (filters when a query is active, keyboard while idle).
+        resultsAdapter.leftFocusTarget = keyboard
+        updateSearchFocusTargets(filtersVisible = false)
     }
 
     var searchRunnable: Runnable? = null
@@ -141,6 +148,34 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     fun applyFilterChip(selected: View) {
         for (id in listOf(R.id.searchFilterAll, R.id.searchFilterLive, R.id.searchFilterFilms, R.id.searchFilterSeries)) {
             searchView.findViewById<View>(id).isSelected = searchView.findViewById<View>(id) === selected
+        }
+        updateSearchFocusTargets(filtersVisible = filtersRow.visibility == View.VISIBLE)
+    }
+
+    if (!touchDevice) {
+        val closeButton = searchView.findViewById<View>(R.id.searchCloseButton)
+        for (id in listOf(R.id.searchFilterAll, R.id.searchFilterLive, R.id.searchFilterFilms, R.id.searchFilterSeries)) {
+            searchView.findViewById<View>(id).setOnKeyListener { chip, keyCode, event ->
+                if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (resultsList.isShown && resultsAdapter.itemCount > 0) {
+                            resultsList.scrollToPosition(0)
+                            resultsList.post {
+                                val firstResult = resultsList.layoutManager?.findViewByPosition(0)
+                                if (firstResult?.requestFocus() != true) keyboard.requestFocus()
+                            }
+                            true
+                        } else {
+                            keyboard.requestFocus()
+                        }
+                    }
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT ->
+                        if (chip.id == R.id.searchFilterAll) keyboard.requestFocus() else false
+                    android.view.KeyEvent.KEYCODE_DPAD_UP -> closeButton.requestFocus()
+                    else -> false
+                }
+            }
         }
     }
     for ((filter, id) in listOf(
@@ -267,12 +302,14 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
                 statusText.visibility = View.VISIBLE
                 resultsList.visibility = View.GONE
                 filtersRow.visibility = View.GONE
+                updateSearchFocusTargets(filtersVisible = false)
                 buildRecents()
                 searchAllResults = emptyList()
                 searchDisplayedCount = 0
                 return
             }
             filtersRow.visibility = View.VISIBLE
+            updateSearchFocusTargets(filtersVisible = true)
             // Recents are the idle-state surface - once results take over, get them off
             // the panel (on portrait they'd squeeze the grid with the filters and keyboard).
             recentsBlock.visibility = View.GONE

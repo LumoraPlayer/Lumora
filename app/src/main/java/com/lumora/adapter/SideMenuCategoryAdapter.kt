@@ -16,6 +16,7 @@ import com.lumora.R
 import com.lumora.cache.EpgListCache
 import com.lumora.model.CategoryFilter
 import com.lumora.parser.XtreamClient
+import com.lumora.util.resetFocusTransform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -126,6 +127,7 @@ class SideMenuCategoryAdapter(
         }
 
         fun bind(category: CategoryFilter, selected: Boolean) {
+            itemView.resetFocusTransform()
             current = category
             val rawName = if (category.isDynamic) category.name.uppercase() else category.name
             val label = rawName.let { if (it.length > 80) it.take(79) + "…" else it }

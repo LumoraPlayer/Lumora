@@ -45,6 +45,26 @@ internal fun MainActivity.simklAccessToken(): String? {
 internal fun MainActivity.isSimklSignedIn(): Boolean =
     SimklClient.isConfigured && SimklStore.isSignedIn(prefs)
 
+// ── Ratings ─────────────────────────────────────
+
+/**
+ * The IMDb score to show for a title, or null when there is nothing to show.
+ *
+ * Two steps, both cached: TMDB's `external_ids` for the `tt…` (the same id Stremio and
+ * subtitle search use), then Simkl's own field for the number. TMDB is the bridge because it
+ * is the id every catalogue title is resolved through; Simkl is the source because its API
+ * carries IMDb's rating directly, so the score costs no second credential and no scraping
+ * (see SimklClient.imdbRating for the endpoint's own details).
+ *
+ * This is metadata, not account state: it needs no Simkl sign-in and no Simkl toggle. It
+ * does need a TMDB key, because that is what maps a panel title to the IMDb id at all.
+ */
+internal suspend fun MainActivity.imdbRatingFor(tmdbId: Int, isSeries: Boolean): String? {
+    if (tmdbId <= 0 || !tmdbClient.hasKey()) return null
+    val imdbId = tmdbClient.imdbId(tmdbId, isSeries) ?: return null
+    return simklClient.imdbRating(imdbId, isSeries)?.score
+}
+
 // ── Identifying a title to Simkl ────────────────
 
 /**

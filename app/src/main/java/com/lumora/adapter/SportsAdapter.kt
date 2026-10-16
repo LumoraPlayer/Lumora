@@ -22,6 +22,7 @@ import com.lumora.sports.SportsChannelMatcher
 import com.lumora.sports.Sport
 import com.lumora.sports.SportsStatus
 import com.lumora.util.PosterLoader
+import com.lumora.util.resetFocusTransform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -436,6 +437,7 @@ class SportsAdapter(
          * in which slot, the programme's own title taking the top line.
          */
         fun bindGuideEvent(item: SportsListItem.GuideEvent) {
+            itemView.resetFocusTransform()
             currentEvent = null
             guidesChannel = item.channel
             val context = itemView.context
@@ -469,6 +471,7 @@ class SportsAdapter(
         }
 
         fun bind(item: SportsListItem.Event) {
+            itemView.resetFocusTransform()
             currentEvent = item
             guidesChannel = null
             val fixture = item.fixture

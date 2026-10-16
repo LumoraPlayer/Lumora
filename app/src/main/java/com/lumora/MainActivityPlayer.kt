@@ -683,6 +683,11 @@ internal fun MainActivity.showPlayerFor(
     dismissActiveScraperChallenges()
     // Reset Up Next state on any new playback
     cancelUpNext()
+    // A newly selected channel/title starts in fullscreen. The overlay defaults to VISIBLE
+    // in the layout, and a previous session may have left it up after its hide timer was
+    // cancelled, so don't rely on the auto-hide to dismiss it here.
+    mainHandler.removeCallbacks(hideControlsRunnable)
+    binding.controlsOverlay.visibility = View.GONE
     // A refusal belongs to the episode that was playing: the next one - or a re-play of this
     // one - gets its own offer (see upNextDismissed's kdoc).
     upNextDismissed = false

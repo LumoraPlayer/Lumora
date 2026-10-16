@@ -1387,6 +1387,7 @@ internal suspend fun MainActivity.applyCategoryFilter(focusFirstLiveChannel: Boo
             // one the user is waiting for, so drop ours rather than overwrite it.
             if (generation != categoryFilterGeneration) return
             liveAdapter.submitList(filtered) {
+                updateGuideRowWrap()
                 if (!focusFirstLiveChannel) return@submitList
                 val first = filtered.firstOrNull() ?: return@submitList
                 requestPreviewLoad(first)

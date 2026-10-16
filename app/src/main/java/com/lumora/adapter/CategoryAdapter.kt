@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.lumora.R
 import com.lumora.model.CategoryFilter
+import com.lumora.util.resetFocusTransform
 
 /** Id prefix MainActivity gives the Live TV dynamic buckets (Sports/News/Music/Cinema). */
 const val DYNAMIC_BUCKET_ID_PREFIX = "dynbucket:"
@@ -132,6 +133,8 @@ class CategoryAdapter(
         }
 
         fun bind(category: CategoryFilter, selected: Boolean) {
+            itemView.resetFocusTransform()
+            star.resetFocusTransform()
             current = category
             val countSuffix = if (category.count >= 0) " (${category.count})" else ""
             val rawName = if (category.isDynamic) category.name.uppercase() else category.name

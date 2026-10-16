@@ -12,8 +12,8 @@
 <resources>
     <dimen name="poster_grid_min_column_width">80dp</dimen>
     <dimen name="poster_image_height">88dp</dimen>
-    <dimen name="shelf_poster_width">67dp</dimen>
-    <dimen name="shelf_poster_image_height">106dp</dimen>
+    <dimen name="shelf_poster_width">104dp</dimen>
+    <dimen name="shelf_poster_image_height">137dp</dimen>
     <dimen name="search_poster_image_height">77dp</dimen>
 
     <!-- Settings text: the sw540dp bucket (720p/1080p sets) already steps these up from the

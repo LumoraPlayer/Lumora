@@ -23,6 +23,9 @@ private const val TARGET_POSTER_HEIGHT_PX = 330
  * the jank/freeze reported when browsing large VOD catalogs.
  */
 object PosterLoader {
+    /** Holders that scroll past quickly never start their network fetch at all. */
+    const val LOAD_DEBOUNCE_MS = 150L
+
     private val cache = object : LruCache<String, Bitmap>(
         (Runtime.getRuntime().maxMemory() / 1024 / 8).toInt()
     ) {

@@ -26,13 +26,10 @@
         android:paddingStart="2dp"
         android:paddingEnd="6dp"
         android:paddingVertical="4dp"
-        android:stateListAnimator="@animator/focus_scale"
-        android:nextFocusLeft="@id/guideChannelFav">
+        android:stateListAnimator="@animator/focus_scale">
 
-        <!-- ★ white when the channel is favourited, ☆ grey when not. Its own D-pad target
-             at the left edge of the row: LEFT from the channel column lands on it, focusing
-             keeps the preview + now-line alive (the adapter mirrors guideChannelInfo's focus
-             listener), clicking toggles the favourite. -->
+        <!-- Favourite indicator stays tappable but is not a separate D-pad stop: long-press
+             on the channel row also toggles it, so LEFT can return directly to categories. -->
         <TextView
             android:id="@+id/guideChannelFav"
             android:layout_width="wrap_content"
@@ -40,10 +37,9 @@
             android:layout_marginEnd="2dp"
             android:background="@drawable/bg_toolbar_button"
             android:clickable="true"
-            android:focusable="true"
+            android:focusable="false"
             android:fontFamily="@font/inter_medium"
             android:gravity="center"
-            android:nextFocusRight="@id/guideChannelInfo"
             android:paddingHorizontal="4dp"
             android:paddingVertical="1dp"
             android:stateListAnimator="@animator/focus_scale_flat"
@@ -140,9 +136,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:overScrollMode="never"
-            android:scrollbars="none"
-            android:requiresFadingEdge="horizontal"
-            android:fadingEdgeLength="18dp">
+            android:scrollbars="none">
 
             <LinearLayout
                 android:id="@+id/guideProgramRow"

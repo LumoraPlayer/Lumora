@@ -87,16 +87,15 @@
          its thumbnail with a huge empty gap - inset the list so a row is a readable block. -->
     <dimen name="detail_list_end_inset">300dp</dimen>
 
-    <!-- Live TV. The guide grid was the worst offender in the app - 8-9sp channel names and
-         numbers are essentially unreadable across a room. Row height and logo box grow with
-         the type so the row stays proportioned rather than just gaining crowded text. -->
+    <!-- Live TV. Channel names and numbers stay legible at couch distance while the channel
+         column grows only enough to keep a common long label readable. -->
     <dimen name="category_row_text">14sp</dimen>
     <!-- Tighter than the phone's 12dp/14dp: the category pill should hug its (now bold,
          larger) label rather than sit in a box sized for 10sp text. -->
     <dimen name="category_row_padding_vertical">6dp</dimen>
     <dimen name="category_row_padding_horizontal">9dp</dimen>
-    <dimen name="guide_channel_name_text">11sp</dimen>
-    <dimen name="guide_channel_number_text">11sp</dimen>
+    <dimen name="guide_channel_name_text">13sp</dimen>
+    <dimen name="guide_channel_number_text">12sp</dimen>
     <dimen name="guide_channel_initial_text">13sp</dimen>
     <dimen name="guide_program_text">14sp</dimen>
     <!-- Logo box and row height sized off the 13sp channel name rather than held at a fixed
@@ -105,21 +104,10 @@
          larger and left a visible band of empty background above and below every name. -->
     <dimen name="guide_channel_logo_size">30dp</dimen>
     <dimen name="guide_row_min_height">40dp</dimen>
-    <!-- Sized so a name the length of "Sky Sports Football" fits without ellipsis, measured
-         rather than estimated: that string is 102dp in Inter Medium at guide_channel_name_text
-         (11sp). The rest of the row accounts for 90dp of this - 8dp of guideChannelInfo
-         padding, 21dp of favourite star (glyph + its own padding + margin), 27dp of channel
-         number at its widest ("1001" plus margin), the 30dp logo box, and the text column's
-         4dp start margin - so 192dp is the exact fit and the few dp over are headroom for
-         Android's metrics not matching the measurement exactly.
-
-         Note this fits title case. An all-caps "SKY SPORTS FOOTBALL" is 130dp and would still
-         ellipsize; sizing for that costs another 28dp of programme grid.
-
-         Every dp here is taken straight off the timeline to the right. The guide header's
-         spacer in activity_main.xml reads this same dimen, so the time ruler stays aligned
-         with the programme blocks by itself. -->
-    <dimen name="guide_channel_column_width">198dp</dimen>
+    <!-- The channel column is wide enough for typical channel names at the larger 13sp type,
+         without spending more of the timeline than necessary. The guide header's spacer in
+         activity_main.xml uses this same dimen, keeping the ruler aligned with the blocks. -->
+    <dimen name="guide_channel_column_width">220dp</dimen>
     <!-- Narrower than the old 240dp: the rows are short labels with a count, and the width
          they were given came straight off the guide grid and the poster columns next to
          them. Long names wrap to a second line rather than taking more width - see
@@ -205,13 +193,18 @@
          around a 20dp icon rendered the measured 56dp-wide empty capsules. 10dp hugs the
          icon while staying a reachable remote target inside the 51dp-tall band. -->
     <dimen name="chrome_button_padding_h">10dp</dimen>
-    <!-- TV tier: toolbar_padding_horizontal is 28dp, so -14dp leaves the brand ~14dp
-         from the screen edge, corner-hugged with its top edge. -->
-    <dimen name="toolbar_brand_translate_x">-14dp</dimen>
-    <!-- Nudges the brand mark up slightly so it doesn't crowd the tab row beneath it at
-         TV scale. -->
-    <dimen name="toolbar_brand_translate_y">-4dp</dimen>
+    <!-- Keep the brand inside the TV toolbar's safe inset; unlike the phone tier it is not
+         pulled toward the screen bezel. -->
+    <dimen name="toolbar_brand_translate_x">0dp</dimen>
+    <!-- The toolbar's top padding supplies the TV overscan-safe inset. -->
+    <dimen name="toolbar_brand_translate_y">0dp</dimen>
     <dimen name="toolbar_padding_horizontal">28dp</dimen>
+    <dimen name="toolbar_padding_top">16dp</dimen>
+    <dimen name="settings_outer_padding_horizontal">28dp</dimen>
+    <dimen name="settings_outer_padding_vertical">16dp</dimen>
+    <dimen name="player_controls_safe_horizontal_inset">28dp</dimen>
+    <dimen name="player_controls_safe_vertical_inset">16dp</dimen>
+    <dimen name="player_controls_safe_margin">28dp</dimen>
     <!-- TV tier of the toolbar cluster spacing - see values/dimens.xml. Slightly wider than
          phone: the buttons are aimed at a remote across a room, and the panel has room to
          spare at 960dp wide. -->

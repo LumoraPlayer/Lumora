@@ -2790,10 +2790,10 @@ class MainActivity : AppCompatActivity() {
     // ── Provider Settings (QR + Manual entry) ─────
 
     /** Lightweight stand-in for AlertDialog that mimics just what showProviderSettings()
-     *  needs - dismiss()/setOnDismissListener()/show() plus a Save/Cancel button pair -
+     *  needs - dismiss()/setOnDismissListener()/show() plus a close affordance and optional Save -
      *  while actually adding the content view into [container] (the same "swap the active
-     *  tab's content region" slot every other tab uses), so the toolbar + tab bar above
-     *  stay visible and usable while Settings is open. A real AlertDialog rendered as a
+     *  tab's content region" slot every other tab uses), so the app toolbar stays visible
+     *  while browse tabs are hidden and Settings owns focus. A real AlertDialog rendered as a
      *  small centered floating box with the platform's own button panel no matter what
      *  background/size overrides were applied on its Window - not something
      *  window.setLayout(MATCH_PARENT, MATCH_PARENT) can escape - so this skips Dialog

@@ -27,7 +27,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val FILLER_MINUTES = 30
+private const val FILLER_MINUTES = 90
 private const val NOW_NEXT_SEPARATOR = " · "
 // Fast D-pad/fling scrolling flies a row past in well under this time; waiting this
 // long before firing its network fetch means rows that never settle never cost a
@@ -64,6 +64,12 @@ class LiveGuideAdapter(
     private val isChannelFavourite: (String) -> Boolean = { false },
     private val fetchPrograms: suspend (String) -> List<XtreamClient.EpgProgram>?
 ) : ListAdapter<Channel, LiveGuideAdapter.RowViewHolder>(DiffCallback()) {
+
+    /** D-pad UP from the first guide row returns to the Live TV tab. */
+    var topRowFocusUpTargetId: Int = R.id.tabLive
+
+    /** D-pad LEFT from the channel column returns to the selected category or collapsed-rail affordance. */
+    var leftEdgeFocusTarget: (() -> Boolean)? = null
 
     companion object {
         /** Timeline scale (px per programme minute, in dp). Also used by MainActivity's
@@ -170,28 +176,16 @@ class LiveGuideAdapter(
                 updateNowLine()
             }
             favStar.setOnClickListener { current?.let { onChannelFavClick?.invoke(it) } }
-            // The star is a second D-pad target inside the row: focusing it must behave like
-            // focusing the channel column (preview pane follows, now/next line stays) rather
-            // than reading as "left the channel".
-            favStar.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) current?.let { onChannelFocused?.invoke(it) }
-                updateNowLine()
-            }
-            // LEFT from the channel column must land on this row's star, not fall through to
-            // the nearest focusable on the whole screen (the sidebar's stars). nextFocusLeftId
-            // silently failed to resolve across the guide RecyclerView's focus-search scope,
-            // so this is handled by key explicitly, per the repo's D-pad pattern.
+            // The star remains a tap target and favourite indicator, but is not a second
+            // remote stop. LEFT returns directly to the selected category (or rail expand
+            // affordance) instead of requiring LEFT through every channel's star first.
             channelInfo.setOnKeyListener { _, keyCode, event ->
-                if (event.action == android.view.KeyEvent.ACTION_DOWN && keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT) {
-                    favStar.requestFocus()
-                    true
-                } else false
-            }
-            favStar.setOnKeyListener { _, keyCode, event ->
-                if (event.action == android.view.KeyEvent.ACTION_DOWN && keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
-                    channelInfo.requestFocus()
-                    true
-                } else false
+                if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> leftEdgeFocusTarget?.invoke() ?: false
+                    android.view.KeyEvent.KEYCODE_DPAD_UP -> focusTabFromTopRow()
+                    else -> false
+                }
             }
             scrollView.setOnScrollChangeListener { v, scrollX, _, _, _ -> broadcastScroll(scrollX, v as HorizontalScrollView) }
         }
@@ -449,10 +443,7 @@ class LiveGuideAdapter(
             // (EPG gap), the first upcoming program.
             val next = if (currentIndex >= 0) programs.getOrNull(currentIndex + 1)
             else programs.firstOrNull { it.startTimestamp > nowSeconds }
-            // The fav star is a second focus target in the channel column (see its
-            // OnFocusChangeListener) - focusing it must expand the now/next line exactly
-            // like focusing the channel column does, not read as "left the channel".
-            val focused = channelInfo.isFocused || favStar.isFocused
+            val focused = channelInfo.isFocused
             val context = itemView.context
             nowText.text = when {
                 focused && current != null && next != null ->
@@ -500,6 +491,11 @@ class LiveGuideAdapter(
                 setOnFocusChangeListener { _, hasFocus ->
                     if (hasFocus) current?.let { onChannelFocused?.invoke(it) }
                 }
+                setOnKeyListener { _, keyCode, event ->
+                    if (event.action == android.view.KeyEvent.ACTION_DOWN &&
+                        keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP
+                    ) focusTabFromTopRow() else false
+                }
                 setOnLongClickListener { view ->
                     val channel = current
                     val program = (view.tag as BlockState).program
@@ -514,6 +510,12 @@ class LiveGuideAdapter(
                     true
                 }
             }
+        }
+
+        private fun focusTabFromTopRow(): Boolean {
+            if (bindingAdapterPosition != 0) return false
+            val target = itemView.rootView.findViewById<View>(topRowFocusUpTargetId)
+            return target?.takeIf { it.isShown }?.requestFocus() ?: true
         }
     }
 

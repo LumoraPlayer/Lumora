@@ -3,21 +3,28 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/canvas">
+    android:background="@color/canvas"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:paddingHorizontal="@dimen/settings_outer_padding_horizontal"
+    android:paddingVertical="@dimen/settings_outer_padding_vertical">
 
-<!-- No maxWidth here: LinearLayout ignores it (it was a no-op), so the panel has always
-     been full-bleed. Reading measure is constrained by settings_content_inset on the
-     content column instead, which is 0dp everywhere except TV. -->
+<!-- No maxWidth here: LinearLayout ignores it. The panel fills its slot, with TV-tier
+     overscan-safe padding at the root and settings_content_inset constraining the content column. -->
 <LinearLayout
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:layout_gravity="center_horizontal"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:orientation="vertical">
 
   <LinearLayout
       android:layout_width="match_parent"
       android:layout_height="0dp"
       android:layout_weight="1"
+      android:clipChildren="false"
+      android:clipToPadding="false"
       android:orientation="horizontal">
 
     <!-- Nav rail - hidden entirely until a provider is configured (see showProviderSettings()) -->
@@ -26,6 +33,8 @@
         android:layout_width="@dimen/settings_nav_rail_width"
         android:layout_height="match_parent"
         android:background="@color/canvas_elevated"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:orientation="vertical">
 
         <TextView
@@ -39,17 +48,21 @@
             android:textSize="@dimen/settings_text_section"
             android:fontFamily="@font/inter_bold" />
 
-        <!-- Scrollable so the rail never clips the last row under the Cancel/Save footer
-             on shorter TV panels - this rail has no fixed height budget of its own. -->
+        <!-- Scrollable so the rail never clips the last row on shorter panels - this rail has
+             no fixed height budget of its own. -->
         <ScrollView
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:scrollbars="none">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:orientation="vertical"
                 android:paddingHorizontal="@dimen/settings_gap_m"
                 android:paddingBottom="@dimen/settings_gap">
@@ -397,7 +410,8 @@
                         <LinearLayout
                             android:id="@+id/settingsTypeM3u"
                             android:layout_width="0dp"
-                            android:layout_height="@dimen/settings_type_card_height"
+                            android:layout_height="wrap_content"
+                            android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
                             android:layout_marginEnd="5dp"
                             android:background="@drawable/card_surface_background"
@@ -405,15 +419,18 @@
                             android:focusable="true"
                             android:gravity="center"
                             android:orientation="vertical"
+                            android:paddingHorizontal="4dp"
+                            android:paddingVertical="6dp"
                             android:stateListAnimator="@animator/focus_scale_flat">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/provider_type_m3u" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/playlist_link" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_m3u" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/playlist_link" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
 
                         <LinearLayout
                             android:id="@+id/settingsTypeXtream"
                             android:layout_width="0dp"
-                            android:layout_height="@dimen/settings_type_card_height"
+                            android:layout_height="wrap_content"
+                            android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
                             android:layout_marginHorizontal="5dp"
                             android:background="@drawable/card_surface_background"
@@ -421,15 +438,18 @@
                             android:focusable="true"
                             android:gravity="center"
                             android:orientation="vertical"
+                            android:paddingHorizontal="4dp"
+                            android:paddingVertical="6dp"
                             android:stateListAnimator="@animator/focus_scale_flat">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/provider_type_xtream" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/login_codes" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_xtream" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/login_codes" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
 
                         <LinearLayout
                             android:id="@+id/settingsTypeStalker"
                             android:layout_width="0dp"
-                            android:layout_height="@dimen/settings_type_card_height"
+                            android:layout_height="wrap_content"
+                            android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
                             android:layout_marginStart="5dp"
                             android:background="@drawable/card_surface_background"
@@ -437,9 +457,11 @@
                             android:focusable="true"
                             android:gravity="center"
                             android:orientation="vertical"
+                            android:paddingHorizontal="4dp"
+                            android:paddingVertical="6dp"
                             android:stateListAnimator="@animator/focus_scale_flat">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/provider_type_stalker" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/mac_address" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_stalker" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/mac_address" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
                     </LinearLayout>
 
@@ -458,7 +480,8 @@
                         <LinearLayout
                             android:id="@+id/settingsTypeJellyfin"
                             android:layout_width="0dp"
-                            android:layout_height="@dimen/settings_type_card_height"
+                            android:layout_height="wrap_content"
+                            android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
                             android:layout_marginEnd="5dp"
                             android:background="@drawable/card_surface_background"
@@ -466,15 +489,18 @@
                             android:focusable="true"
                             android:gravity="center"
                             android:orientation="vertical"
+                            android:paddingHorizontal="4dp"
+                            android:paddingVertical="6dp"
                             android:stateListAnimator="@animator/focus_scale_flat">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/provider_type_jellyfin" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_jellyfin" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
 
                         <LinearLayout
                             android:id="@+id/settingsTypeSilo"
                             android:layout_width="0dp"
-                            android:layout_height="@dimen/settings_type_card_height"
+                            android:layout_height="wrap_content"
+                            android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
                             android:layout_marginHorizontal="5dp"
                             android:background="@drawable/card_surface_background"
@@ -482,15 +508,18 @@
                             android:focusable="true"
                             android:gravity="center"
                             android:orientation="vertical"
+                            android:paddingHorizontal="4dp"
+                            android:paddingVertical="6dp"
                             android:stateListAnimator="@animator/focus_scale_flat">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/provider_type_silo" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_silo" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
 
                         <LinearLayout
                             android:id="@+id/settingsTypePlex"
                             android:layout_width="0dp"
-                            android:layout_height="@dimen/settings_type_card_height"
+                            android:layout_height="wrap_content"
+                            android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
                             android:layout_marginStart="5dp"
                             android:background="@drawable/card_surface_background"
@@ -498,9 +527,11 @@
                             android:focusable="true"
                             android:gravity="center"
                             android:orientation="vertical"
+                            android:paddingHorizontal="4dp"
+                            android:paddingVertical="6dp"
                             android:stateListAnimator="@animator/focus_scale_flat">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/provider_type_plex" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_plex" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
                     </LinearLayout>
 
@@ -518,7 +549,8 @@
                         <LinearLayout
                             android:id="@+id/settingsTypeSmb"
                             android:layout_width="0dp"
-                            android:layout_height="@dimen/settings_type_card_height"
+                            android:layout_height="wrap_content"
+                            android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
                             android:layout_marginEnd="5dp"
                             android:background="@drawable/card_surface_background"
@@ -526,15 +558,18 @@
                             android:focusable="true"
                             android:gravity="center"
                             android:orientation="vertical"
+                            android:paddingHorizontal="4dp"
+                            android:paddingVertical="6dp"
                             android:stateListAnimator="@animator/focus_scale_flat">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/provider_type_smb" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/network_share" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_smb" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/network_share" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
 
                         <LinearLayout
                             android:id="@+id/settingsTypeWebdav"
                             android:layout_width="0dp"
-                            android:layout_height="@dimen/settings_type_card_height"
+                            android:layout_height="wrap_content"
+                            android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
                             android:layout_marginStart="5dp"
                             android:background="@drawable/card_surface_background"
@@ -542,9 +577,11 @@
                             android:focusable="true"
                             android:gravity="center"
                             android:orientation="vertical"
+                            android:paddingHorizontal="4dp"
+                            android:paddingVertical="6dp"
                             android:stateListAnimator="@animator/focus_scale_flat">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/provider_type_webdav" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/network_share" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_webdav" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/network_share" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
                     </LinearLayout>
 
@@ -733,6 +770,8 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/settings_gap"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
                         android:orientation="vertical">
 
                         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/m3u_url" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
@@ -794,6 +833,8 @@
                         android:id="@+id/settingsXtreamGroup"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -861,6 +902,8 @@
                         android:id="@+id/settingsStalkerGroup"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -906,6 +949,8 @@
                         android:id="@+id/settingsJellyfinGroup"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -996,6 +1041,8 @@
                         android:id="@+id/settingsPlexGroup"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -1073,6 +1120,8 @@
                         android:id="@+id/settingsSmbGroup"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -1129,6 +1178,8 @@
                         android:id="@+id/settingsWebdavGroup"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -1270,6 +1321,8 @@
                 android:id="@+id/panePlayback"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1427,6 +1480,8 @@
                 android:id="@+id/panePrivacy"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1465,6 +1520,8 @@
                 android:id="@+id/paneBackup"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1514,6 +1571,8 @@
                 android:id="@+id/paneEpg"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1588,16 +1647,15 @@
                     android:fontFamily="@font/inter_regular"
                     android:visibility="gone" />
 
-                <!-- FullHeightRecyclerView, not a plain RecyclerView: inside the
-                     settingsContentScroll ScrollView a plain one measures itself to a single
-                     row. Same usage as activity_main.xml's detailItemsList. -->
-                <com.lumora.view.FullHeightRecyclerView
+                <!-- Bounded nested list: allow RecyclerView to recycle large download histories
+                     while the settings page remains scrollable around it. -->
+                <com.lumora.view.BoundedHeightRecyclerView
                     android:id="@+id/settingsDownloadsList"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:clipChildren="false"
                     android:clipToPadding="false"
-                    android:nestedScrollingEnabled="false"
+                    android:nestedScrollingEnabled="true"
                     android:overScrollMode="never" />
             </LinearLayout>
 
@@ -2284,6 +2342,8 @@
                 android:id="@+id/paneAbout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -2625,30 +2685,12 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/canvas_elevated"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:gravity="end|center_vertical"
         android:orientation="horizontal"
-        android:padding="@dimen/settings_gap_l">
-
-        <LinearLayout
-            android:id="@+id/settingsCancelButton"
-            style="@style/Widget.Lumora.SecondaryButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingVertical="@dimen/settings_row_padding_vertical"
-            android:layout_marginEnd="12dp"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:paddingHorizontal="@dimen/settings_pane_padding"
-            android:stateListAnimator="@animator/focus_scale_flat">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/cancel"
-                android:textColor="@color/text_secondary"
-                android:textSize="@dimen/settings_text_subtitle"
-                android:fontFamily="@font/inter_medium" />
-        </LinearLayout>
+        android:padding="@dimen/settings_gap_l"
+        android:visibility="gone">
 
         <LinearLayout
             android:id="@+id/settingsSaveButton"

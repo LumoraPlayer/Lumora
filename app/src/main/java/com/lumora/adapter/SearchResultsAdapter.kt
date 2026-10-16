@@ -16,10 +16,13 @@ import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.util.PosterLoader
 import com.lumora.util.cleanVodTitle
+import com.lumora.util.resetFocusTransform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** A TV-program match from EPG search: the program title is the headline, with the
@@ -55,7 +58,7 @@ class SearchResultsAdapter(
 
     /** Column count of the GridLayoutManager this adapter is bound to. */
     var spanCount: Int = 1
-    /** View id resolved via rootView when DPAD_UP is pressed on the top row (the keyboard). */
+    /** View id resolved via rootView when DPAD_UP is pressed on the top row (active filter or keyboard). */
     var topRowFocusUpTargetId: Int = View.NO_ID
     /** View focused when DPAD_LEFT is pressed from the first column (the keyboard). */
     var leftFocusTarget: View? = null
@@ -106,6 +109,14 @@ class SearchResultsAdapter(
             is SearchResultItem.Media -> (holder as MediaHolder).bind(item.channel)
             is SearchResultItem.Epg -> (holder as EpgHolder).bind(item.program)
         }
+    }
+
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        when (holder) {
+            is MediaHolder -> holder.cancelPendingLoad()
+            is EpgHolder -> holder.cancelPendingLoad()
+        }
+        super.onViewRecycled(holder)
     }
 
     /** Focus handling shared by both tile types: escape the grid at its top/left edges into
@@ -173,6 +184,7 @@ class SearchResultsAdapter(
         private val titleText: TextView = itemView.findViewById(R.id.itemTitle)
         private val typeBadge: TextView = itemView.findViewById(R.id.itemTypeBadge)
         private var current: Channel? = null
+        private var imageJob: Job? = null
 
         init {
             itemView.setOnClickListener { current?.let { onItemClick(SearchResultItem.Media(it)) } }
@@ -183,6 +195,8 @@ class SearchResultsAdapter(
         }
 
         fun bind(channel: Channel) {
+            itemView.resetFocusTransform()
+            cancelPendingLoad()
             current = channel
             // What hideContentDetail's findItemViewByChannelId looks for when it restores
             // focus after a detail screen opened from search - same tag PosterGridAdapter and
@@ -214,10 +228,16 @@ class SearchResultsAdapter(
             posterImage.setImageResource(R.drawable.ic_launcher_foreground)
             if (url.isNullOrBlank()) return
             PosterLoader.getCached(url)?.let { posterImage.setImageBitmap(it); return }
-            scope.launch {
+            imageJob = scope.launch {
+                delay(PosterLoader.LOAD_DEBOUNCE_MS)
                 val bitmap = PosterLoader.fetch(url)
                 if (bitmap != null && current === channel) posterImage.setImageBitmap(bitmap)
             }
+        }
+
+        fun cancelPendingLoad() {
+            imageJob?.cancel()
+            imageJob = null
         }
     }
 
@@ -226,6 +246,7 @@ class SearchResultsAdapter(
         private val titleText: TextView = itemView.findViewById(R.id.epgProgramTitle)
         private val metaText: TextView = itemView.findViewById(R.id.epgProgramMeta)
         private var current: SearchEpgResult? = null
+        private var imageJob: Job? = null
 
         init {
             itemView.setOnClickListener { current?.let { onItemClick(SearchResultItem.Epg(it)) } }
@@ -233,6 +254,8 @@ class SearchResultsAdapter(
         }
 
         fun bind(result: SearchEpgResult) {
+            itemView.resetFocusTransform()
+            cancelPendingLoad()
             current = result
             // Same focus-restore tag as MediaHolder - the EPG tile stands for its channel.
             itemView.tag = result.channel.id
@@ -244,10 +267,16 @@ class SearchResultsAdapter(
             posterImage.setImageResource(R.drawable.ic_launcher_foreground)
             if (url.isNullOrBlank()) return
             PosterLoader.getCached(url)?.let { posterImage.setImageBitmap(it); return }
-            scope.launch {
+            imageJob = scope.launch {
+                delay(PosterLoader.LOAD_DEBOUNCE_MS)
                 val bitmap = PosterLoader.fetch(url)
                 if (bitmap != null && current === result) posterImage.setImageBitmap(bitmap)
             }
+        }
+
+        fun cancelPendingLoad() {
+            imageJob?.cancel()
+            imageJob = null
         }
     }
 

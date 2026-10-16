@@ -707,6 +707,30 @@ internal fun MainActivity.showProviderSettings() {
     // Close Search if it's open - the two share the weighted content slot and would otherwise
     // render stacked on top of each other (see showSearchDialog).
     activeSearchOverlay?.dismiss()
+    val tabBarWasVisible = binding.tabBar.visibility == View.VISIBLE
+    val browseChromeViews = listOf(
+        binding.tabHome,
+        binding.tabLive,
+        binding.tabSports,
+        binding.tabSeries,
+        binding.tabFilms,
+        binding.tabDiscover,
+        binding.tabDownloads,
+        binding.btnSearch,
+        binding.btnRefresh
+    )
+    val browseChromeVisibility = browseChromeViews.map { it.visibility }
+    if (tabBarWasVisible) browseChromeViews.forEach { it.visibility = View.INVISIBLE }
+    val settingsButtonDescription = binding.btnSettings.contentDescription
+    val settingsButtonIcon = binding.btnSettings.findViewById<ImageView>(R.id.btnSettingsIcon)
+    val settingsButtonNextFocusLeftId = binding.btnSettings.nextFocusLeftId
+    val settingsButtonNextFocusRightId = binding.btnSettings.nextFocusRightId
+    binding.btnSettings.contentDescription = getString(R.string.close)
+    settingsButtonIcon.setImageResource(R.drawable.ic_x)
+    if (tabBarWasVisible) {
+        binding.btnSettings.nextFocusLeftId = View.NO_ID
+        binding.btnSettings.nextFocusRightId = View.NO_ID
+    }
     // Every open of Settings on a portrait phone starts with the rail hidden, the same way
     // rotating into portrait re-hides the category rail: the panes need the full width to
     // be readable, and the tree is inflated fresh here anyway, so an expand from a previous
@@ -777,6 +801,8 @@ internal fun MainActivity.showProviderSettings() {
     val iptvProviderListEmpty = dialogView.findViewById<View>(R.id.settingsIptvProviderListEmpty)
     val addIptvProviderButton = dialogView.findViewById<View>(R.id.settingsAddIptvProvider)
     val iptvFormSection = dialogView.findViewById<View>(R.id.settingsIptvFormSection)
+    val settingsFooter = dialogView.findViewById<View>(R.id.settingsFooter)
+    settingsFooter.visibility = View.GONE
     val iptvFieldsSection = dialogView.findViewById<View>(R.id.settingsIptvFieldsSection)
     val typePicker = dialogView.findViewById<View>(R.id.settingsTypePicker)
     val typeSummary = dialogView.findViewById<View>(R.id.settingsTypeSummary)
@@ -804,7 +830,7 @@ internal fun MainActivity.showProviderSettings() {
     val dialog = MainActivity.FullScreenOverlay(
         binding.settingsContainer,
         dialogView,
-        closeButton = dialogView.findViewById(R.id.settingsCancelButton),
+        closeButton = binding.btnSettings,
         // Resolved lazily at show()-time (see MainActivity.FullScreenOverlay) - if nothing's
         // configured yet, openIptvForm(null) has already run by then and hidden
         // addIptvProviderButton, so fall back to the first type card instead.
@@ -1349,6 +1375,7 @@ internal fun MainActivity.showProviderSettings() {
         typePicker.visibility = View.VISIBLE
         iptvFieldsSection.visibility = View.GONE
         iptvFormSection.visibility = View.GONE
+        settingsFooter.visibility = View.GONE
         addIptvProviderButton.visibility = View.VISIBLE
         iptvListSection.visibility = View.VISIBLE
         if (serverRunning) stopQrServer()
@@ -1409,6 +1436,7 @@ internal fun MainActivity.showProviderSettings() {
         webdavUser.setText("")
         webdavPass.setText("")
         iptvFormSection.visibility = View.VISIBLE
+        settingsFooter.visibility = View.VISIBLE
         // Whatever opened this ("+ Add Provider", or a list row's Edit button) just went
         // GONE with the list, so focus has to be handed to the form explicitly. The edit
         // path is already covered by selectType() above; the add path lands on the first
@@ -1435,6 +1463,7 @@ internal fun MainActivity.showProviderSettings() {
         jellyfinUser.setText(existing.username ?: "")
         jellyfinPass.setText(existing.password ?: "")
         iptvFormSection.visibility = View.VISIBLE
+        settingsFooter.visibility = View.VISIBLE
     }
 
     // SMB/WebDAV shares: same store, same form; each type's fields are pre-filled from the
@@ -1458,6 +1487,7 @@ internal fun MainActivity.showProviderSettings() {
             webdavPass.setText(existing.password ?: "")
         }
         iptvFormSection.visibility = View.VISIBLE
+        settingsFooter.visibility = View.VISIBLE
     }
 
     // Plex entries are in the same store, but unlike Jellyfin there is nothing to pre-fill:
@@ -1473,6 +1503,7 @@ internal fun MainActivity.showProviderSettings() {
         providerNameInput.setText("")
         selectType("plex")
         iptvFormSection.visibility = View.VISIBLE
+        settingsFooter.visibility = View.VISIBLE
     }
 
     fun renderIptvProviderList() {
@@ -1589,12 +1620,9 @@ internal fun MainActivity.showProviderSettings() {
             val seriesBox = row.findViewById<CheckBox>(R.id.rowSeriesBox)
             if (server.isShare) {
                 // A share browses a folder tree on demand; it contributes no catalogue entries
-                // and has no live channels, so all three gates would toggle nothing. Disabled
-                // rather than hidden so the row keeps its siblings' three-column layout.
-                listOf(tvBox, moviesBox, seriesBox).forEach { box ->
-                    box.isChecked = false
-                    box.isEnabled = false
-                }
+                // and has no live channels, so all three gates would toggle nothing. Hide the
+                // controls rather than spending most of this narrow row on three disabled boxes.
+                listOf(tvBox, moviesBox, seriesBox).forEach { it.visibility = View.GONE }
             } else if (server.isPlex || server.isSilo) {
                 // No TV box: Plex never produces live channels (Plex Live TV is a tuner-session
                 // flow Lumora's live model can't express) and Silo's Jellyfin compatibility
@@ -2103,6 +2131,13 @@ internal fun MainActivity.showProviderSettings() {
             row.isSelected = i == index
             pane.visibility = if (i == index) View.VISIBLE else View.GONE
         }
+        // The Save action belongs to the provider form only. Keep it hidden when another pane
+        // is selected even if the form remains open underneath, and restore it on return.
+        settingsFooter.visibility = if (index == 0 && iptvFormSection.visibility == View.VISIBLE) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         // A plugin's page is not one of these panes and would otherwise stay up underneath
         // whichever section was just chosen. Selecting Plugins itself is handled by the
         // rail's own listener, which opens either the list or a specific plugin's page.
@@ -2257,6 +2292,14 @@ internal fun MainActivity.showProviderSettings() {
         traktSignInJob?.cancel()
         traktSignInJob = null
         activeSettingsOverlay = null
+        browseChromeViews.forEachIndexed { index, view -> view.visibility = browseChromeVisibility[index] }
+        binding.btnSettings.contentDescription = settingsButtonDescription
+        settingsButtonIcon.setImageResource(R.drawable.ic_settings)
+        binding.btnSettings.nextFocusLeftId = settingsButtonNextFocusLeftId
+        binding.btnSettings.nextFocusRightId = settingsButtonNextFocusRightId
+        binding.btnSettings.setOnClickListener {
+            if (activeSettingsOverlay != null) activeSettingsOverlay?.dismiss() else showProviderSettings()
+        }
         // A preview re-armed from the Filters pane starts only now, not while the dialog was
         // up: starting it there played the stream's audio from under Settings with nothing on
         // screen to explain it. requestPreviewLoad re-checks the pref and the tab itself.
@@ -2325,11 +2368,8 @@ internal fun MainActivity.showProviderSettings() {
     // the same footer button is shared by every nav pane, most of which have nothing
     // for it to save.
     dialogView.findViewById<View>(R.id.settingsSaveButton).setOnClickListener {
-        // Save is a footer button shown on every pane, but only the provider add/edit form
-        // has anything to commit - everything else (toggles, pickers, PIN) persists as it is
-        // changed. It used to return here silently, so on the provider list, or on Playback
-        // or Filters or Plugins, pressing Save did nothing whatsoever and looked broken.
-        // Closing is what Save means once the work is already saved.
+        // The footer is only shown while the provider add/edit form is open. Every other
+        // settings pane persists its changes as they are made and has no Save action.
         if (iptvFormSection.visibility != View.VISIBLE) {
             activeSettingsOverlay?.dismiss()
             return@setOnClickListener

@@ -14,10 +14,13 @@ import com.lumora.R
 import com.lumora.download.DownloadRecord
 import com.lumora.download.DownloadStatus
 import com.lumora.util.PosterLoader
+import com.lumora.util.resetFocusTransform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class DownloadAdapter(
@@ -48,6 +51,11 @@ class DownloadAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) = holder.bind(getItem(position))
 
+    override fun onViewRecycled(holder: ViewHolder) {
+        holder.cancelPendingLoad()
+        super.onViewRecycled(holder)
+    }
+
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val poster: ImageView = itemView.findViewById(R.id.downloadPoster)
         private val title: TextView = itemView.findViewById(R.id.downloadTitle)
@@ -55,6 +63,7 @@ class DownloadAdapter(
         private val progress: ProgressBar = itemView.findViewById(R.id.downloadProgress)
         private val deleteButton: ImageView = itemView.findViewById(R.id.downloadDeleteButton)
         private var current: DownloadRecord? = null
+        private var imageJob: Job? = null
 
         init {
             itemView.setOnClickListener { current?.let(onClick) }
@@ -88,6 +97,9 @@ class DownloadAdapter(
         }
 
         fun bind(record: DownloadRecord) {
+            itemView.resetFocusTransform()
+            deleteButton.resetFocusTransform()
+            cancelPendingLoad()
             current = record
             title.text = record.title
             val url = record.posterUrl?.takeIf { it.isNotBlank() }
@@ -99,7 +111,8 @@ class DownloadAdapter(
                 if (cached != null) {
                     poster.setImageBitmap(cached)
                 } else {
-                    scope.launch {
+                    imageJob = scope.launch {
+                        delay(PosterLoader.LOAD_DEBOUNCE_MS)
                         val bitmap = PosterLoader.fetch(url)
                         if (current !== record) return@launch
                         if (bitmap != null) poster.setImageBitmap(bitmap)
@@ -126,6 +139,11 @@ class DownloadAdapter(
                     progress.visibility = View.GONE
                 }
             }
+        }
+
+        fun cancelPendingLoad() {
+            imageJob?.cancel()
+            imageJob = null
         }
     }
 

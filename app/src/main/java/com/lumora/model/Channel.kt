@@ -34,6 +34,11 @@ data class Channel(
     val season: Int? = null,
     val year: String? = null,
     val rating: String? = null,
+    // IMDb's own score, when the app fetched one (Simkl carries IMDb's rating - see
+    // SimklClient.imdbRating). Kept apart from [rating], which is whatever the panel or TMDB
+    // shipped and is shown unlabelled; this one is always labelled "IMDb" because it is a
+    // different scale from a panel's number.
+    val imdbRating: String? = null,
     // ISO "YYYY-MM-DD" - only Xtream's series list actually carries a real release date
     // in bulk (movies only expose it per-item via get_vod_info, one call per movie,
     // impractical to fetch for the whole catalog just to sort it). Null means fall back

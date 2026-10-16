@@ -83,6 +83,10 @@ class SimklClient(private val http: OkHttpClient) {
         val episodes: Map<Int, Set<Int>> = emptyMap()
     )
 
+    /** The IMDb score Simkl carries for a title: [score] formatted for display ("9.3"), plus
+     *  IMDb's own vote count when the response has one. */
+    data class ImdbRating(val score: String, val votes: Int?)
+
     // ── PIN sign-in ─────────────────────────────
 
     suspend fun createPin(): PinCode? = withContext(Dispatchers.IO) {
@@ -245,12 +249,51 @@ class SimklClient(private val http: OkHttpClient) {
         out
     }
 
+    // ── Ratings ─────────────────────────────────
+
+    /**
+     * The title's IMDb score, as Simkl carries it, keyed by the IMDb id.
+     *
+     * Simkl indexes IMDb's ratings as its own field (`{"ratings":{"imdb":{"rating":9.3,
+     * "votes":3253189}}}`), so an IMDb number costs no second credential and no scraping -
+     * [com.lumora.data.remote.tmdb.TmdbClient.imdbId] already turns the tmdb id every
+     * catalogue title is resolved through into the `tt…` this takes. The response is public:
+     * the `simkl-api-key` header identifies the app but the endpoint does not require it, so
+     * a build with no client id at all still gets scores. A title Simkl has not indexed (or
+     * one IMDb has no rating for yet) answers null, and the caller shows what it showed
+     * before.
+     *
+     * Caching is per id and only ever for an *answered* request: a title Simkl knows but has
+     * no IMDb rating for is cached as "no score", while anything that came back non-2xx is
+     * not cached at all. That distinction matters because Simkl answers an id it does not
+     * recognise with `412 client_id_failed` - the same shape as a credential problem, which
+     * cannot be told apart from a real miss - and pinning that for the session would hide a
+     * score the moment whatever caused it is fixed. The cost is one small request per open of
+     * a title Simkl has never heard of, which is the honest price; the detail screen is the
+     * only caller and opens are user-driven.
+     *
+     * [isSeries] picks Simkl's `/tv` path: the two paths are keyed separately there, and a
+     * film asked at the show path answers nothing.
+     */
+    suspend fun imdbRating(imdbId: String, isSeries: Boolean): ImdbRating? = withContext(Dispatchers.IO) {
+        val id = imdbId.trim()
+        if (!id.startsWith("tt")) return@withContext null
+        ratingCache[id]?.let { return@withContext it.value }
+        val type = if (isSeries) "tv" else "movies"
+        val json = getJson("$API_BASE/$type/$id?extended=full") ?: return@withContext null
+        val parsed = parseImdbRating(json)
+        ratingCache[id] = BoxedRating(parsed)
+        parsed
+    }
+
     // ── Plumbing ────────────────────────────────
 
     private fun getJson(url: String, token: String? = null): JSONObject? {
         val request = Request.Builder()
             .url(url)
-            .header("simkl-api-key", CLIENT_ID)
+            // Only when the build has one: an empty header is not "no header" to every
+            // gateway, and ratings are reachable without it (see imdbRating).
+            .apply { if (CLIENT_ID.isNotBlank()) header("simkl-api-key", CLIENT_ID) }
             .apply { if (token != null) header("Authorization", "Bearer $token") }
             .build()
         return runCatching {
@@ -264,7 +307,7 @@ class SimklClient(private val http: OkHttpClient) {
     private fun postJson(url: String, body: JSONObject, token: String? = null): JSONObject? {
         val request = Request.Builder()
             .url(url)
-            .header("simkl-api-key", CLIENT_ID)
+            .apply { if (CLIENT_ID.isNotBlank()) header("simkl-api-key", CLIENT_ID) }
             .apply { if (token != null) header("Authorization", "Bearer $token") }
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .build()
@@ -285,4 +328,29 @@ class SimklClient(private val http: OkHttpClient) {
         private const val PIN_URL = "https://simkl.com/pin"
         private const val APP_NAME = "lumora"
     }
+
+    /** ConcurrentHashMap rejects null values, so a title Simkl has no score for (and the
+     *  "not asked yet" state, which is the same answer) is wrapped to be cacheable. */
+    private class BoxedRating(val value: ImdbRating?)
+
+    /** Keyed by IMDb id - one entry per film or show, for the life of the process. */
+    private val ratingCache = java.util.concurrent.ConcurrentHashMap<String, BoxedRating>()
+}
+
+/**
+ * The IMDb entry of a Simkl title response, or null when there is none.
+ *
+ * Shape: `{"ratings":{"imdb":{"rating":9.3,"votes":3253189},"simkl":{…}}}`; a title Simkl
+ * knows without an IMDb rating carries no `imdb` block (or a zero), which is the same answer
+ * as far as the caller is concerned. Top-level and split out so a plain JVM test pins it.
+ */
+internal fun parseImdbRating(json: JSONObject): SimklClient.ImdbRating? {
+    val imdb = json.optJSONObject("ratings")?.optJSONObject("imdb") ?: return null
+    val rating = imdb.optDouble("rating", Double.NaN).takeIf { !it.isNaN() && it > 0.0 } ?: return null
+    return SimklClient.ImdbRating(
+        // A fixed one-decimal score, locale-independent: "9,3" in French would read as two
+        // numbers on a TV, and this is a rating, not prose.
+        score = String.format(java.util.Locale.ROOT, "%.1f", rating),
+        votes = imdb.optInt("votes", 0).takeIf { it > 0 }
+    )
 }

@@ -437,6 +437,11 @@ internal fun MainActivity.buildGuideHeader() {
 }
 
 internal fun MainActivity.setupChannelList() {
+    liveAdapter.topRowFocusUpTargetId = R.id.tabLive
+    liveAdapter.leftEdgeFocusTarget = {
+        focusSelectedSidebarRow()
+        true
+    }
     binding.liveContent.layoutManager = LinearLayoutManager(this)
     binding.liveContent.addOnScrollListener(object : RecyclerView.OnScrollListener() {
         override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) { updateGuideRowWrap() }
@@ -445,6 +450,9 @@ internal fun MainActivity.setupChannelList() {
         override fun onChildViewAttachedToWindow(view: View) { binding.liveContent.post { updateGuideRowWrap() } }
         override fun onChildViewDetachedFromWindow(view: View) {}
     })
+    binding.livePreviewGutter.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        binding.liveContent.post { updateGuideRowWrap() }
+    }
     binding.seriesContent.layoutManager = LinearLayoutManager(this)
     binding.filmsContent.layoutManager = LinearLayoutManager(this)
     binding.categorySidebar.layoutManager = LinearLayoutManager(this)
@@ -681,6 +689,42 @@ internal fun MainActivity.inflateVersionChip(parent: ViewGroup, label: String): 
     return chip
 }
 
+/**
+ * The detail screen's meta line: year, the source's own score, the IMDb score when it came
+ * from somewhere else, and the category.
+ *
+ * IMDb is labelled because it is a different scale from the panel's number - "★ 7.4" could
+ * be anything, and a 0-10 score beside a 0-10 score with no source is worse than one score -
+ * and the two never repeat each other: a panel that ships the IMDb number itself (Stalker's
+ * `rating_imdb`) is printed once, as the labelled score, and Simkl's copy of it is not
+ * printed a second time. The comparison is numeric, not textual: a panel writes "8" where
+ * Simkl formats "8.0", and those are the same score. [MainActivity.imdbRatingFor] is where the
+ * score comes from.
+ */
+internal fun detailMetaLine(item: Channel, imdbRating: String?): String {
+    val hasImdb = !imdbRating.isNullOrBlank()
+    // A panel that ships IMDb's own number (Stalker's rating_imdb, and most panels' `rating`
+    // field) must not print it twice, and the two spellings of one score differ ("8" from the
+    // panel, "8.0" from Simkl) - so the comparison is numeric. The labelled one wins: one
+    // number, and now with a source on it, instead of an anonymous star that happened to be
+    // IMDb's.
+    val panelScore = item.rating?.takeIf { it.isNotBlank() && !(hasImdb && sameScore(it, imdbRating)) }
+    return listOfNotNull(
+        item.year,
+        panelScore?.let { "★ $it" },
+        imdbRating?.takeIf { hasImdb }?.let { "IMDb $it" },
+        item.categoryName?.takeIf { it.isNotBlank() }
+    ).joinToString("  ·  ")
+}
+
+/** Whether two score strings name the same number ("8" and "8.0" do; a blank parses to
+ *  nothing and is never a match). */
+private fun sameScore(a: String?, b: String?): Boolean {
+    val left = a?.toDoubleOrNull() ?: return false
+    val right = b?.toDoubleOrNull() ?: return false
+    return kotlin.math.abs(left - right) < 0.05
+}
+
 /** Unified detail screen for a movie or series: poster/plot/cast plus its versions or
  *  episode list. [versionGroup] carries the duplicate set through when the screen re-opens
  *  on a sibling copy (series only - see the series version chips below), since the map is
@@ -723,6 +767,69 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // they only ever come from TMDB - the provider details interfaces have no shape for a
     // person id, and the row is rebuilt when the enrichment lands.
     var castMembers: List<TmdbClient.CastMember> = emptyList()
+
+    fun firstDetailAction(): View? = listOf(
+        playButton,
+        favoriteButton,
+        downloadButton,
+        binding.detailFindStreamButton,
+        binding.detailTrailerButton
+    ).firstOrNull { it.isShown && it.isFocusable }
+
+    fun selectedVersionChip(): View? {
+        if (!versionsScroll.isShown) return null
+        for (i in 0 until versionsRow.childCount) {
+            val chip = versionsRow.getChildAt(i)
+            if (chip.isSelected && chip.isShown) return chip
+        }
+        return versionsRow.getChildAt(0)?.takeIf { it.isShown }
+    }
+
+    fun focusFirstEpisode(): Boolean {
+        if (itemsList.visibility != View.VISIBLE || (itemsList.adapter?.itemCount ?: 0) == 0) return false
+        itemsList.scrollToPosition(0)
+        itemsList.post {
+            itemsList.post { itemsList.layoutManager?.findViewByPosition(0)?.requestFocus() }
+        }
+        return true
+    }
+
+    fun wireVerticalFocus(view: View, onUp: () -> Boolean, onDown: () -> Boolean) {
+        view.setOnKeyListener { _, keyCode, event ->
+            if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            when (keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_UP -> onUp()
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> onDown()
+                else -> false
+            }
+        }
+    }
+
+    fun focusActionAbove(): Boolean {
+        val firstCast = binding.detailCastRow.getChildAt(0)
+            ?.takeIf { binding.detailCastScroll.isShown && it.isShown }
+        if (firstCast?.requestFocus() == true) return true
+        return binding.detailBackButton.requestFocus()
+    }
+
+    fun focusActionBelow(): Boolean {
+        val target = versionsRow.getChildAt(0)?.takeIf { versionsScroll.isShown && it.isShown }
+            ?: selectedSeasonChip?.takeIf { it.isShown }
+        return target?.requestFocus() ?: false
+    }
+
+    listOf(
+        playButton,
+        favoriteButton,
+        downloadButton,
+        binding.detailFindStreamButton,
+        binding.detailTrailerButton
+    ).forEach { button -> wireVerticalFocus(button, ::focusActionAbove, ::focusActionBelow) }
+    binding.detailBackButton.setOnKeyListener { _, keyCode, event ->
+        if (event.action == android.view.KeyEvent.ACTION_DOWN &&
+            keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN
+        ) firstDetailAction()?.requestFocus() ?: false else false
+    }
 
     // These views are reused across opens now (no longer a fresh dialog each time) -
     // reset everything a previous item may have left behind before showing new data.
@@ -778,11 +885,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
 
     val isSeries = item.mediaType == MediaType.SERIES
     titleText.text = item.name
-    metaText.text = listOfNotNull(
-        item.year,
-        item.rating?.takeIf { it.isNotBlank() }?.let { "★ $it" },
-        item.categoryName?.takeIf { it.isNotBlank() }
-    ).joinToString("  ·  ")
+    metaText.text = detailMetaLine(item, item.imdbRating)
     itemsList.layoutManager = LinearLayoutManager(this)
     loadDetailImage(item.posterUrl ?: item.logoUrl, backdrop, item.id)
     wireFindStreamButton(item)
@@ -802,6 +905,11 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             val chip = inflateVersionChip(versionsRow, versionChipLabel(version, index))
             chip.isSelected = if (openedIsInGroup) version.id == item.id else index == 0
             chip.nextFocusUpId = playButton.id
+            wireVerticalFocus(
+                chip,
+                onUp = { firstDetailAction()?.requestFocus() ?: false },
+                onDown = { selectedSeasonChip?.takeIf { it.isShown }?.requestFocus() ?: false }
+            )
             chip.setOnClickListener {
                 if (version.id != item.id) showContentDetail(version, seriesGroup)
             }
@@ -1040,6 +1148,16 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             val resolved = item.tmdbTypeAndId()
                 ?: tmdbClient.resolveId(cleanVodTitle(item.name), item.tmdbYear(), isSeries)
                 ?: return@launch
+            // The IMDb score rides in its own coroutine, deliberately: it is one label, and
+            // Simkl is a different host from TMDB - awaiting it here held the plot, cast and
+            // backdrop behind it, and the `?: return@launch` on the details call below would
+            // have skipped it outright whenever TMDB's own lookup failed (the id it needs
+            // comes from a different TMDB endpoint, external_ids).
+            scope.launch {
+                val rating = imdbRatingFor(resolved.second, resolved.first == "tv") ?: return@launch
+                // Same stale-screen guard as the enrichment below.
+                if (nowShowingDetailId == requestedItemId) metaText.text = detailMetaLine(item, rating)
+            }
             val tmdb = tmdbClient.titleDetails(resolved.first, resolved.second) ?: return@launch
             // The user can have moved to another title while the two calls ran - applying
             // then would write one film's plot onto another's screen.
@@ -1310,23 +1428,23 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                             // default focus search won't cross into a focusable child at
                             // the cell's edge, so label <-> check navigate explicitly.
                             chip.setOnKeyListener { _, keyCode, event ->
-                                if (event.action == android.view.KeyEvent.ACTION_DOWN &&
-                                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT
-                                ) {
-                                    check.requestFocus()
-                                    true
-                                } else {
-                                    false
+                                if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                                when (keyCode) {
+                                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> check.isShown && check.requestFocus()
+                                    android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                                        (selectedVersionChip() ?: firstDetailAction())?.requestFocus() ?: false
+                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusFirstEpisode()
+                                    else -> false
                                 }
                             }
                             check.setOnKeyListener { _, keyCode, event ->
-                                if (event.action == android.view.KeyEvent.ACTION_DOWN &&
-                                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT
-                                ) {
-                                    chip.requestFocus()
-                                    true
-                                } else {
-                                    false
+                                if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                                when (keyCode) {
+                                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> chip.requestFocus()
+                                    android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                                        (selectedVersionChip() ?: firstDetailAction())?.requestFocus() ?: false
+                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusFirstEpisode()
+                                    else -> false
                                 }
                             }
                             seasonRow.addView(cell)
@@ -1448,6 +1566,11 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                         val chip = inflateVersionChip(versionsRow, versionChipLabel(version, index))
                         chip.isSelected = if (openedIsInGroup) version.id == item.id else index == 0
                         chip.nextFocusUpId = playButton.id
+                        wireVerticalFocus(
+                            chip,
+                            onUp = { firstDetailAction()?.requestFocus() ?: false },
+                            onDown = { selectedSeasonChip?.takeIf { it.isShown }?.requestFocus() ?: false }
+                        )
                         chip.setOnClickListener {
                             hideContentDetail()
                             currentIndex = filmList.indexOf(item)
@@ -1749,7 +1872,9 @@ internal fun MainActivity.stopToolbarClock() {
 
 internal fun MainActivity.setupToolbar() {
     startToolbarClock()
-    binding.btnSettings.setOnClickListener { showProviderSettings() }
+    binding.btnSettings.setOnClickListener {
+        if (activeSettingsOverlay != null) activeSettingsOverlay?.dismiss() else showProviderSettings()
+    }
     binding.btnRefresh.setOnClickListener { reloadCurrentProvider() }
     binding.btnSearch.setOnClickListener { showSearchDialog() }
     wireStartupChooser()

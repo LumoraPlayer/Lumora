@@ -16,10 +16,13 @@ import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.util.PosterLoader
 import com.lumora.util.cleanVodTitle
+import com.lumora.util.resetFocusTransform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Flat, vertically-scrolling poster grid - used for a single selected category
@@ -113,11 +116,17 @@ class PosterGridAdapter(
         holder.bind(getItem(position))
     }
 
+    override fun onViewRecycled(holder: ViewHolder) {
+        holder.cancelPendingLoad()
+        super.onViewRecycled(holder)
+    }
+
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val posterImage: ImageView = itemView.findViewById(R.id.itemPoster)
         private val titleText: TextView = itemView.findViewById(R.id.itemTitle)
         private val typeBadge: TextView = itemView.findViewById(R.id.itemTypeBadge)
         private var current: Channel? = null
+        private var imageJob: Job? = null
 
         init {
             itemView.setOnClickListener { current?.let(onItemClick) }
@@ -183,6 +192,8 @@ class PosterGridAdapter(
         }
 
         fun bind(channel: Channel) {
+            itemView.resetFocusTransform()
+            cancelPendingLoad()
             current = channel
             // Tagged with the channel id so closing the detail screen can find this exact
             // poster again and put focus back on it (MainActivity.hideContentDetail).
@@ -218,10 +229,16 @@ class PosterGridAdapter(
             if (url.isNullOrBlank()) return
             PosterLoader.getCached(url)?.let { posterImage.setImageBitmap(it); return }
 
-            scope.launch {
+            imageJob = scope.launch {
+                delay(PosterLoader.LOAD_DEBOUNCE_MS)
                 val bitmap = PosterLoader.fetch(url)
                 if (bitmap != null && current === channel) posterImage.setImageBitmap(bitmap)
             }
+        }
+
+        fun cancelPendingLoad() {
+            imageJob?.cancel()
+            imageJob = null
         }
     }
 

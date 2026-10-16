@@ -916,7 +916,7 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
             addView(status)
             addView(resultsHost)
         }
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(getString(R.string.plug_stremio_store))
             .setView(ScrollView(this).apply { addView(container) })
             .setNegativeButton(getString(R.string.close), null)
@@ -977,6 +977,12 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
                     }
                 }
                 resultsHost.addView(row)
+            }
+            resultsHost.post {
+                if (!dialog.isShowing) return@post
+                resultsHost.getChildAt(0)
+                    ?.findViewById<View>(R.id.candidateAddButton)
+                    ?.requestFocus()
             }
         }
     }
@@ -1700,6 +1706,12 @@ internal fun MainActivity.wirePluginStoresSection(dialogView: View, manager: Plu
                     if (isPublicContent) ensurePublicContentDisclaimerAccepted { doInstall() } else doInstall()
                 }
                 resultsHost.addView(row)
+            }
+            resultsHost.post {
+                if (!dialog.isShowing) return@post
+                resultsHost.getChildAt(0)
+                    ?.findViewById<View>(R.id.candidateAddButton)
+                    ?.requestFocus()
             }
         }
     }

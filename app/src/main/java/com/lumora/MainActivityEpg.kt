@@ -2,6 +2,7 @@
 package com.lumora
 
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -297,14 +298,26 @@ internal fun MainActivity.updateGuideRowWrap() {
         binding.livePreviewPane.getGlobalVisibleRect(previewGlobalRect)
         previewGlobalRect.width()
     } else 0
+    var anyVisibleRowOverlaps = false
     for (i in 0 until binding.liveContent.childCount) {
         val child = binding.liveContent.getChildAt(i)
         val overlapsPreview = showingPreview && run {
             child.getGlobalVisibleRect(guideRowGlobalRect)
             guideRowGlobalRect.bottom > previewGlobalRect.top && guideRowGlobalRect.top < previewGlobalRect.bottom
         }
+        if (overlapsPreview) anyVisibleRowOverlaps = true
         (binding.liveContent.getChildViewHolder(child) as? LiveGuideAdapter.RowViewHolder)
             ?.setReservedEnd(if (overlapsPreview) reservedPx else 0)
+    }
+    // The ruler and the rows share a horizontal scroll offset. Reserve the same viewport
+    // while any visible row wraps around the preview so labels don't continue into a region
+    // where those rows have no programme cells; restore full width once the guide scrolls
+    // below the preview.
+    val headerMarginEnd = if (anyVisibleRowOverlaps) reservedPx else 0
+    val headerLayoutParams = binding.guideHeaderScroll.layoutParams as? ViewGroup.MarginLayoutParams
+    if (headerLayoutParams != null && headerLayoutParams.marginEnd != headerMarginEnd) {
+        headerLayoutParams.marginEnd = headerMarginEnd
+        binding.guideHeaderScroll.layoutParams = headerLayoutParams
     }
 }
 

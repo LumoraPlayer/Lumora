@@ -20,9 +20,12 @@ import com.lumora.util.daysUntilAirDate
 import com.lumora.util.isUnreleasedEpisode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.lumora.util.resetFocusTransform
 import java.util.concurrent.TimeUnit
 
 class EpisodeAdapter(
@@ -90,6 +93,11 @@ class EpisodeAdapter(
         holder.bind(getItem(position))
     }
 
+    override fun onViewRecycled(holder: ViewHolder) {
+        holder.cancelPendingLoad()
+        super.onViewRecycled(holder)
+    }
+
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val titleText: TextView = itemView.findViewById(R.id.episodeTitle)
         private val dateText: TextView = itemView.findViewById(R.id.episodeDate)
@@ -103,6 +111,7 @@ class EpisodeAdapter(
         private val downloadButton: ImageButton = itemView.findViewById(R.id.episodeDownloadButton)
         private val checkButton: TextView = itemView.findViewById(R.id.episodeCheckButton)
         private var current: Channel? = null
+        private var imageJob: Job? = null
 
         init {
             itemView.setOnClickListener {
@@ -196,21 +205,11 @@ class EpisodeAdapter(
         }
 
         fun bind(episode: Channel) {
+            cancelPendingLoad()
+            itemView.resetFocusTransform()
+            downloadButton.resetFocusTransform()
+            checkButton.resetFocusTransform()
             current = episode
-            // A row recycled mid-focus-animation carries the previous item's scale and
-            // elevation with it, so switching season left visibly enlarged/raised leftover
-            // rows scattered through the new list. The focus_scale stateListAnimator only
-            // drives these on an actual focus change, so nothing restores them on rebind -
-            // reset to rest here, on every bind. A *focused* row rebinding in place (the
-            // watched-toggle repaint keeps the same ViewHolder and focus) must keep its
-            // pop instead - it was never recycled, and snapping it flat while it still
-            // holds focus reads as a glitch. Same guard on the check button below.
-            if (!itemView.isFocused) {
-                itemView.animate().cancel()
-                itemView.scaleX = 1f
-                itemView.scaleY = 1f
-                itemView.translationZ = 0f
-            }
 
             // Episode number as its own token leading the title line rather than buried
             // inside a long "S01E04 · Actual Episode Title" string - that string still
@@ -297,12 +296,6 @@ class EpisodeAdapter(
             // focusable - leaving it there gives the row a control whose only outcome is a
             // wrong checkmark.
             checkButton.visibility = if (unreleased) View.GONE else View.VISIBLE
-            if (!checkButton.isFocused) {
-                checkButton.animate().cancel()
-                checkButton.scaleX = 1f
-                checkButton.scaleY = 1f
-            }
-
             if (showDownloadButton && !unreleased) {
                 downloadButton.visibility = View.VISIBLE
                 // A disabled button must also leave the D-pad chain: staying focusable made
@@ -324,12 +317,18 @@ class EpisodeAdapter(
             val url = episode.posterUrl
             if (!url.isNullOrBlank()) {
                 PosterLoader.getCached(url)?.let { thumbImage.setImageBitmap(it) } ?: run {
-                    scope.launch {
+                    imageJob = scope.launch {
+                        delay(PosterLoader.LOAD_DEBOUNCE_MS)
                         val bitmap = PosterLoader.fetch(url)
                         if (bitmap != null && current === episode) thumbImage.setImageBitmap(bitmap)
                     }
                 }
             }
+        }
+
+        fun cancelPendingLoad() {
+            imageJob?.cancel()
+            imageJob = null
         }
     }
 

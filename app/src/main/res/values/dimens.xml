@@ -209,6 +209,12 @@
          zero here since the phone brand already sits flush against the row's top edge. -->
     <dimen name="toolbar_brand_translate_y">0dp</dimen>
     <dimen name="toolbar_padding_horizontal">20dp</dimen>
+    <dimen name="toolbar_padding_top">4dp</dimen>
+    <dimen name="settings_outer_padding_horizontal">0dp</dimen>
+    <dimen name="settings_outer_padding_vertical">0dp</dimen>
+    <dimen name="player_controls_safe_horizontal_inset">16dp</dimen>
+    <dimen name="player_controls_safe_vertical_inset">8dp</dimen>
+    <dimen name="player_controls_safe_margin">6dp</dimen>
     <!-- Gap between the three toolbar cluster buttons (search/settings/refresh) and the air
          after the last one. Was a 4dp literal on settings/refresh with nothing on the right;
          the search pill's own 14dp padding made the cluster read as one wide gap then two
