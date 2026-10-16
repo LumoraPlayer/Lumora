@@ -881,6 +881,22 @@ internal fun MainActivity.clearContinueWatching(onRebuilt: (() -> Unit)? = null)
  */
 internal fun MainActivity.removeFromContinueWatching(item: Channel) {
     PlaybackPositionStore.clear(this, streamKey(item))
+    // One episode, several copies: the row shows one tile per episode (continueWatchingTiles),
+    // but each copy keeps its own position entry - clearing just the tile's key lets the next
+    // copy's entry take its place on the very next rebuild, which reads as the removal not
+    // sticking. Sweep every other copy the catalogue shares the episode with, through the same
+    // shared watched keys a watched mark uses; entries too old to yield a key (no episode
+    // number or resolvable series in the snapshot) are matched by identical snapshot name.
+    val sharedKeys = watchedKeysFor(item)
+    if (sharedKeys.isNotEmpty()) {
+        clearSiblingCopyPositions(item, sharedKeys)
+    } else {
+        val ownKey = streamKey(item)
+        for (sibling in PlaybackPositionStore.getAllInProgress(this)) {
+            if (sibling.mediaType != item.mediaType || sibling.name != item.name) continue
+            streamKey(sibling).takeIf { it != ownKey }?.let { PlaybackPositionStore.clear(this, it) }
+        }
+    }
     // Continue Watching tiles are re-labelled copies (continueWatchingTiles) that keep the
     // original id, so this matches the entry the server list actually holds.
     for ((serverId, items) in jellyfinResumeByServer.toMap()) {

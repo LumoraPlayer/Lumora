@@ -228,7 +228,7 @@ internal fun MainActivity.setItemWatched(
  * in Continue Watching. Marking unwatched: a sibling's near-complete entry would out-vote the
  * cleared shared mark, because [isItemWatched] consults the per-copy entry first.
  */
-private fun MainActivity.clearSiblingCopyPositions(item: Channel, sharedKeys: List<String>) {
+internal fun MainActivity.clearSiblingCopyPositions(item: Channel, sharedKeys: List<String>) {
     val ownKey = item.id.ifBlank { item.url }
     val sharedSet = sharedKeys.toHashSet()
     for (candidate in allChannels) {
