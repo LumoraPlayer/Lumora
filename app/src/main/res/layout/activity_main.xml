@@ -1712,21 +1712,20 @@
                 android:clipToPadding="false"
                 android:orientation="vertical">
 
-                <!-- Compact poster (2:3, not a full-width landscape banner) sits beside the
-                     title/buttons instead of above them - frees up most of the vertical
-                     space a hero banner used to take, so far less scrolling is needed to
-                     reach the plot/cast/episodes below, and D-pad "scroll down" reaches
+                <!-- Compact poster (2:3, a thumb not a hero) sits beside the
+                     title/overview instead of above them - far less scrolling is needed to
+                     reach the cast/episodes below, and D-pad "scroll down" reaches
                      them in far fewer presses. -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:paddingHorizontal="24dp"
-                    android:paddingTop="72dp">
+                    android:paddingTop="56dp">
 
                     <FrameLayout
-                        android:layout_width="120dp"
-                        android:layout_height="180dp"
+                        android:layout_width="88dp"
+                        android:layout_height="132dp"
                         android:background="@drawable/bg_rounded_poster"
                         android:clipToOutline="true"
                         android:elevation="4dp">
@@ -1738,11 +1737,12 @@
                             android:scaleType="centerCrop" />
                     </FrameLayout>
 
-                    <!-- clipChildren false: the cast row inside scales its focused face to
-                         1.06x, and the first cell's grown left edge would otherwise be sliced
-                         off at this column's start (the same reason the container below
-                         carries the flags). -->
+                    <!-- On TV, reserve the poster's right-hand side for two columns:
+                         title/rating on the left and a word-wrapped Overview in the large
+                         upper-right area. The overview no longer stacks beneath every title
+                         field, so the cast can start immediately below this poster-height row. -->
                     <LinearLayout
+                        android:id="@+id/detailHeaderColumns"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
@@ -1751,131 +1751,340 @@
                         android:clipToPadding="false"
                         android:orientation="vertical">
 
-                        <TextView
-                            android:id="@+id/detailTitle"
+                        <!-- Two bands rather than one: the title/synopsis band, then a
+                             band whose left half is the actions and whose right half opens
+                             with CAST, so the buttons line up with that word instead of
+                             floating above it. -->
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:ellipsize="end"
-                            android:fontFamily="@font/inter_semibold"
-                            android:maxLines="2"
-                            android:textColor="@color/text_primary"
-                            android:textSize="@dimen/text_title" />
-
-                        <TextView
-                            android:id="@+id/detailMeta"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="10dp"
-                            android:background="@drawable/pill_number"
-                            android:ellipsize="end"
-                            android:fontFamily="@font/inter_semibold"
-                            android:maxLines="1"
-                            android:paddingHorizontal="10dp"
-                            android:paddingVertical="5dp"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="@dimen/text_caption" />
-
-                        <TextView
-                            android:id="@+id/detailReleaseDate"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="10dp"
-                            android:ellipsize="end"
-                            android:fontFamily="@font/inter_regular"
-                            android:maxLines="1"
-                            android:textColor="@color/text_tertiary"
-                            android:textSize="@dimen/text_caption"
-                            android:visibility="gone" />
-
-                        <TextView
-                            android:id="@+id/detailPlotLabel"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="14dp"
-                            android:fontFamily="@font/inter_semibold"
-                            android:text="@string/overview"
-                            android:textAllCaps="true"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="@dimen/text_tiny"
-                            android:visibility="gone" />
-
-                        <TextView
-                            android:id="@+id/detailPlot"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="6dp"
-                            android:ellipsize="end"
-                            android:fontFamily="@font/inter_regular"
-                            android:lineSpacingExtra="3dp"
-                            android:maxLines="5"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="@dimen/text_caption"
-                            android:visibility="gone" />
-
-                        <TextView
-                            android:id="@+id/detailCastLabel"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:fontFamily="@font/inter_semibold"
-                            android:text="@string/cast"
-                            android:textAllCaps="true"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="@dimen/text_tiny"
-                            android:visibility="gone" />
-
-                        <!-- Faces first; the text block below keeps genre/director (and, when
-                             TMDB has no cast entries at all - no key, an unresolved title -
-                             the provider's name-only cast line, same as before). -->
-                        <HorizontalScrollView
-                            android:id="@+id/detailCastScroll"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:layout_marginBottom="-6dp"
                             android:clipChildren="false"
                             android:clipToPadding="false"
-                            android:scrollbars="none"
-                            android:visibility="gone">
+                            android:orientation="horizontal">
 
-                            <!-- The row carries 6dp of vertical padding the cells sit inside:
-                                 the focused cell scales to 1.06, which is about 10px of growth
-                                 on every side, and without somewhere to grow the white focus
-                                 stroke was cut off at the row's top and bottom edges (the
-                                 stroke sits past the cell's layout bounds once scaled). The
-                                 scroll's marginTop/marginBottom are stepped by the same 6dp so
-                                 the faces stay exactly where they were and the genre line
-                                 below doesn't move.
-                                 The 4dp start/end padding does the same for the first and
-                                 last cell: their scaled edges are cut by the scrolling
-                                 container's own bounds, which the row cannot grow past
-                                 (unlike vertically, where wrapping grows the container with
-                                 the row). A hair of indent on the row is the price of the
-                                 first face's highlight being whole. -->
-                            <LinearLayout
-                                android:id="@+id/detailCastRow"
+                        <LinearLayout
+                            android:id="@+id/detailTitleColumn"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1.2"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/detailTitle"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:ellipsize="end"
+                                android:fontFamily="@font/inter_semibold"
+                                android:maxLines="2"
+                                android:textColor="@color/text_primary"
+                                android:textSize="@dimen/text_title_s" />
+
+                            <TextView
+                                android:id="@+id/detailMeta"
                                 android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:background="@drawable/pill_number"
+                                android:ellipsize="end"
+                                android:fontFamily="@font/inter_semibold"
+                                android:maxLines="1"
+                                android:paddingHorizontal="10dp"
+                                android:paddingVertical="5dp"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="@dimen/text_caption" />
+
+                            <TextView
+                                android:id="@+id/detailReleaseDate"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:ellipsize="end"
+                                android:fontFamily="@font/inter_regular"
+                                android:maxLines="1"
+                                android:textColor="@color/text_tertiary"
+                                android:textSize="@dimen/text_caption"
+                                android:visibility="gone" />
+
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/detailOverviewColumn"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp"
+                            android:layout_weight="1"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/detailPlotLabel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/inter_semibold"
+                                android:text="@string/overview"
+                                android:textAllCaps="true"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="@dimen/text_tiny"
+                                android:visibility="gone" />
+
+                            <TextView
+                                android:id="@+id/detailPlot"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:breakStrategy="simple"
+                                android:ellipsize="end"
+                                android:fontFamily="@font/inter_regular"
+                                android:lineSpacingExtra="3dp"
+                                android:maxLines="4"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="@dimen/text_caption"
+                                android:visibility="gone" />
+
+                            <TextView
+                                android:id="@+id/detailOverviewMeta"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:breakStrategy="simple"
+                                android:ellipsize="end"
+                                android:fontFamily="@font/inter_regular"
+                                android:lineSpacingExtra="3dp"
+                                android:maxLines="3"
+                                android:textColor="@color/text_tertiary"
+                                android:textSize="@dimen/text_caption"
+                                android:visibility="gone" />
+
+
+                        </LinearLayout>
+                        </LinearLayout>
+
+                        <!-- Band 2: actions on the left, CAST on the right. -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:orientation="horizontal">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1.2"
+                                android:clipChildren="false"
+                                android:clipToPadding="false"
+                                android:orientation="vertical">
+
+                            <!-- Play / favourite / Find & Play / trailer sit in the title
+                                 column's empty space instead of a full-width row of their
+                                 own: versions, seasons and episodes below the header all
+                                 move up by its height. -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:clipChildren="false"
                                 android:clipToPadding="false"
-                                android:orientation="horizontal"
-                                android:paddingStart="4dp"
-                                android:paddingEnd="4dp"
-                                android:paddingTop="6dp"
-                                android:paddingBottom="6dp" />
-                        </HorizontalScrollView>
+                                android:orientation="horizontal">
 
-                        <TextView
-                            android:id="@+id/detailCast"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="6dp"
-                            android:ellipsize="end"
-                            android:fontFamily="@font/inter_regular"
-                            android:maxLines="3"
-                            android:textColor="@color/text_tertiary"
-                            android:textSize="@dimen/text_caption"
-                            android:visibility="gone" />
+                                <LinearLayout
+                                    android:id="@+id/detailPlayButton"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="48dp"
+                                    android:background="@drawable/bg_play_button"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:gravity="center"
+                                    android:orientation="horizontal"
+                                    android:paddingHorizontal="28dp"
+                                    android:stateListAnimator="@animator/focus_scale"
+                                    android:visibility="gone">
+
+                                    <ImageView
+                                        android:layout_width="18dp"
+                                        android:layout_height="18dp"
+                                        android:src="@drawable/ic_play"
+                                        android:tint="@android:color/white" />
+
+                                    <TextView
+                                        android:id="@+id/detailPlayButtonLabel"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginStart="8dp"
+                                        android:fontFamily="@font/inter_semibold"
+                                        android:text="@string/play"
+                                        android:textAllCaps="true"
+                                        android:textColor="@android:color/white"
+                                        android:textSize="@dimen/text_body" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/detailFavoriteButton"
+                                    android:layout_width="48dp"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="10dp"
+                                    android:background="@drawable/bg_toolbar_button"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:gravity="center"
+                                    android:stateListAnimator="@animator/focus_scale"
+                                    android:visibility="gone">
+
+                                    <TextView
+                                        android:id="@+id/detailFavoriteIcon"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="☆"
+                                        android:textColor="@color/text_primary"
+                                        android:textSize="@dimen/text_title" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/detailDownloadButton"
+                                    android:layout_width="48dp"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="10dp"
+                                    android:background="@drawable/bg_toolbar_button"
+                                    android:clickable="true"
+                                    android:contentDescription="@string/download"
+                                    android:focusable="true"
+                                    android:gravity="center"
+                                    android:stateListAnimator="@animator/focus_scale"
+                                    android:visibility="gone">
+
+                                    <ImageView
+                                        android:id="@+id/detailDownloadIcon"
+                                        android:layout_width="20dp"
+                                        android:layout_height="20dp"
+                                        android:src="@android:drawable/stat_sys_download"
+                                        android:tint="@color/text_primary" />
+                                </LinearLayout>
+
+                                <!-- Shown when anything can source a stream for this title - an enabled
+                                     stream_search plugin, the built-in site scrapers, or a Stremio
+                                     stream addon (see canFindStream / wireFindStreamButton). Hidden
+                                     again while the primary Play button is saying "Find & Play"
+                                     itself - see syncFindStreamButton. -->
+                                <LinearLayout
+                                    android:id="@+id/detailFindStreamButton"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="10dp"
+                                    android:background="@drawable/bg_toolbar_button"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:gravity="center"
+                                    android:orientation="horizontal"
+                                    android:paddingHorizontal="18dp"
+                                    android:stateListAnimator="@animator/focus_scale"
+                                    android:visibility="gone">
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:fontFamily="@font/inter_medium"
+                                        android:text="@string/find_stream"
+                                        android:textAllCaps="true"
+                                        android:textColor="@color/text_primary"
+                                        android:textSize="@dimen/text_body" />
+                                </LinearLayout>
+
+                                <!-- Shown only when TMDB has a trailer for this title (see
+                                     wireTrailerButton). Opens a YouTube /embed player in-app. -->
+                                <LinearLayout
+                                    android:id="@+id/detailTrailerButton"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="10dp"
+                                    android:background="@drawable/bg_toolbar_button"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:gravity="center"
+                                    android:orientation="horizontal"
+                                    android:paddingHorizontal="18dp"
+                                    android:stateListAnimator="@animator/focus_scale"
+                                    android:visibility="gone">
+
+                                    <TextView
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:fontFamily="@font/inter_medium"
+                                        android:text="@string/trailer"
+                                        android:textAllCaps="true"
+                                        android:textColor="@color/text_primary"
+                                        android:textSize="@dimen/text_body" />
+                                </LinearLayout>
+                            </LinearLayout>
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/detailCastColumn"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="16dp"
+                                android:layout_weight="1"
+                                android:clipChildren="false"
+                                android:clipToPadding="false"
+                                android:orientation="vertical">
+
+                            <!-- Cast closes the Overview column: it reads as part of the
+                                 synopsis block, and - unlike a row of its own between the
+                                 header and the episodes - costs the episode list nothing,
+                                 which is the width it needs to show a title and a plot. -->
+                            <TextView
+                                android:id="@+id/detailCastLabel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:fontFamily="@font/inter_semibold"
+                                android:text="@string/cast"
+                                android:textAllCaps="true"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="@dimen/text_tiny"
+                                android:visibility="gone" />
+
+                            <HorizontalScrollView
+                                android:id="@+id/detailCastScroll"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="-6dp"
+                                android:clipChildren="false"
+                                android:clipToPadding="false"
+                                android:scrollbars="none"
+                                android:visibility="gone">
+
+                                <!-- Keep 6dp vertical and 4dp horizontal breathing room for
+                                     the 1.06x focus-scale stroke; the first and last faces
+                                     need room inside the scroll viewport too. -->
+                                <LinearLayout
+                                    android:id="@+id/detailCastRow"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false"
+                                    android:orientation="horizontal"
+                                    android:paddingStart="4dp"
+                                    android:paddingEnd="4dp"
+                                    android:paddingTop="6dp"
+                                    android:paddingBottom="6dp" />
+                            </HorizontalScrollView>
+
+                            <TextView
+                                android:id="@+id/detailCast"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:breakStrategy="simple"
+                                android:ellipsize="end"
+                                android:fontFamily="@font/inter_regular"
+                                android:maxLines="3"
+                                android:textColor="@color/text_tertiary"
+                                android:textSize="@dimen/text_caption"
+                                android:visibility="gone" />
+                            </LinearLayout>
+                        </LinearLayout>
                     </LinearLayout>
                 </LinearLayout>
 
@@ -1891,225 +2100,117 @@
                     android:paddingHorizontal="24dp"
                     android:paddingBottom="24dp">
 
+                    <!-- Everything below the header spans the full panel width: the episode
+                         rows carry a title and a plot line, and a half-width column squeezed
+                         both out of the row. The cast lives up in the Overview column, so
+                         nothing sits beside this at all - see the chip scrollers' viewport
+                         clipping below for the one thing that used to. -->
                     <LinearLayout
+                        android:id="@+id/detailBodyColumns"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="20dp"
                         android:clipChildren="false"
                         android:clipToPadding="false"
                         android:orientation="horizontal">
 
                         <LinearLayout
-                            android:id="@+id/detailPlayButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="48dp"
-                            android:background="@drawable/bg_play_button"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:orientation="horizontal"
-                            android:paddingHorizontal="28dp"
-                            android:stateListAnimator="@animator/focus_scale"
-                            android:visibility="gone">
+                            android:id="@+id/detailEpisodesColumn"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:orientation="vertical">
 
-                            <ImageView
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
-                                android:src="@drawable/ic_play"
-                                android:tint="@android:color/white" />
+
+                            <!-- clipChildren/clipToPadding false: item_category chips inside scale to
+                                 1.06x on focus and would otherwise be clipped top/bottom by these
+                                 wrap_content containers whose bounds hug the chip height exactly. -->
+                            <HorizontalScrollView
+                                android:id="@+id/detailVersionsScroll"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:clipChildren="true"
+                                android:clipToPadding="false"
+                                android:scrollbars="none"
+                                android:visibility="gone">
+
+                                <LinearLayout
+                                    android:id="@+id/detailVersionsRow"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:clipChildren="true"
+                                    android:clipToPadding="false"
+                                    android:orientation="horizontal" />
+                            </HorizontalScrollView>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:layout_marginTop="12dp"
+                                android:background="@color/divider" />
 
                             <TextView
-                                android:id="@+id/detailPlayButtonLabel"
-                                android:layout_width="wrap_content"
+                                android:id="@+id/detailSectionLabel"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginStart="8dp"
+                                android:layout_marginTop="10dp"
                                 android:fontFamily="@font/inter_semibold"
-                                android:text="@string/play"
                                 android:textAllCaps="true"
-                                android:textColor="@android:color/white"
-                                android:textSize="@dimen/text_body" />
-                        </LinearLayout>
+                                android:textColor="@color/text_secondary"
+                                android:textSize="@dimen/text_caption" />
 
-                        <LinearLayout
-                            android:id="@+id/detailFavoriteButton"
-                            android:layout_width="48dp"
-                            android:layout_height="48dp"
-                            android:layout_marginStart="10dp"
-                            android:background="@drawable/bg_toolbar_button"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:stateListAnimator="@animator/focus_scale"
-                            android:visibility="gone">
+                            <HorizontalScrollView
+                                android:id="@+id/detailSeasonScroll"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:paddingTop="4dp"
+                                android:paddingBottom="4dp"
+                                android:layout_marginBottom="-8dp"
+                                android:clipChildren="true"
+                                android:clipToPadding="false"
+                                android:scrollbars="none"
+                                android:visibility="gone">
+
+                                <LinearLayout
+                                    android:id="@+id/detailSeasonRow"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:clipChildren="true"
+                                    android:clipToPadding="false"
+                                    android:orientation="horizontal" />
+                            </HorizontalScrollView>
 
                             <TextView
-                                android:id="@+id/detailFavoriteIcon"
-                                android:layout_width="wrap_content"
+                                android:id="@+id/detailStatus"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="☆"
-                                android:textColor="@color/text_primary"
-                                android:textSize="@dimen/text_title" />
-                        </LinearLayout>
+                                android:layout_marginTop="10dp"
+                                android:gravity="center"
+                                android:text="@string/loading"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="@dimen/text_body_s" />
 
-                        <LinearLayout
-                            android:id="@+id/detailDownloadButton"
-                            android:layout_width="48dp"
-                            android:layout_height="48dp"
-                            android:layout_marginStart="10dp"
-                            android:background="@drawable/bg_toolbar_button"
-                            android:clickable="true"
-                            android:contentDescription="@string/download"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:stateListAnimator="@animator/focus_scale"
-                            android:visibility="gone">
-
-                            <ImageView
-                                android:id="@+id/detailDownloadIcon"
-                                android:layout_width="20dp"
-                                android:layout_height="20dp"
-                                android:src="@android:drawable/stat_sys_download"
-                                android:tint="@color/text_primary" />
-                        </LinearLayout>
-
-                        <!-- Shown when anything can source a stream for this title - an enabled
-                             stream_search plugin, the built-in site scrapers, or a Stremio
-                             stream addon (see canFindStream / wireFindStreamButton). Hidden
-                             again while the primary Play button is saying "Find & Play"
-                             itself - see syncFindStreamButton. -->
-                        <LinearLayout
-                            android:id="@+id/detailFindStreamButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="48dp"
-                            android:layout_marginStart="10dp"
-                            android:background="@drawable/bg_toolbar_button"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:orientation="horizontal"
-                            android:paddingHorizontal="18dp"
-                            android:stateListAnimator="@animator/focus_scale"
-                            android:visibility="gone">
-
-                            <TextView
-                                android:layout_width="wrap_content"
+                            <!-- Full panel width: the row shows a title and a plot line, and
+                                 the old 300dp TV end-inset (for a list that had a sidebar
+                                 beside it) squeezed both out of it. Bounded height keeps this
+                                 nested list scrollable and recycled instead of measuring every
+                                 episode in a long season at once. -->
+                            <com.lumora.view.BoundedHeightRecyclerView
+                                android:id="@+id/detailItemsList"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:fontFamily="@font/inter_medium"
-                                android:text="@string/find_stream"
-                                android:textAllCaps="true"
-                                android:textColor="@color/text_primary"
-                                android:textSize="@dimen/text_body" />
-                        </LinearLayout>
-
-                        <!-- Shown only when TMDB has a trailer for this title (see
-                             wireTrailerButton). Opens a YouTube /embed player in-app. -->
-                        <LinearLayout
-                            android:id="@+id/detailTrailerButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="48dp"
-                            android:layout_marginStart="10dp"
-                            android:background="@drawable/bg_toolbar_button"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:orientation="horizontal"
-                            android:paddingHorizontal="18dp"
-                            android:stateListAnimator="@animator/focus_scale"
-                            android:visibility="gone">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:fontFamily="@font/inter_medium"
-                                android:text="@string/trailer"
-                                android:textAllCaps="true"
-                                android:textColor="@color/text_primary"
-                                android:textSize="@dimen/text_body" />
+                                android:layout_marginTop="6dp"
+                                android:layout_marginEnd="0dp"
+                                android:clipChildren="false"
+                                android:clipToPadding="false"
+                                android:nestedScrollingEnabled="true"
+                                android:overScrollMode="never"
+                                android:visibility="gone" />
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- clipChildren/clipToPadding false: item_category chips inside scale to
-                         1.06x on focus and would otherwise be clipped top/bottom by these
-                         wrap_content containers whose bounds hug the chip height exactly. -->
-                    <HorizontalScrollView
-                        android:id="@+id/detailVersionsScroll"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:clipChildren="false"
-                        android:clipToPadding="false"
-                        android:scrollbars="none"
-                        android:visibility="gone">
-
-                        <LinearLayout
-                            android:id="@+id/detailVersionsRow"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:clipChildren="false"
-                            android:clipToPadding="false"
-                            android:orientation="horizontal" />
-                    </HorizontalScrollView>
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginTop="20dp"
-                        android:background="@color/divider" />
-
-                    <TextView
-                        android:id="@+id/detailSectionLabel"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="18dp"
-                        android:fontFamily="@font/inter_semibold"
-                        android:textAllCaps="true"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="@dimen/text_caption" />
-
-                    <HorizontalScrollView
-                        android:id="@+id/detailSeasonScroll"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:clipChildren="false"
-                        android:clipToPadding="false"
-                        android:scrollbars="none"
-                        android:visibility="gone">
-
-                        <LinearLayout
-                            android:id="@+id/detailSeasonRow"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:clipChildren="false"
-                            android:clipToPadding="false"
-                            android:orientation="horizontal" />
-                    </HorizontalScrollView>
-
-                    <TextView
-                        android:id="@+id/detailStatus"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:gravity="center"
-                        android:text="@string/loading"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="@dimen/text_body_s" />
-
-                    <!-- marginEnd is 0dp off-TV; on TV it pulls the rows in from the full
-                         panel width, which was far wider than a row's actual content. -->
-                    <!-- Bounded height keeps this nested list scrollable and recycled instead
-                         of measuring every episode in a long season at once. -->
-                    <com.lumora.view.BoundedHeightRecyclerView
-                        android:id="@+id/detailItemsList"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:layout_marginEnd="@dimen/detail_list_end_inset"
-                        android:clipChildren="false"
-                        android:clipToPadding="false"
-                        android:nestedScrollingEnabled="true"
-                        android:overScrollMode="never"
-                        android:visibility="gone" />
                 </LinearLayout>
             </LinearLayout>
         </ScrollView>
@@ -2438,9 +2539,8 @@
             android:orientation="vertical"
             android:visibility="visible">
 
-            <!-- Keep the now-playing identity in the top strip instead of stacking it above
-                 the bottom controls. This leaves the transport/timeline/options together in
-                 a much shallower control surface. -->
+            <!-- The top strip stays dedicated to navigation; playback identity lives beside
+                 the transport controls in the compact bottom surface. -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -2478,76 +2578,6 @@
                     android:stateListAnimator="@animator/focus_scale"
                     android:src="@drawable/ic_menu"
                     android:tint="@color/text_primary" />
-
-                <FrameLayout
-                    android:id="@+id/playerLogoBox"
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:layout_marginStart="12dp"
-                    android:background="@drawable/shape_logo_box"
-                    android:clipToOutline="true"
-                    android:elevation="2dp">
-
-                    <TextView
-                        android:id="@+id/playerChannelInitial"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:gravity="center"
-                        android:textColor="@color/text_primary"
-                        android:textSize="@dimen/text_subhead"
-                        android:textStyle="bold" />
-
-                    <ImageView
-                        android:id="@+id/playerChannelLogo"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:padding="6dp"
-                        android:scaleType="fitCenter"
-                        android:visibility="gone" />
-                </FrameLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:id="@+id/playerChannelName"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:ellipsize="end"
-                        android:maxLines="1"
-                        android:textColor="@color/text_primary"
-                        android:textSize="@dimen/text_subhead"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/playerSubtitle"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:ellipsize="end"
-                        android:maxLines="1"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="@dimen/text_caption"
-                        android:visibility="gone" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/playerLiveBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/pill_live"
-                    android:paddingHorizontal="10dp"
-                    android:paddingVertical="4dp"
-                    android:text="@string/live_badge"
-                    android:textAllCaps="true"
-                    android:textColor="@android:color/white"
-                    android:textSize="@dimen/text_tiny"
-                    android:textStyle="bold" />
             </LinearLayout>
 
             <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
@@ -2576,84 +2606,188 @@
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
                         android:clipToPadding="false"
-                        android:gravity="center"
+                        android:gravity="center_vertical"
                         android:orientation="horizontal">
-                        <ImageButton
-                            android:id="@+id/btnPrevChannel"
-                            android:layout_width="38dp"
-                            android:layout_height="38dp"
-                            android:background="@drawable/bg_toolbar_button"
-                            android:clickable="true"
-                            android:contentDescription="@string/ui_prev"
-                            android:focusable="true"
-                            android:nextFocusRight="@id/btnRewind"
-                            android:nextFocusDown="@id/seekBar"
-                            android:padding="10dp"
-                            android:stateListAnimator="@animator/focus_scale"
-                            android:src="@android:drawable/ic_media_previous"
-                            android:tint="@color/text_primary" />
-                        <ImageButton
-                            android:id="@+id/btnRewind"
-                            android:layout_width="38dp"
-                            android:layout_height="38dp"
-                            android:layout_marginEnd="6dp"
-                            android:background="@drawable/bg_toolbar_button"
-                            android:clickable="true"
-                            android:contentDescription="@string/play_rewind_15"
-                            android:focusable="true"
-                            android:nextFocusLeft="@id/btnPrevChannel"
-                            android:nextFocusRight="@id/btnPlayPause"
-                            android:nextFocusDown="@id/seekBar"
-                            android:padding="8dp"
-                            android:stateListAnimator="@animator/focus_scale"
-                            android:src="@android:drawable/ic_media_rew"
-                            android:tint="@color/text_primary" />
-                        <ImageButton
-                            android:id="@+id/btnPlayPause"
-                            android:layout_width="46dp"
-                            android:layout_height="46dp"
-                            android:layout_marginHorizontal="10dp"
-                            android:background="@drawable/bg_play_button"
-                            android:clickable="true"
-                            android:contentDescription="@string/play_play_pause"
-                            android:focusable="true"
-                            android:nextFocusLeft="@id/btnRewind"
-                            android:nextFocusRight="@id/btnFastForward"
-                            android:nextFocusDown="@id/seekBar"
-                            android:padding="11dp"
-                            android:stateListAnimator="@animator/focus_scale"
-                            android:src="@drawable/ic_play"
-                            android:tint="@android:color/white" />
-                        <ImageButton
-                            android:id="@+id/btnFastForward"
-                            android:layout_width="38dp"
-                            android:layout_height="38dp"
-                            android:layout_marginStart="6dp"
-                            android:background="@drawable/bg_toolbar_button"
-                            android:clickable="true"
-                            android:contentDescription="@string/play_ff_30"
-                            android:focusable="true"
-                            android:nextFocusLeft="@id/btnPlayPause"
-                            android:nextFocusRight="@id/btnNextChannel"
-                            android:nextFocusDown="@id/seekBar"
-                            android:padding="8dp"
-                            android:stateListAnimator="@animator/focus_scale"
-                            android:src="@android:drawable/ic_media_ff"
-                            android:tint="@color/text_primary" />
-                        <ImageButton
-                            android:id="@+id/btnNextChannel"
-                            android:layout_width="38dp"
-                            android:layout_height="38dp"
-                            android:background="@drawable/bg_toolbar_button"
-                            android:clickable="true"
-                            android:contentDescription="@string/ui_next"
-                            android:focusable="true"
-                            android:nextFocusLeft="@id/btnFastForward"
-                            android:nextFocusDown="@id/seekBar"
-                            android:padding="12dp"
-                            android:stateListAnimator="@animator/focus_scale"
-                            android:src="@android:drawable/ic_media_next"
-                            android:tint="@color/text_primary" />
+
+                        <!-- Channel/title at the left; keep the poster compact so this
+                             identity row stays no taller than the play button. -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="12dp"
+                            android:layout_weight="1"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <FrameLayout
+                                android:id="@+id/playerLogoBox"
+                                android:layout_width="36dp"
+                                android:layout_height="36dp"
+                                android:layout_marginEnd="8dp"
+                                android:background="@drawable/shape_logo_box"
+                                android:clipToOutline="true"
+                                android:elevation="2dp">
+
+                                <TextView
+                                    android:id="@+id/playerChannelInitial"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent"
+                                    android:gravity="center"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="@dimen/text_subhead"
+                                    android:textStyle="bold" />
+
+                                <ImageView
+                                    android:id="@+id/playerChannelLogo"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent"
+                                    android:padding="6dp"
+                                    android:scaleType="fitCenter"
+                                    android:visibility="gone" />
+                            </FrameLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:id="@+id/playerChannelName"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:ellipsize="end"
+                                    android:includeFontPadding="false"
+                                    android:maxLines="1"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="@dimen/text_subhead"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/playerLiveBadge"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:background="@drawable/pill_live"
+                                    android:includeFontPadding="false"
+                                    android:paddingHorizontal="7dp"
+                                    android:paddingVertical="1dp"
+                                    android:text="@string/live_badge"
+                                    android:textAllCaps="true"
+                                    android:textColor="@android:color/white"
+                                    android:textSize="@dimen/text_tiny"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <!-- The transport controls remain centered between identity and EPG. -->
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:gravity="center"
+                            android:orientation="horizontal">
+
+                            <ImageButton
+                                android:id="@+id/btnPrevChannel"
+                                android:layout_width="38dp"
+                                android:layout_height="38dp"
+                                android:background="@drawable/bg_toolbar_button"
+                                android:clickable="true"
+                                android:contentDescription="@string/ui_prev"
+                                android:focusable="true"
+                                android:nextFocusRight="@id/btnRewind"
+                                android:nextFocusDown="@id/seekBar"
+                                android:padding="10dp"
+                                android:stateListAnimator="@animator/focus_scale"
+                                android:src="@android:drawable/ic_media_previous"
+                                android:tint="@color/text_primary" />
+                            <ImageButton
+                                android:id="@+id/btnRewind"
+                                android:layout_width="38dp"
+                                android:layout_height="38dp"
+                                android:layout_marginEnd="6dp"
+                                android:background="@drawable/bg_toolbar_button"
+                                android:clickable="true"
+                                android:contentDescription="@string/play_rewind_15"
+                                android:focusable="true"
+                                android:nextFocusLeft="@id/btnPrevChannel"
+                                android:nextFocusRight="@id/btnPlayPause"
+                                android:nextFocusDown="@id/seekBar"
+                                android:padding="8dp"
+                                android:stateListAnimator="@animator/focus_scale"
+                                android:src="@android:drawable/ic_media_rew"
+                                android:tint="@color/text_primary" />
+                            <ImageButton
+                                android:id="@+id/btnPlayPause"
+                                android:layout_width="46dp"
+                                android:layout_height="46dp"
+                                android:layout_marginHorizontal="10dp"
+                                android:background="@drawable/bg_play_button"
+                                android:clickable="true"
+                                android:contentDescription="@string/play_play_pause"
+                                android:focusable="true"
+                                android:nextFocusLeft="@id/btnRewind"
+                                android:nextFocusRight="@id/btnFastForward"
+                                android:nextFocusDown="@id/seekBar"
+                                android:padding="11dp"
+                                android:stateListAnimator="@animator/focus_scale"
+                                android:src="@drawable/ic_play"
+                                android:tint="@android:color/white" />
+                            <ImageButton
+                                android:id="@+id/btnFastForward"
+                                android:layout_width="38dp"
+                                android:layout_height="38dp"
+                                android:layout_marginStart="6dp"
+                                android:background="@drawable/bg_toolbar_button"
+                                android:clickable="true"
+                                android:contentDescription="@string/play_ff_30"
+                                android:focusable="true"
+                                android:nextFocusLeft="@id/btnPlayPause"
+                                android:nextFocusRight="@id/btnNextChannel"
+                                android:nextFocusDown="@id/seekBar"
+                                android:padding="8dp"
+                                android:stateListAnimator="@animator/focus_scale"
+                                android:src="@android:drawable/ic_media_ff"
+                                android:tint="@color/text_primary" />
+                            <ImageButton
+                                android:id="@+id/btnNextChannel"
+                                android:layout_width="38dp"
+                                android:layout_height="38dp"
+                                android:background="@drawable/bg_toolbar_button"
+                                android:clickable="true"
+                                android:contentDescription="@string/ui_next"
+                                android:focusable="true"
+                                android:nextFocusLeft="@id/btnFastForward"
+                                android:nextFocusDown="@id/seekBar"
+                                android:padding="12dp"
+                                android:stateListAnimator="@animator/focus_scale"
+                                android:src="@android:drawable/ic_media_next"
+                                android:tint="@color/text_primary" />
+                        </LinearLayout>
+
+                        <FrameLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1">
+
+                            <TextView
+                                android:id="@+id/playerSubtitle"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:breakStrategy="simple"
+                                android:ellipsize="end"
+                                android:gravity="center_vertical"
+                                android:includeFontPadding="false"
+                                android:maxLines="2"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="@dimen/text_caption"
+                                android:visibility="gone" />
+                        </FrameLayout>
                     </LinearLayout>
 
                     <!-- Seek-preview thumbnail (Jellyfin trickplay tiles). Sits above the

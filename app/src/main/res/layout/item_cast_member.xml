@@ -15,7 +15,7 @@
     android:focusable="true"
     android:gravity="center_horizontal"
     android:orientation="vertical"
-    android:padding="6dp"
+    android:padding="2dp"
     android:stateListAnimator="@animator/focus_scale">
 
     <FrameLayout
@@ -34,8 +34,8 @@
              of), on the frame's own surface colour so an absent face reads as deliberate. -->
         <ImageView
             android:id="@+id/castPhotoPlaceholder"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
             android:layout_gravity="center"
             android:importantForAccessibility="no"
             android:src="@drawable/ic_person" />
@@ -45,14 +45,13 @@
         android:id="@+id/castName"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="2dp"
         android:ellipsize="end"
         android:fontFamily="@font/inter_medium"
         android:gravity="center"
         android:maxLines="2"
-        android:minLines="2"
         android:textColor="@color/text_primary"
-        android:textSize="@dimen/text_body_s" />
+        android:textSize="@dimen/cast_name_text" />
 
     <!-- The role in this title ("Walter White"). Optional: plenty of cast entries carry no
          character name, and the row keeps a one-line slot for the ones that do so the
@@ -61,11 +60,11 @@
         android:id="@+id/castCharacter"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="1dp"
+        android:layout_marginTop="0dp"
         android:ellipsize="end"
         android:fontFamily="@font/inter_regular"
         android:gravity="center"
         android:maxLines="1"
         android:textColor="@color/text_tertiary"
-        android:textSize="@dimen/text_tiny" />
+        android:textSize="@dimen/cast_role_text" />
 </LinearLayout>

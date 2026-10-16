@@ -762,14 +762,15 @@ internal fun MainActivity.showPlayerFor(
         binding.btnSpeed.text = getString(R.string.play_speed_label, speedController.currentSpeed)
     }
 
-    // Live channels get a square logo tile (fitCenter, so a wide/odd-aspect logo
-    // doesn't get cropped); movies/series get a poster-shaped tile (centerCrop) -
-    // squeezing a 2:3 poster into a 52x52 square looked like a stretched thumbnail.
+    // Keep the logo/poster alongside the title without increasing the transport row's
+    // height. On narrow screens, hide the artwork so the channel/content name has room.
     val density = resources.displayMetrics.density
     val isPoster = channel.mediaType != MediaType.LIVE
+    binding.playerLogoBox.visibility =
+        if (resources.configuration.smallestScreenWidthDp >= 540) View.VISIBLE else View.GONE
     binding.playerLogoBox.layoutParams = binding.playerLogoBox.layoutParams.apply {
-        width = ((if (isPoster) 34 else 36) * density).toInt()
-        height = ((if (isPoster) 50 else 36) * density).toInt()
+        width = ((if (isPoster) 30 else 36) * density).toInt()
+        height = ((if (isPoster) 44 else 36) * density).toInt()
     }
     binding.playerChannelLogo.scaleType = if (isPoster) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
     val logoPadding = if (isPoster) 0 else (6 * density).toInt()
@@ -800,7 +801,12 @@ internal fun MainActivity.showPlayerFor(
         scope.launch {
             val program = runCatching { resolveCurrentProgram(channel.id) }.getOrNull()
             if (nowPlayingChannel?.id != channel.id || program == null) return@launch
-            binding.playerSubtitle.text = "${program.title}  ·  ${formatEpgTimeRange(program.startTimestamp, program.stopTimestamp)}"
+            val description = program.description?.trim()?.takeIf { it.isNotEmpty() }
+            binding.playerSubtitle.text = if (description != null) {
+                "${program.title}\n$description"
+            } else {
+                "${program.title}  ·  ${formatEpgTimeRange(program.startTimestamp, program.stopTimestamp)}"
+            }
             binding.playerSubtitle.visibility = View.VISIBLE
         }
     }

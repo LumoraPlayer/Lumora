@@ -27,20 +27,20 @@
         android:focusable="true"
         android:fontFamily="@font/inter_medium"
         android:maxLines="1"
-        android:paddingHorizontal="18dp"
-        android:paddingVertical="10dp"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="6dp"
         android:stateListAnimator="@animator/focus_scale"
         android:textColor="@color/season_chip_text"
-        android:textSize="@dimen/text_body_l" />
+        android:textSize="@dimen/text_body_s" />
 
     <!-- Green-filled when every episode in the season is watched, hollow outline
          otherwise. Shared drawable/color with the episode-row check so both read as
          the same "mark watched" control. -->
     <TextView
         android:id="@+id/seasonCheckButton"
-        android:layout_width="34dp"
-        android:layout_height="34dp"
-        android:layout_marginStart="8dp"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_marginStart="6dp"
         android:background="@drawable/bg_episode_check"
         android:clickable="true"
         android:focusable="true"
@@ -49,5 +49,5 @@
         android:stateListAnimator="@animator/focus_scale_flat"
         android:text="✓"
         android:textColor="@color/episode_check_text"
-        android:textSize="@dimen/text_body" />
+        android:textSize="@dimen/text_caption" />
 </LinearLayout>

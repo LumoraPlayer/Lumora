@@ -74,20 +74,26 @@ internal fun MainActivity.populateCastRow(
     }
     // Back from the person page lands on the face that was picked (the row was rebuilt
     // from the title's own detail screen - see hidePersonDetail), not on the Play button.
-    // UP out of the faces reaches the detail Back button, and UP from Play reaches the
-    // first face: the default focus search runs over the whole scrolling page (cast row,
+    // The actions sit beside the cast row in the title column, so UP out of the faces
+    // reaches Play and DOWN reaches whatever versions/seasons sit below the header -
+    // Play's own DOWN enters the faces first (see focusActionBelow), making the pair
+    // symmetric. The default focus search runs over the whole scrolling page (cast row,
     // version chips, plot area all mixed), which is exactly the geometry the rest of this
     // screen wires around explicitly.
     val firstCell = row.getChildAt(0)
     if (firstCell != null) {
-        val backTarget = binding.detailBackButton.id
-        val belowTarget = binding.detailPlayButton.id
+        val upTarget = binding.detailPlayButton.id
+        val versionsFirst = binding.detailVersionsRow.getChildAt(0)
+            ?.takeIf { binding.detailVersionsScroll.isShown && it.isShown }?.id
+        val downTarget = versionsFirst
+            ?: selectedSeasonChip?.takeIf { it.isShown }?.id
+            ?: View.NO_ID
         for (i in 0 until row.childCount) {
             val cell = row.getChildAt(i)
-            cell.nextFocusUpId = backTarget
-            cell.nextFocusDownId = belowTarget
+            cell.nextFocusUpId = upTarget
+            cell.nextFocusDownId = downTarget
         }
-        binding.detailPlayButton.nextFocusUpId = firstCell.id
+        binding.detailPlayButton.nextFocusUpId = binding.detailBackButton.id
     }
     val focusPersonId = castFocusPersonId ?: return
     castFocusPersonId = null
@@ -223,8 +229,9 @@ internal fun MainActivity.showPersonPage() {
             else -> null
         }
         meta.text = listOfNotNull(roleLine.takeIf { it.isNotBlank() }, birthLine).joinToString("  ·  ")
-        if (!details.biography.isNullOrBlank()) {
-            bio.text = details.biography
+        val biography = details.biography?.takeIf { it.isNotBlank() }?.let(::firstBiographyParagraph)
+        if (!biography.isNullOrBlank()) {
+            bio.text = biography
             bio.visibility = View.VISIBLE
             bioLabel.visibility = View.VISIBLE
         }
@@ -233,6 +240,19 @@ internal fun MainActivity.showPersonPage() {
         renderPersonCredits(requestedPersonId, focusSelected = true)
     }
 }
+
+/** Keeps the cast member page to TMDB's lead biography paragraph. The source often appends
+ *  several career-history paragraphs, which bury the filmography on a TV page; preserve the
+ *  first thought, joining any wrapped source lines into one readable paragraph. */
+internal fun firstBiographyParagraph(text: String): String =
+    text.trim()
+        .split(Regex("\\r?\\n\\s*\\r?\\n"), limit = 2)
+        .firstOrNull()
+        .orEmpty()
+        .lineSequence()
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .joinToString(" ")
 
 /**
  * The Films / Series chips over the filmography. Both halves are already in hand

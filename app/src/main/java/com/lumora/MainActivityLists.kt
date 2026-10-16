@@ -745,6 +745,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     val titleText = binding.detailTitle
     val metaText = binding.detailMeta
     val plotText = binding.detailPlot
+    val overviewMetaText = binding.detailOverviewMeta
     val castText = binding.detailCast
     val plotLabel = binding.detailPlotLabel
     val castLabel = binding.detailCastLabel
@@ -763,6 +764,22 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     val downloadButton = binding.detailDownloadButton
     val castScroll = binding.detailCastScroll
     val castRow = binding.detailCastRow
+    // On a portrait phone the poster leaves too little room for two text columns; stack
+    // metadata then Overview in the same right-hand area. On TV (sw540dp and up) keep them
+    // side-by-side so the synopsis uses the otherwise-empty upper-right space.
+    if (resources.configuration.smallestScreenWidthDp < 540) {
+        binding.detailHeaderColumns.orientation = LinearLayout.VERTICAL
+        fun stackColumn(view: View, topMarginDp: Int) {
+            val params = view.layoutParams as LinearLayout.LayoutParams
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT
+            params.weight = 0f
+            params.marginStart = 0
+            params.topMargin = (topMarginDp * resources.displayMetrics.density).toInt()
+            view.layoutParams = params
+        }
+        stackColumn(binding.detailTitleColumn, 0)
+        stackColumn(binding.detailOverviewColumn, 12)
+    }
     // The faces currently on the row. Held here (not passed through ContentDetails) because
     // they only ever come from TMDB - the provider details interfaces have no shape for a
     // person id, and the row is rebuilt when the enrichment lands.
@@ -805,14 +822,17 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         }
     }
 
+    // The actions sit in the title column at the top of the screen, so UP leaves
+    // them for the Back button; DOWN enters the cast row beside them, then the
+    // versions/seasons below the header.
     fun focusActionAbove(): Boolean {
-        val firstCast = binding.detailCastRow.getChildAt(0)
-            ?.takeIf { binding.detailCastScroll.isShown && it.isShown }
-        if (firstCast?.requestFocus() == true) return true
         return binding.detailBackButton.requestFocus()
     }
 
     fun focusActionBelow(): Boolean {
+        val firstCast = binding.detailCastRow.getChildAt(0)
+            ?.takeIf { binding.detailCastScroll.isShown && it.isShown }
+        if (firstCast?.requestFocus() == true) return true
         val target = versionsRow.getChildAt(0)?.takeIf { versionsScroll.isShown && it.isShown }
             ?: selectedSeasonChip?.takeIf { it.isShown }
         return target?.requestFocus() ?: false
@@ -835,6 +855,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // reset everything a previous item may have left behind before showing new data.
     backdrop.setImageDrawable(null)
     plotText.visibility = View.GONE
+    overviewMetaText.visibility = View.GONE
     castText.visibility = View.GONE
     plotLabel.visibility = View.GONE
     castLabel.visibility = View.GONE
@@ -1083,11 +1104,22 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             releaseDateText.text = getString(R.string.list_released, details.releaseDate)
             releaseDateText.visibility = View.VISIBLE
         }
-        if (!details.plot.isNullOrBlank()) {
+        val hasPlot = !details.plot.isNullOrBlank()
+        if (hasPlot) {
             plotText.text = details.plot
             plotText.visibility = View.VISIBLE
-            plotLabel.visibility = View.VISIBLE
         }
+        val overviewMeta = listOfNotNull(
+            details.genre?.takeIf { it.isNotBlank() }?.let { getString(R.string.list_genre, it) },
+            details.director?.takeIf { it.isNotBlank() }?.let { getString(R.string.list_director, it) }
+        ).joinToString("\n")
+        if (overviewMeta.isNotBlank()) {
+            overviewMetaText.text = overviewMeta
+            overviewMetaText.visibility = View.VISIBLE
+        }
+        // Genre/director live with the synopsis in the top-right Overview column; show the
+        // heading if either one exists, even when the source omitted the plot itself.
+        plotLabel.visibility = if (hasPlot || overviewMeta.isNotBlank()) View.VISIBLE else View.GONE
         // Faces, when TMDB supplied them: the row *is* the cast section then, so the
         // provider's name-only line is dropped rather than repeating every name under the
         // photos. It stays for the cases TMDB has nothing for a title (no key, unresolved
@@ -1106,18 +1138,18 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 returnGroup = seriesGroup ?: versionGroup
             )
         }
-        val castLine = listOfNotNull(
-            details.genre?.takeIf { it.isNotBlank() }?.let { getString(R.string.list_genre, it) },
-            details.director?.takeIf { it.isNotBlank() }?.let { getString(R.string.list_director, it) },
-            details.cast?.takeIf { it.isNotBlank() && castMembers.isEmpty() }
-                ?.let { getString(R.string.list_cast, it) }
-        ).joinToString("\n")
-        if (castLine.isNotBlank()) {
-            castText.text = castLine
+        // A name-only cast line remains for sources without TMDB person ids - but only
+        // then. Genre/director live in the Overview column above, and a provider line left
+        // visible by an earlier applyDetails (faces arrived with the enrichment after it)
+        // would otherwise duplicate the faces it sits beside, so the absence hides it.
+        val providerCast = details.cast?.takeIf { it.isNotBlank() && castMembers.isEmpty() }
+        if (providerCast != null) {
+            castText.text = getString(R.string.list_cast, providerCast)
             castText.visibility = View.VISIBLE
-            castLabel.visibility = View.VISIBLE
-        } else if (castMembers.isNotEmpty()) {
-            // Nothing textual left, but the faces need the section label above them.
+        } else {
+            castText.visibility = View.GONE
+        }
+        if (providerCast != null || castMembers.isNotEmpty()) {
             castLabel.visibility = View.VISIBLE
         }
         if (!details.backdropUrl.isNullOrBlank()) loadDetailImage(details.backdropUrl, backdrop, item.id)

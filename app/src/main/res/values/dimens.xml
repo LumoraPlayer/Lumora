@@ -58,7 +58,6 @@
 
     <!-- Episode list runs the full available width everywhere except TV, where a full-width
          row is far wider than the content in it. -->
-    <dimen name="detail_list_end_inset">0dp</dimen>
 
     <!-- Live TV: category sidebar and the EPG guide grid. Same story as the settings scale -
          these were sized for a phone in the hand; values-television/ steps them up. -->
@@ -124,12 +123,16 @@
          face shot; the cell width just has to hold it plus its padding, and the photo stops
          a comfortable margin short of the card's edge - the focused cell draws its white
          3dp stroke on that edge, and a photo filling the card left the highlight sitting
-         flush against the picture instead of around it. The person page's own portrait is
-         2:3, the shape TMDB profile shots are taken in. -->
-    <dimen name="cast_photo_size">72dp</dimen>
-    <dimen name="cast_cell_width">96dp</dimen>
-    <dimen name="person_photo_width">180dp</dimen>
-    <dimen name="person_photo_height">270dp</dimen>
+         flush against the picture instead of around it. Sizes are half the pre-2026-10
+         values in each dimension (a quarter of the area): the row is a compact strip of
+         faces under the poster, not a second poster shelf. The person page's own portrait
+         is 2:3, the shape TMDB profile shots are taken in. -->
+    <dimen name="cast_photo_size">36dp</dimen>
+    <dimen name="cast_cell_width">48dp</dimen>
+    <dimen name="cast_name_text">8sp</dimen>
+    <dimen name="cast_role_text">7sp</dimen>
+    <dimen name="person_photo_width">120dp</dimen>
+    <dimen name="person_photo_height">180dp</dimen>
     <!-- General on-screen body copy outside the settings scale (empty states, Up Next). -->
     <dimen name="content_body_text">13sp</dimen>
 
