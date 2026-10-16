@@ -112,6 +112,23 @@ internal fun MainActivity.updateSkipSegmentUi() {
         lastShownSkipSegmentKey = segment.key
         binding.btnSkipSegment.text = skipSegmentLabel(segment.type)
         binding.btnSkipSegment.visibility = View.VISIBLE
+        // Highlight it for the press the moment it appears - the pill is the one thing to
+        // press, and nothing ever moved focus onto it before, so OK did nothing until the
+        // user found it with the D-pad. Deferred a frame: requestFocus on a view that just
+        // flipped from GONE can silently no-op before it is laid out (the same double-post
+        // pattern the side menu's re-expand uses). Not while the side menu is open - the
+        // user is browsing categories, and yanking focus to the corner mid-navigation is
+        // worse than making them find the pill afterwards.
+        if (!isPlayerSideMenuOpen()) {
+            binding.btnSkipSegment.post {
+                if (!binding.btnSkipSegment.requestFocus()) {
+                    // Same double-post retry the rails use: the pill flipped from GONE this
+                    // frame and may not be laid out yet, and requestFocus on it silently
+                    // fails - which left the press going to the controls bar instead.
+                    binding.btnSkipSegment.post { binding.btnSkipSegment.requestFocus() }
+                }
+            }
+        }
     }
     // Auto-skip covers the openers only. Skipping the credits by itself would race the
     // end-of-playback handling (save-watched, Up Next, auto-advance), and skipping a preview
@@ -143,13 +160,6 @@ private fun MainActivity.performSkipSegment(segment: SkipSegment) {
     dismissedSkipSegmentKey = segment.key
     activeSkipSegment = null
     binding.btnSkipSegment.visibility = View.GONE
-    // The credits are where an episode ends, and this is the app's one-press "next episode":
-    // with a chain behind the episode, pressing Skip Credits moves to the episode after it
-    // outright. Seeking into the last second and leaving the advance to the end-of-item path
-    // is what made the press look broken - reporting the skip shows the controls bar, and
-    // showing the controls bar refuses the Up Next offer (see showControls), which
-    // deliberately disables that fallback - so the episode then sat finished, nothing moving.
-    if (segment.type == "credits" && advanceToNextEpisode()) return
     val duration = playerManager.duration
     val end = segment.effectiveEndMs(duration)
     // Stop a second short of the media's own end: landing exactly on it races the player's
@@ -157,7 +167,11 @@ private fun MainActivity.performSkipSegment(segment: SkipSegment) {
     val target = if (duration > 0) end.coerceAtMost(duration - 1000L) else end
     playerManager.seekTo(target.coerceAtLeast(0L))
     showControls()
-    Toast.makeText(this, getString(R.string.skip_skipped, skipSegmentLabel(segment.type)), Toast.LENGTH_SHORT).show()
+    Toast.makeText(
+        this,
+        getString(R.string.skip_skipped, skipSegmentNoun(segment.type)),
+        Toast.LENGTH_SHORT
+    ).show()
 }
 
 /** Button label for a segment type. Unknown types (IntroDB adds one, or a type this build
@@ -168,4 +182,15 @@ internal fun MainActivity.skipSegmentLabel(type: String): String = when (type.lo
     "credits" -> getString(R.string.skip_credits)
     "preview" -> getString(R.string.skip_preview)
     else -> getString(R.string.skip_segment)
+}
+
+/** The toast's noun for a segment type. [skipSegmentLabel] is button text ("Skip Recap"), and
+ *  dropping it straight into "Skipped %1$s" read "Skipped Skip Recap". The client only ever
+ *  parses the four known types; anything else falls back to the type name itself. */
+internal fun MainActivity.skipSegmentNoun(type: String): String = when (type.lowercase()) {
+    "intro" -> getString(R.string.skip_intro_noun)
+    "recap" -> getString(R.string.skip_recap_noun)
+    "credits" -> getString(R.string.skip_credits_noun)
+    "preview" -> getString(R.string.skip_preview_noun)
+    else -> type.replaceFirstChar { it.uppercase() }
 }

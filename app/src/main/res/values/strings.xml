@@ -446,6 +446,12 @@
     <string name="skip_preview">Skip Preview</string>
     <string name="skip_segment">Skip</string>
     <string name="skip_skipped">Skipped %1$s</string>
+    <!-- Noun forms for the "Skipped %1$s" toast. The labels above are imperative button text
+         ("Skip Recap"), so dropping one into the toast read "Skipped Skip Recap". -->
+    <string name="skip_intro_noun">Intro</string>
+    <string name="skip_recap_noun">Recap</string>
+    <string name="skip_credits_noun">Credits</string>
+    <string name="skip_preview_noun">Preview</string>
     <string name="sett_skip_segments">Skip intro button</string>
     <string name="sett_skip_segments_caption">Shows a Skip button when IntroDB has intro/recap/credits timestamps for the title</string>
     <string name="sett_skip_auto">Auto-skip intros</string>

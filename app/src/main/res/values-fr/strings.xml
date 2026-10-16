@@ -424,6 +424,10 @@
     <string name="skip_preview">Passer l\'aperçu</string>
     <string name="skip_segment">Passer</string>
     <string name="skip_skipped">Ignoré : %1$s</string>
+    <string name="skip_intro_noun">Intro</string>
+    <string name="skip_recap_noun">Résumé</string>
+    <string name="skip_credits_noun">Générique</string>
+    <string name="skip_preview_noun">Aperçu</string>
     <string name="sett_skip_segments">Bouton Passer l\'intro</string>
     <string name="sett_skip_segments_caption">Affiche un bouton Passer lorsque IntroDB dispose d\'horodatages d\'intro, de résumé ou de générique pour le titre</string>
     <string name="sett_skip_auto">Passer automatiquement les intros</string>

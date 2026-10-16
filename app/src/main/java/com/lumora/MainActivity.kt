@@ -1098,14 +1098,13 @@ class MainActivity : AppCompatActivity() {
         internal const val REQUEST_PICK_M3U = 2003
         private const val EDGE_SWIPE_ZONE_DP = 24f
         private const val EDGE_SWIPE_THRESHOLD_DP = 64f
-        /** How long before playback should move on the Up Next overlay appears, and therefore
-         *  what the countdown starts at - one value, because the countdown has to reach zero
-         *  exactly at the point it advances on (that is what makes auto-advance land on the
-         *  target rather than cut in early). 60s gives time to read the next episode's title
-         *  and hit Play now, or to cancel, without having to catch it inside the closing
-         *  seconds. The target is the episode's end, or the credits' start when IntroDB knows
-         *  it - see checkUpNextTrigger. */
-        internal const val UP_NEXT_COUNTDOWN_SECONDS = 60
+        /** How long the end-of-episode offer counts down before the next episode begins, and
+         *  therefore how early it appears when nothing else owns the end zone (with no
+         *  credits segment the pill shows this many seconds before the end). Also the
+         *  countdown after Skip Credits seeks to the end. 15s is enough to read the next
+         *  episode's marker and hit the pill, or back out, without parking on the closing
+         *  frame for long. The end zone's own pill carries it - see checkUpNextTrigger. */
+        internal const val UP_NEXT_COUNTDOWN_SECONDS = 15
     }
 
     internal val liveAdapter = LiveGuideAdapter(
@@ -2293,8 +2292,12 @@ class MainActivity : AppCompatActivity() {
         // that holds regardless of what happens to be focused behind the hidden overlay.
         // Every action (down, up, repeats) is swallowed so the reveal press can't also click
         // whatever it just focused. Up Next is excluded - its card owns focus while the
-        // controls are hidden and OK there means "play the next episode now".
+        // controls are hidden and OK there means "play the next episode now" - and so is the
+        // Skip pill: while it is up it is the end zone's one press, and swallowing the key
+        // here (before the view tree and before onKeyDown) meant pressing it opened the bar
+        // instead. Both fall through to the press handling below.
         if (isPlayerVisible && !isPlayerSideMenuOpen() && !upNextActive &&
+            binding.btnSkipSegment.visibility != View.VISIBLE &&
             binding.controlsOverlay.visibility != View.VISIBLE &&
             (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
                 event.keyCode == android.view.KeyEvent.KEYCODE_ENTER)
@@ -2525,16 +2528,40 @@ class MainActivity : AppCompatActivity() {
             android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
             android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER
         )
+        // The end zone's pill is the one press while it is up, and CENTER has to reach it
+        // wherever focus went - the controls bar can clear focus entirely as it auto-hides,
+        // which left OK re-opening the bar instead of skipping. Press the pill directly
+        // unless the viewer is deliberately inside the controls bar (then OK belongs to
+        // whatever they walked to). The Up Next pill is the same offer, same corner.
+        if (isPlayerVisible && !isPlayerSideMenuOpen() &&
+            (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                keyCode == android.view.KeyEvent.KEYCODE_ENTER) &&
+            !binding.controlsOverlay.hasFocus()
+        ) {
+            if (binding.btnSkipSegment.visibility == View.VISIBLE) {
+                binding.btnSkipSegment.performClick()
+                return true
+            }
+            if (upNextActive) {
+                binding.upNextOverlay.performClick()
+                return true
+            }
+        }
         if (isPlayerVisible && !isPlayerSideMenuOpen() && !upNextActive && isDirectionalKey) {
             if (binding.controlsOverlay.visibility != View.VISIBLE) {
-                showControls()
+                // A pill holding focus keeps it: revealing the bar must not yank the D-pad
+                // off the press the viewer is about to make (the bar is still reachable
+                // with one more direction after, or by leaving the pill).
+                showControls(takeFocus = !binding.btnSkipSegment.hasFocus())
                 return true
             }
             // The bar can be up with nothing in it focused - that is how VOD's LEFT-rewind
             // reveals it. UP/DOWN/CENTER is the deliberate "I want the buttons" press, so it
             // puts focus on play/pause explicitly rather than leaving it to a focus search
-            // that has the whole browse screen behind the player to choose from.
-            if (!binding.controlsOverlay.hasFocus() && keyCode != android.view.KeyEvent.KEYCODE_DPAD_LEFT &&
+            // that has the whole browse screen behind the player to choose from. A focused
+            // skip pill is left alone for the same reason as above.
+            if (!binding.controlsOverlay.hasFocus() && !binding.btnSkipSegment.hasFocus() &&
+                keyCode != android.view.KeyEvent.KEYCODE_DPAD_LEFT &&
                 keyCode != android.view.KeyEvent.KEYCODE_DPAD_RIGHT
             ) {
                 binding.btnPlayPause.requestFocus()

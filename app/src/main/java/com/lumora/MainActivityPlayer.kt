@@ -504,20 +504,22 @@ internal fun MainActivity.setupPlayerControls() {
                         PlaybackPositionStore.clear(this@setupPlayerControls, finishedKey)
                     }
                 }
-                // If Up Next is running it will handle the advance. A refused offer must not
-                // be second-guessed either: Cancel means the episode ends here, with Next and
-                // Back left to the viewer - the next-episode entry saved above still keeps the
-                // series on the Continue Watching / Up Next shelves.
+                // If an offer is already counting - raised before the end on an episode with
+                // no credits segment - it owns the advance. A refused offer must not be
+                // second-guessed either: Back means the episode ends here, with Next and
+                // Back left to the viewer - the next-episode entry saved above still keeps
+                // the series on the Continue Watching / Up Next shelves.
                 if (upNextActive || upNextDismissed) return@onPlaybackStateChanged
-                // Silent fallback auto-advance when Up Next wasn't triggered
-                // (e.g. user seeks to end, skipping the 30s countdown window).
+                // The end of the episode is where the next episode is asked for: the pill
+                // goes up with its countdown (MainActivity.UP_NEXT_COUNTDOWN_SECONDS) and
+                // nothing starts until that reaches zero. This is also the landing after
+                // Skip Credits seeks to the end, and the replacement for the old silent
+                // advance - an exchange the viewer can refuse instead of one that happens.
                 val queue = currentEpisodeQueue
                 val nextIdx = currentEpisodeQueueIndex + 1
                 if (nextIdx in queue.indices) {
-                    skipResumePrompt = true
-                    showPlayerFor(queue[nextIdx])
-                    currentEpisodeQueue = queue
-                    currentEpisodeQueueIndex = nextIdx
+                    upNextEpisode = queue[nextIdx]
+                    showUpNextOverlay()
                 }
             }
             }
@@ -825,7 +827,10 @@ internal fun MainActivity.showPlayerFor(
     startVodQualityWatch(channel)
     binding.playerAspectContainer.videoAspectRatio = 0f
     playerManager.setSurfaceView(binding.playerSurface)
-    showControls()
+    // No controls bar on start (it used to pop open on every play): it covered the opening
+    // frames and fought the skip pill for focus the moment the pill appeared. The bar is one
+    // press away - any direction reveals it (see onKeyDown's reveal branch) - and a media
+    // remote's own transport keys drive playback without it.
     binding.bufferingSpinner.visibility = View.VISIBLE
     val startVersion = if (channel.mediaType == MediaType.LIVE) currentVersionGroup.getOrNull(currentVersionIndex) ?: channel else channel
     // Stalker VOD carries a base64 play command, not a URL - it must be create_link'd at
