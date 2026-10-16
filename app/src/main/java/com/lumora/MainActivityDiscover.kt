@@ -1340,16 +1340,31 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
     }
     if (candidates.isEmpty()) return items
 
-    return items.map { item ->
-        val episode = item.episodeNum ?: return@map item
-        val seriesId = item.categoryId?.takeIf { it.isNotBlank() } ?: return@map item
+    // One tile per episode, whichever copy was watched last. The position store keys per copy
+    // (provider-scoped id, or the url when an id is blank), so the same episode carried by
+    // three providers - or reached once by id and once by url - left three in-progress entries
+    // that all decorate to the same series-plus-marker label: one episode listed three times.
+    // The app's cross-provider identity for an episode is the shared watched key (see
+    // MainActivityWatched), computed from the series name plus the numbering, which every
+    // copy agrees on; the incoming list is most-recently-watched first (the store's own
+    // order), so the first copy that claims an episode is the one that kept playing last.
+    val seenEpisodes = HashSet<String>()
+    return items.mapNotNull { item ->
+        val episode = item.episodeNum ?: return@mapNotNull item
+        val seriesId = item.categoryId?.takeIf { it.isNotBlank() } ?: return@mapNotNull item
         val series = candidates[seriesId]?.firstOrNull {
             it.isJellyfin == item.isJellyfin && it.isPlex == item.isPlex &&
                 (item.sourceProviderId == null || it.sourceProviderId == item.sourceProviderId)
-        } ?: return@map item
-        val seriesName = cleanVodTitle(series.name).ifBlank { return@map item }
-        val marker = tileSeasonNumber(item)
-            ?.let { season -> "S%02dE%02d".format(season, episode) }
+        } ?: return@mapNotNull item
+        val seriesName = cleanVodTitle(series.name).ifBlank { return@mapNotNull item }
+        val season = tileSeasonNumber(item)
+        // Null-season and season-1 spellings name the same episode (see episodeWatchedKeys) -
+        // once either spelling has claimed an episode, a copy using the other is dropped too.
+        val episodeKeys = episodeWatchedKeys(seriesName, season, episode)
+        if (episodeKeys.any { it in seenEpisodes }) return@mapNotNull null
+        seenEpisodes.addAll(episodeKeys)
+        val marker = season
+            ?.let { "S%02dE%02d".format(it, episode) }
             ?: "E%02d".format(episode)
         item.copy(
             name = "$seriesName · $marker",
