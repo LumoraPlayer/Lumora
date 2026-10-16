@@ -84,14 +84,26 @@ fun localStorageRoots(context: Context): List<ShareEntry> {
  * player can open (alphabetical, [isPlayableMedia] - the same extension list the share
  * listings use, so a sidecar subtitle or a stray document never becomes a dead play press).
  * Dot-entries are skipped: on an Android volume they are almost entirely system bookkeeping.
+ *
+ * [rootPaths] are the volume roots the browser is scoped to (empty = no clamp). Entries whose
+ * *resolved* path leaves every root are skipped: `isDirectory` follows symlinks, so a link
+ * inside a volume pointing at "/" or the app's private storage let browsing escape the volume
+ * the browser claims to stay in.
  */
-fun listLocalDirectory(dir: File): List<ShareEntry> {
+fun listLocalDirectory(dir: File, rootPaths: Collection<String> = emptyList()): List<ShareEntry> {
+    // A listing that fails because the path itself is gone - the USB drive was ejected while
+    // the browser sat in one of its folders - must not read as an empty folder: the browser
+    // renders an empty list as "this folder is empty", which misdiagnoses a vanished drive.
+    // Throwing routes it to the browser's failure branch, which names the real problem.
+    if (!dir.exists()) throw java.io.FileNotFoundException(dir.absolutePath)
     val children = dir.listFiles() ?: return emptyList()
+    val canonicalRoots = rootPaths.mapNotNull { runCatching { File(it).canonicalPath }.getOrNull() }
     val folders = ArrayList<ShareEntry>()
     val files = ArrayList<ShareEntry>()
     for (child in children) {
         val name = child.name ?: continue
         if (name.startsWith(".")) continue
+        if (!resolvesInsideRoots(child, canonicalRoots)) continue
         when {
             child.isDirectory ->
                 folders += ShareEntry(name, child.absolutePath, isDirectory = true)
@@ -104,12 +116,25 @@ fun listLocalDirectory(dir: File): List<ShareEntry> {
     return folders + files
 }
 
+/** Whether [child]'s canonical path stays under one of [canonicalRoots]. No roots = no clamp
+ *  (the JVM tests' case); an unresolvable path is treated as outside rather than trusted. */
+private fun resolvesInsideRoots(child: File, canonicalRoots: List<String>): Boolean {
+    if (canonicalRoots.isEmpty()) return true
+    val canonical = runCatching { child.canonicalPath }.getOrNull() ?: return false
+    return canonicalRoots.any { root -> canonical == root || canonical.startsWith("$root/") }
+}
+
 /**
  * The browser's "up one level" for a local path: the parent directory, or "" - the volume
  * list - when [path] is itself a volume root (or the list already). Jumping to "/storage" and
  * above is never useful and on some builds not even readable.
+ *
+ * A path no longer under any current root returns "" too: its volume was ejected mid-browse,
+ * and climbing the old absolute path would walk toward "/storage" through directories that
+ * are not just useless but usually unreadable - the volume list is the honest destination.
  */
 fun localParentPath(path: String, rootPaths: Collection<String>): String {
     if (path.isBlank() || path in rootPaths) return ""
+    if (rootPaths.none { root -> root.isNotBlank() && path.startsWith("$root/") }) return ""
     return path.substringBeforeLast('/', "")
 }

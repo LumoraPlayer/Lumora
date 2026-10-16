@@ -223,6 +223,12 @@ class QrPairingManager(private val context: Context) {
                     }
                     val type = form["type"] ?: "m3u"
                     Log.d(TAG, "Provider submitted: type=$type name=${form["name"]}")
+                    // A successful submit consumes the token: the QR is a one-shot handoff,
+                    // and a phone page kept in history (or anyone else on the LAN who saw
+                    // the URL) could otherwise re-POST for the rest of the timeout window -
+                    // each repeat installs another addon or overwrites provider configs.
+                    // Error pages below do not consume it, so a failed Quick Connect / Plex
+                    // start can be retried from the same page.
                     if (type == "jellyfin" && form["authMethod"] == "quickconnect") {
                         // Quick Connect's code has to match on both screens - start it here,
                         // synchronously, so the same code/secret pair can be shown on the
@@ -238,6 +244,7 @@ class QrPairingManager(private val context: Context) {
                                 "jellyfin_quickconnect",
                                 form + mapOf("serverUrl" to serverUrl, "code" to result.code, "secret" to result.secret)
                             )
+                            consumeToken(token)
                             writeHtml(c.getOutputStream(), 200, quickConnectPage(result.code))
                         }
                     } else if (type == "plex") {
@@ -249,10 +256,12 @@ class QrPairingManager(private val context: Context) {
                             writeHtml(c.getOutputStream(), 200, errorPage(result?.error ?: "Couldn't start Plex sign-in"))
                         } else {
                             onProviderReceived?.invoke("plex_pin", form + mapOf("code" to result.code))
+                            consumeToken(token)
                             writeHtml(c.getOutputStream(), 200, plexLinkPage(result.code, result.authUrl))
                         }
                     } else {
                         onProviderReceived?.invoke(type, form)
+                        consumeToken(token)
                         writeHtml(
                             c.getOutputStream(),
                             200,
@@ -272,6 +281,12 @@ class QrPairingManager(private val context: Context) {
 
     private fun isTokenValid(token: String?): Boolean =
         token != null && token == activeToken && System.currentTimeMillis() < activeExpiresAt
+
+    /** Burns the active token after a successful submit - see the POST handler. The socket
+     *  keeps serving (the success page is already written); later submits fail as expired. */
+    private fun consumeToken(submitted: String?) {
+        if (submitted != null && submitted == activeToken) activeToken = null
+    }
 
     private fun generateToken(): String {
         val bytes = ByteArray(16)

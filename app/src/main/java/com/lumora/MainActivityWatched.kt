@@ -66,31 +66,41 @@ internal fun movieWatchedKey(title: String): String? =
 internal fun episodeWatchedKey(seriesName: String?, season: Int?, episode: Int?): String? {
     if (episode == null) return null
     val normalized = normalizeForWatchedKey(seriesName ?: return null) ?: return null
-    return "e|$normalized|s${season ?: 0}|e$episode"
+    // "sx" is the unknown-season spelling - deliberately not "s0", which is a real season
+    // (specials) and must not be conflated with "the source didn't say" (see the aliasing
+    // in episodeWatchedKeys).
+    return "e|$normalized|s${season ?: "x"}|e$episode"
 }
 
 /**
- * Every stored spelling of an episode mark. The season-less flat numbering (`s0`) and the
- * explicit season 1 name the same episode, but the two producers pick differently: a
- * Jellyfin/Plex episode's name carries no season marker and [Channel] has nowhere to keep the
- * server's season field, so the player's own mark lands on `s0`, while the server import and
- * the Trakt pull both carry the real season and write `s1`. Un-ticking one spelling left the
- * other in place - the row looked unwatched while [isItemWatched] still said true, and the
- * next [pushWatchedToTrakt] backfill put the episode straight back on Trakt.
+ * Every stored spelling of an episode mark.
+ *
+ * The unknown-season spelling (`sx`) and the explicit season 1 name the same episode for the
+ * two producers that disagree: a Jellyfin/Plex episode used to reach the player with no season
+ * at all, so its mark landed on the unknown spelling, while the server import and the Trakt
+ * pull both carry the real season and write `s1`. (Jellyfin/Plex episodes now carry their real
+ * season on [Channel.season], so the two agree on `s1` for season 1 and `s2+` for later -
+ * `sx` remains for the providers that genuinely have no season, and for older snapshots.)
+ * Un-ticking one spelling left the other in place - the row looked unwatched while
+ * [isItemWatched] still said true, and the next [pushWatchedToTrakt] backfill put the episode
+ * straight back on Trakt - so both are written and cleared together.
  *
  * Aliasing covers only the null/1 ambiguity: a real season 2+ has one spelling, and season 0
- * (specials) is left alone rather than being conflated with season 1.
+ * (specials) stands alone on `s0` rather than being conflated with season 1. Marks written by
+ * builds before the `sx` spelling existed land on `s0` for both unknown-season and season-1
+ * items; they are no longer read (reading them would resurrect the specials conflation), so
+ * one of those may read as unwatched once and re-mark on the next play.
  */
 internal fun episodeWatchedKeys(seriesName: String?, season: Int?, episode: Int?): List<String> {
     val primary = episodeWatchedKey(seriesName, season, episode) ?: return emptyList()
-    val aliasSeason = when (season) {
-        null -> 1
-        1 -> 0
+    val alias = when (season) {
+        null -> "s1"
+        1 -> "sx"
         else -> return listOf(primary)
     }
     val parts = primary.split('|')
     if (parts.size != 4) return listOf(primary)
-    return listOf(primary, "e|${parts[1]}|s$aliasSeason|${parts[3]}")
+    return listOf(primary, "e|${parts[1]}|$alias|${parts[3]}")
 }
 
 /** [watchedKeyFor] plus every alias spelling that names the same item (see [episodeWatchedKeys]). */
@@ -221,22 +231,27 @@ internal fun MainActivity.setItemWatched(
 }
 
 /**
- * Drops every *other* catalogue copy's position entry for the same title.
+ * Drops every *other* copy's position entry for the same title.
  *
  * Needed in both directions, for opposite reasons. Marking watched: a sibling's half-finished
  * resume point is moot now the title has been seen, and leaving it would keep that copy sitting
  * in Continue Watching. Marking unwatched: a sibling's near-complete entry would out-vote the
  * cleared shared mark, because [isItemWatched] consults the per-copy entry first.
+ *
+ * Sweeps the position store, not the catalogue. Episodes exist in the store only - the
+ * catalogue holds series cards, and an episode is never a catalogue member - so a catalogue
+ * scan could never find an episode's sibling copies at all (their entries just survived and
+ * the tile came back on the next rebuild). Films exist in both, and any film copy with a
+ * position entry is in the store too, so one sweep covers every case. The store is capped at
+ * 500 entries, so this is also cheaper than the old full-catalogue scan per candidate.
  */
 internal fun MainActivity.clearSiblingCopyPositions(item: Channel, sharedKeys: List<String>) {
-    val ownKey = item.id.ifBlank { item.url }
+    val ownKey = streamKey(item)
     val sharedSet = sharedKeys.toHashSet()
-    for (candidate in allChannels) {
-        if (candidate.mediaType != item.mediaType) continue
-        val key = candidate.id.ifBlank { candidate.url }
-        if (key.isBlank() || key == ownKey) continue
-        if (PlaybackPositionStore.get(this, key) == null) continue
-        if (watchedKeysFor(candidate).any { it in sharedSet }) PlaybackPositionStore.clear(this, key)
+    for ((key, sibling) in PlaybackPositionStore.getAllWithSnapshots(this)) {
+        if (key == ownKey) continue
+        if (sibling.mediaType != item.mediaType) continue
+        if (watchedKeysFor(sibling).any { it in sharedSet }) PlaybackPositionStore.clear(this, key)
     }
 }
 

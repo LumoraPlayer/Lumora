@@ -1072,6 +1072,16 @@ class MainActivity : AppCompatActivity() {
     internal val upNextTickRunnable = object : Runnable {
         override fun run() {
             if (upNextActive) {
+                // The countdown is time-to-advance, not wall-clock: it must not keep running
+                // while the player is paused (the viewer paused to read the offer, not to
+                // skip it) or the app sits in the background (onPause removes the tick
+                // outright; this guard also covers a pause mid-window without leaving the
+                // app). Re-post without decrementing so unpausing picks the countdown up
+                // exactly where it stopped.
+                if (!playerManager.isPlaying) {
+                    mainHandler.postDelayed(this, 1000)
+                    return
+                }
                 upNextCountdown--
                 updateUpNextOverlay()
                 if (upNextCountdown <= 0) {
@@ -1828,6 +1838,40 @@ class MainActivity : AppCompatActivity() {
                 showLocalFilesBrowser()
             }
         }
+        // The Up Next countdown was removed when the app went to the background; if the
+        // offer is still up, resume it (removeCallbacks first so a resume can't
+        // double-schedule the tick - the same pattern hideControls uses).
+        if (upNextActive) {
+            mainHandler.removeCallbacks(upNextTickRunnable)
+            mainHandler.postDelayed(upNextTickRunnable, 1000)
+        }
+    }
+
+    /**
+     * The pre-30 storage grant for Local files. The armed-flag path in onResume was the only
+     * handler for this request, which left the flag to be consumed by whatever resume came
+     * next: a denial was silent, and a grant reported without an intervening pause/resume
+     * cycle kept the flag armed until an unrelated screen-off/on later popped the browser
+     * open. Handle the result where it lands, and disarm either way - the API 30+ route
+     * (system settings) still comes back through onResume's check.
+     */
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != LOCAL_FILES_PERMISSION_REQUEST) return
+        localFilesOpenAfterGrant = false
+        val granted = grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        if (granted && com.lumora.localfiles.hasLocalFilesAccess(this)) {
+            refreshIptvProviderList()
+            showLocalFilesBrowser()
+        } else if (!granted) {
+            // Was silent before: the dialog just went away and Settings showed no reason.
+            Toast.makeText(this, getString(R.string.sett_local_files_needs_access), Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onPause() {
@@ -1849,6 +1893,9 @@ class MainActivity : AppCompatActivity() {
                 // debounced write lands, losing the resume point it just recorded.
                 com.lumora.cache.PlaybackPositionStore.flush(this)
                 playerManager.pause()
+                // The Up Next countdown pauses too - otherwise the 15s window could elapse
+                // while the app is behind Home and start the next episode out of nowhere.
+                mainHandler.removeCallbacks(upNextTickRunnable)
                 // After the pause, so it reports the paused state: the play is still open
                 // (onResume resumes it), but the server's resume point should already be
                 // current if the process is killed while backgrounded and no stop ever lands.
@@ -2340,7 +2387,7 @@ class MainActivity : AppCompatActivity() {
         // never runs. Claiming the key before it is dispatched to any view is the only place
         // that holds regardless of what happens to be focused behind the hidden overlay.
         // Every action (down, up, repeats) is swallowed so the reveal press can't also click
-        // whatever it just focused. Up Next is excluded - its card owns focus while the
+        // whatever it just focused. Up Next is excluded - its pill owns focus while the
         // controls are hidden and OK there means "play the next episode now" - and so is the
         // Skip pill: while it is up it is the end zone's one press, and swallowing the key
         // here (before the view tree and before onKeyDown) meant pressing it opened the bar
@@ -2468,12 +2515,12 @@ class MainActivity : AppCompatActivity() {
         // is flown out (and dismisses the whole menu otherwise), and UP/DOWN/CENTER fall
         // through to the framework to navigate/activate rows. LEFT back out of the column
         // is the adapter's job - the focused row sees the key before this runs.
-        // Up Next owns the D-pad while its card is up: the card's Play Now / Cancel are the
-        // only actionable controls on screen, and both of these shortcuts used to eat the key
-        // before focus could reach them - RIGHT fast-forwarded instead of moving to Cancel,
-        // LEFT rewound (VOD) or flew the side menu out (Live). The card's buttons carry their
-        // own nextFocusLeft/Right/Down/Up links (see activity_main.xml), so directional keys
-        // fall through to the framework's focus search here and stay inside the card.
+        // Up Next owns the D-pad while its pill is up: the pill is the only actionable
+        // control on screen, and these shortcuts used to eat the key before focus could
+        // reach it - RIGHT fast-forwarded instead of pressing it, LEFT rewound (VOD) or flew
+        // the side menu out (Live). The pill carries its own nextFocus links (see
+        // activity_main.xml), so directional keys fall through to the framework's focus
+        // search here and stay on it.
         if (isPlayerVisible && !upNextActive) {
             if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT && !isPlayerSideMenuOpen()) {
                 // Only from the bare video. With the controls bar up and focus inside it,
@@ -2569,9 +2616,9 @@ class MainActivity : AppCompatActivity() {
         // also perform whatever that direction would otherwise do, same as it not also
         // clicking the button it lands focus on. Skipped while the side menu is open -
         // the drawer is the only chrome on screen and it must not pop the bottom bar
-        // over itself - and while the Up Next card is up: showControls() hides that card
-        // (they share the corner), so consuming the key here stole the D-pad before it
-        // could reach Play Now / Cancel and made Cancel unselectable.
+        // over itself - and while the Up Next pill is up: showControls() takes that pill
+        // down (they share the corner), so consuming the key here stole the D-pad before it
+        // could press the pill.
         val isDirectionalKey = keyCode in intArrayOf(
             android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN,
             android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,

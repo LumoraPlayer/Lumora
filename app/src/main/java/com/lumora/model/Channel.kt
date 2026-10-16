@@ -26,6 +26,12 @@ data class Channel(
     // straight from the source to show it as its own badge rather than shoehorned out of
     // the name string.
     val episodeNum: Int? = null,
+    // Series episodes only - the season the server filed the episode under, when it states
+    // one (Jellyfin/Plex do, Xtream bakes it into `name` instead). The episode lists can
+    // parse "S03E03" back out of the name for their own display, but the cross-provider
+    // identity keys (watched marks, Continue Watching de-dup) must not: an episode title
+    // can itself contain "S01E02", and a media-server name carries no marker at all.
+    val season: Int? = null,
     val year: String? = null,
     val rating: String? = null,
     // ISO "YYYY-MM-DD" - only Xtream's series list actually carries a real release date

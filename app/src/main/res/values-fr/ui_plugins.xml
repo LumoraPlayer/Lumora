@@ -126,4 +126,16 @@
     <string name="plug_export_failed">Échec de l\'exportation</string>
     <string name="plug_imported_summary">Importé : %1$d fournisseurs, %2$d sources EPG, %3$d groupes, %4$d paramètres</string>
     <string name="plug_import_failed">Échec de l\'importation</string>
+
+    <!-- Stremio addon store & phone QR install -->
+    <string name="plug_stremio_store">Boutique d\'extensions Stremio</string>
+    <string name="plug_stremio_store_caption">Parcourir les catalogues officiel et communautaire</string>
+    <string name="plug_stremio_store_empty">Le catalogue d\'extensions est vide</string>
+    <string name="plug_stremio_store_failed">Impossible de joindre les boutiques d\'extensions — vérifiez votre connexion et réessayez</string>
+    <string name="plug_stremio_store_count">%1$d extensions</string>
+    <string name="plug_stremio_official">Catalogue officiel</string>
+    <string name="plug_stremio_community">Catalogue communautaire</string>
+    <string name="plug_add_via_phone_qr">Ajouter sur votre téléphone (QR)</string>
+    <string name="plug_stremio_qr_scan">Scannez avec votre téléphone, puis collez le lien du manifeste de l\'extension</string>
+    <string name="plug_stremio_qr_received">Lien de l\'extension reçu — installation…</string>
 </resources>

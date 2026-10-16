@@ -1732,11 +1732,17 @@
                             android:scaleType="centerCrop" />
                     </FrameLayout>
 
+                    <!-- clipChildren false: the cast row inside scales its focused face to
+                         1.06x, and the first cell's grown left edge would otherwise be sliced
+                         off at this column's start (the same reason the container below
+                         carries the flags). -->
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
                         android:layout_weight="1"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
                         android:orientation="vertical">
 
                         <TextView
@@ -1819,19 +1825,38 @@
                             android:id="@+id/detailCastScroll"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="10dp"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginBottom="-6dp"
                             android:clipChildren="false"
                             android:clipToPadding="false"
                             android:scrollbars="none"
                             android:visibility="gone">
 
+                            <!-- The row carries 6dp of vertical padding the cells sit inside:
+                                 the focused cell scales to 1.06, which is about 10px of growth
+                                 on every side, and without somewhere to grow the white focus
+                                 stroke was cut off at the row's top and bottom edges (the
+                                 stroke sits past the cell's layout bounds once scaled). The
+                                 scroll's marginTop/marginBottom are stepped by the same 6dp so
+                                 the faces stay exactly where they were and the genre line
+                                 below doesn't move.
+                                 The 4dp start/end padding does the same for the first and
+                                 last cell: their scaled edges are cut by the scrolling
+                                 container's own bounds, which the row cannot grow past
+                                 (unlike vertically, where wrapping grows the container with
+                                 the row). A hair of indent on the row is the price of the
+                                 first face's highlight being whole. -->
                             <LinearLayout
                                 android:id="@+id/detailCastRow"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:clipChildren="false"
                                 android:clipToPadding="false"
-                                android:orientation="horizontal" />
+                                android:orientation="horizontal"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:paddingTop="6dp"
+                                android:paddingBottom="6dp" />
                         </HorizontalScrollView>
 
                         <TextView
@@ -2114,6 +2139,7 @@
         android:visibility="gone">
 
         <ScrollView
+            android:id="@+id/personDetailScroll"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipChildren="false"
@@ -2208,10 +2234,8 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="6dp"
-                            android:ellipsize="end"
                             android:fontFamily="@font/inter_regular"
                             android:lineSpacingExtra="3dp"
-                            android:maxLines="12"
                             android:textColor="@color/text_secondary"
                             android:textSize="@dimen/text_caption"
                             android:visibility="gone" />

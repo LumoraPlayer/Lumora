@@ -850,7 +850,13 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
             .setView(container)
             .setNegativeButton(getString(R.string.cancel), null)
             .create()
+        // Dismissed while start() is still resolving its socket would run stop() before the
+        // server exists - the server would then come up behind a closed dialog and listen
+        // out its whole timeout with no UI to stop it. The flag lets the coroutine below
+        // stop what start() just created instead of trusting the dismiss listener's timing.
+        var qrDialogDismissed = false
         qrDialog.setOnDismissListener {
+            qrDialogDismissed = true
             qrManager.stop()
             stremioQrReceived = null
         }
@@ -862,6 +868,12 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
         qrDialog.show()
         scope.launch {
             val result = qrManager.start(providerType = "stremio")
+            if (qrDialogDismissed) {
+                // Dismissed mid-start: the listener's stop() ran before the server existed,
+                // so take this one down now. The dialog's views are detached; leave them.
+                qrManager.stop()
+                return@launch
+            }
             if (result == null) {
                 status.text = getString(R.string.sett_could_not_start_server)
                 return@launch
@@ -913,6 +925,12 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
         scope.launch {
             val installedIds = stremioAddonManager.discoverAddons().map { it.id }.toSet()
             val catalog = stremioAddonManager.fetchStoreCatalog()
+            // null = neither catalogue answered; distinct from an empty catalogue, which is
+            // why fetchStoreCatalog returns null at all.
+            if (catalog == null) {
+                status.text = getString(R.string.plug_stremio_store_failed)
+                return@launch
+            }
             if (catalog.isEmpty()) {
                 status.text = getString(R.string.plug_stremio_store_empty)
                 return@launch

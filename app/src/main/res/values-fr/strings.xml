@@ -519,4 +519,5 @@
     <string name="sports_name_boxing">Boxe</string>
     <string name="sports_no_upcoming">Aucun match à venir</string>
     <string name="sports_no_upcoming_caption">Plus aucun match programmé aujourd\'hui.</string>
+    <string name="sett_local_file_gone">Ce fichier n\'est plus là — la clé a peut-être été retirée.</string>
 </resources>

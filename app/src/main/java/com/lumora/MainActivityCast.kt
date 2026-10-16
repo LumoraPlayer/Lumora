@@ -35,6 +35,8 @@ internal fun MainActivity.populateCastRow(
     row.removeAllViews()
     if (members.isEmpty()) {
         binding.detailCastScroll.visibility = View.GONE
+        // The row is gone, so a stale UP target from it would dead-end on detached views.
+        binding.detailPlayButton.nextFocusUpId = View.NO_ID
         return
     }
     binding.detailCastScroll.visibility = View.VISIBLE
@@ -72,6 +74,21 @@ internal fun MainActivity.populateCastRow(
     }
     // Back from the person page lands on the face that was picked (the row was rebuilt
     // from the title's own detail screen - see hidePersonDetail), not on the Play button.
+    // UP out of the faces reaches the detail Back button, and UP from Play reaches the
+    // first face: the default focus search runs over the whole scrolling page (cast row,
+    // version chips, plot area all mixed), which is exactly the geometry the rest of this
+    // screen wires around explicitly.
+    val firstCell = row.getChildAt(0)
+    if (firstCell != null) {
+        val backTarget = binding.detailBackButton.id
+        val belowTarget = binding.detailPlayButton.id
+        for (i in 0 until row.childCount) {
+            val cell = row.getChildAt(i)
+            cell.nextFocusUpId = backTarget
+            cell.nextFocusDownId = belowTarget
+        }
+        binding.detailPlayButton.nextFocusUpId = firstCell.id
+    }
     val focusPersonId = castFocusPersonId ?: return
     castFocusPersonId = null
     row.post { focusCastCell(focusPersonId) }
@@ -104,6 +121,12 @@ internal fun MainActivity.openPersonPage(
     personReturnItem = returnItem
     personReturnGroup = returnGroup
     personFocusCreditKey = null
+    // This page replaces whatever occupied the person slot. If the title detail below it was
+    // itself opened from the previous person's filmography (detailFromPerson), that return
+    // path is gone with it - leaving the flag set made the *next* Back out of the title
+    // hide the detail with restoreMain=false and call showPersonPage() on a now-empty slot,
+    // which is a blank screen with nothing but the app's exit on the following press.
+    detailFromPerson = false
     // Fresh page, fresh filmography: the chips re-cut this list, so it can't be a previous
     // person's. Opens on the half matching the title the face was picked from - a film's
     // cast should not land on a wall of TV shows.
@@ -121,6 +144,11 @@ internal fun MainActivity.showPersonPage() {
     val person = openPerson ?: return
     isPersonDetailVisible = true
     binding.personDetailLayout.visibility = View.VISIBLE
+    // The page's views are reused across people, so a previous person's scroll position
+    // would otherwise open this one already scrolled past the portrait and name. Start at
+    // the top; nothing below scrolls it either - on a fresh open focus stays on Back (see
+    // renderPersonCredits), so the face and the name are what the page opens on.
+    binding.personDetailScroll.scrollTo(0, 0)
     applyStatus()
 
     val photo = binding.personPhotoImage
@@ -296,6 +324,14 @@ private fun MainActivity.renderPersonCredits(personId: Int, focusSelected: Boole
             credit.year,
             credit.character?.takeIf { it.isNotBlank() }?.let { getString(R.string.list_person_as, it) }
         ).joinToString("  ·  ")
+        // One TalkBack stop per tile, matching the cast cells on the other screen: title and
+        // meta together name the credit, and the children stop splitting it into three stops.
+        cell.contentDescription = listOfNotNull(
+            title.text.takeIf { it.isNotBlank() },
+            meta.text.takeIf { it.isNotBlank() }
+        ).joinToString(", ")
+        title.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        meta.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         // A unique id per tile: nextFocusUpId (and anything else that aims at a tile) is an
         // id, and the inflated layout's own ids repeat across every cell.
         cell.id = View.generateViewId()
@@ -317,15 +353,17 @@ private fun MainActivity.renderPersonCredits(personId: Int, focusSelected: Boole
     selectedPersonCreditChip()?.nextFocusDownId = firstTile.id
     binding.personBackButton.nextFocusDownId = firstTile.id
     if (!focusSelected) return
-    // Back out of a credit should land back on the tile it was opened from; a fresh open
-    // starts on the most recent title.
+    // Back out of a credit lands on the tile it was opened from - that is what the flag
+    // records, and it consumes it. A fresh open has no such tile: focusing the first one
+    // scrolled the page down to it, which cut the portrait and name off the top - the page
+    // must open at the top with its own face on screen. Focus stays on Back; DOWN reaches
+    // the filmography through the nextFocusDownId wired just above.
     val focusKey = personFocusCreditKey
     personFocusCreditKey = null
-    val target = if (focusKey != null) {
-        (0 until row.childCount).map { row.getChildAt(it) }.firstOrNull { it.tag == focusKey } ?: firstTile
-    } else {
-        firstTile
-    }
+    if (focusKey == null) return
+    val target = (0 until row.childCount)
+        .map { row.getChildAt(it) }
+        .firstOrNull { it.tag == focusKey } ?: firstTile
     row.post {
         if (isPersonDetailVisible && openPerson?.personId == personId) target?.requestFocus()
     }

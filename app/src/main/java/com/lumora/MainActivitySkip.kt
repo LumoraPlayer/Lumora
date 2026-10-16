@@ -144,11 +144,20 @@ internal fun MainActivity.skipActiveSegment() {
     // stops with playback at the very end, and a pause on the last frame leaves whatever was
     // shown standing), so recompute against the current position before giving up - and with
     // nothing live, the episode's last credits segment is still what the pill stood for.
+    // That last fallback is gated on the position actually being at/after its start: a
+    // paused player on the finished last frame (the tick is frozen there, so no segment
+    // can read as containing the position) must not seek back into the credits as if the
+    // press were the end-of-episode skip. The type compare is case-insensitive like the
+    // pill's label lookup.
     val segment = activeSkipSegment
         ?: currentSkipSegments.firstOrNull {
             it.contains(playerManager.currentPosition, playerManager.duration) && it.key != dismissedSkipSegmentKey
         }
-        ?: currentSkipSegments.lastOrNull { it.type == "credits" && it.key != dismissedSkipSegmentKey }
+        ?: currentSkipSegments.lastOrNull {
+            it.type.equals("credits", ignoreCase = true) &&
+                it.key != dismissedSkipSegmentKey &&
+                playerManager.currentPosition >= it.startMs
+        }
     if (segment == null) return
     performSkipSegment(segment)
 }

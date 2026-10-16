@@ -1253,7 +1253,7 @@ internal fun MainActivity.buildCategoryRows(
         // Pinned (favourite) categories always come first - above dynamic clusters,
         // genre buckets, and everything else - so the user's pinned items are always
         // one D-pad press away regardless of how the sidebar otherwise arranges itself.
-        result += pinnedRows.sortedBy { it.name.lowercase() }
+        result += pinnedRows.sortedBy { it.name.lowercase(java.util.Locale.ROOT) }
         // Series/Films: clustered service categories, then genre buckets, then the
         // provider's own list. Live TV has no brand block here (its brand rows come from
         // deriveBrandCategories and go through bucketing), so it just leads with buckets.
@@ -1263,8 +1263,22 @@ internal fun MainActivity.buildCategoryRows(
         // Provider order by default - the order the provider's own category list arrives in
         // (first-seen channel order) is the order people know from the panel they came from.
         // Settings > Filters can ask for A-Z instead, for finding a category by name.
-        result += if (tab == 0 && alphabeticalLiveCategories) {
-            unpinnedRows.sortedBy { it.name.lowercase() }
+        //
+        // Adult categories sink below everything else on Live TV, whichever order is active.
+        // The bucket path files them into the Adult row and nowhere else, but in classic
+        // layout (or with dynamic categories off) they used to sit wherever the provider
+        // listed them - the old priority sort sank them explicitly, and losing that was a
+        // parental-ordering regression, not part of the provider-order change. Stable
+        // partition: provider order and A-Z both stay intact within each half. Locale.ROOT
+        // on the sort so a Turkish device doesn't misorder "I..." names.
+        result += if (tab == 0) {
+            val (adultRows, otherRows) = unpinnedRows.partition { isAdultCategory(it.name) }
+            if (alphabeticalLiveCategories) {
+                otherRows.sortedBy { it.name.lowercase(java.util.Locale.ROOT) } +
+                    adultRows.sortedBy { it.name.lowercase(java.util.Locale.ROOT) }
+            } else {
+                otherRows + adultRows
+            }
         } else {
             unpinnedRows
         }

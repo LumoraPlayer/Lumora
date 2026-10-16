@@ -382,9 +382,26 @@ internal fun MainActivity.buildGuideHeader() {
     // mark, then half-hour cells sitting on the clock's usual :00/:30 boundaries. Labelling
     // fixed cells now+30k instead (the old ruler) put every time off the clock by however
     // many minutes past the boundary the guide happened to be opened - 11:47, 12:17, 12:47.
+    //
+    // The boundary comes from the wall clock (Calendar), not from flooring epoch millis to
+    // 30-minute cells: an epoch floor is :00/:30 UTC, which only lines up with the labels
+    // below in whole-hour-offset zones - a device in Kathmandu (+5:45) or Adelaide (+9:30)
+    // got :15/:45 labels, and any zone's ruler drifted across a DST jump (the ruler's cells
+    // are fixed 30-minute spans, so the label at each edge must be the *local* time of that
+    // edge). Calendar resolves "next :00/:30 local" directly, offset and DST included.
     val nowMs = System.currentTimeMillis()
     val halfHourMs = 30 * 60_000L
-    val nextHalfHourMs = (nowMs / halfHourMs + 1) * halfHourMs
+    val nextHalfHourMs = java.util.Calendar.getInstance().run {
+        timeInMillis = nowMs
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+        if (get(java.util.Calendar.MINUTE) < 30) set(java.util.Calendar.MINUTE, 30)
+        else {
+            set(java.util.Calendar.MINUTE, 0)
+            add(java.util.Calendar.HOUR_OF_DAY, 1)
+        }
+        timeInMillis
+    }
     // The same minute-floor the program block widths use ((stop - now) / 60_000 in
     // renderPrograms), so a label and the edge of the block starting at its time agree
     // instead of drifting a minute apart.
@@ -1465,12 +1482,14 @@ private val EPISODE_SEASON_REGEX = Regex("""^S(\d+)E\d+""")
  *  writes the marker spaced ("Show S01 E02"), same shape the series-marker regex reads. */
 private val EPISODE_SEASON_TRAIL_REGEX = Regex("""(?i)\bS(\d+)\s*E\d+""")
 
-/** The season an episode belongs to. A Channel has an episodeNum but no season field, so
- *  it's read back out of the "S04E01 · " marker its provider baked into the name, or out
- *  of a TMDB placeholder's ":s4e1" id. Null when neither says - callers must not assume
- *  season 1 from that, since "no season stated" and "season 1" are different things. */
+/** The season an episode belongs to. The authoritative source is [Channel.season], which
+ *  a media server states outright; everything else is read back out of the "S04E01 · "
+ *  marker its provider baked into the name, or out of a TMDB placeholder's ":s4e1" id.
+ *  Null when nothing says - callers must not assume season 1 from that, since "no season
+ *  stated" and "season 1" are different things. */
 internal fun seasonNumberOf(episode: Channel): Int? =
-    EPISODE_SEASON_REGEX.find(episode.name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+    episode.season
+        ?: EPISODE_SEASON_REGEX.find(episode.name)?.groupValues?.getOrNull(1)?.toIntOrNull()
         ?: EPISODE_SEASON_TRAIL_REGEX.find(episode.name)?.groupValues?.getOrNull(1)?.toIntOrNull()
         ?: episode.id.takeIf { it.contains(":s") }
             ?.substringAfterLast(":s")?.substringBefore("e")?.toIntOrNull()

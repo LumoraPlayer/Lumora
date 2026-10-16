@@ -1960,17 +1960,25 @@ internal fun MainActivity.showProviderSettings() {
         PREF_SUBTITLES_ENABLED
     ))
     // Live TV rail order: the provider's own vs A-Z. Rebuild the rows immediately, so the
-    // rail behind the Settings dialog carries the new order the moment the tick changes.
+    // rail behind the Settings dialog carries the new order the moment the tick changes -
+    // but only while Live TV is the active tab, since rebuildCategoriesForActiveTab()
+    // rebuilds whatever tab is showing and the pref means nothing on Series/Films. On those
+    // tabs the toggle is picked up by the regular rebuild when the user switches to Live.
     filtersPane.addView(dubCheckBoxRow(
         getString(R.string.sett_categories_alphabetical),
         getString(R.string.sett_categories_alphabetical_caption),
         PREF_ALPHABETICAL_LIVE_CATEGORIES,
-        onToggle = { if (allChannels.isNotEmpty()) scope.launch { rebuildCategoriesForActiveTab() } }
+        onToggle = { if (activeTab == 0 && allChannels.isNotEmpty()) scope.launch { rebuildCategoriesForActiveTab() } }
     ))
     // Live channel preview as a first-class row: this switch used to exist only as one line
     // inside the "Playback settings" dialog, which is not where anyone asking "stop channels
     // auto-playing when I open a playlist" would look. Off stops a channel starting while
     // browsing or opening a category; OK still opens the channel fullscreen.
+    //
+    // Re-arming on ON defers the stream load to the dialog's close (see the dismiss listener):
+    // requestPreviewLoad() here would start playback behind the open dialog - audio playing
+    // under Settings with nothing on screen to explain it.
+    var previewRearmPending = false
     filtersPane.addView(dubCheckBoxRow(
         getString(R.string.sett_live_preview_title),
         getString(R.string.sett_live_preview_caption),
@@ -1982,12 +1990,13 @@ internal fun MainActivity.showProviderSettings() {
                 // closed); focus is untouched.
                 if (activeTab == 0 && !isPlayerVisible) {
                     showLivePreviewPane()
-                    lastFocusedLiveChannel?.let { requestPreviewLoad(it) }
+                    previewRearmPending = true
                 }
             } else {
                 // Take the preview that is playing right now down with it, so the change is
                 // visible without leaving Settings.
                 releaseLivePreview()
+                previewRearmPending = false
             }
         }
     ))
@@ -2248,6 +2257,12 @@ internal fun MainActivity.showProviderSettings() {
         traktSignInJob?.cancel()
         traktSignInJob = null
         activeSettingsOverlay = null
+        // A preview re-armed from the Filters pane starts only now, not while the dialog was
+        // up: starting it there played the stream's audio from under Settings with nothing on
+        // screen to explain it. requestPreviewLoad re-checks the pref and the tab itself.
+        if (previewRearmPending && activeTab == 0 && !isPlayerVisible) {
+            lastFocusedLiveChannel?.let { requestPreviewLoad(it) }
+        }
         applyStatus()
         refreshIptvProviderList = {}
         // Closes over the dismissed tree like the plugin lambdas below - held past dismiss it

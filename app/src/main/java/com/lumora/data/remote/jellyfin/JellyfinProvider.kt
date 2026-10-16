@@ -1201,6 +1201,10 @@ class JellyfinProvider(baseClient: OkHttpClient) {
                     item.seriesId?.let { qualifiedMediaItemId(sourceId, it) }
                 } else null,
                 episodeNum = item.episodeNumber,
+                // The server's season, kept so this episode's cross-provider watched key
+                // and Continue Watching de-dup match a panel copy's "S03E03" (see
+                // seasonNumberOf / episodeWatchedKeys).
+                season = item.seasonNumber,
                 mediaType = mediaType,
                 rating = item.rating?.toString(),
                 releaseDate = item.releaseDate,

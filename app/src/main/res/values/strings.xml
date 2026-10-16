@@ -264,6 +264,7 @@
     <string name="sett_local_access_open">Open settings</string>
     <string name="sett_local_access_revoked">All files access is needed to read this folder — grant it in Settings, then reopen the browser.</string>
     <string name="sett_local_list_error">Could not read this folder: %1$s</string>
+    <string name="sett_local_file_gone">This file is no longer there — the drive may have been removed.</string>
     <string name="change">Change</string>
     <string name="show_phone_qr_pairing_code">Show phone QR pairing code</string>
     <string name="or_enter_manually">OR enter manually</string>

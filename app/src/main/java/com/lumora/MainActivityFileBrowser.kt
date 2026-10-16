@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import com.lumora.cache.PlaybackPositionStore
 import com.lumora.localfiles.hasLocalFilesAccess
 import com.lumora.localfiles.listLocalDirectory
@@ -17,7 +18,9 @@ import com.lumora.localfiles.localStorageRoots
 import com.lumora.model.Channel
 import com.lumora.shares.ShareEntry
 import com.lumora.shares.formatShareSize
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
@@ -240,7 +243,15 @@ internal fun MainActivity.showLocalFilesBrowser() {
     showFileBrowser(
         title = getString(R.string.sett_local_files),
         listDirectory = { path ->
-            if (path.isBlank()) localStorageRoots(this) else listLocalDirectory(File(path))
+            // Blocking filesystem calls (and, for the root list, StorageManager IPC): on the
+            // main thread a slow USB stick froze the browser, and the 30s timeout above cannot
+            // even fire while the thread is blocked. The share path suspends on its own; this
+            // is the local side's only guard. Roots are re-read per call so an eject between
+            // loads is seen.
+            withContext(Dispatchers.IO) {
+                if (path.isBlank()) localStorageRoots(this@showLocalFilesBrowser)
+                else listLocalDirectory(File(path), localStorageRoots(this@showLocalFilesBrowser).map { it.path })
+            }
         },
         playEntry = { playLocalFile(it) },
         parentOf = { path -> localParentPath(path, localStorageRoots(this).map { it.path }) },
@@ -254,11 +265,18 @@ internal fun MainActivity.showLocalFilesBrowser() {
 /**
  * Plays one file from local storage through the normal player stack - a `file://` URL, the
  * same shape the Downloads tab plays. Resume works through the same store as every other VOD
- * path; the channel id is the absolute path, so a file keeps its resume point across
- * sessions (and across a USB drive being unmounted and remounted under a different volume
- * id, which a volume-keyed id would not survive).
+ * path; the channel id is the absolute path, so the file keeps its resume point while the
+ * mount path is stable (a drive remounted under a different volume path is a new key, and
+ * the old entry ages out with the store's own cap).
  */
 internal fun MainActivity.playLocalFile(entry: ShareEntry) {
+    // The drive can have been ejected between the row being rendered and the press landing;
+    // handing the player a file:// URL for a path that is gone fails with a generic player
+    // error, which reads like a broken file rather than a missing drive.
+    if (!File(entry.path).exists()) {
+        Toast.makeText(this, getString(R.string.sett_local_file_gone), Toast.LENGTH_LONG).show()
+        return
+    }
     val channel = Channel(
         id = "local:${entry.path}",
         name = entry.name.substringBeforeLast('.').ifBlank { entry.name },
@@ -305,6 +323,6 @@ private fun MainActivity.openAllFilesAccessSettings(): Boolean {
     }.isSuccess
 }
 
-/** Any small unique code will do - there is no per-permission result handling to collide
- *  with; the permission dialog backgrounding the app is what triggers the onResume recheck. */
-private const val LOCAL_FILES_PERMISSION_REQUEST = 0x10F
+/** Request code for the pre-30 storage grant; MainActivity.onRequestPermissionsResult opens
+ *  the browser on a grant and clears the armed flag either way. */
+internal const val LOCAL_FILES_PERMISSION_REQUEST = 0x10F

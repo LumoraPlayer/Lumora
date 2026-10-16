@@ -374,10 +374,20 @@ class TmdbClient {
         return parsed
     }
 
-    /** Tries each configured key in turn, so a dead/rate-limited key falls back to the next. */
+    /** [fetchBody], parsed. */
     private suspend fun get(path: String, params: String): List<Channel> =
         fetchBody(path, params)?.let { parse(it) } ?: emptyList()
 
+    /**
+     * One call's body, trying each configured key in turn.
+     *
+     * Key rotation is for *key* failures - a revoked or individually-limited key - not for
+     * every non-2xx. TMDB's rate limit is per origin, so rotating through a 429 only spent
+     * every configured key on one throttled call; the wait is now honoured (clamped, then
+     * the same key retried once) and the call gives up if it is still limited. A 404 is
+     * TMDB saying the title does not exist - trying the remaining keys multiplies requests
+     * for every miss and finds the same nothing. 401/403 (a dead key) still rotates.
+     */
     private suspend fun fetchBody(path: String, params: String): String? = withContext(Dispatchers.IO) {
         for (key in KEYS) {
             val url = "$BASE$path?api_key=$key&$params"
@@ -387,17 +397,37 @@ class TmdbClient {
                         val body = resp.body?.string()
                         if (!body.isNullOrBlank()) return@withContext body
                     }
-                    if (resp.code == 429) {
-                        val retryAfter = resp.header("Retry-After")?.toLongOrNull() ?: 1
-                        kotlinx.coroutines.delay(retryAfter * 1000)
-                        // Loop naturally continues to next key after use{} block
+                    when {
+                        resp.code == 429 -> {
+                            // Retry-After is delta-seconds or an HTTP date; the digits-only
+                            // read below turns the date form into the 1s floor, and the clamp
+                            // stops a broken/hostile header from parking the caller for the
+                            // rest of the session.
+                            val retryAfterSec = resp.header("Retry-After")
+                                ?.toLongOrNull()?.coerceIn(1L, MAX_RETRY_AFTER_SEC) ?: 1L
+                            kotlinx.coroutines.delay(retryAfterSec * 1000)
+                            return@withContext retryOnce(url)
+                        }
+                        // TMDB knows no such title: the remaining keys would find the same
+                        // nothing, so the call is over.
+                        resp.code == 404 -> return@withContext null
+                        // Other non-2xx (bad/revoked key): fall through to the next key.
+                        else -> Unit
                     }
-                    // Non-2xx (bad/limited key): fall through to the next key.
                 }
             } catch (e: Exception) {
                 // Network error: try the next key too.
             }
         }
+        null
+    }
+
+    /** One same-key retry after the 429 wait; null when it is still limited or unreachable. */
+    private fun retryOnce(url: String): String? = try {
+        http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+            if (resp.isSuccessful) resp.body?.string()?.takeIf { it.isNotBlank() } else null
+        }
+    } catch (e: Exception) {
         null
     }
 
@@ -547,6 +577,9 @@ class TmdbClient {
             .split(',')
             .map { it.trim() }
             .filter { it.isNotBlank() }
+
+        /** Ceiling on how long a 429's Retry-After may park a caller - see [fetchBody]. */
+        private const val MAX_RETRY_AFTER_SEC = 10L
 
         /** First usable key, or "" if none are configured. For callers outside this client that
          *  take a bare key string rather than going through [request] - notably the ported

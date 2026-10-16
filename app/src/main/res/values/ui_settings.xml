@@ -68,6 +68,7 @@
 
     <!-- MainActivitySettings.kt - backup & restore -->
     <string name="sett_backup_saved_to">Backup saved to %1$s</string>
+    <string name="sett_backup_secrets_note">The backup file carries provider logins and media-server session tokens as readable text — keep it somewhere private.</string>
     <string name="sett_export_failed">Export failed</string>
     <string name="sett_no_backup_file">No backup file found at %1$s</string>
     <string name="sett_imported_summary">Imported: %1$d providers, %2$d EPG sources, %3$d groups, %4$d settings</string>

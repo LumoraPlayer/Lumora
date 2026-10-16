@@ -44,7 +44,10 @@ import com.lumora.scraper.bridge.ScraperSiteStore
 import com.lumora.scraper.utils.UserPreferences
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonDeserializer
 import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonPrimitive
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -262,7 +265,13 @@ internal fun restoreBackupSettings(
     var restored = 0
     for ((key, backup) in settings) {
         val type = allowlist[key] ?: continue
-        val value = decodeSetting(type, backup) ?: continue
+        // Per-key isolation, not just per-value: a hand-edited backup can carry a null map
+        // value (decodeSetting dereferences it) or a non-object entry (Gson throws while
+        // reading it - thrown from importFrom's parse, which is outside this loop), and any
+        // of those used to escape to the outer catch and fail the *whole* restore. The
+        // documented contract is that one bad setting cannot cost the user every other
+        // section, so everything about this one key fails alone.
+        val value = runCatching { decodeSetting(type, backup) }.getOrNull() ?: continue
         when (type) {
             SettingType.BOOLEAN -> editor.putBoolean(key, value as Boolean)
             SettingType.INT -> editor.putInt(key, value as Int)
@@ -288,7 +297,26 @@ internal fun restoreBackupSettings(
 class BackupManager(private val context: Context) {
 
     private val TAG = "BackupManager"
-    private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
+    private val gson: Gson = GsonBuilder().setPrettyPrinting()
+        // A settings entry that isn't the expected {"type":..., "value":...} shape must cost
+        // only itself. Gson's reflective reader throws on the first entry that is not an
+        // object at all ("disabled_sites": 42, "x": null, a wrong-typed field), and that throw
+        // happens while parsing the whole file - one hand-edited key failed the entire
+        // restore, contradicting restoreBackupSettings' documented per-key contract. This
+        // reader answers null for a malformed entry so restore skips just that key;
+        // serialisation is untouched (this is a deserializer registration only).
+        .registerTypeAdapter(
+            SettingBackup::class.java,
+            JsonDeserializer<SettingBackup> { json, _, _ ->
+                val obj = json as? JsonObject ?: return@JsonDeserializer null
+                val type = (obj.get("type") as? JsonPrimitive)?.takeIf { it.isString }?.asString
+                    ?: return@JsonDeserializer null
+                val value = (obj.get("value") as? JsonPrimitive)?.takeIf { it.isString }?.asString
+                    ?: return@JsonDeserializer null
+                SettingBackup(type, value)
+            }
+        )
+        .create()
     private     companion object {
         // Deliberately not bumped for the fields this change adds: they are additive and
         // Gson-tolerant in both directions. An old build reading a new backup drops the

@@ -39,6 +39,10 @@ class StremioAddonManager(
     // fetches. Same pattern as PluginStoreManager.
     private val explicitHttpClient: OkHttpClient? = null,
 ) {
+    /** Cache for [fetchStoreCatalog]: parsed list + fetch time; see the TTL there. */
+    private data class CachedCatalog(val fetchedAt: Long, val addons: List<StoreAddon>)
+    private var catalogCache: CachedCatalog? = null
+
     private var addons: List<StremioAddon> = emptyList()
 
     private val httpClient: OkHttpClient
@@ -113,38 +117,69 @@ class StremioAddonManager(
      * community list Stremio's own addon browser reads - flattened into installable
      * entries. Only addons that publish streams are offered, matching [installFromUrl]'s
      * gate; a row that could never install is worse than no row.
+     *
+     * Null when neither catalogue could be fetched at all - the caller shows an error rather
+     * than the same empty state as a catalogue that genuinely offered nothing. A successful
+     * result is cached for [STORE_CACHE_TTL_MS]: each open used to re-download both
+     * catalogues in full, which on a TV stick is three network round trips for a list that
+     * changes weekly.
      */
-    suspend fun fetchStoreCatalog(): List<StoreAddon> = withContext(Dispatchers.IO) {
+    suspend fun fetchStoreCatalog(): List<StoreAddon>? = withContext(Dispatchers.IO) {
+        catalogCache?.takeIf { System.currentTimeMillis() - it.fetchedAt < STORE_CACHE_TTL_MS }?.let {
+            return@withContext it.addons
+        }
         val entries = LinkedHashMap<String, StoreAddon>()
+        var fetchedAny = false
         for ((url, official) in listOf(COMMUNITY_STORE_URL to false, OFFICIAL_STORE_URL to true)) {
             val text = fetchText(httpClient, url) ?: continue
-            runCatching {
-                val addons = JsonParser.parseString(text).asJsonObject.getAsJsonArray("addons")
-                for (element in addons) {
-                    val obj = element.asJsonObject
-                    val manifest = obj.getAsJsonObject("manifest") ?: continue
-                    val id = manifest.get("id")?.asString ?: continue
-                    val transportUrl = obj.get("transportUrl")?.asString ?: continue
-                    val streams = manifest.get("resources")?.asJsonArray?.any { r ->
-                        (r.isJsonPrimitive && r.asString == StremioProtocol.RESOURCE_STREAM) ||
-                            (r.isJsonObject && r.asJsonObject.get("name")?.asString == StremioProtocol.RESOURCE_STREAM)
-                    } ?: false
-                    if (!streams) continue
-                    entries.putIfAbsent(
-                        id,
-                        StoreAddon(
-                            id = id,
-                            name = manifest.get("name")?.asString ?: id,
-                            description = manifest.get("description")?.asString.orEmpty(),
-                            manifestUrl = transportUrl,
-                            official = official
-                        )
-                    )
-                }
+            fetchedAny = true
+            val addons = runCatching {
+                JsonParser.parseString(text).asJsonObject.getAsJsonArray("addons")
+            }.getOrNull() ?: continue
+            // One malformed entry must cost only itself. The parse below used to run inside a
+            // single runCatching around the whole loop, so the first entry whose shape was off
+            // (a "manifest" that is a string, a "resources" that isn't an array) silently
+            // dropped every entry after it in that catalogue.
+            for (element in addons) {
+                val entry = parseStoreEntry(element, official) ?: continue
+                val existing = entries[entry.id]
+                // Duplicates keep the official copy (and its "official" tag); the community
+                // catalogue is fetched first only for history's sake.
+                if (existing != null && (existing.official || !entry.official)) continue
+                entries[entry.id] = entry
             }
         }
-        entries.values.toList()
+        if (!fetchedAny) return@withContext null
+        val result = entries.values.toList()
+        catalogCache = CachedCatalog(System.currentTimeMillis(), result)
+        result
     }
+
+    /** One store catalogue entry, or null when it is malformed. Every field read defensively:
+     *  the catalogues are keyless public JSON and one bad row must not take the list down. */
+    private fun parseStoreEntry(element: com.google.gson.JsonElement, official: Boolean): StoreAddon? =
+        runCatching {
+            val obj = element.asJsonObject
+            val manifest = obj.getAsJsonObject("manifest") ?: return@runCatching null
+            val id = manifest.stringField("id") ?: return@runCatching null
+            val transportUrl = obj.stringField("transportUrl") ?: return@runCatching null
+            val resources = manifest.get("resources")?.takeIf { it.isJsonArray }?.asJsonArray
+            val streams = resources?.any { r ->
+                (r.isJsonPrimitive && r.asJsonPrimitive.isString && r.asString == StremioProtocol.RESOURCE_STREAM) ||
+                    (r.isJsonObject && r.asJsonObject.stringField("name") == StremioProtocol.RESOURCE_STREAM)
+            } ?: false
+            if (!streams) return@runCatching null
+            StoreAddon(
+                id = id,
+                name = manifest.stringField("name") ?: id,
+                description = manifest.stringField("description").orEmpty(),
+                manifestUrl = transportUrl,
+                official = official
+            )
+        }.getOrNull()
+
+    private fun JsonObject.stringField(name: String): String? =
+        get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
 
     fun isEnabled(addonId: String): Boolean = addonId in enabledAddonIds()
 
@@ -181,7 +216,19 @@ class StremioAddonManager(
             addProperty("manifestUrl", manifestUrl)
             add("manifest", JsonParser.parseString(body))
         }
-        File(addonsDir(), fileNameFor(addon.id)).writeText(wrapper.toString())
+        val file = File(addonsDir(), fileNameFor(addon.id))
+        // Atomic replace: a crash mid-write used to leave a truncated wrapper that the next
+        // discoverAddons silently dropped (and pruned its enabled id), so the addon simply
+        // vanished - and this path also runs unattended from autoUpdate. Temp file in the
+        // same directory + rename, like PlaybackPositionStore's persist.
+        val tmp = File(file.absolutePath + ".tmp")
+        tmp.writeText(wrapper.toString())
+        if (!tmp.renameTo(file)) {
+            // Same-directory rename can't realistically fail; if it does, still install
+            // rather than reporting failure on a write that mostly succeeded.
+            tmp.delete()
+            file.writeText(wrapper.toString())
+        }
         discoverAddons()
         val stored = addons.firstOrNull { it.id == addon.id } ?: addon
         InstallResult.Installed(stored)
@@ -268,6 +315,8 @@ class StremioAddonManager(
         /** Shared with PluginScriptManager - see the pluginPrefs kdoc. */
         const val PLUGIN_PREFS_FILE = "plugin_prefs"
         const val MAX_RESPONSE_BYTES = 8L * 1024 * 1024
+        /** How long a parsed store catalogue is reused before both catalogues are re-fetched. */
+        const val STORE_CACHE_TTL_MS = 30L * 60_000L
         /** Per-addon bound on a stream query - the other sources are what the dialog waits on. */
         const val STREAM_TIMEOUT_SEC = 10L
         /** The two public catalogues behind Stremio's own addon browser: the community list,

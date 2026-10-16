@@ -1318,6 +1318,8 @@ class PlexProvider(baseClient: OkHttpClient, private val clientIdentifier: Strin
                     item.seriesId?.let { qualifiedMediaItemId(sourceId, it) }
                 } else null,
                 episodeNum = item.episodeNumber,
+                // The server's season - same role as the Jellyfin stamp above.
+                season = item.seasonNumber,
                 mediaType = mediaType,
                 rating = item.rating?.toString(),
                 releaseDate = item.releaseDate,

@@ -404,10 +404,19 @@ internal fun MainActivity.checkUpNextTrigger() {
     if (duration <= 0) return
     // A credits segment means the end zone already has its one offer: the Skip Credits pill
     // (MainActivitySkip), which moves straight to the next episode when the queue has one.
-    // The countdown stands down for the whole episode in that case - two offers in the same
-    // corner on the same minute is what this exists to prevent. Everything IntroDB has no
-    // credits start for keeps the countdown, which still advances at the episode's end.
-    if (currentSkipSegments.any { it.type == "credits" }) return
+    // The countdown stands down while that segment owns the end zone - two offers in the same
+    // corner on the same minute is what this exists to prevent. But only one that actually
+    // owns it: IntroDB can answer with a null start (stored as 0) or, after a wrong-title
+    // match, a start past the duration, and neither ever raises a pill in the end zone, so
+    // suppressing the countdown for those swallowed the episode's only offer. The type
+    // compare is case-insensitive, like the pill's own label lookup.
+    val endZoneCredits = currentSkipSegments.any { segment ->
+        segment.type.equals("credits", ignoreCase = true) &&
+            segment.startMs > 0 &&
+            segment.startMs < duration &&
+            segment.effectiveEndMs(duration) >= duration - MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L
+    }
+    if (endZoneCredits) return
     if (duration - position > MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L) return // more than the countdown window left
     upNextEpisode = currentEpisodeQueue[nextIdx]
     showUpNextOverlay()

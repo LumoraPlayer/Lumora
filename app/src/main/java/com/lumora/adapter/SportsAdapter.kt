@@ -9,6 +9,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -287,6 +288,22 @@ class SportsAdapter(
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
                 if (keyCode == KeyEvent.KEYCODE_DPAD_UP) handleTopRowUp(v, bindingAdapterPosition) else false
             }
+            // A focused row must never sit invisibly behind the wrapper that clips the list's
+            // top edge (see activity_main.xml): focus arriving from outside the list - the
+            // chip row's DOWN, a restored focus position - can land on a row scrolled up out
+            // of sight, and OK would then activate a row the viewer cannot see. Pull it back
+            // into view when it takes focus, the same thing the framework does for its own
+            // keyboard navigation (which does not run for focus from outside the list).
+            itemView.setOnFocusChangeListener { _, hasFocus ->
+                if (!hasFocus) return@setOnFocusChangeListener
+                itemView.post {
+                    val list = itemView.parent as? RecyclerView ?: return@post
+                    when {
+                        itemView.top < list.top -> list.scrollBy(0, itemView.top - list.top)
+                        itemView.bottom > list.bottom -> list.scrollBy(0, itemView.bottom - list.bottom)
+                    }
+                }
+            }
         }
 
         /**
@@ -328,24 +345,27 @@ class SportsAdapter(
                 chip.setBackgroundResource(R.drawable.bg_sports_channel_chip_empty)
                 logoBox.visibility = View.GONE
                 channelName.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_tertiary))
-                setChannelName(itemView.context.getString(R.string.sports_no_channel))
                 channelNumber.text = null
                 channelNumber.visibility = View.GONE
+                setChannelName(itemView.context.getString(R.string.sports_no_channel))
                 loadLogo(null)
                 return
             }
             chip.setBackgroundResource(R.drawable.bg_sports_channel_chip)
             logoBox.visibility = View.VISIBLE
             channelName.setTextColor(ContextCompat.getColor(itemView.context, R.color.text_primary))
+            // Number first, then the name: the live card puts them on one line, and
+            // setChannelName has to subtract the number's width from the name's budget -
+            // it can only do that against this bind's number, not the last one's.
+            val number = channel.tvgChno?.takeIf { it.isNotBlank() }
+            channelNumber.text = number?.let { itemView.context.getString(R.string.sports_channel_number_short, it) }
+            channelNumber.visibility = if (number == null) View.GONE else View.VISIBLE
             val label = if (moreCount > 0) {
                 itemView.context.getString(R.string.sports_channel_more, channel.name, moreCount)
             } else {
                 channel.name
             }
             setChannelName(label)
-            val number = channel.tvgChno?.takeIf { it.isNotBlank() }
-            channelNumber.text = number?.let { itemView.context.getString(R.string.sports_channel_number_short, it) }
-            channelNumber.visibility = if (number == null) View.GONE else View.VISIBLE
             logoInitial.text = channel.name.trim().take(1).uppercase()
             loadLogo(channel)
         }
@@ -365,8 +385,21 @@ class SportsAdapter(
             channelName.maxLines = 1
             channelName.setTextSize(TypedValue.COMPLEX_UNIT_PX, channelNameTextSize)
 
+            // The live card puts the number beside the name on the same line (a horizontal
+            // parent - the full-width row stacks them, so only that case has to pay for the
+            // number), so the name's real budget is maxWidth minus the number, its margins and
+            // padding. Measuring against maxWidth alone said a wrap too late and left the
+            // TextView to ellipsize what the measurement claimed would fit.
+            val numberOnSameLine = channelNumber.visibility == View.VISIBLE &&
+                (channelNumber.parent as? LinearLayout)?.orientation == LinearLayout.HORIZONTAL &&
+                channelNumber.parent === channelName.parent
+            val siblingWidth = if (numberOnSameLine) {
+                val margin = (channelNumber.layoutParams as? ViewGroup.MarginLayoutParams)?.marginStart ?: 0
+                channelNumber.paint.measureText(channelNumber.text?.toString().orEmpty()).toInt() +
+                    channelNumber.paddingLeft + channelNumber.paddingRight + margin
+            } else 0
             val available = channelName.maxWidth -
-                channelName.compoundPaddingLeft - channelName.compoundPaddingRight
+                channelName.compoundPaddingLeft - channelName.compoundPaddingRight - siblingWidth
             if (available <= 0) return
 
             channelNamePaint.textSize = channelNameTextSize

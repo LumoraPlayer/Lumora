@@ -1483,6 +1483,17 @@
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/export_backup" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
+                <!-- What the export actually contains, spelled out before the press: the file
+                     is plain JSON, and anyone who holds it holds the provider logins and
+                     media-server session tokens inside it. -->
+                <TextView
+                    android:id="@+id/settingsBackupNote"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/settings_gap_s"
+                    android:text="@string/sett_backup_secrets_note"
+                    style="@style/TextAppearance.Lumora.SettingsSubtitle" />
+
                 <LinearLayout
                     android:id="@+id/settingsImportBackup"
                     android:layout_width="match_parent"

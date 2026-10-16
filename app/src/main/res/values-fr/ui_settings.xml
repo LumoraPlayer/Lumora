@@ -147,4 +147,25 @@
     <string name="trakt_pushing">Envoi de votre historique vers Trakt…</string>
     <string name="trakt_synced_both">Synchronisé · %1$d entrants, %2$d sortants</string>
     <string name="trakt_synced_both_partial">Synchronisé · %1$d entrants, %2$d sortants · %3$d titres non associés</string>
+
+    <!-- Local files (Settings > Providers, file browser) -->
+    <string name="sett_local_files">Fichiers locaux</string>
+    <string name="sett_local_files_detail">Parcourir cet appareil et les clés USB</string>
+    <string name="sett_local_files_needs_access">Accès à tous les fichiers requis — appuyez sur Parcourir</string>
+    <string name="sett_local_internal">Stockage interne</string>
+    <string name="sett_local_usb">Stockage USB</string>
+    <string name="sett_local_access_title">Accès à tous les fichiers</string>
+    <string name="sett_local_access_message">Lumora a besoin de l\'accès à tous les fichiers pour parcourir le stockage de cet appareil et les clés USB connectées. Accordez-le sur l\'écran suivant, puis revenez — le navigateur s\'ouvre tout seul.</string>
+    <string name="sett_local_access_open">Ouvrir les paramètres</string>
+    <string name="sett_local_access_revoked">L\'accès à tous les fichiers est nécessaire pour lire ce dossier — accordez-le dans les Paramètres, puis rouvrez le navigateur.</string>
+    <string name="sett_local_list_error">Impossible de lire ce dossier : %1$s</string>
+
+    <!-- Live TV rails and preview -->
+    <string name="sett_categories_alphabetical">Trier les catégories TV en direct A–Z</string>
+    <string name="sett_categories_alphabetical_caption">Désactivé conserve l\'ordre du fournisseur</string>
+    <string name="sett_live_preview_title">Aperçu des chaînes en direct</string>
+    <string name="sett_live_preview_caption">Désactivé empêche une chaîne de démarrer pendant la navigation ou l\'ouverture d\'une liste</string>
+
+    <!-- Backup -->
+    <string name="sett_backup_secrets_note">Le fichier de sauvegarde contient vos identifiants de fournisseurs et les jetons de session des serveurs multimédia en clair — conservez-le dans un endroit privé.</string>
 </resources>

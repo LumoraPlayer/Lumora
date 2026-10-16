@@ -884,9 +884,10 @@ internal fun MainActivity.removeFromContinueWatching(item: Channel) {
     // One episode, several copies: the row shows one tile per episode (continueWatchingTiles),
     // but each copy keeps its own position entry - clearing just the tile's key lets the next
     // copy's entry take its place on the very next rebuild, which reads as the removal not
-    // sticking. Sweep every other copy the catalogue shares the episode with, through the same
-    // shared watched keys a watched mark uses; entries too old to yield a key (no episode
-    // number or resolvable series in the snapshot) are matched by identical snapshot name.
+    // sticking. Sweep every other copy the store holds (episodes only ever live there, see
+    // clearSiblingCopyPositions), through the same shared watched keys a watched mark uses;
+    // entries too old to yield a key (no episode number or resolvable series in the snapshot)
+    // are matched by identical snapshot name.
     val sharedKeys = watchedKeysFor(item)
     if (sharedKeys.isNotEmpty()) {
         clearSiblingCopyPositions(item, sharedKeys)
@@ -898,12 +899,17 @@ internal fun MainActivity.removeFromContinueWatching(item: Channel) {
         }
     }
     // Continue Watching tiles are re-labelled copies (continueWatchingTiles) that keep the
-    // original id, so this matches the entry the server list actually holds.
+    // original id, so this matches the entry the server list actually holds. A sibling copy
+    // on another server or account has its own id and would hand the tile straight back, so
+    // it is matched by the same shared episode keys the position sweep above uses.
+    val sharedSet = sharedKeys.toHashSet()
+    fun isRemovedSibling(entry: Channel): Boolean =
+        entry.id == item.id || (sharedSet.isNotEmpty() && watchedKeysFor(entry).any { it in sharedSet })
     for ((serverId, items) in jellyfinResumeByServer.toMap()) {
-        jellyfinResumeByServer[serverId] = items.filterNot { it.id == item.id }
+        jellyfinResumeByServer[serverId] = items.filterNot(::isRemovedSibling)
     }
     for ((serverId, items) in plexResumeByServer.toMap()) {
-        plexResumeByServer[serverId] = items.filterNot { it.id == item.id }
+        plexResumeByServer[serverId] = items.filterNot(::isRemovedSibling)
     }
     val rawId = com.lumora.util.rawMediaItemId(item.id)
     val serverId = item.sourceProviderId.orEmpty()
@@ -1382,6 +1388,18 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
     // copy agrees on; the incoming list is most-recently-watched first (the store's own
     // order), so the first copy that claims an episode is the one that kept playing last.
     val seenEpisodes = HashSet<String>()
+    // Claims an episode for a tile that cannot be decorated (no series resolved, or the
+    // series' own name is blank): still dedupes it by the same shared keys, so two
+    // unresolvable copies of one episode don't both render - removal matches these keys
+    // too (removeFromContinueWatching), so the two must agree on what "the same episode"
+    // is. Returns false when an earlier tile already claimed it.
+    fun claimEpisode(channel: Channel): Boolean {
+        val keys = watchedKeysFor(channel)
+        if (keys.isEmpty()) return true
+        if (keys.any { it in seenEpisodes }) return false
+        seenEpisodes.addAll(keys)
+        return true
+    }
     return items.mapNotNull { item ->
         val episode = item.episodeNum ?: return@mapNotNull item
         val seriesId = item.categoryId?.takeIf { it.isNotBlank() }
@@ -1395,8 +1413,8 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
             // catalogue series; an older save or a since-relisted show falls back to the
             // same name-based resolution clicking uses.
             ?: resolveHomeTileSeries(item)
-            ?: return@mapNotNull item
-        val seriesName = cleanVodTitle(series.name).ifBlank { return@mapNotNull item }
+            ?: return@mapNotNull if (claimEpisode(item)) item else null
+        val seriesName = cleanVodTitle(series.name).ifBlank { return@mapNotNull if (claimEpisode(item)) item else null }
         val season = tileSeasonNumber(item)
         // Null-season and season-1 spellings name the same episode (see episodeWatchedKeys) -
         // once either spelling has claimed an episode, a copy using the other is dropped too.

@@ -111,6 +111,19 @@ object PlaybackPositionStore {
             .sortedByDescending { it.value.updatedAt }
             .mapNotNull { it.value.channel }
 
+    /**
+     * Every entry that carries a channel snapshot, keyed by the entry's own store key -
+     * including near-complete entries, unlike [getAllInProgress].
+     *
+     * For bookkeeping that must see finished entries too: the sibling-copy sweep has to
+     * clear a half-finished copy when its episode is marked watched *and* a near-complete
+     * copy when it is marked unwatched (the latter would otherwise out-vote the cleared
+     * shared mark - see clearSiblingCopyPositions).
+     */
+    fun getAllWithSnapshots(context: Context): List<Pair<String, Channel>> =
+        ensureLoaded(context).entries
+            .mapNotNull { entry -> entry.value.channel?.let { entry.key to it } }
+
     fun clearAll(context: Context) {
         cache = ConcurrentHashMap()
         // Route the disk wipe through the same single-thread executor as every other write:
@@ -235,6 +248,10 @@ object PlaybackPositionStore {
                                 // headers below. These three are what lets the resume path
                                 // re-run the plugin's resolve() for a fresh URL instead.
                                 episodeNum = c.optInt("episodeNum", -1).takeIf { it >= 0 },
+                                // The server's own season, when the snapshot has one - the
+                                // played episode's own season is what the cross-provider
+                                // watched keys are computed from after a cold restart.
+                                season = c.optInt("season", -1).takeIf { it >= 0 },
                                 categoryId = c.optString("categoryId", null),
                                 isJellyfin = c.optBoolean("isJellyfin", false),
                                 isPlex = c.optBoolean("isPlex", false),
@@ -283,6 +300,7 @@ object PlaybackPositionStore {
                             ch.group?.let { put("group", it) }
                             ch.categoryName?.let { put("categoryName", it) }
                             ch.episodeNum?.let { put("episodeNum", it) }
+                            ch.season?.let { put("season", it) }
                             // Provider provenance, so Continue Watching can rebuild the
                             // auto-advance episode queue after a cold restart (a series
                             // episode is never in the catalog). Absent on entries written

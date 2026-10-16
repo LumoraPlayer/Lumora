@@ -157,7 +157,7 @@
     <dimen name="shelf_poster_width">104dp</dimen>
     <dimen name="shelf_poster_image_height">137dp</dimen>
     <!-- Cast row / person page at TV scale - see values/dimens.xml for the role of each. -->
-    <dimen name="cast_photo_size">96dp</dimen>
+    <dimen name="cast_photo_size">84dp</dimen>
     <dimen name="cast_cell_width">112dp</dimen>
     <dimen name="person_photo_width">210dp</dimen>
     <dimen name="person_photo_height">315dp</dimen>
