@@ -120,6 +120,13 @@
          is 2:3, so the image height is (width - 16dp of card padding) x 1.5. -->
     <dimen name="shelf_poster_width">86dp</dimen>
     <dimen name="shelf_poster_image_height">110dp</dimen>
+    <!-- Cast row on the detail screen and the person page behind it. The photo is a square
+         face shot; the cell width just has to hold it plus its padding. The person page's
+         own portrait is 2:3, the shape TMDB profile shots are taken in. -->
+    <dimen name="cast_photo_size">84dp</dimen>
+    <dimen name="cast_cell_width">96dp</dimen>
+    <dimen name="person_photo_width">180dp</dimen>
+    <dimen name="person_photo_height">270dp</dimen>
     <!-- General on-screen body copy outside the settings scale (empty states, Up Next). -->
     <dimen name="content_body_text">13sp</dimen>
 

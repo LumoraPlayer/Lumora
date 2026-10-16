@@ -37,6 +37,17 @@
     <string name="list_cast">Cast: %1$s</string>
     <string name="list_detail_load_failed">Failed to load details: %1$s</string>
 
+    <!-- Cast member page (biography + filmography, MainActivityCast.kt) -->
+    <string name="list_person_biography">Biography</string>
+    <string name="list_person_known_for">Known for</string>
+    <string name="list_person_born">Born %1$s</string>
+    <string name="list_person_died">Died %1$s</string>
+    <string name="list_person_as">as %1$s</string>
+    <string name="list_person_load_failed">Couldn\'t load this person</string>
+    <string name="list_person_no_credits">Nothing else found for this person</string>
+    <string name="list_person_no_films">No films found</string>
+    <string name="list_person_no_series">No series found</string>
+
     <!-- Poster type badges (PosterGridAdapter.kt / SearchResultsAdapter.kt) -->
     <string name="list_type_film">Film</string>
 

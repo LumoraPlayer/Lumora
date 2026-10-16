@@ -1631,7 +1631,7 @@ internal fun MainActivity.setStatus(text: String, visible: Boolean) {
 internal fun MainActivity.applyStatus() {
     binding.statusText.text = statusText
     val slotTaken = activeSettingsOverlay != null || activeSearchOverlay != null ||
-        isPlayerVisible || isContentDetailVisible ||
+        isPlayerVisible || isContentDetailVisible || isPersonDetailVisible ||
         binding.contentRow.visibility == View.VISIBLE ||
         binding.homeContent.visibility == View.VISIBLE ||
         binding.discoverContent.visibility == View.VISIBLE

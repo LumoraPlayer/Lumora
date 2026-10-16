@@ -680,6 +680,45 @@ class MainActivity : AppCompatActivity() {
      *  the poster it was opened from rather than to the tab bar. */
     internal var detailReturnItemId: String? = null
     internal var nowShowingDetailId: String? = null
+    /** The cast member page (biography + filmography). Sits above the title detail and is
+     *  opaque, so both can be "visible" with the person page owning focus. */
+    internal var isPersonDetailVisible = false
+    /** Which person the page belongs to and where it was opened from, kept while the page is
+     *  up - including while a title opened from one of their credits sits on top of it, so
+     *  Back can rebuild the page exactly as it was. Null when no page is open. */
+    internal var openPerson: OpenPerson? = null
+    /** The title whose cast row the person page was opened from, rebuilt when Back finally
+     *  leaves the person (a credit opened from the page replaced it on screen). */
+    internal var personReturnItem: Channel? = null
+    internal var personReturnGroup: List<Channel>? = null
+    /** Cast member to put focus on once the cast row is (re)built - back out of a person page
+     *  and the D-pad should be standing on the face that was picked, not the Play button. */
+    internal var castFocusPersonId: Int? = null
+    /** Credit to put focus on when the person page re-opens (Back out of a title opened from
+     *  the filmography). Key is "movie:603" / "tv:1396", same as the tile tags. */
+    internal var personFocusCreditKey: String? = null
+    /** True while the title detail on screen was opened from a person page's filmography:
+     *  Back goes to that person page instead of the grid behind it. */
+    internal var detailFromPerson = false
+
+    /** Identity of an open person page; see [openPerson]. */
+    internal data class OpenPerson(
+        val personId: Int,
+        val name: String,
+        /** Role in [fromTitle], as the cast row stated it (may be blank). */
+        val character: String?,
+        /** The title the page was opened from, for the "as X · in Y" line. */
+        val fromTitle: String?,
+        /** Whether that title is a series - picks which half of the filmography the page
+         *  opens on (the tabs swap it afterwards). */
+        val fromIsSeries: Boolean
+    )
+
+    /** The person page's filmography, as TMDB sent it. Held so the Films/Series chips can
+     *  re-cut it without a second round trip. */
+    internal var personCredits: List<com.lumora.data.remote.tmdb.TmdbClient.PersonCredit> = emptyList()
+    /** Which half of [personCredits] the page is showing: true = series, false = films. */
+    internal var personShowTvCredits = false
     /** Category drill-down inside the player side menu (Live/Series/Films section rows). */
     internal lateinit var sideMenuCategoryAdapter: SideMenuCategoryAdapter
     internal var sideMenuCategoriesExpanded = false
@@ -1934,6 +1973,16 @@ class MainActivity : AppCompatActivity() {
         else if (isPlayerVisible && upNextActive) { dismissUpNext() }
         else if (isPlayerVisible && isPlayerSideMenuOpen()) { closeSideMenu() }
         else if (isPlayerVisible) { hidePlayer(); restoreSearchIfPending() }
+        // The person page is the topmost content screen when it is up, whether it covers the
+        // title it was opened from or a credit's detail page took that slot over.
+        else if (isPersonDetailVisible) { hidePersonDetail(); restoreSearchIfPending() }
+        // A title opened from a person page: Back closes it and re-opens the person, rather
+        // than dropping to the grid the whole chain started from.
+        else if (isContentDetailVisible && detailFromPerson) {
+            detailFromPerson = false
+            hideContentDetail(restoreMain = false)
+            showPersonPage()
+        }
         else if (isContentDetailVisible) { hideContentDetail(); restoreSearchIfPending() }
         // Back walks back up the way the user came in rather than dropping straight out of
         // the app. Inside a section (Live/Series/Films/Discover/Downloads) the first press
@@ -1954,7 +2003,7 @@ class MainActivity : AppCompatActivity() {
      *  normal episode flow) or a still-open overlay means there's nothing to restore yet. */
     internal fun restoreSearchIfPending() {
         val query = pendingSearchRestore ?: return
-        if (isPlayerVisible || isContentDetailVisible || activeSearchOverlay != null) return
+        if (isPlayerVisible || isContentDetailVisible || isPersonDetailVisible || activeSearchOverlay != null) return
         pendingSearchRestore = null
         showSearchDialog(query)
     }
@@ -2310,7 +2359,7 @@ class MainActivity : AppCompatActivity() {
             // while the player is up (a stray press mid-playback shouldn't drop the video)
             // or with a detail open (search hides contentRow, and the stale isContentDetailVisible
             // would corrupt the Back stack).
-            if (!isPlayerVisible && !isContentDetailVisible) showSearchDialog()
+            if (!isPlayerVisible && !isContentDetailVisible && !isPersonDetailVisible) showSearchDialog()
             return true
         }
         if (event.action == android.view.KeyEvent.ACTION_DOWN && isContentDetailVisible && !isPlayerVisible) {

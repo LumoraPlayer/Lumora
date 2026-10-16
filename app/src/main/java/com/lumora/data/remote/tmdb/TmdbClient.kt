@@ -270,10 +270,21 @@ class TmdbClient {
                     ?.optStringOrNull("name")
             }
             // Top-billed only: the full cast list runs to dozens of names and the detail
-            // screen gives this one line.
-            val cast = credits?.optJSONArray("cast")?.let { arr ->
-                (0 until minOf(arr.length(), CAST_LIMIT)).mapNotNull {
-                    arr.optJSONObject(it)?.optStringOrNull("name")
+            // screen shows this many faces.
+            val castMembers = credits?.optJSONArray("cast")?.let { arr ->
+                (0 until minOf(arr.length(), CAST_LIMIT)).mapNotNull { index ->
+                    val member = arr.optJSONObject(index) ?: return@mapNotNull null
+                    val name = member.optStringOrNull("name") ?: return@mapNotNull null
+                    // No person id means no person page behind the face (its filmography
+                    // is keyed by that id), so a nameless-id entry is no use here.
+                    val personId = member.optInt("id", 0)
+                    if (personId <= 0) return@mapNotNull null
+                    CastMember(
+                        personId = personId,
+                        name = name,
+                        character = member.optStringOrNull("character"),
+                        profileUrl = member.optStringOrNull("profile_path")?.let { "$PROFILE$it" }
+                    )
                 }
             }.orEmpty()
             TitleDetails(
@@ -283,13 +294,83 @@ class TmdbClient {
                 releaseDate = o.optStringOrNull("release_date") ?: o.optStringOrNull("first_air_date"),
                 genre = genres.takeIf { it.isNotEmpty() }?.joinToString(", "),
                 director = director,
-                cast = cast.takeIf { it.isNotEmpty() }?.joinToString(", "),
-                rating = o.optDouble("vote_average", 0.0).takeIf { it > 0 }?.let { "%.1f".format(it) }
+                cast = castMembers.takeIf { it.isNotEmpty() }?.joinToString(", ") { it.name },
+                rating = o.optDouble("vote_average", 0.0).takeIf { it > 0 }?.let { "%.1f".format(it) },
+                castMembers = castMembers
             )
         }
         // Boxed so a title TMDB has nothing for is still a cache hit rather than a re-request
         // on every reopen of that detail screen.
         titleCache[cacheKey] = Boxed(parsed)
+        return parsed
+    }
+
+    /**
+     * A person's biography and filmography, for the cast page behind a face on the detail
+     * screen. One request, not two: `append_to_response=combined_credits` returns the
+     * movie and TV credits in the same body as the biography - the person page is opened
+     * from a cast row, so it is a press away from anyone browsing a title's cast, and
+     * paying a second round trip per open on a TV stick shows.
+     *
+     * Cached per person for the process, same reasoning as [titleDetails]: Back from a
+     * title opened from the page re-opens it, and that re-open must be instant.
+     */
+    suspend fun personDetails(personId: Int): PersonDetails? {
+        if (personId <= 0) return null
+        val cacheKey = "$languageTag:$personId"
+        personCache[cacheKey]?.let { return it.value }
+        val parsed = withContext(Dispatchers.IO) {
+            val body = fetchBody("/person/$personId", "language=$languageTag&append_to_response=combined_credits")
+                ?: return@withContext null
+            val o = JSONObject(body)
+            // One entry per title: the same show is listed once per role it carries the
+            // person in as often as not ("Himself", a character, ...), which on screen read
+            // as duplicate tiles. First (most promoted) role wins.
+            val seen = HashSet<String>(64)
+            val credits = o.optJSONObject("combined_credits")?.optJSONArray("cast")?.let { arr ->
+                val out = ArrayList<PersonCredit>(64)
+                for (i in 0 until arr.length()) {
+                    val c = arr.optJSONObject(i) ?: continue
+                    val type = c.optStringOrNull("media_type") ?: continue
+                    if (type != "movie" && type != "tv") continue
+                    val id = c.optInt("id", 0)
+                    if (id <= 0) continue
+                    val title = c.optStringOrNull("title") ?: c.optStringOrNull("name") ?: continue
+                    if (!seen.add("$type:$id")) continue
+                    val date = c.optStringOrNull("release_date") ?: c.optStringOrNull("first_air_date")
+                    out.add(
+                        PersonCredit(
+                            tmdbId = id,
+                            mediaType = type,
+                            title = title,
+                            year = date?.take(4)?.takeIf { it.length == 4 },
+                            posterUrl = c.optStringOrNull("poster_path")?.let { "$IMG$it" },
+                            character = c.optStringOrNull("character"),
+                            rating = c.optDouble("vote_average", 0.0).takeIf { it > 0 }?.let { "%.1f".format(it) },
+                            popularity = c.optDouble("popularity", 0.0)
+                        )
+                    )
+                }
+                out
+            }.orEmpty()
+            // Newest first, undated last, popularity breaking ties - a filmography, not
+            // TMDB's arbitrary response order.
+            val ordered = credits.sortedWith(
+                compareByDescending<PersonCredit> { it.year != null }
+                    .thenByDescending { it.year.orEmpty() }
+                    .thenByDescending { it.popularity }
+            )
+            PersonDetails(
+                name = o.optStringOrNull("name").orEmpty(),
+                biography = o.optStringOrNull("biography"),
+                profileUrl = o.optStringOrNull("profile_path")?.let { "$IMG$it" },
+                birthday = o.optStringOrNull("birthday"),
+                deathday = o.optStringOrNull("deathday"),
+                placeOfBirth = o.optStringOrNull("place_of_birth"),
+                credits = ordered.take(CREDIT_LIMIT)
+            )
+        }
+        personCache[cacheKey] = BoxedPerson(parsed)
         return parsed
     }
 
@@ -394,18 +475,62 @@ class TmdbClient {
         val genre: String?,
         val director: String?,
         val cast: String?,
-        val rating: String?
+        val rating: String?,
+        /** Top-billed cast with faces, behind the detail screen's cast row. Empty when the
+         *  credits carried no usable entries - [cast] remains the name-only fallback. */
+        val castMembers: List<CastMember> = emptyList()
+    )
+
+    /** One cast entry: who, as whom, and the face to draw - and the person id the person
+     *  page (biography + filmography) is keyed by. */
+    data class CastMember(
+        val personId: Int,
+        val name: String,
+        val character: String?,
+        val profileUrl: String?
+    )
+
+    /** A person's page data: the biography block plus their filmography. */
+    data class PersonDetails(
+        val name: String,
+        val biography: String?,
+        val profileUrl: String?,
+        /** ISO "YYYY-MM-DD", as TMDB states it. */
+        val birthday: String?,
+        val deathday: String?,
+        val placeOfBirth: String?,
+        /** Newest first, deduplicated, capped - see [personDetails]. */
+        val credits: List<PersonCredit>
+    )
+
+    /** One title in a person's filmography. */
+    data class PersonCredit(
+        val tmdbId: Int,
+        /** TMDB's own type tag: "movie" or "tv". */
+        val mediaType: String,
+        val title: String,
+        val year: String?,
+        val posterUrl: String?,
+        val character: String?,
+        val rating: String?,
+        /** Only used to order undated entries - the notable work leads rather than an
+         *  arbitrary TMDB order. */
+        val popularity: Double
     )
 
     /** ConcurrentHashMap rejects null values, so a "TMDB knows nothing about this" result
      *  has to be wrapped to be cacheable at all. */
     private class Boxed(val value: TitleDetails?)
 
+    /** Same wrapping for the nullable person cache. */
+    private class BoxedPerson(val value: PersonDetails?)
+
     /** Same wrapping for the nullable IMDb-id cache. */
     private class BoxedImdb(val value: String?)
 
     private val episodeCache = java.util.concurrent.ConcurrentHashMap<String, Map<Int, TvEpisode>>()
     private val titleCache = java.util.concurrent.ConcurrentHashMap<String, Boxed>()
+    private val personCache = java.util.concurrent.ConcurrentHashMap<String, BoxedPerson>()
     private val imdbCache = java.util.concurrent.ConcurrentHashMap<String, BoxedImdb>()
 
     companion object {
@@ -440,7 +565,13 @@ class TmdbClient {
         private const val IMG = "https://image.tmdb.org/t/p/w342"
         private const val BACKDROP = "https://image.tmdb.org/t/p/w780"
         private const val STILL = "https://image.tmdb.org/t/p/w300"
-        private const val CAST_LIMIT = 8
+        /** Cast faces render at ~96dp; a w185 headshot is ample and a fraction of w342. */
+        private const val PROFILE = "https://image.tmdb.org/t/p/w185"
+        private const val CAST_LIMIT = 12
+        /** Cap on a person page's filmography tiles. Long careers run into the hundreds of
+         *  credits; building every one of them as a view on every open is the cost this
+         *  avoids, and a wall you can never reach the end of helps nobody. */
+        private const val CREDIT_LIMIT = 30
         // TMDB's own TV genre id - https://developer.themoviedb.org/reference/genre-tv-list
         private const val GENRE_NEWS = 10763
     }

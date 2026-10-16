@@ -1812,6 +1812,28 @@
                             android:textSize="@dimen/text_tiny"
                             android:visibility="gone" />
 
+                        <!-- Faces first; the text block below keeps genre/director (and, when
+                             TMDB has no cast entries at all - no key, an unresolved title -
+                             the provider's name-only cast line, same as before). -->
+                        <HorizontalScrollView
+                            android:id="@+id/detailCastScroll"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:scrollbars="none"
+                            android:visibility="gone">
+
+                            <LinearLayout
+                                android:id="@+id/detailCastRow"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:clipChildren="false"
+                                android:clipToPadding="false"
+                                android:orientation="horizontal" />
+                        </HorizontalScrollView>
+
                         <TextView
                             android:id="@+id/detailCast"
                             android:layout_width="match_parent"
@@ -2065,6 +2087,202 @@
              vertical space in the flow above. -->
         <ImageButton
             android:id="@+id/detailBackButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="top|start"
+            android:layout_margin="16dp"
+            android:background="@drawable/bg_toolbar_button"
+            android:clickable="true"
+            android:contentDescription="@string/plug_back"
+            android:elevation="8dp"
+            android:focusable="true"
+            android:padding="12dp"
+            android:stateListAnimator="@animator/focus_scale"
+            android:src="@drawable/ic_x"
+            android:tint="@color/text_primary" />
+    </FrameLayout>
+
+    <!-- ============================================================
+         PERSON DETAIL (a cast member's page: photo, biography and the
+         films/series they have been in; opened from the cast row)
+         ============================================================ -->
+    <FrameLayout
+        android:id="@+id/personDetailLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/surface"
+        android:visibility="gone">
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="vertical"
+                android:paddingHorizontal="24dp"
+                android:paddingTop="72dp"
+                android:paddingBottom="24dp">
+
+                <!-- Portrait + identity + biography, laid out like the title screen's own
+                     poster/info block so the page reads as one of the family. -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:orientation="horizontal">
+
+                    <FrameLayout
+                        android:layout_width="@dimen/person_photo_width"
+                        android:layout_height="@dimen/person_photo_height"
+                        android:background="@drawable/bg_rounded_poster"
+                        android:clipToOutline="true"
+                        android:elevation="4dp">
+
+                        <ImageView
+                            android:id="@+id/personPhotoImage"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:scaleType="centerCrop" />
+
+                        <ImageView
+                            android:id="@+id/personPhotoPlaceholder"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_gravity="center"
+                            android:importantForAccessibility="no"
+                            android:src="@drawable/ic_person" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/personName"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:fontFamily="@font/inter_semibold"
+                            android:maxLines="2"
+                            android:textColor="@color/text_primary"
+                            android:textSize="@dimen/text_title" />
+
+                        <!-- Role in the title this page was opened from, then birth info
+                             once loaded. -->
+                        <TextView
+                            android:id="@+id/personMeta"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:ellipsize="end"
+                            android:fontFamily="@font/inter_regular"
+                            android:maxLines="2"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="@dimen/text_caption" />
+
+                        <TextView
+                            android:id="@+id/personBioLabel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:fontFamily="@font/inter_semibold"
+                            android:text="@string/list_person_biography"
+                            android:textAllCaps="true"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="@dimen/text_tiny"
+                            android:visibility="gone" />
+
+                        <TextView
+                            android:id="@+id/personBio"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:ellipsize="end"
+                            android:fontFamily="@font/inter_regular"
+                            android:lineSpacingExtra="3dp"
+                            android:maxLines="12"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="@dimen/text_caption"
+                            android:visibility="gone" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="20dp"
+                    android:background="@color/divider" />
+
+                <TextView
+                    android:id="@+id/personCreditsLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:fontFamily="@font/inter_semibold"
+                    android:text="@string/list_person_known_for"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/text_tiny" />
+
+                <!-- Films / Series toggle for the row below; the chips are built in code
+                     (inflateVersionChip) so they carry the same chrome as every other chip
+                     in the app. -->
+                <LinearLayout
+                    android:id="@+id/personCreditsFilter"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:orientation="horizontal" />
+
+                <!-- The filmography: their films and series, newest first, each opening that
+                     title's own detail page. -->
+                <HorizontalScrollView
+                    android:id="@+id/personCreditsScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:scrollbars="none"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:id="@+id/personCreditsRow"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
+
+                <TextView
+                    android:id="@+id/personStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:gravity="center"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/text_body_s"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- Floats outside the ScrollView, same as the title screen's back button. -->
+        <ImageButton
+            android:id="@+id/personBackButton"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_gravity="top|start"

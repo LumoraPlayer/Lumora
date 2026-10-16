@@ -40,6 +40,7 @@ import com.lumora.util.versionGroupContaining
 import com.lumora.data.remote.stalker.StalkerProvider
 import com.lumora.data.remote.jellyfin.JellyfinProvider
 import com.lumora.data.remote.plex.PlexProvider
+import com.lumora.data.remote.tmdb.TmdbClient
 import kotlinx.coroutines.*
 import okhttp3.Request
 import java.util.Locale
@@ -669,6 +670,9 @@ internal fun MainActivity.inflateVersionChip(parent: ViewGroup, label: String): 
  *  keyed by the group's representative and a sibling isn't in it. */
 internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Channel>? = null) {
     isContentDetailVisible = true
+    // Any opening starts a fresh trail; the person-page return flag is re-armed by
+    // openPersonCredit once this call has reset the screen.
+    detailFromPerson = false
     // What Back should land on when this screen closes. Set before anything else so a
     // detail re-opened on a sibling version (the chips further down) updates it too.
     detailReturnItemId = item.id
@@ -696,6 +700,12 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     val versionsScroll = binding.detailVersionsScroll
     val versionsRow = binding.detailVersionsRow
     val downloadButton = binding.detailDownloadButton
+    val castScroll = binding.detailCastScroll
+    val castRow = binding.detailCastRow
+    // The faces currently on the row. Held here (not passed through ContentDetails) because
+    // they only ever come from TMDB - the provider details interfaces have no shape for a
+    // person id, and the row is rebuilt when the enrichment lands.
+    var castMembers: List<TmdbClient.CastMember> = emptyList()
 
     // These views are reused across opens now (no longer a fresh dialog each time) -
     // reset everything a previous item may have left behind before showing new data.
@@ -718,6 +728,8 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     selectedSeasonChip = null
     versionsScroll.visibility = View.GONE
     versionsRow.removeAllViews()
+    castScroll.visibility = View.GONE
+    castRow.removeAllViews()
     playButton.nextFocusDownId = View.NO_ID
     sectionLabel.text = ""
     itemsList.visibility = View.GONE
@@ -739,9 +751,10 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // ...and again once the frame has settled, because a screen opened from a dismissing
     // dialog can have that first request cancelled by the dialog's window teardown. Only
     // when nothing else claimed focus in the meantime, so it can't steal from the Play
-    // button (or a season chip) that legitimately took it while content was loading.
+    // button (or a season chip) that legitimately took it while content was loading - and
+    // not while the person page is up over this screen, which owns focus then.
     binding.contentDetailLayout.post {
-        if (isContentDetailVisible && binding.contentDetailLayout.findFocus() == null) {
+        if (isContentDetailVisible && !isPersonDetailVisible && binding.contentDetailLayout.findFocus() == null) {
             binding.detailBackButton.requestFocus()
         }
     }
@@ -950,14 +963,36 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             plotText.visibility = View.VISIBLE
             plotLabel.visibility = View.VISIBLE
         }
+        // Faces, when TMDB supplied them: the row *is* the cast section then, so the
+        // provider's name-only line is dropped rather than repeating every name under the
+        // photos. It stays for the cases TMDB has nothing for a title (no key, unresolved
+        // title), which is also the only fallback a provider with real cast text ever gets
+        // - it still shows there.
+        populateCastRow(castMembers, item.id) { member ->
+            openPersonPage(
+                MainActivity.OpenPerson(
+                    personId = member.personId,
+                    name = member.name,
+                    character = member.character,
+                    fromTitle = item.name,
+                    fromIsSeries = isSeries
+                ),
+                returnItem = item,
+                returnGroup = seriesGroup ?: versionGroup
+            )
+        }
         val castLine = listOfNotNull(
             details.genre?.takeIf { it.isNotBlank() }?.let { getString(R.string.list_genre, it) },
             details.director?.takeIf { it.isNotBlank() }?.let { getString(R.string.list_director, it) },
-            details.cast?.takeIf { it.isNotBlank() }?.let { getString(R.string.list_cast, it) }
+            details.cast?.takeIf { it.isNotBlank() && castMembers.isEmpty() }
+                ?.let { getString(R.string.list_cast, it) }
         ).joinToString("\n")
         if (castLine.isNotBlank()) {
             castText.text = castLine
             castText.visibility = View.VISIBLE
+            castLabel.visibility = View.VISIBLE
+        } else if (castMembers.isNotEmpty()) {
+            // Nothing textual left, but the faces need the section label above them.
             castLabel.visibility = View.VISIBLE
         }
         if (!details.backdropUrl.isNullOrBlank()) loadDetailImage(details.backdropUrl, backdrop, item.id)
@@ -971,14 +1006,16 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
      * only supplies what came back empty, and it runs after the provider's own details are
      * already on screen so nothing waits on it. Plenty of panels return a film with no
      * overview and no backdrop at all, which left the detail screen as a title and a Play
-     * button.
+     * button. The cast row is part of the same fetch's answer: faces only exist here, so a
+     * provider-complete title still runs the lookup when the row is empty.
      */
     fun enrichDetailsFromTmdb(details: XtreamClient.ContentDetails?, isSeries: Boolean, requestedItemId: String) {
         if (!tmdbClient.hasKey()) return
         val needs = details == null ||
             details.plot.isNullOrBlank() || details.backdropUrl.isNullOrBlank() ||
             details.releaseDate.isNullOrBlank() || details.genre.isNullOrBlank() ||
-            details.director.isNullOrBlank() || details.cast.isNullOrBlank()
+            details.director.isNullOrBlank() || details.cast.isNullOrBlank() ||
+            castMembers.isEmpty()
         if (!needs) return
         scope.launch {
             // Panel-supplied TMDB id first - a title search resolves an ambiguous name
@@ -990,6 +1027,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             // The user can have moved to another title while the two calls ran - applying
             // then would write one film's plot onto another's screen.
             if (nowShowingDetailId != requestedItemId) return@launch
+            if (tmdb.castMembers.isNotEmpty()) castMembers = tmdb.castMembers
             applyDetails(
                 XtreamClient.ContentDetails(
                     plot = details?.plot?.takeIf { it.isNotBlank() } ?: tmdb.overview,
@@ -1162,7 +1200,9 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         syncFindStreamButton(item, playButtonOwnsFind = mustFind)
         // Landing focus on Play once the screen opens; refocus=false on watch-toggle
         // refreshes (label/target changed) must NOT steal focus - the user is on a check.
-        if (refocus) playButton.requestFocus()
+        // Nor while the person page is up over this screen (a slow season load landing
+        // after a cast face was pressed would otherwise yank the D-pad back).
+        if (refocus && !isPersonDetailVisible) playButton.requestFocus()
         playButton.setOnClickListener {
             // User-initiated play - see playItem for why the suppression flag is cleared here.
             skipResumePrompt = false
@@ -1354,9 +1394,13 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 // repeat the same label on the same screen, so it hides for as long as that
                 // holds (and returns if a later open leaves Play playable again).
                 syncFindStreamButton(item, playButtonOwnsFind = mustFind)
-                if (playable || mustFind) playButton.requestFocus()
-                else binding.detailFindStreamButton.takeIf { it.visibility == View.VISIBLE }
-                    ?.requestFocus()
+                // Same person-page guard as wirePlayButton: a slow film-metadata load must
+                // not pull focus off the cast face the user just pressed.
+                if (!isPersonDetailVisible) {
+                    if (playable || mustFind) playButton.requestFocus()
+                    else binding.detailFindStreamButton.takeIf { it.visibility == View.VISIBLE }
+                        ?.requestFocus()
+                }
                 playButton.setOnClickListener {
                     // User-initiated play - see playItem for why the suppression flag is cleared here.
                     skipResumePrompt = false
@@ -1460,11 +1504,19 @@ private fun needsEpisodeMetadata(episode: Channel, seriesName: String): Boolean 
         episode.releaseDate.isNullOrBlank() ||
         isPlaceholderEpisodeTitle(episode, seriesName)
 
-internal fun MainActivity.hideContentDetail() {
+internal fun MainActivity.hideContentDetail(restoreMain: Boolean = true) {
     isContentDetailVisible = false
+    detailFromPerson = false
     applyStatus()
     nowShowingDetailId = null
     binding.contentDetailLayout.visibility = View.GONE
+    // [restoreMain] false when the person page is about to take over the screen (Back out
+    // of a title opened from a filmography): there is nothing to show behind it yet, and
+    // focusing the grid about to be covered is what would make the D-pad jump.
+    if (!restoreMain) {
+        detailReturnItemId = null
+        return
+    }
     binding.mainContent.visibility = View.VISIBLE
     // Back out of a series/film and you should be standing where you left: on that poster,
     // in that shelf, at that scroll position. The list underneath was only hidden, never

@@ -37,6 +37,17 @@
     <string name="list_cast">Distribution : %1$s</string>
     <string name="list_detail_load_failed">Échec du chargement des détails : %1$s</string>
 
+    <!-- Fiche d\'un membre de la distribution (biographie + filmographie, MainActivityCast.kt) -->
+    <string name="list_person_biography">Biographie</string>
+    <string name="list_person_known_for">Connu pour</string>
+    <string name="list_person_born">Né(e) le %1$s</string>
+    <string name="list_person_died">Décédé(e) le %1$s</string>
+    <string name="list_person_as">dans le rôle de %1$s</string>
+    <string name="list_person_load_failed">Impossible de charger cette personne</string>
+    <string name="list_person_no_credits">Aucun autre titre trouvé pour cette personne</string>
+    <string name="list_person_no_films">Aucun film trouvé</string>
+    <string name="list_person_no_series">Aucune série trouvée</string>
+
     <!-- Badges de type d\'affiche (PosterGridAdapter.kt / SearchResultsAdapter.kt) -->
     <string name="list_type_film">Film</string>
 
