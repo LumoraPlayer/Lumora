@@ -48,7 +48,7 @@ object DerivedCache {
     /** Bump when the line format changes or the derivation's output does (a grouping rule, a
      *  tag vocabulary, a sort) - old files then miss instead of mis-parsing or, worse, serving
      *  output the new code would not produce. */
-    private const val FORMAT_VERSION = "3"
+    private const val FORMAT_VERSION = "4"
 
     class LiveSnapshot(val channels: List<Channel>, val versions: Map<String, List<Channel>>)
 

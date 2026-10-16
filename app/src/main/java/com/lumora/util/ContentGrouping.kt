@@ -877,17 +877,78 @@ fun deriveBrandCategories(channels: List<Channel>): List<Pair<String, List<Chann
  *  to the top of the sidebar. */
 data class CategoryGroup(val label: String, val members: List<CategoryFilter>, val isCluster: Boolean = false)
 
-/** "Newest" shelf (Series/Films): simply sorts by release date descending so the
- *  most recent content appears first, regardless of category or source. */
+/** "Newest" shelf (Series/Films): sorts by release date descending so the most recent
+ *  content appears first, regardless of category or source. */
 fun newestByDate(items: List<Channel>, limit: Int = 30): List<Channel> {
-    fun dateKey(ch: Channel): String = ch.releaseDate?.takeIf { it.isNotBlank() } ?: ch.year?.let { "$it-01-01" } ?: ""
     // Decorate-sort-undecorate: sortedByDescending re-runs its selector on every
-    // comparison (O(n log n) dateKey builds); computing each key once up front keeps
-    // the same stable sort (ties stay in original order), so output is unchanged.
-    return items.map { it to dateKey(it) }
+    // comparison (O(n log n) key builds); computing each key once up front keeps the
+    // same stable sort (ties stay in original order).
+    return items.map { it to releaseDateSortKey(it.releaseDate, it.year) }
         .sortedByDescending { it.second }
         .take(limit)
         .map { it.first }
+}
+
+/** "2020-06-27" / "2020.06.27" / "2020/06/27". */
+private val ISO_DATE_REGEX = Regex("""(?<!\d)(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)""")
+/** "27-06-2020" / "27.06.2020" / "27/06/2020" - and month-first when a component cannot be a month. */
+private val DAY_FIRST_DATE_REGEX = Regex("""(?<!\d)(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?!\d)""")
+/** "20200627". */
+private val COMPACT_DATE_REGEX = Regex("""(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)""")
+/** A plausible year anywhere. \b keeps digit runs (epoch seconds and the like) from matching part of one. */
+private val ANY_YEAR_REGEX = Regex("""\b(19|20)\d{2}\b""")
+
+/**
+ * A comparable yyyymmdd key for whatever date spelling a provider sent, so ordering never
+ * depends on the string form.
+ *
+ * Panels are inconsistent: Xtream's series list carries "releasedate" as an ISO date on
+ * some, as "27-06-2020" or "27.06.2020" on others, as a bare year, or as nothing at all.
+ * Newest used to compare those strings raw, which only orders correctly for ISO - a day-first
+ * "27-06-2020" sorts above every "2026-..." because '7' > '0' at the second character, which is
+ * how a 2020 documentary sat at the top of Newest. Unreadable values fall back to the first
+ * plausible year in the string ([year] covers the provider field), then to 0 (sorted last).
+ *
+ * Day-first vs month-first only matters within one year, and is only resolved when one
+ * component cannot be a month; ambiguous dates read day-first, matching the panels that write
+ * them.
+ */
+internal fun releaseDateSortKey(releaseDate: String?, year: String? = null): Int {
+    val raw = releaseDate?.trim()?.takeIf { it.isNotBlank() }
+    if (raw != null) {
+        ISO_DATE_REGEX.find(raw)?.let { m ->
+            val y = m.groupValues[1].toIntOrNull()
+            val mo = m.groupValues[2].toIntOrNull()
+            val d = m.groupValues[3].toIntOrNull()
+            if (y != null && mo != null && d != null && y in 1900..2100 && mo in 1..12 && d in 1..31) {
+                return y * 10000 + mo * 100 + d
+            }
+        }
+        DAY_FIRST_DATE_REGEX.find(raw)?.let { m ->
+            val a = m.groupValues[1].toIntOrNull()
+            val b = m.groupValues[2].toIntOrNull()
+            val y = m.groupValues[3].toIntOrNull()
+            if (a != null && b != null && y != null && y in 1900..2100) {
+                val (d, mo) = when {
+                    a > 12 && b in 1..12 -> a to b
+                    b > 12 && a in 1..12 -> b to a
+                    else -> a to b
+                }
+                if (mo in 1..12 && d in 1..31) return y * 10000 + mo * 100 + d
+            }
+        }
+        COMPACT_DATE_REGEX.find(raw)?.let { m ->
+            val y = m.groupValues[1].toIntOrNull()
+            val mo = m.groupValues[2].toIntOrNull()
+            val d = m.groupValues[3].toIntOrNull()
+            if (y != null && mo != null && d != null && y in 1900..2100 && mo in 1..12 && d in 1..31) {
+                return y * 10000 + mo * 100 + d
+            }
+        }
+        ANY_YEAR_REGEX.find(raw)?.value?.toIntOrNull()?.let { return it * 10000 }
+    }
+    val y = year?.trim()?.take(4)?.toIntOrNull()
+    return if (y != null && y in 1900..2100) y * 10000 else 0
 }
 
 private fun cleanGroupLabel(raw: String): String =

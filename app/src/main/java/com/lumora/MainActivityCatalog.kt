@@ -12,6 +12,7 @@ import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
 import com.lumora.model.MediaType
 import com.lumora.util.newestByDate
+import com.lumora.util.releaseDateSortKey
 import com.lumora.util.isAdultCategory
 import com.lumora.util.groupDuplicateMovies
 import com.lumora.util.groupDuplicateSeries
@@ -463,10 +464,18 @@ internal fun MainActivity.deriveFilmsSeriesHalf(list: List<Channel>): MainActivi
             else ch.withResolvedYear()
         }
         // Real release date (from the provider's bulk series list) sorts more precisely
-        // than year alone; falls back to year for anything that came back without one.
+        // than year alone; falls back to year for anything that came back without one. The
+        // date is parsed rather than string-compared - panels send day-first and other
+        // spellings that a raw comparison orders wrongly (see releaseDateSortKey). Keyed
+        // once per item, not once per comparison.
         val (groupedSeries, vers) = if (groupChannels) groupDuplicateSeries(rawSeries) else rawSeries to emptyMap()
         series = groupedSeries
-            .sortedWith(compareByDescending<Channel> { it.releaseDate ?: "" }.thenByDescending { it.year?.toIntOrNull() ?: -1 })
+            .map { it to releaseDateSortKey(it.releaseDate, it.year) }
+            .sortedWith(
+                compareByDescending<Pair<Channel, Int>> { it.second }
+                    .thenByDescending { it.first.year?.toIntOrNull() ?: -1 }
+            )
+            .map { it.first }
         seriesVers = vers
         DerivedCache.saveVod(
             this,
