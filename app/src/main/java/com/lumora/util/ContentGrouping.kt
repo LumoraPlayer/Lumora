@@ -57,10 +57,14 @@ private val CURRENT_YEAR: Int by lazy { Calendar.getInstance().get(Calendar.YEAR
 // [isSourceTagToken] is the second gate that keeps real title words out.
 private val LEADING_TAG_REGEX = Regex("""^(?:[A-Z0-9+]{1,6}-)*[A-Z0-9+]{1,6}\s*-\s*""")
 
-// Longer all-letter tags that are still tags, not title words.
+// Longer all-letter tags that are still tags, not title words. MRVL is the panel
+// abbreviation some providers prefix a Marvel collection strand with; the same shape repeats
+// for other strand abbreviations, and each one an operator's data actually uses goes here -
+// the 4-to-6 letter gate in [isSourceTagToken] errs towards keeping title words, so a real
+// abbreviation has to be named or its reposts never group.
 private val KNOWN_TAG_WORDS = setOf(
     "MULTI", "DUAL", "SUB", "SUBS", "DUB", "LAT", "VOSTFR", "HEVC", "H265", "H264",
-    "UHD", "FHD", "HDR", "SDR", "VIP", "PLUS", "ORIG", "ORIGINALS", "NEW", "TOP"
+    "UHD", "FHD", "HDR", "SDR", "VIP", "PLUS", "ORIG", "ORIGINALS", "NEW", "TOP", "MRVL"
 )
 
 /** True if one hyphen-joined leading token is a source/quality tag rather than a word of

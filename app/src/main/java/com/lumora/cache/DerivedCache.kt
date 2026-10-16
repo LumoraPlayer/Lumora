@@ -45,8 +45,10 @@ object DerivedCache {
     /** Stands in for a null category id ("All" rows), which is meaningful and not the same
      *  as an empty string. */
     private const val NULL_ID = "\u0003"
-    /** Bump when the line format changes - old files then miss instead of mis-parsing. */
-    private const val FORMAT_VERSION = "2"
+    /** Bump when the line format changes or the derivation's output does (a grouping rule, a
+     *  tag vocabulary, a sort) - old files then miss instead of mis-parsing or, worse, serving
+     *  output the new code would not produce. */
+    private const val FORMAT_VERSION = "3"
 
     class LiveSnapshot(val channels: List<Channel>, val versions: Map<String, List<Channel>>)
 

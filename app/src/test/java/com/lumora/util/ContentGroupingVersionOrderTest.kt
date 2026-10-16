@@ -124,4 +124,37 @@ class ContentGroupingVersionOrderTest {
     fun `a weak badge strips only alongside a strong one`() {
         assertEquals("the web", normalizeTitleForGrouping("The Web 1080p WEB"))
     }
+
+    @Test
+    fun `a provider abbreviation tag groups its reposts`() {
+        // One panel posts the same show three times: plain, "MRVL - " and "4K-MRVL - ". The
+        // 4-letter abbreviation is a source tag (see KNOWN_TAG_WORDS), so all three share a
+        // grouping key instead of one card each.
+        val plain = normalizeTitleForGrouping("VisionQuest (2026)")
+        assertEquals(plain, normalizeTitleForGrouping("MRVL - VisionQuest (2026)"))
+        assertEquals(plain, normalizeTitleForGrouping("4K-MRVL - VisionQuest (2026)"))
+    }
+
+    @Test
+    fun `an unknown all-caps word before a dash stays part of the title`() {
+        // The guard the tag vocabulary exists for: TROY is not a known tag, so this must keep
+        // both words and never collapse onto a real "The Odyssey".
+        assertEquals("troy - the odyssey", normalizeTitleForGrouping("TROY - THE ODYSSEY"))
+    }
+
+    @Test
+    fun `the three VisionQuest reposts share one card`() {
+        val (reps, versions) = groupDuplicateSeries(
+            listOf(
+                movie("VisionQuest (2026)", "plain").copy(mediaType = MediaType.SERIES),
+                movie("MRVL - VisionQuest (2026)", "mrvl").copy(mediaType = MediaType.SERIES),
+                movie("4K-MRVL - VisionQuest (2026)", "mrvl4k").copy(mediaType = MediaType.SERIES)
+            )
+        )
+        assertEquals(1, reps.size)
+        assertEquals(
+            setOf("plain", "mrvl", "mrvl4k"),
+            versions[reps.first().id]!!.map { it.id }.toSet()
+        )
+    }
 }
