@@ -49,13 +49,17 @@
             android:fontFamily="@font/inter_bold" />
 
         <!-- Scrollable so the rail never clips the last row on shorter panels - this rail has
-             no fixed height budget of its own. -->
+             no fixed height budget of its own. Clipped to its own bounds (unlike the
+             chains below): with clipping off, rows sliding up painted over the static
+             "Settings" title above, and a focused top row's scale-up overlapped it.
+             The content's own top padding below keeps the first row's highlight
+             clear of the clipped edge. -->
         <ScrollView
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:clipChildren="false"
-            android:clipToPadding="false"
+            android:clipChildren="true"
+            android:clipToPadding="true"
             android:scrollbars="none">
 
             <LinearLayout
@@ -65,6 +69,7 @@
                 android:clipToPadding="false"
                 android:orientation="vertical"
                 android:paddingHorizontal="@dimen/settings_gap_m"
+                android:paddingTop="@dimen/settings_gap_s"
                 android:paddingBottom="@dimen/settings_gap">
 
                 <!-- Collapse row - first in the rail, directly under the "Settings" title,

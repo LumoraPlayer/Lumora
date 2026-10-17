@@ -27,9 +27,38 @@ import java.util.*
 private const val TAG = "QrPairing"
 private const val PAIRING_TIMEOUT_MS = 5 * 60 * 1000L
 private const val QR_SIZE = 512
-private const val MAX_BODY = 24 * 1024
+/** Largest POST body accepted - sized for an M3U file upload from the phone (base64
+ *  inflates ~4/3, so this fits roughly a 50 MB playlist plus the form fields). Bodies
+ *  past this are rejected outright rather than truncated (see the /submit handler):
+ *  a truncated playlist - or truncated base64 - would save as garbage. Note the
+ *  transient cost: the body sits in memory as chars plus the decoded bytes, so a
+ *  max-size upload briefly holds several times the file size in RAM. */
+private const val MAX_BODY = 72 * 1024 * 1024
+/** Largest accepted M3U upload after base64 decoding. The phone page pre-checks the
+ *  picked file against the same cap before submitting. */
+internal const val MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+/** Where playlists uploaded from the phone are kept - app-private storage, so the
+ *  provider survives reboots (unlike cache) and no other app can read it. */
+private const val UPLOAD_DIR = "m3u_uploads"
 /** How long a client may sit silent before its connection is dropped. */
 private const val READ_TIMEOUT_MS = 5_000
+
+/** File name for a playlist uploaded from the phone: strips any client path, keeps
+ *  only filename-safe characters, caps the length, and falls back to [fallback] when
+ *  nothing usable remains. Pure so it stays unit-testable. */
+internal fun sanitizeUploadFileName(rawName: String?, fallback: String = "playlist.m3u"): String {
+    var stem = rawName
+        ?.substringAfterLast('/')
+        ?.substringAfterLast('\\')
+        ?.trim()
+        ?.takeUnless { it.isBlank() }
+        ?.replace(Regex("[^A-Za-z0-9._-]+"), "_")
+        ?.take(64)
+        ?.trim('_', '.')
+        .takeUnless { it.isNullOrBlank() } ?: fallback
+    if (!stem.contains('.')) stem += ".m3u"
+    return stem
+}
 
 /**
  * HTTP server + QR code generator for phone-based IPTV provider setup.
@@ -211,7 +240,16 @@ class QrPairingManager(private val context: Context) {
                     }
                 }
                 method == "POST" && pathAndQuery.startsWith("/submit") -> {
-                    val length = headers["content-length"]?.toIntOrNull()?.coerceAtMost(MAX_BODY) ?: 0
+                    val declared = headers["content-length"]?.toIntOrNull() ?: 0
+                    if (declared > MAX_BODY) {
+                        // Reject rather than truncate (the old coerceAtMost): a cut-off
+                        // playlist - or cut-off base64 - would save as garbage and then
+                        // fail to parse on the TV with no hint why. Error pages don't
+                        // consume the token, so a smaller file can still be retried.
+                        writeHtml(c.getOutputStream(), 413, errorPage("That file is too large - 50 MB max. Paste a playlist URL instead, or pick the file in Settings on the TV itself."))
+                        return
+                    }
+                    val length = declared.coerceAtMost(MAX_BODY)
                     val body = CharArray(length)
                     var read = 0
                     while (read < length) { val n = reader.read(body, read, length - read); if (n <= 0) break; read += n }
@@ -259,6 +297,20 @@ class QrPairingManager(private val context: Context) {
                             consumeToken(token)
                             writeHtml(c.getOutputStream(), 200, plexLinkPage(result.code, result.authUrl))
                         }
+                    } else if (type == "m3u" && !form["m3uFileContent"].isNullOrBlank()) {
+                        // A playlist file picked on the phone (base64 in a hidden field -
+                        // the phone has the file, so the TV has to keep a copy: a
+                        // content:// URI from the phone would be meaningless here).
+                        // The base64 payload is deliberately NOT passed on to
+                        // onProviderReceived - the TV only needs the saved file's URL.
+                        val saved = saveUploadedPlaylist(form["m3uFileName"], form["m3uFileContent"].orEmpty())
+                        if (saved == null) {
+                            writeHtml(c.getOutputStream(), 200, errorPage("Couldn't save that file - is it a playlist under 50 MB? Try again, or paste a URL instead."))
+                        } else {
+                            onProviderReceived?.invoke("m3u", mapOf("name" to (form["name"] ?: ""), "m3uUrl" to saved))
+                            consumeToken(token)
+                            writeHtml(c.getOutputStream(), 200, successPage("Playlist uploaded! Check your TV."))
+                        }
                     } else {
                         onProviderReceived?.invoke(type, form)
                         consumeToken(token)
@@ -286,6 +338,28 @@ class QrPairingManager(private val context: Context) {
      *  keeps serving (the success page is already written); later submits fail as expired. */
     private fun consumeToken(submitted: String?) {
         if (submitted != null && submitted == activeToken) activeToken = null
+    }
+
+    /** Stores a base64 playlist posted from the phone under app-private storage and
+     *  returns its file:// URL for the provider config. Null when the payload isn't
+     *  decodable, is empty, or is over the cap. */
+    private fun saveUploadedPlaylist(rawName: String?, base64: String): String? {
+        val bytes = try {
+            android.util.Base64.decode(base64.trim(), android.util.Base64.DEFAULT)
+        } catch (_: Exception) {
+            return null
+        }
+        if (bytes.isEmpty() || bytes.size > MAX_UPLOAD_BYTES) return null
+        val dir = java.io.File(context.filesDir, UPLOAD_DIR)
+        if (!dir.isDirectory && !dir.mkdirs()) return null
+        val file = java.io.File(dir, "m3u-${System.currentTimeMillis()}-${sanitizeUploadFileName(rawName)}")
+        return try {
+            file.writeBytes(bytes)
+            file.toURI().toString()
+        } catch (_: Exception) {
+            runCatching { file.delete() }
+            null
+        }
     }
 
     private fun generateToken(): String {
@@ -376,7 +450,7 @@ class QrPairingManager(private val context: Context) {
         writeResponse(output, status, "text/html; charset=utf-8", html)
 
     private fun writeResponse(output: OutputStream, status: Int, contentType: String, body: String) {
-        val statusText = when (status) { 200 -> "OK"; 400 -> "Bad Request"; 403 -> "Forbidden"; 404 -> "Not Found"; else -> "OK" }
+        val statusText = when (status) { 200 -> "OK"; 400 -> "Bad Request"; 403 -> "Forbidden"; 404 -> "Not Found"; 413 -> "Content Too Large"; else -> "OK" }
         val bytes = body.toByteArray(StandardCharsets.UTF_8)
         val header = "HTTP/1.1 $status $statusText\r\n" +
             "Content-Type: $contentType\r\n" +
@@ -426,7 +500,7 @@ button:active{background:#1565c0}
 <input type="hidden" name="token" value="${token.escapeHtml()}">
 <label>Provider type</label>
 <select name="type" id="type" onchange="updateType()">
-  <option value="m3u" ${if (presetType == "m3u") "selected" else ""}>M3U Playlist URL</option>
+  <option value="m3u" ${if (presetType == "m3u") "selected" else ""}>M3U Playlist</option>
   <option value="xtream" ${if (presetType == "xtream") "selected" else ""}>Xtream Codes</option>
   <option value="stalker" ${if (presetType == "stalker") "selected" else ""}>Stalker Portal</option>
   <option value="jellyfin" ${if (presetType == "jellyfin") "selected" else ""}>Jellyfin</option>
@@ -440,7 +514,12 @@ button:active{background:#1565c0}
 <div id="m3uFields" class="field-group ${if (presetType == "m3u") "active" else ""}">
   <label>M3U Playlist URL</label>
   <input name="m3uUrl" placeholder="https://example.com/get.php?...">
-  <div class="hint">Paste your full M3U playlist URL here.</div>
+  <div class="hint">Paste the playlist URL, or upload a playlist file from this phone instead:</div>
+  <label>M3U file from this phone (uploads to the TV)</label>
+  <input type="file" id="m3uFile" accept=".m3u,.m3u8,.txt,audio/x-mpegurl,application/x-mpegurl,application/vnd.apple.mpegurl">
+  <input type="hidden" name="m3uFileName" id="m3uFileName">
+  <input type="hidden" name="m3uFileContent" id="m3uFileContent">
+  <div class="hint" id="m3uFileHint"></div>
 </div>
 <div id="xtreamFields" class="field-group ${if (presetType == "xtream") "active" else ""}">
   <label>Server URL</label>
@@ -536,6 +615,22 @@ document.getElementById('stalkerMac').value='00:1A:79:'+o()+':'+o()+':'+o();}
 function updateAuthMethod(){const m=document.getElementById('authMethod').value;
 document.getElementById('jellyfinPasswordFields').classList.toggle('active',m==='password');
 document.getElementById('jellyfinQuickConnectHint').classList.toggle('active',m==='quickconnect');syncEnabledFields();}
+function handleM3uSubmit(e){var f=document.getElementById('m3uFile');
+if(!f||!f.files||f.files.length===0)return true;
+e.preventDefault();
+var file=f.files[0];var hint=document.getElementById('m3uFileHint');
+if(file.size>52428800){hint.textContent='That file is over 50 MB - paste a URL instead.';return false;}
+hint.textContent='Uploading '+file.name+'...';
+var r=new FileReader();
+r.onload=function(){var data=''+r.result;var i=data.indexOf(',');
+document.getElementById('m3uFileName').value=file.name||'playlist.m3u';
+document.getElementById('m3uFileContent').value=i>=0?data.slice(i+1):data;
+var url=document.querySelector('#m3uFields input[name=m3uUrl]');
+if(url){url.disabled=true;}
+e.target.submit();};
+r.onerror=function(){hint.textContent='Could not read that file.';};
+r.readAsDataURL(file);return false;}
+document.querySelector('form').addEventListener('submit',handleM3uSubmit);
 syncEnabledFields();
 </script>
 </body></html>

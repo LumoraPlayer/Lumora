@@ -19,19 +19,28 @@
     android:stateListAnimator="@animator/focus_scale">
 
     <!-- 16:9 artwork (channel logo / program backdrop) centre-cropped into the same area
-         the poster grid uses, so the row height matches item_poster_grid exactly. -->
-    <ImageView
-        android:id="@+id/epgPoster"
+         the poster grid uses, so the row height matches item_poster_grid exactly.
+         Rounded outline-clipped frame like the poster tiles - the bitmap itself is
+         square and would otherwise paint sharp corners over the rounded card. The
+         scrim lives inside the frame so its bottom corners round with it. -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="@dimen/search_poster_image_height"
-        android:background="@color/surface"
-        android:scaleType="centerCrop" />
+        android:background="@drawable/bg_rounded_poster_large"
+        android:clipToOutline="true">
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="80dp"
-        android:layout_gravity="bottom"
-        android:background="@drawable/grad_poster_scrim" />
+        <ImageView
+            android:id="@+id/epgPoster"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="80dp"
+            android:layout_gravity="bottom"
+            android:background="@drawable/grad_poster_scrim" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/epgProgramBadge"

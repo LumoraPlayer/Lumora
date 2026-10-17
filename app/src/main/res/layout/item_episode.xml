@@ -18,7 +18,7 @@
     android:minHeight="96dp"
     android:orientation="horizontal"
     android:padding="12dp"
-    android:stateListAnimator="@animator/focus_scale">
+    android:stateListAnimator="@animator/focus_scale_row">
 
     <!-- 16:9, matching the aspect the providers' episode stills actually come in, so
          centerCrop isn't shaving the sides off every thumbnail. -->

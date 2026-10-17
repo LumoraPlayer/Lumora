@@ -1507,6 +1507,21 @@ internal fun MainActivity.showProviderSettings() {
     }
 
     fun renderIptvProviderList() {
+        // Drops a removed source's watch progress (Continue Watching + Up Next trails)
+        // so its tiles don't linger as dead entries that spin on connect - the same
+        // sweep the dead-panel health check runs (see pruneForRemovedProviders).
+        // Favorites, watched marks and downloads stay: that is explicit user state
+        // which still applies if the source is ever re-added.
+        fun pruneRemovedSource(name: String, sourceId: String, baseUrl: String?) {
+            val pruned = PlaybackPositionStore.pruneForRemovedProviders(this, setOf(sourceId), listOfNotNull(baseUrl))
+            clearUpNextMemo()
+            if (pruned > 0) {
+                com.lumora.diagnostics.SessionLog.event(
+                    "providers",
+                    "removed $name; dropped $pruned stale watch-progress entr${if (pruned == 1) "y" else "ies"}"
+                )
+            }
+        }
         iptvProviderListContainer.removeAllViews()
         val list = IptvProviderStore.load(prefs)
         val servers = mediaServers()
@@ -1581,6 +1596,7 @@ internal fun MainActivity.showProviderSettings() {
                     .setMessage(getString(R.string.sett_remove_provider_message))
                     .setPositiveButton(getString(R.string.remove)) { _, _ ->
                         IptvProviderStore.remove(prefs, cfg.id)
+                        pruneRemovedSource(cfg.name, cfg.id, cfg.url)
                         renderIptvProviderList()
                         // The removed row's own Remove button was holding focus and is
                         // gone now - see focusWhenReady.
@@ -1707,6 +1723,7 @@ internal fun MainActivity.showProviderSettings() {
                         // this install to plex.tv, and minting a new one on every remove/re-add
                         // would litter the user's Plex device list with a fresh entry each time.
                         MediaServerStore.remove(prefs, server.id)
+                        pruneRemovedSource(server.name, server.id, server.url)
                         jellyfinClients.remove(server.id)
                         plexClients.remove(server.id)
                         jellyfinResumeByServer.remove(server.id)

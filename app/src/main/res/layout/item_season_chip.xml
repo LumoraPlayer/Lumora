@@ -29,13 +29,14 @@
         android:maxLines="1"
         android:paddingHorizontal="10dp"
         android:paddingVertical="6dp"
-        android:stateListAnimator="@animator/focus_scale"
         android:textColor="@color/season_chip_text"
         android:textSize="@dimen/text_body_s" />
 
     <!-- Green-filled when every episode in the season is watched, hollow outline
          otherwise. Shared drawable/color with the episode-row check so both read as
-         the same "mark watched" control. -->
+         the same "mark watched" control. No focus-scale animator on either child:
+         both drawables already ring on focus, and any scale-up overflows the
+         horizontally-clipped chip scroller - the focused edge chip read as cut off. -->
     <TextView
         android:id="@+id/seasonCheckButton"
         android:layout_width="30dp"
@@ -46,7 +47,6 @@
         android:focusable="true"
         android:fontFamily="@font/inter_semibold"
         android:gravity="center"
-        android:stateListAnimator="@animator/focus_scale_flat"
         android:text="✓"
         android:textColor="@color/episode_check_text"
         android:textSize="@dimen/text_caption" />

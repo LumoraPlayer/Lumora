@@ -18,6 +18,20 @@ import kotlinx.coroutines.launch
 // have been in, every one a door into that title's detail screen. A provider that ships
 // only a cast string (or no TMDB key at all) keeps the old name-only line; see applyDetails.
 
+/** Focuses the first visible detail action, scrolling the page back to the very top
+ *  first. Anything arriving from below the header (faces, versions, seasons) must land
+ *  on the poster/title, not merely scroll the button into view wherever the page sits:
+ *  the ScrollView only auto-scrolls an off-screen target into view, and the Back
+ *  button sits outside it entirely, so neither ever returns the page to the top.
+ *  Scrolling before focusing is safe - the actions live at the top, so focusing them
+ *  right after never scrolls back down on any normal viewport. Plain
+ *  [firstDetailAction] stays for hops already at the top (Back DOWN). */
+internal fun MainActivity.focusFirstDetailActionFromBelow(): Boolean {
+    val target = firstDetailAction() ?: return false
+    binding.detailScroll.scrollTo(0, 0)
+    return target.requestFocus()
+}
+
 /** First visible action on the detail screen's button row - the D-pad's way back up
  *  out of the cast faces (UP) and the Back button's way back down (DOWN). */
 internal fun MainActivity.firstDetailAction(): View? = listOf(
@@ -103,7 +117,7 @@ internal fun MainActivity.populateCastRow(
         cell.setOnKeyListener { _, keyCode, event ->
             if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
             when (keyCode) {
-                android.view.KeyEvent.KEYCODE_DPAD_UP -> firstDetailAction()?.requestFocus() ?: false
+                android.view.KeyEvent.KEYCODE_DPAD_UP -> focusFirstDetailActionFromBelow()
                 android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusBelowDetailHeader()
                 else -> false
             }

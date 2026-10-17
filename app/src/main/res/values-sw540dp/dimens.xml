@@ -147,8 +147,9 @@
          Half dimensions (quarter area) like the base tier: a compact face strip. -->
     <dimen name="cast_photo_size">42dp</dimen>
     <dimen name="cast_cell_width">56dp</dimen>
-    <dimen name="cast_name_text">10sp</dimen>
-    <dimen name="cast_role_text">8sp</dimen>
+    <dimen name="cast_name_text">8sp</dimen>
+    <dimen name="cast_role_text">7sp</dimen>
+    <dimen name="detail_actions_start_margin">16dp</dimen>
     <dimen name="person_photo_width">140dp</dimen>
     <dimen name="person_photo_height">210dp</dimen>
     <dimen name="content_body_text">17sp</dimen>

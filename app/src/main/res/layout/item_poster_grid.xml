@@ -11,51 +11,60 @@
     android:padding="8dp"
     android:stateListAnimator="@animator/focus_scale">
 
-    <ImageView
-        android:id="@+id/itemPoster"
+    <!-- Rounded image frame: the bitmap itself is square, so without the rounded
+         outline clip the photo paints sharp corners over the rounded card. The
+         badge, scrim and title live inside the frame so they round with it. -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="@dimen/poster_image_height"
-        android:background="@color/surface"
-        android:scaleType="centerCrop" />
+        android:background="@drawable/bg_rounded_poster_large"
+        android:clipToOutline="true">
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="80dp"
-        android:layout_gravity="bottom"
-        android:background="@drawable/grad_poster_scrim" />
+        <ImageView
+            android:id="@+id/itemPoster"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop" />
 
-    <TextView
-        android:id="@+id/itemTypeBadge"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|start"
-        android:layout_margin="6dp"
-        android:background="@drawable/pill_live"
-        android:fontFamily="@font/inter_semibold"
-        android:paddingHorizontal="6dp"
-        android:paddingVertical="2dp"
-        android:textAllCaps="true"
-        android:textColor="@android:color/white"
-        android:textSize="@dimen/poster_badge_text"
-        android:visibility="gone" />
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="80dp"
+            android:layout_gravity="bottom"
+            android:background="@drawable/grad_poster_scrim" />
 
-    <com.lumora.ui.OutlineTextView
-        android:id="@+id/itemTitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:padding="8dp"
-        android:autoSizeMaxTextSize="@dimen/poster_title_text"
-        android:autoSizeMinTextSize="@dimen/poster_title_text_min"
-        android:autoSizeStepGranularity="1sp"
-        android:autoSizeTextType="uniform"
-        android:breakStrategy="simple"
-        android:ellipsize="end"
-        android:fontFamily="@font/inter_medium"
-        android:lineSpacingExtra="1dp"
-        android:maxLines="4"
-        android:textColor="@color/text_primary"
-        android:textSize="@dimen/poster_title_text"
-        app:outlineColor="@color/poster_title_outline"
-        app:outlineWidth="@dimen/poster_title_outline_width" />
+        <TextView
+            android:id="@+id/itemTypeBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_margin="6dp"
+            android:background="@drawable/pill_live"
+            android:fontFamily="@font/inter_semibold"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:textAllCaps="true"
+            android:textColor="@android:color/white"
+            android:textSize="@dimen/poster_badge_text"
+            android:visibility="gone" />
+
+        <com.lumora.ui.OutlineTextView
+            android:id="@+id/itemTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:padding="8dp"
+            android:autoSizeMaxTextSize="@dimen/poster_title_text"
+            android:autoSizeMinTextSize="@dimen/poster_title_text_min"
+            android:autoSizeStepGranularity="1sp"
+            android:autoSizeTextType="uniform"
+            android:breakStrategy="simple"
+            android:ellipsize="end"
+            android:fontFamily="@font/inter_medium"
+            android:lineSpacingExtra="1dp"
+            android:maxLines="4"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/poster_title_text"
+            app:outlineColor="@color/poster_title_outline"
+            app:outlineWidth="@dimen/poster_title_outline_width" />
+    </FrameLayout>
 </FrameLayout>

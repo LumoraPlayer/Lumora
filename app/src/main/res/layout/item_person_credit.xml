@@ -22,7 +22,8 @@
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="@dimen/shelf_poster_image_height"
-        android:background="@color/surface">
+        android:background="@drawable/bg_rounded_poster_large"
+        android:clipToOutline="true">
 
         <ImageView
             android:id="@+id/creditPoster"

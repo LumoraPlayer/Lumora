@@ -131,6 +131,10 @@
     <dimen name="cast_cell_width">48dp</dimen>
     <dimen name="cast_name_text">8sp</dimen>
     <dimen name="cast_role_text">7sp</dimen>
+    <!-- Detail screen action row (Play / Find & Play / trailer): shifted right of the
+         title column's edge on large screens, where TV overscan was slicing the left
+         edge of Play. 0 on phones, where the row already spans the full width. -->
+    <dimen name="detail_actions_start_margin">0dp</dimen>
     <dimen name="person_photo_width">120dp</dimen>
     <dimen name="person_photo_height">180dp</dimen>
     <!-- General on-screen body copy outside the settings scale (empty states, Up Next). -->

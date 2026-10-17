@@ -10,6 +10,7 @@ import android.widget.*
 import com.lumora.cache.FavoritesStore
 import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.RecentlyPlayedStore
+import com.lumora.data.IptvProviderStore
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
 import com.lumora.model.MediaType
@@ -1091,13 +1092,19 @@ internal fun MainActivity.buildUpNextSeriesTiles(): List<Channel> {
         .mapNotNullTo(HashSet()) { it.categoryId?.takeIf { id -> id.isNotBlank() } }
     val trails = PlaybackPositionStore.getCompletedSeriesTrails(this)
         .filterNot { it.categoryId in serverCovered }
-    val pending = trails
+    // Trails of switched-off sources resolve nothing (their series left the catalog
+    // with them) and their stale memo tiles must not render - see disabledSourceIds.
+    // The fetch below is skipped for them too, so a rebuild fires no dead lookups.
+    val off = disabledSourceIds()
+    val liveTrails = if (off.isEmpty()) trails
+        else trails.filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
+    val pending = liveTrails
         .mapNotNull { it.categoryId?.takeIf { id -> id !in upNextTiles && id !in upNextFetching } }
         .take(MAX_UP_NEXT_SERIES)
     if (pending.isNotEmpty()) fetchUpNextSeries(pending)
     // Trail order = most recently completed first; present the memoized tiles in that
     // order (LinkedHashMap insertion order is fetch-completion order, which is arbitrary).
-    return trails.mapNotNull { t -> upNextTiles[t.categoryId] }
+    return liveTrails.mapNotNull { t -> upNextTiles[t.categoryId] }
 }
 
 /** Fetches the episode lists for up to [MAX_UP_NEXT_SERIES] series (one network call each,
@@ -1297,8 +1304,12 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     if (continueItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_continue_watching), continueItems))
 
     // "Next Up" is the row that makes a series library usable - the next unwatched episode
-    // of everything in flight, straight from the server's own tracking.
+    // of everything in flight, straight from the server's own tracking. Switched-off
+    // servers hide (see disabledSourceIds); their lists are only re-pulled on catalog
+    // loads, so the filter has to run here at render time, not where they are stored.
+    val off = disabledSourceIds()
     val nextUpItems = (jellyfinNextUpItems + plexNextUpItems)
+        .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
         .distinctBy { it.id.ifBlank { it.url } }
         .filterNot(::isAdultHomeItem)
     if (nextUpItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_next_up), nextUpItems))
@@ -1338,6 +1349,25 @@ internal fun MainActivity.seriesContinueItems(): List<Channel> {
         (server + local.filterNot { it.id in serverIds }).filterNot(::isAdultHomeItem)
     )
 }
+
+/** Ids of IPTV providers and media-server accounts the user switched off. Tiles
+ *  owned by one hide from Continue Watching / Up Next (they are not deleted - see
+ *  continueWatchingTiles and buildUpNextSeriesTiles). Empty in the common case, so
+ *  callers can skip filtering entirely. */
+internal fun MainActivity.disabledSourceIds(): Set<String> {
+    val iptv = IptvProviderStore.load(prefs).filterNot { it.enabled }.map { it.id }
+    val servers = mediaServers().filterNot { it.enabled }.map { it.id }
+    return (iptv + servers).toSet()
+}
+
+/** Trailing season split some panels bake into the series name ("Show Season 1",
+ *  "Show S01" as its own catalogue entry). Stripped for Continue Watching dedup only:
+ *  two snapshots of one episode that resolve to different season-split entries would
+ *  otherwise tile twice under disjoint keys. Display names and watched-mark keys are
+ *  untouched - this only merges the row, and only when everything else already agrees
+ *  (same normalized root, same season, same episode). Pure so it stays testable. */
+internal fun stripSeasonSplitForDedup(name: String): String =
+    name.replace(Regex("""(?i)\s+(?:season\s*\d{1,2}|\bS\d{1,2})\s*$"""), "").trim().ifBlank { name }
 
 /**
  * Re-labels episode tiles with the show they belong to, and gives them the show's artwork:
@@ -1379,7 +1409,14 @@ internal fun tileSeasonNumber(episode: Channel): Int? =
         ?: ANY_SEASON_MARKER_REGEX.find(episode.name)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
 internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Channel> {
-    val wanted = items.mapNotNullTo(HashSet()) { item ->
+    // A switched-off source hides its tiles (it does not delete them - re-enabling
+    // brings them back, progress intact). Matched on sourceProviderId only: snapshots
+    // without provenance can't be attributed, and guessing by host risks hiding
+    // another source's tile. See disabledSourceIds.
+    val off = disabledSourceIds()
+    val live = if (off.isEmpty()) items
+        else items.filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
+    val wanted = live.mapNotNullTo(HashSet()) { item ->
         item.categoryId?.takeIf { it.isNotBlank() && item.episodeNum != null }
     }
     // One pass over the catalogue for the whole row. resolveHomeTileSeries scans allChannels
@@ -1416,7 +1453,7 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
         seenEpisodes.addAll(keys)
         return true
     }
-    return items.mapNotNull { item ->
+    return live.mapNotNull { item ->
         val episode = item.episodeNum ?: return@mapNotNull item
         val seriesId = item.categoryId?.takeIf { it.isNotBlank() }
         val series = seriesId?.let { id ->
@@ -1434,7 +1471,10 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
         val season = tileSeasonNumber(item)
         // Null-season and season-1 spellings name the same episode (see episodeWatchedKeys) -
         // once either spelling has claimed an episode, a copy using the other is dropped too.
-        val episodeKeys = episodeWatchedKeys(seriesName, season, episode)
+        // The season-split spelling joins them: a panel listing "Show" and "Show S01" as
+        // separate entries would otherwise tile one episode twice under disjoint keys.
+        val episodeKeys = episodeWatchedKeys(seriesName, season, episode) +
+            episodeWatchedKeys(stripSeasonSplitForDedup(seriesName), season, episode)
         if (episodeKeys.any { it in seenEpisodes }) return@mapNotNull null
         seenEpisodes.addAll(episodeKeys)
         val marker = season

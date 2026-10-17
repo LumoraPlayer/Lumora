@@ -1699,6 +1699,7 @@
         android:visibility="gone">
 
         <ScrollView
+            android:id="@+id/detailScroll"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipChildren="false"
@@ -1771,15 +1772,47 @@
                             android:clipToPadding="false"
                             android:orientation="vertical">
 
-                            <TextView
-                                android:id="@+id/detailTitle"
+                            <!-- Title with its favourite star beside it: the star used to
+                                 sit in the action row below, costing the one line Play,
+                                 Find and Trailer now share. -->
+                            <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:ellipsize="end"
-                                android:fontFamily="@font/inter_semibold"
-                                android:maxLines="2"
-                                android:textColor="@color/text_primary"
-                                android:textSize="@dimen/text_title_s" />
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:id="@+id/detailTitle"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:ellipsize="end"
+                                    android:fontFamily="@font/inter_semibold"
+                                    android:maxLines="2"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="@dimen/text_title_s" />
+
+                                <LinearLayout
+                                    android:id="@+id/detailFavoriteButton"
+                                    android:layout_width="40dp"
+                                    android:layout_height="40dp"
+                                    android:layout_marginStart="8dp"
+                                    android:background="@drawable/bg_toolbar_button"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:gravity="center"
+                                    android:stateListAnimator="@animator/focus_scale"
+                                    android:visibility="gone">
+
+                                    <TextView
+                                        android:id="@+id/detailFavoriteIcon"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:text="☆"
+                                        android:textColor="@color/text_primary"
+                                        android:textSize="@dimen/text_title" />
+                                </LinearLayout>
+                            </LinearLayout>
 
                             <TextView
                                 android:id="@+id/detailMeta"
@@ -1878,33 +1911,39 @@
                                 android:clipToPadding="false"
                                 android:orientation="vertical">
 
-                            <!-- Play / favourite / Find & Play / trailer sit in the title
+                            <!-- Play / Find & Play / trailer sit in the title
                                  column's empty space instead of a full-width row of their
                                  own: versions, seasons and episodes below the header all
-                                 move up by its height. -->
+                                 move up by its height. The start margin clears TV
+                                 overscan, which was slicing the left edge of Play (see
+                                 detail_actions_start_margin: 0 on phones). -->
                             <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
+                                android:layout_marginStart="@dimen/detail_actions_start_margin"
                                 android:clipChildren="false"
                                 android:clipToPadding="false"
                                 android:orientation="horizontal">
 
+                                <!-- Compact actions: Play, Find and Trailer share this one
+                                     line, so each stays small (40dp, caption labels). -->
+
                                 <LinearLayout
                                     android:id="@+id/detailPlayButton"
                                     android:layout_width="wrap_content"
-                                    android:layout_height="48dp"
+                                    android:layout_height="40dp"
                                     android:background="@drawable/bg_play_button"
                                     android:clickable="true"
                                     android:focusable="true"
                                     android:gravity="center"
                                     android:orientation="horizontal"
-                                    android:paddingHorizontal="28dp"
+                                    android:paddingHorizontal="20dp"
                                     android:stateListAnimator="@animator/focus_scale"
                                     android:visibility="gone">
 
                                     <ImageView
-                                        android:layout_width="18dp"
-                                        android:layout_height="18dp"
+                                        android:layout_width="14dp"
+                                        android:layout_height="14dp"
                                         android:src="@drawable/ic_play"
                                         android:tint="@android:color/white" />
 
@@ -1912,39 +1951,18 @@
                                         android:id="@+id/detailPlayButtonLabel"
                                         android:layout_width="wrap_content"
                                         android:layout_height="wrap_content"
-                                        android:layout_marginStart="8dp"
+                                        android:layout_marginStart="6dp"
                                         android:fontFamily="@font/inter_semibold"
                                         android:text="@string/play"
                                         android:textAllCaps="true"
                                         android:textColor="@android:color/white"
-                                        android:textSize="@dimen/text_body" />
-                                </LinearLayout>
-
-                                <LinearLayout
-                                    android:id="@+id/detailFavoriteButton"
-                                    android:layout_width="48dp"
-                                    android:layout_height="48dp"
-                                    android:layout_marginStart="10dp"
-                                    android:background="@drawable/bg_toolbar_button"
-                                    android:clickable="true"
-                                    android:focusable="true"
-                                    android:gravity="center"
-                                    android:stateListAnimator="@animator/focus_scale"
-                                    android:visibility="gone">
-
-                                    <TextView
-                                        android:id="@+id/detailFavoriteIcon"
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:text="☆"
-                                        android:textColor="@color/text_primary"
-                                        android:textSize="@dimen/text_title" />
+                                        android:textSize="@dimen/text_body_s" />
                                 </LinearLayout>
 
                                 <LinearLayout
                                     android:id="@+id/detailDownloadButton"
-                                    android:layout_width="48dp"
-                                    android:layout_height="48dp"
+                                    android:layout_width="40dp"
+                                    android:layout_height="40dp"
                                     android:layout_marginStart="10dp"
                                     android:background="@drawable/bg_toolbar_button"
                                     android:clickable="true"
@@ -1970,14 +1988,14 @@
                                 <LinearLayout
                                     android:id="@+id/detailFindStreamButton"
                                     android:layout_width="wrap_content"
-                                    android:layout_height="48dp"
+                                    android:layout_height="40dp"
                                     android:layout_marginStart="10dp"
                                     android:background="@drawable/bg_toolbar_button"
                                     android:clickable="true"
                                     android:focusable="true"
                                     android:gravity="center"
                                     android:orientation="horizontal"
-                                    android:paddingHorizontal="18dp"
+                                    android:paddingHorizontal="14dp"
                                     android:stateListAnimator="@animator/focus_scale"
                                     android:visibility="gone">
 
@@ -1988,7 +2006,7 @@
                                         android:text="@string/find_stream"
                                         android:textAllCaps="true"
                                         android:textColor="@color/text_primary"
-                                        android:textSize="@dimen/text_body" />
+                                        android:textSize="@dimen/text_body_s" />
                                 </LinearLayout>
 
                                 <!-- Shown only when TMDB has a trailer for this title (see
@@ -1996,14 +2014,14 @@
                                 <LinearLayout
                                     android:id="@+id/detailTrailerButton"
                                     android:layout_width="wrap_content"
-                                    android:layout_height="48dp"
+                                    android:layout_height="40dp"
                                     android:layout_marginStart="10dp"
                                     android:background="@drawable/bg_toolbar_button"
                                     android:clickable="true"
                                     android:focusable="true"
                                     android:gravity="center"
                                     android:orientation="horizontal"
-                                    android:paddingHorizontal="18dp"
+                                    android:paddingHorizontal="14dp"
                                     android:stateListAnimator="@animator/focus_scale"
                                     android:visibility="gone">
 
@@ -2014,7 +2032,7 @@
                                         android:text="@string/trailer"
                                         android:textAllCaps="true"
                                         android:textColor="@color/text_primary"
-                                        android:textSize="@dimen/text_body" />
+                                        android:textSize="@dimen/text_body_s" />
                                 </LinearLayout>
                             </LinearLayout>
                             </LinearLayout>
@@ -2196,7 +2214,10 @@
                                  the old 300dp TV end-inset (for a list that had a sidebar
                                  beside it) squeezed both out of it. Bounded height keeps this
                                  nested list scrollable and recycled instead of measuring every
-                                 episode in a long season at once. -->
+                                 episode in a long season at once. The horizontal padding
+                                 (with clipToPadding off) is the focused row's breathing
+                                 room: rows pop 1.03x (focus_scale_row) and would otherwise
+                                 overhang the screen edges and read as cut off. -->
                             <com.lumora.view.BoundedHeightRecyclerView
                                 android:id="@+id/detailItemsList"
                                 android:layout_width="match_parent"
@@ -2207,6 +2228,7 @@
                                 android:clipToPadding="false"
                                 android:nestedScrollingEnabled="true"
                                 android:overScrollMode="never"
+                                android:paddingHorizontal="6dp"
                                 android:visibility="gone" />
                         </LinearLayout>
                     </LinearLayout>
