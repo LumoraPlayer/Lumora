@@ -440,6 +440,11 @@ class PlayerManager(
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            // Every new stream starts in video Auto: a manual rendition override targets the
+            // previous manifest's TrackGroup exactly, so keeping it would pin (or break)
+            // the next title instead of following bandwidth. The quality picker re-applies
+            // a choice per playback when the user wants one.
+            .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
             .apply {
                 if (preferAudioLanguage) {
                     val wanted = preferredAudioLanguage()

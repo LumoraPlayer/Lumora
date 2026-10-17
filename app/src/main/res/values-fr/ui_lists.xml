@@ -61,8 +61,11 @@
 
     <!-- Sélecteur de piste (MainActivityLists.kt) -->
     <string name="list_audio_track">Piste audio</string>
+    <string name="list_video_quality">Qualité vidéo</string>
+    <string name="list_auto">Auto</string>
     <string name="list_off">Désactivé</string>
     <string name="list_no_alt_audio">Aucune piste audio alternative</string>
+    <string name="list_no_alt_video">Aucune autre qualité vidéo</string>
     <string name="list_no_subtitles">Aucun sous-titre disponible</string>
 
     <!-- Ligne/grille Reprendre la lecture (MainActivityDiscover.kt / MainActivityCategories.kt) -->

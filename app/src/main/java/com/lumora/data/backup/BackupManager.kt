@@ -382,7 +382,10 @@ class BackupManager(private val context: Context) {
         val userAgent: String?,
         // Which discovery plugin proposed this entry, when one did. Defaulted, so backups
         // written before the field existed import as absent rather than failing.
-        val discoveredBy: String? = null
+        val discoveredBy: String? = null,
+        // Backup sources hide from browsing but keep their failover streams. Defaulted for
+        // the same forward-compatibility: old backups restore as fully visible providers.
+        val backup: Boolean = false
     )
 
     /** One MediaServerConfig (Jellyfin/Silo/Plex session), round-tripped through the JSON backup. */
@@ -781,7 +784,8 @@ class BackupManager(private val context: Context) {
         id = id, type = type, name = name, enabled = enabled,
         liveEnabled = liveEnabled, moviesEnabled = moviesEnabled,
         seriesEnabled = seriesEnabled, url = url, username = username,
-        password = password, userAgent = userAgent, discoveredBy = discoveredBy
+        password = password, userAgent = userAgent, discoveredBy = discoveredBy,
+        backup = backup
     )
 
     private fun MediaServerConfig.toBackup() = MediaServerBackup(
@@ -796,7 +800,8 @@ class BackupManager(private val context: Context) {
         id = id, type = type, name = name, enabled = enabled,
         liveEnabled = liveEnabled, moviesEnabled = moviesEnabled,
         seriesEnabled = seriesEnabled, url = url, username = username,
-        password = password, userAgent = userAgent, discoveredBy = discoveredBy
+        password = password, userAgent = userAgent, discoveredBy = discoveredBy,
+        backup = backup
     )
 
     private fun MediaServerBackup.toConfig() = MediaServerConfig(

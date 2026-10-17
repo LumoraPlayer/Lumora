@@ -136,14 +136,14 @@ object M3uParser {
             if (line.isEmpty()) continue
 
             when {
-                line.startsWith("#EXTM3U") -> {
+                line.startsWith("#EXTM3U", ignoreCase = true) -> {
                     header = if (line.length > 7) line.substring(7).trim() else null
                 }
-                line.startsWith("#EXTINF:") -> {
+                line.startsWith("#EXTINF:", ignoreCase = true) -> {
                     currentExtInf = line.substring(8).trim()
                 }
-                line.startsWith("#KODIPROP:") -> {
-                    val body = line.removePrefix("#KODIPROP:").trim()
+                line.startsWith("#KODIPROP:", ignoreCase = true) -> {
+                    val body = line.substring(line.indexOf(':') + 1).trim()
                     val eq = body.indexOf('=')
                     // Value keeps any further `=` (header values contain `=`).
                     if (eq > 0) {
@@ -152,8 +152,8 @@ object M3uParser {
                         if (key.isNotEmpty()) pendingKodi[key] = value
                     }
                 }
-                line.startsWith("#EXTVLCOPT:") -> {
-                    pendingVlcOpts.add(line.removePrefix("#EXTVLCOPT:").trim())
+                line.startsWith("#EXTVLCOPT:", ignoreCase = true) -> {
+                    pendingVlcOpts.add(line.substring(line.indexOf(':') + 1).trim())
                 }
                 line.startsWith("#") -> { /* skip other tags */ }
                 else -> {
@@ -247,7 +247,7 @@ object M3uParser {
             val eq = opt.indexOf('=')
             if (eq <= 0) continue
             val k = opt.substring(0, eq).trim().lowercase()
-            val v = opt.substring(eq + 1).trim()
+            val v = KodiProps.unquote(opt.substring(eq + 1).trim())
             if (v.isEmpty()) continue
             when (k) {
                 "http-user-agent" -> streamHeaders["User-Agent"] = v
@@ -258,15 +258,24 @@ object M3uParser {
         // KODIPROP stream_headers ride on every request. manifest_headers are kept apart
         // (phase 2): when present, Kodi sends them on the manifest request only and
         // restricts stream_headers to segments/keys - PlayerManager splits per request.
-        kodiProps["inputstream.adaptive.stream_headers"]?.let { streamHeaders.putAll(KodiProps.parseKodiHeaders(it)) }
+        // Key lookup is case-insensitive: providers vary the casing of
+        // `inputstream.adaptive.*` and an exact-match miss used to drop DRM/headers.
+        KodiProps.lookup(kodiProps, "inputstream.adaptive.stream_headers")
+            ?.let { streamHeaders.putAll(KodiProps.parseKodiHeaders(it)) }
         val manifestHeaders: Map<String, String>? =
-            kodiProps["inputstream.adaptive.manifest_headers"]
+            KodiProps.lookup(kodiProps, "inputstream.adaptive.manifest_headers")
                 ?.let { KodiProps.parseKodiHeaders(it) }
                 ?.takeIf { it.isNotEmpty() }
+        // Direct per-entry `#KODIPROP:http-user-agent` / `User-Agent` (and referrer/origin
+        // companions): fallback when neither EXTVLCOPT nor stream_headers provided one.
+        // stream_headers wins when both are present.
+        for ((name, value) in KodiProps.extractDirectHeaders(kodiProps)) {
+            streamHeaders.putIfAbsent(name, value)
+        }
         streamHeaders.putAll(urlSuffixHeaders)
 
         // DRM: license_type + license_key (+ license_data / manifest_type companions).
-        val licenseTypeRaw = kodiProps["inputstream.adaptive.license_type"]?.trim()?.lowercase()
+        val licenseTypeRaw = KodiProps.lookup(kodiProps, "inputstream.adaptive.license_type")?.trim()?.lowercase()
         var drmType: String? = null
         var drmKeys: List<com.lumora.model.DrmKey>? = null
         var drmLicenseUrl: String? = null
@@ -277,7 +286,7 @@ object M3uParser {
             drmType = licenseTypeRaw
             if (KodiProps.isClearKeyLicenseType(licenseTypeRaw)) {
                 drmType = "clearkey"
-                kodiProps["inputstream.adaptive.license_key"]?.let { rawKey ->
+                KodiProps.lookup(kodiProps, "inputstream.adaptive.license_key")?.let { rawKey ->
                     when (val parsed = KodiProps.parseClearKeyLicense(rawKey)) {
                         is KodiProps.LicenseKeyParse.StaticKeys ->
                             drmKeys = parsed.keys.takeIf { it.isNotEmpty() }
@@ -295,7 +304,7 @@ object M3uParser {
             } else {
                 // Widevine/PlayReady: detect and keep (report rather than silently fail);
                 // a hosted license URL still goes to drmLicenseUrl for phase 2.
-                kodiProps["inputstream.adaptive.license_key"]?.trim()?.takeIf { it.isNotEmpty() }?.let { rawKey ->
+                KodiProps.lookup(kodiProps, "inputstream.adaptive.license_key")?.trim()?.takeIf { it.isNotEmpty() }?.let { rawKey ->
                     if (rawKey.startsWith("http://", ignoreCase = true) ||
                         rawKey.startsWith("https://", ignoreCase = true)
                     ) {
@@ -304,8 +313,8 @@ object M3uParser {
                 }
             }
         }
-        val drmSchemeData = kodiProps["inputstream.adaptive.license_data"]?.trim()?.takeIf { it.isNotEmpty() }
-        val manifestType = KodiProps.normalizeManifestType(kodiProps["inputstream.adaptive.manifest_type"])
+        val drmSchemeData = KodiProps.lookup(kodiProps, "inputstream.adaptive.license_data")?.trim()?.takeIf { it.isNotEmpty() }
+        val manifestType = KodiProps.normalizeManifestType(KodiProps.lookup(kodiProps, "inputstream.adaptive.manifest_type"))
 
         return Channel(
             // The stream url, because an M3U has no id of its own and Channel.id defaults to

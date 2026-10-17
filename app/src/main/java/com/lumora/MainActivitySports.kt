@@ -50,9 +50,9 @@ import java.util.Locale
 //    Channel matching is entirely guide-driven: a programme listing both teams in its title is
 //    the evidence that a channel is showing that fixture.
 //
-// The board is a two-column grid: every fixture - live, upcoming or finished - and every guide
-// listing is a half-width card, two to a line (item_sports_live_card.xml); only section labels
-// and notices span the board. See setupSportsTab.
+// The board is a grid: every fixture - live, upcoming or finished - and every guide
+// listing is a small card, up to four to a line (item_sports_live_card.xml); only section
+// labels and notices span the board. See setupSportsTab.
 
 /** Above this many guide rows the board stops looking: a day's fixtures are matched from a
  *  window, and a store carrying six figures of programmes should not be walked in full to
@@ -67,19 +67,20 @@ private const val TAG_MATCH = "SportsMatch"
 internal fun MainActivity.setupSportsTab() {
     val columns = sportsGridColumns()
     val grid = GridLayoutManager(this, columns)
-    // Every card - a fixture, live, upcoming or finished, and a guide listing - is half-width,
-    // two to a line; only a section label and a notice span the board. That is the whole of the
-    // grid: two columns, and anything full-width occupies both.
+    // Every card - a fixture, live, upcoming or finished, and a guide listing - is one
+    // span wide (four to a line at full width); only a section label and a notice span
+    // the board.
     grid.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
         override fun getSpanSize(position: Int): Int =
-            if (sportsAdapter.isHalfWidth(position)) 1 else columns
+            if (sportsAdapter.isCard(position)) 1 else columns
     }
+    sportsAdapter.columns = columns
     binding.sportsContent.layoutManager = grid
-    // The gutter between the two cards of a line, and only between them: with none the pair
-    // reads as one bar with a seam in it, and a margin on every card would pull the outer edges
-    // out of line with the full-width rows above and below.
+    // The gutter between cards sharing a line, and only between them: with none the row
+    // reads as one bar with seams in it, and a margin on every card would pull the outer
+    // edges out of line with the full-width rows above and below.
     binding.sportsContent.addItemDecoration(
-        LiveCardGutter(sportsAdapter, resources.getDimensionPixelSize(R.dimen.sports_live_grid_gap))
+        LiveCardGutter(sportsAdapter, resources.getDimensionPixelSize(R.dimen.sports_live_grid_gap), columns)
     )
     binding.sportsContent.adapter = sportsAdapter
     // The board is rebuilt wholesale whenever it is refreshed; the default item animator's
@@ -88,8 +89,8 @@ internal fun MainActivity.setupSportsTab() {
 }
 
 /**
- * How many live cards sit on one line of the board: two wherever a half-width card clears
- * [R.dimen.sports_live_card_min_width], one anywhere narrower (a phone), where the board falls
+ * How many cards sit on one line of the board: up to four wherever a card clears
+ * [R.dimen.sports_live_card_min_width], fewer anywhere narrower (a phone), where the board falls
  * back to the full-width rows it always had rather than ellipsising the sides a card is about.
  *
  * Read once, from the width the list is going to get - it is not laid out yet at setup, so a
@@ -100,7 +101,7 @@ private fun MainActivity.sportsGridColumns(): Int {
     val widthPx = binding.sportsContent.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
     val widthDp = widthPx / resources.displayMetrics.density
     val minCardDp = resources.getDimension(R.dimen.sports_live_card_min_width) / resources.displayMetrics.density
-    return (widthDp / minCardDp).toInt().coerceIn(1, 2)
+    return (widthDp / minCardDp).toInt().coerceIn(1, 4)
 }
 
 /** The board's column count, as its layout manager knows it. The renderer reads it back from
@@ -110,15 +111,16 @@ private fun MainActivity.sportsColumns(): Int =
     (binding.sportsContent.layoutManager as? GridLayoutManager)?.spanCount ?: 1
 
 /**
- * The gutter between the two live cards on one line of the board's grid.
+ * The gutter between the cards sharing one line of the board's grid.
  *
- * Only half-width rows get it, and only on the edge the two share: the left card keeps the
- * board's left edge and the right card its right edge, so a pair still lines up with the
- * full-width rows above and below it.
+ * Only cards get it, and only on the edges they share: the line's outer cards keep the
+ * board's left and right edges, so a row of cards still lines up with the full-width
+ * rows above and below it.
  */
 private class LiveCardGutter(
     private val adapter: SportsAdapter,
-    private val gapPx: Int
+    private val gapPx: Int,
+    private val columns: Int
 ) : RecyclerView.ItemDecoration() {
 
     override fun getItemOffsets(
@@ -128,16 +130,15 @@ private class LiveCardGutter(
         state: RecyclerView.State
     ) {
         val position = parent.getChildAdapterPosition(view)
-        if (!adapter.isHalfWidth(position)) return
+        if (!adapter.isCard(position)) return
         val params = view.layoutParams as? GridLayoutManager.LayoutParams ?: return
-        if (params.spanIndex == 0) {
-            // Only when a partner actually shares the line (the section builders keep pairs
-            // whole, so this is belt-and-braces): the outer edges of a lone card have to stay
-            // flush with the full-width rows above and below it.
-            if (adapter.isHalfWidth(position + 1)) outRect.right = gapPx / 2
-        } else {
-            outRect.left = gapPx / 2
-        }
+        val span = params.spanIndex
+        if (span > 0) outRect.left = gapPx / 2
+        // Right edge only when a partner card actually shares the line (a 1-span card
+        // always fits the remainder of its line, so a half-width next item is on this
+        // line, while a section label or a notice wraps to the next): the outer edges
+        // of a lone trailing card stay flush with the full-width rows above and below it.
+        if (span < columns - 1 && adapter.isCard(position + 1)) outRect.right = gapPx / 2
     }
 }
 
@@ -570,13 +571,13 @@ private fun MainActivity.buildGuideSectionRows(events: List<SportsListItem.Guide
             live = true
         )
     )
-    // Half-width cards, two to a line, wherever the board has room for two: a guide listing is
-    // a title and a line of blurb, and as a full-width bar it took the whole board's width to
-    // say one sentence. An odd count leaves the last card alone in the left column - the same
-    // size as its neighbours, deliberately: a full-width card at the 1.06x focus scale grew
-    // wider than the board's padding, and the screen itself cut its edges off.
-    val halfWidth = sportsColumns() > 1
-    out.addAll(events.map { it.copy(halfWidth = halfWidth) })
+    // Small cards, up to four to a line wherever the board has room: a guide listing is
+    // a title and a line of blurb, and as a full-width bar it took the whole board's width
+    // to say one sentence. A short trailing run leaves its last cards alone at the same
+    // size as their neighbours, deliberately: a stretched card at the 1.06x focus scale
+    // grew wider than the board's padding, and the screen itself cut its edges off.
+    val useCards = sportsColumns() > 1
+    out.addAll(events.map { it.copy(isCard = useCards) })
     return out
 }
 
@@ -601,11 +602,11 @@ private fun MainActivity.buildFixtureSectionRows(
             live = section.section == SportsSection.LIVE
         )
     )
-    // Every card of a section is half-width, two to a line, wherever the board is wide enough
-    // for two. An odd count leaves the last card alone in the left column at the same size as
-    // its neighbours: a full-width card at the 1.06x focus scale grew wider than the board's
-    // padding and the screen itself cut its edges off.
-    val halfWidth = sportsColumns() > 1
+    // Every card of a section is small, up to four to a line wherever the board has room.
+    // A short trailing run leaves its last cards alone at the same size as their neighbours:
+    // a stretched card at the 1.06x focus scale grew wider than the board's padding and the
+    // screen itself cut its edges off.
+    val useCards = sportsColumns() > 1
     for (fixture in section.fixtures) {
         val matches = matched[fixture.id]?.channels.orEmpty()
         // Only matches resolving to a channel in the visible catalogue are kept: a match on
@@ -616,7 +617,7 @@ private fun MainActivity.buildFixtureSectionRows(
                 fixture = fixture,
                 matches = playable,
                 channels = playable.mapNotNull { channelById[it.channelId] }.associateBy { it.id },
-                halfWidth = halfWidth
+                isCard = useCards
             )
         )
     }

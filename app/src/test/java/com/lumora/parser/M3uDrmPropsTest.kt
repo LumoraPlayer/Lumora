@@ -113,6 +113,61 @@ class M3uDrmPropsTest {
     }
 
     @Test
+    fun `extvlcopt user-agent captured`() {
+        val channels = parse(
+            "#EXTINF:-1,Ch\n" +
+                "#EXTVLCOPT:http-user-agent=Mozilla/5.0 Test\n" +
+                "http://ex.com/x.mpd\n"
+        )
+        assertEquals("Mozilla/5.0 Test", channels.single().streamHeaders?.get("User-Agent"))
+    }
+
+    @Test
+    fun `extvlcopt user-agent quoted and case-insensitive`() {
+        val channels = parse(
+            "#EXTINF:-1,Ch\n" +
+                "#extvlcopt:HTTP-USER-AGENT=\"Quoted Agent/1.0\"\n" +
+                "http://ex.com/x.mpd\n"
+        )
+        assertEquals("Quoted Agent/1.0", channels.single().streamHeaders?.get("User-Agent"))
+    }
+
+    @Test
+    fun `kodiprop direct user-agent fallback captured`() {
+        val channels = parse(
+            "#EXTINF:-1,Ch\n" +
+                "#KODIPROP:http-user-agent=DirectAgent/2.0\n" +
+                "http://ex.com/x.mpd\n"
+        )
+        assertEquals("DirectAgent/2.0", channels.single().streamHeaders?.get("User-Agent"))
+    }
+
+    @Test
+    fun `stream-headers win over direct kodiprop user-agent`() {
+        val channels = parse(
+            "#EXTINF:-1,Ch\n" +
+                "#KODIPROP:inputstream.adaptive.stream_headers=User-Agent=StreamAgent\n" +
+                "#KODIPROP:http-user-agent=DirectAgent\n" +
+                "http://ex.com/x.mpd\n"
+        )
+        assertEquals("StreamAgent", channels.single().streamHeaders?.get("User-Agent"))
+    }
+
+    @Test
+    fun `kodiprop keys match case-insensitively`() {
+        val channels = parse(
+            "#EXTINF:-1,Ch\n" +
+                "#KODIPROP:InputStream.Adaptive.License_Type=CLEARKEY\n" +
+                "#KODIPROP:InputStream.Adaptive.License_Key=aa:bb\n" +
+                "#KODIPROP:InputStream.Adaptive.Stream_Headers=User-Agent=MixedCase\n" +
+                "http://ex.com/x.mpd\n"
+        )
+        val ch = channels.single()
+        assertEquals("clearkey", ch.drmType)
+        assertEquals("MixedCase", ch.streamHeaders?.get("User-Agent"))
+    }
+
+    @Test
     fun `org-w3-clearkey alias treated as clearkey`() {
         val channels = parse(
             "#EXTINF:-1,Ch\n" +

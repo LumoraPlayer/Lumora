@@ -53,10 +53,10 @@ sealed interface SportsListItem {
         /** Resolved playable channel per matched id - a match whose id is not in the user's
          *  visible catalogue (a hidden category, an adult channel) simply has no entry here. */
         val channels: Map<String, Channel>,
-        /** Drawn as a half-width card, two to a line, when the board is wide enough for them -
+        /** Drawn as a small card, up to four to a line where the board has room for them -
          *  the same card the Live now games use (item_sports_live_card.xml). The host sets it
-         *  for every fixture section; the odd last card of a section spans the board. */
-        val halfWidth: Boolean = false
+         *  for every fixture section; a short trailing run keeps its cards the same size. */
+        val isCard: Boolean = false
     ) : SportsListItem {
         override val key: String get() = "event:${fixture.id}"
     }
@@ -80,11 +80,11 @@ sealed interface SportsListItem {
          *  the honest answer for a sport this build has no chip for (cricket, tennis, darts).
          *  Such a row still shows under All. */
         val sport: Sport? = null,
-        /** Drawn as a half-width card, two to a line, when the board is wide enough for them -
+        /** Drawn as a small card, up to four to a line where the board has room for them -
          *  the same card the live games use (item_sports_live_card.xml). A full-width bar of a
          *  guide listing was the widest thing on the board for what is usually a title and a
          *  one-line blurb. */
-        val halfWidth: Boolean = false
+        val isCard: Boolean = false
     ) : SportsListItem {
         override val key: String get() = "guide:${channel.id}:$startTimestamp"
     }
@@ -108,8 +108,8 @@ sealed interface SportsListItem {
  * and a dedicated channel, the usual case for the big competitions - the host opens a chooser
  * rather than the adapter growing focusable chips inside its rows.
  *
- * The board is a two-column grid: [isHalfWidth] tells the grid's span-size lookup which rows
- * are half-width (see MainActivitySports.setupSportsTab) - every card - and everything else,
+ * The board is a grid: [isCard] tells the grid's span-size lookup which rows are
+ * small cards (see MainActivitySports.setupSportsTab) - every card - and everything else,
  * the section labels and notices, spans the whole board.
  */
 class SportsAdapter(
@@ -119,6 +119,11 @@ class SportsAdapter(
 
     /** Where UP from the first row goes. Set by the host to the tab that owns this screen. */
     var topRowFocusUpTargetId: Int = View.NO_ID
+
+    /** How many cards share one grid line. Set by the host from the grid it builds
+     *  (see MainActivitySports.setupSportsTab) - the span lookup, the gutter and the
+     *  top-row escape below all have to agree with the layout manager. */
+    var columns: Int = 2
 
     /** Preferred over [topRowFocusUpTargetId] when set: the chip row's selected sport, which is
      *  the control directly above the list. Reassigned on every render, since the chips are
@@ -145,25 +150,25 @@ class SportsAdapter(
     }
 
     /**
-     * True when the row at [position] is half-width: a live card, paired with the next one on
-     * its line. Read by the grid's span-size lookup and its gutter decoration, so the two cannot
-     * disagree about which rows are paired. Positions outside the list answer false rather than
-     * throw - the grid asks during layout, and a list edit can land between the ask and the
-     * answer.
+     * True when the row at [position] is a small grid card: a live card, paired with its
+     * line-mates. Read by the grid's span-size lookup and its gutter decoration, so the two
+     * cannot disagree about which rows share a line. Positions outside the list answer
+     * false rather than throw - the grid asks during layout, and a list edit can land
+     * between the ask and the answer.
      */
-    fun isHalfWidth(position: Int): Boolean {
+    fun isCard(position: Int): Boolean {
         if (position < 0 || position >= itemCount) return false
         return when (val item = getItem(position)) {
-            is SportsListItem.Event -> item.halfWidth
-            is SportsListItem.GuideEvent -> item.halfWidth
+            is SportsListItem.Event -> item.isCard
+            is SportsListItem.GuideEvent -> item.isCard
             else -> false
         }
     }
 
     override fun getItemViewType(position: Int): Int = when (val item = getItem(position)) {
         is SportsListItem.Header -> VIEW_TYPE_HEADER
-        is SportsListItem.Event -> if (item.halfWidth) VIEW_TYPE_LIVE_CARD else VIEW_TYPE_EVENT
-        is SportsListItem.GuideEvent -> if (item.halfWidth) VIEW_TYPE_LIVE_CARD else VIEW_TYPE_EVENT
+        is SportsListItem.Event -> if (item.isCard) VIEW_TYPE_LIVE_CARD else VIEW_TYPE_EVENT
+        is SportsListItem.GuideEvent -> if (item.isCard) VIEW_TYPE_LIVE_CARD else VIEW_TYPE_EVENT
         is SportsListItem.Notice -> VIEW_TYPE_NOTICE
     }
 
@@ -205,13 +210,13 @@ class SportsAdapter(
      *  usually precede every row, so the first *focusable* row is hardly ever item 0 - and
      *  requiring item 0 left UP dead on exactly those boards, with no way back to the chips.
      *
-     *  The right-hand card of a two-per-line pair is the one exception to "a focusable item
-     *  before this one owns UP": its partner sits on the same line, not above it, so UP from
+     *  A card that is not first on its line is the one exception to "a focusable item
+     *  before this one owns UP": its line-mates sit on the same line, not above it, so UP from
      *  that card leaves the list the same way UP from the first line does. */
     private fun handleTopRowUp(v: View, position: Int): Boolean {
-        // -2 on a right-hand card: skip the left partner sharing its line, which is the only
-        // item it would otherwise find "before" itself on the first line.
-        val lastAbove = if (isRightCardOfPair(position)) position - 2 else position - 1
+        // Skip the line-mates sharing this card's line, which are the only items it would
+        // otherwise find "before" itself on the first line.
+        val lastAbove = position - lineOffset(position) - 1
         for (i in 0..lastAbove) {
             val item = getItem(i)
             if (item is SportsListItem.Event || item is SportsListItem.GuideEvent) return false
@@ -221,18 +226,18 @@ class SportsAdapter(
         return target.isShown && target.requestFocus()
     }
 
-    /** True when [position] is the right-hand card of a half-width pair. Half-width items pair
-     *  up two to a line from the start of every run of them (see isHalfWidth); a full-width row
-     *  resets the run. */
-    private fun isRightCardOfPair(position: Int): Boolean {
-        if (position <= 0 || !isHalfWidth(position) || !isHalfWidth(position - 1)) return false
+    /** Offset of [position] within its grid line: 0 for the first card, 1 for the next, and
+     *  so on. Cards pair up from the start of every run of them (see isCard); a full-width
+     *  row resets the run. */
+    private fun lineOffset(position: Int): Int {
+        if (columns <= 1) return 0
         var run = 0
         var i = position - 1
-        while (i >= 0 && isHalfWidth(i)) {
+        while (i >= 0 && isCard(i)) {
             run++
             i--
         }
-        return run % 2 == 1
+        return run % columns
     }
 
     inner class HeaderHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {

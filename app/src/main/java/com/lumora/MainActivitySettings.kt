@@ -769,6 +769,8 @@ internal fun MainActivity.showProviderSettings() {
     val shareStatus = dialogView.findViewById<TextView>(R.id.settingsShareStatus)
     val m3uUrl = dialogView.findViewById<EditText>(R.id.settingsM3uUrl)
     val uaInput = dialogView.findViewById<EditText>(R.id.settingsUserAgent)
+    val backupCheckBox = dialogView.findViewById<CheckBox>(R.id.settingsProviderBackup)
+    val backupHint = dialogView.findViewById<View>(R.id.settingsProviderBackupHint)
     val xtreamUrl = dialogView.findViewById<EditText>(R.id.settingsXtreamUrl)
     val xtreamUser = dialogView.findViewById<EditText>(R.id.settingsXtreamUser)
     val xtreamPass = dialogView.findViewById<EditText>(R.id.settingsXtreamPass)
@@ -985,6 +987,12 @@ internal fun MainActivity.showProviderSettings() {
     // code/fields below the fold, forcing a scroll right after tapping "Show QR".
     fun selectType(type: String) {
         currentType = type
+        // Backup sources are an IPTV concept (hidden browsing, kept for failover) - the
+        // toggle lives with the name both kinds of provider set, but only shows for the
+        // types it applies to.
+        val backupVisible = type == "m3u" || type == "xtream" || type == "stalker"
+        backupCheckBox.visibility = if (backupVisible) View.VISIBLE else View.GONE
+        backupHint.visibility = if (backupVisible) View.VISIBLE else View.GONE
         typeCards.forEach { (t, card) ->
             card.setBackgroundResource(if (t == type) R.drawable.bg_type_option_selected else R.drawable.card_surface_background)
         }
@@ -1395,6 +1403,7 @@ internal fun MainActivity.showProviderSettings() {
         addIptvProviderButton.visibility = View.GONE
         iptvListSection.visibility = View.GONE
         providerNameInput.setText(existing?.name ?: "")
+        backupCheckBox.isChecked = existing?.backup == true
         if (existing != null) {
             iptvFormTitle.text = getString(R.string.sett_editing_provider, existing.name)
             iptvFormTitle.visibility = View.VISIBLE
@@ -1588,7 +1597,12 @@ internal fun MainActivity.showProviderSettings() {
             }
             // A picked file's content:// URI is long and says nothing - show its file name.
             val sourceLabel = if (cfg.type == "m3u" && isLocalFileUrl(cfg.url ?: "")) localFileDisplayName(cfg.url ?: "") else cfg.url ?: ""
-            row.findViewById<TextView>(R.id.rowDetail).text = getString(R.string.sett_provider_row_detail, typeLabel, sourceLabel)
+            // Backup sources stay enabled (they still serve failover streams), so the
+            // row needs its own mark - otherwise a hidden-but-on provider reads exactly
+            // like a normal one and the wife test fails at the settings screen itself.
+            val detail = getString(R.string.sett_provider_row_detail, typeLabel, sourceLabel)
+            row.findViewById<TextView>(R.id.rowDetail).text =
+                if (cfg.backup) "$detail · ${getString(R.string.sett_provider_backup_badge)}" else detail
             row.findViewById<View>(R.id.rowEditButton).setOnClickListener { openIptvForm(cfg) }
             row.findViewById<View>(R.id.rowRemoveButton).setOnClickListener {
                 AlertDialog.Builder(this)
@@ -1808,10 +1822,12 @@ internal fun MainActivity.showProviderSettings() {
         try {
             startActivityForResult(intent, MainActivity.REQUEST_EXPORT_BACKUP)
             pendingBackupManager = backupManager
-        } catch (e: android.content.ActivityNotFoundException) {
+        } catch (e: Exception) {
             // Fire TV and most Android TV boxes ship no document picker at all - SAF
-            // just isn't there to launch. Fall back to a fixed app-storage location
-            // that works on every device, no picker required.
+            // just isn't there to launch. Caught broadly, not just
+            // ActivityNotFoundException: resolver failures surface as other throwables
+            // on some firmware, and any of them must fall back to the fixed
+            // app-storage location instead of crashing the tap.
             scope.launch {
                 val file = localBackupFile()
                 val success = withContext(Dispatchers.IO) { backupManager.exportTo(Uri.fromFile(file)) }
@@ -1831,7 +1847,9 @@ internal fun MainActivity.showProviderSettings() {
         try {
             startActivityForResult(intent, MainActivity.REQUEST_IMPORT_BACKUP)
             pendingBackupManager = backupManager
-        } catch (e: android.content.ActivityNotFoundException) {
+        } catch (e: Exception) {
+            // Same broad catch as export above: any resolver failure falls back to the
+            // local file instead of crashing the tap.
             val file = localBackupFile()
             if (!file.exists()) {
                 Toast.makeText(this@showProviderSettings, getString(R.string.sett_no_backup_file, file.absolutePath), Toast.LENGTH_LONG).show()
@@ -2396,6 +2414,16 @@ internal fun MainActivity.showProviderSettings() {
         }
         val name = providerNameInput.text.toString().trim()
         val id = editingProviderId ?: IptvProviderStore.newId()
+        // Backup sources hide but keep playing: the flag only exists on IPTV types (the
+        // checkbox is hidden for everything else), and turning the last visible source
+        // into one is refused - an empty catalogue with configured providers reads as broken,
+        // not as hidden.
+        val wantBackup = backupCheckBox.isChecked &&
+            (currentType == "m3u" || currentType == "xtream" || currentType == "stalker")
+        if (wantBackup && !hasOtherVisibleSource(id)) {
+            Toast.makeText(this, getString(R.string.sett_provider_backup_needed), Toast.LENGTH_SHORT).show()
+            return@setOnClickListener
+        }
         // The form has no per-type controls; preserve the provider's existing content
         // flags so saving the form never silently resets a movies/series split.
         val prevConfig = editingProviderId?.let { pid -> IptvProviderStore.load(prefs).firstOrNull { it.id == pid } }
@@ -2412,7 +2440,8 @@ internal fun MainActivity.showProviderSettings() {
                     id = id, type = "m3u", name = name.ifBlank { "M3U/M3U8 Playlist" }, enabled = true,
                     liveEnabled = prevConfig?.liveEnabled ?: true,
                     moviesEnabled = prevConfig?.moviesEnabled ?: true, seriesEnabled = prevConfig?.seriesEnabled ?: true,
-                    url = url, userAgent = uaInput.text.toString().trim().ifBlank { null }
+                    url = url, userAgent = uaInput.text.toString().trim().ifBlank { null },
+                    backup = wantBackup
                 ))
             }
             "xtream" -> {
@@ -2422,7 +2451,8 @@ internal fun MainActivity.showProviderSettings() {
                     id = id, type = "xtream", name = name.ifBlank { "Xtream" }, enabled = true,
                     liveEnabled = prevConfig?.liveEnabled ?: true,
                     moviesEnabled = prevConfig?.moviesEnabled ?: true, seriesEnabled = prevConfig?.seriesEnabled ?: true,
-                    url = url, username = xtreamUser.text.toString().trim(), password = xtreamPass.text.toString().trim()
+                    url = url, username = xtreamUser.text.toString().trim(), password = xtreamPass.text.toString().trim(),
+                    backup = wantBackup
                 ))
             }
             "stalker" -> {
@@ -2432,7 +2462,8 @@ internal fun MainActivity.showProviderSettings() {
                     id = id, type = "stalker", name = name.ifBlank { "Stalker Portal" }, enabled = true,
                     liveEnabled = prevConfig?.liveEnabled ?: true,
                     moviesEnabled = prevConfig?.moviesEnabled ?: true, seriesEnabled = prevConfig?.seriesEnabled ?: true,
-                    url = url, userAgent = stalkerMac.text.toString().trim()
+                    url = url, userAgent = stalkerMac.text.toString().trim(),
+                    backup = wantBackup
                 ))
             }
             "jellyfin" -> {

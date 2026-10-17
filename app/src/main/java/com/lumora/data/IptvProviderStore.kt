@@ -67,6 +67,14 @@ object IptvProviderStore {
         return current
     }
 
+    /** Marks a provider as a backup source (hidden from browsing, kept for failover)
+     *  or back as a visible one - mirrors setEnabled. */
+    fun setBackup(prefs: SharedPreferences, id: String, backup: Boolean): List<IptvProviderConfig> {
+        val current = load(prefs).map { if (it.id == id) it.copy(backup = backup) else it }
+        save(prefs, current)
+        return current
+    }
+
     /** Flips one per-provider content-type gate (live/movies/series) for one provider,
      *  mirroring setEnabled - loads, updates the matching entry, saves, returns the new
      *  list. Pass null to leave a flag untouched. */
@@ -143,6 +151,7 @@ object IptvProviderStore {
         put("liveEnabled", c.liveEnabled)
         put("moviesEnabled", c.moviesEnabled)
         put("seriesEnabled", c.seriesEnabled)
+        if (c.backup) put("backup", true)
         c.url?.let { put("url", it) }
         c.username?.let { put("username", it) }
         c.password?.let { put("password", it) }
@@ -167,6 +176,7 @@ object IptvProviderStore {
             liveEnabled = o.optBoolean("liveEnabled", true),
             moviesEnabled = flag("moviesEnabled"),
             seriesEnabled = flag("seriesEnabled"),
+            backup = o.optBoolean("backup", false),
             url = o.optString("url").takeIf { it.isNotBlank() },
             username = o.optString("username").takeIf { it.isNotBlank() },
             password = o.optString("password").takeIf { it.isNotBlank() },

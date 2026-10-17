@@ -166,6 +166,7 @@ internal fun MainActivity.setupPlayerControls() {
     binding.sideMenuCategoryList.layoutManager = LinearLayoutManager(this)
     binding.sideMenuCategoryList.adapter = sideMenuCategoryAdapter
     binding.btnAudioTrack.setOnClickListener { showTrackPicker(isAudio = true) }
+    binding.btnVideoQuality.setOnClickListener { showVideoQualityPicker() }
     binding.btnSubtitleTrack.setOnClickListener { showTrackPicker(isAudio = false) }
     binding.btnSkipSegment.setOnClickListener { skipActiveSegment() }
     binding.btnChapters.setOnClickListener { showChapterPicker() }

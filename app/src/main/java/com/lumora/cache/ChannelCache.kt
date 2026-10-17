@@ -20,7 +20,7 @@ private const val LEGACY_JSON_CACHE_FILE = "channels_cache.json"
 private const val FIELD_SEP = ''
 /** Fields written per line. Append-only: new fields go at the end so older files stay
  *  readable. */
-private const val FIELD_COUNT = 37
+private const val FIELD_COUNT = 38
 /** Fields a line must have to be usable. Held at the pre-Catch-Up count on purpose - a
  *  cache written by an older build is still perfectly good, and every field added since
  *  is read with getOrElse. Raising this to FIELD_COUNT dropped every line of an existing
@@ -118,7 +118,11 @@ object ChannelCache {
                 sb.append(clean(ch.manifestHeaders?.let { com.lumora.parser.KodiProps.encodeHeaderMap(it) })).append(FIELD_SEP)
                 sb.append(clean(ch.drmLicenseHeaders?.let { com.lumora.parser.KodiProps.encodeHeaderMap(it) })).append(FIELD_SEP)
                 sb.append(clean(ch.drmPostData)).append(FIELD_SEP)
-                sb.append(clean(ch.drmLicenseResponse)).append('\n')
+                sb.append(clean(ch.drmLicenseResponse)).append(FIELD_SEP)
+                // Per-entry request headers (User-Agent/Referer/token from KODIPROP
+                // stream_headers, #EXTVLCOPT or URL suffix): without these a cached
+                // ClearKey entry replays with only the provider UA and 403s.
+                sb.append(clean(ch.streamHeaders?.takeIf { it.isNotEmpty() }?.let { com.lumora.parser.KodiProps.encodeHeaderMap(it) })).append('\n')
                 out.append(sb)
             }
             }
@@ -215,7 +219,12 @@ object ChannelCache {
                                 ?.let { com.lumora.parser.KodiProps.decodeHeaderMap(it) }
                                 ?.takeIf { it.isNotEmpty() },
                             drmPostData = f.getOrElse(35) { "" }.ifEmpty { null },
-                            drmLicenseResponse = f.getOrElse(36) { "" }.ifEmpty { null }
+                            drmLicenseResponse = f.getOrElse(36) { "" }.ifEmpty { null },
+                            // Appended after phase 2: older cache lines simply have no field 37
+                            // and read back with null headers (provider UA still applies).
+                            streamHeaders = f.getOrElse(37) { "" }.takeIf { it.isNotEmpty() }
+                                ?.let { com.lumora.parser.KodiProps.decodeHeaderMap(it) }
+                                ?.takeIf { it.isNotEmpty() }
                         )
                     )
                 }

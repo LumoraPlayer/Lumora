@@ -37,6 +37,7 @@ import com.lumora.util.newestByDate
 import com.lumora.util.cleanVodCategoryLabel
 import com.lumora.util.isAdultCategory
 import com.lumora.util.groupLiveQualityVersions
+import com.lumora.util.withoutBackupOnlyGroups
 import kotlinx.coroutines.*
 
 // ── Category rail, tabs & side-menu drill-down ──
@@ -1573,14 +1574,15 @@ internal fun MainActivity.onCategorySelected(category: CategoryFilter) {
             // rebuilding the sidebar so categories reflect the full channel list.
             val hideAdult = prefs.getBoolean(PREF_HIDE_ADULT, true)
             val snapshot = allChannels
+            val backupIds = backupSourceIds()
             val rawLive = snapshot.filter { it.mediaType == MediaType.LIVE && !it.name.contains("##") }
                 .filterNot { hideAdult && isAdultCategory(it.categoryName, it.group) }
             if (newClassic || !prefs.getBoolean(PREF_GROUP_CHANNELS, true)) {
-                liveChannels = rawLive
+                liveChannels = rawLive.withoutBackupOnlyGroups(emptyMap(), backupIds)
                 liveVersions = emptyMap()
             } else {
-                val (grouped, vers) = groupLiveQualityVersions(rawLive)
-                liveChannels = grouped
+                val (grouped, vers) = groupLiveQualityVersions(rawLive, backupIds)
+                liveChannels = grouped.withoutBackupOnlyGroups(vers, backupIds)
                 liveVersions = vers
             }
             rebuildCategoriesForActiveTab()

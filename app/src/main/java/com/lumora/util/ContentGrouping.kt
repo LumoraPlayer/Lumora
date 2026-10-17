@@ -206,7 +206,10 @@ fun extractLeadingTag(name: String): String? =
  * source tags/qualities. Returns one representative Channel per group (for
  * display) plus a map from that representative's id to every version.
  */
-fun groupDuplicateMovies(movies: List<Channel>): Pair<List<Channel>, Map<String, List<Channel>>> {
+fun groupDuplicateMovies(
+    movies: List<Channel>,
+    backupIds: Set<String> = emptySet()
+): Pair<List<Channel>, Map<String, List<Channel>>> {
     val groups = LinkedHashMap<String, MutableList<Channel>>()
     // Duplicate titles are the whole point of this pass - memoize each title's
     // normalized key so every extra copy of the same title skips the regex pipeline.
@@ -218,16 +221,20 @@ fun groupDuplicateMovies(movies: List<Channel>): Pair<List<Channel>, Map<String,
     val representatives = mutableListOf<Channel>()
     val versionsById = mutableMapOf<String, List<Channel>>()
     for (group in groups.values) {
-        val versions = bestQualityFirst(group)
-        val representative = pickRepresentative(versions)
+        val versions = bestQualityFirst(group, backupIds)
+        val representative = pickRepresentative(versions, backupIds)
         representatives.add(representative)
         if (versions.size > 1) versionsById[representative.id] = versions
     }
     return representatives to versionsById
 }
 
-/** Version order for a duplicated title. Two rules, in this order:
+/** Version order for a duplicated title. Three rules, in this order:
  *
+ *  0. Backup sources sort last, so a backup copy never wins the card (or the default
+ *     play, or the first chip) just for carrying the better tag - while staying in the
+ *     versions map behind whatever does, which is the failover the flag exists for.
+ *     With no backup ids every copy scores 0 here and the order is unchanged.
  *  1. The user's own media-server library (Jellyfin or Plex) always outranks an IPTV copy of
  *     the same title: it's the copy they curated, and it streams off their own server. An
  *     own-library file carries no quality tag in its name (it's a real file, not a reposted
@@ -238,10 +245,11 @@ fun groupDuplicateMovies(movies: List<Channel>): Pair<List<Channel>, Map<String,
  *     same film at several tiers and the untagged/SD copy used to win purely by load order.
  *
  *  The sort is stable, so equal-quality copies keep provider order. */
-private fun bestQualityFirst(versions: List<Channel>): List<Channel> =
+private fun bestQualityFirst(versions: List<Channel>, backupIds: Set<String> = emptySet()): List<Channel> =
     if (versions.size > 1) {
         versions.sortedWith(
-            compareBy<Channel> { if (it.isOwnLibrary) 0 else 1 }
+            compareBy<Channel> { if (it.sourceProviderId in backupIds) 1 else 0 }
+                .thenBy { if (it.isOwnLibrary) 0 else 1 }
                 .thenByDescending { vodQualityScore(it.name) }
         )
     } else {
@@ -250,17 +258,19 @@ private fun bestQualityFirst(versions: List<Channel>): List<Channel> =
 
 /** The copy that gets the card. A poster is what makes the card look right, so it wins among
  *  equally-ranked copies - but never at the cost of demoting the own-library version, which
- *  is already first in [versions]. */
-private fun pickRepresentative(versions: List<Channel>): Channel {
-    val preferred = versions.firstOrNull()?.takeIf { it.isOwnLibrary }
+ *  is already first in [versions]. Backup copies are only considered when nothing visible
+ *  carries a poster (a backup-only group has no card anyway - see withoutBackupOnlyGroups). */
+private fun pickRepresentative(versions: List<Channel>, backupIds: Set<String> = emptySet()): Channel {
+    val pool = versions.filterNot { it.sourceProviderId in backupIds }.ifEmpty { versions }
+    val preferred = pool.firstOrNull()?.takeIf { it.isOwnLibrary }
     val ownWithPoster = if (preferred != null) {
-        versions.firstOrNull { it.isOwnLibrary && !it.posterUrl.isNullOrBlank() } ?: preferred
+        pool.firstOrNull { it.isOwnLibrary && !it.posterUrl.isNullOrBlank() } ?: preferred
     } else {
         null
     }
     return ownWithPoster
-        ?: versions.firstOrNull { !it.posterUrl.isNullOrBlank() }
-        ?: versions.first()
+        ?: pool.firstOrNull { !it.posterUrl.isNullOrBlank() }
+        ?: pool.first()
 }
 
 /**
@@ -274,7 +284,10 @@ private fun pickRepresentative(versions: List<Channel>): Channel {
  * episode list, and every other provider's copy was previously dropped outright with
  * no way to reach it.
  */
-fun groupDuplicateSeries(series: List<Channel>): Pair<List<Channel>, Map<String, List<Channel>>> {
+fun groupDuplicateSeries(
+    series: List<Channel>,
+    backupIds: Set<String> = emptySet()
+): Pair<List<Channel>, Map<String, List<Channel>>> {
     // m3u_plus panels list episodes, not shows - collapse those rows first so the pass
     // below groups show cards with show cards, not episodes with episodes.
     val shows = collapseM3uEpisodeRows(series)
@@ -288,8 +301,8 @@ fun groupDuplicateSeries(series: List<Channel>): Pair<List<Channel>, Map<String,
     val representatives = mutableListOf<Channel>()
     val versionsById = mutableMapOf<String, List<Channel>>()
     for (group in groups.values) {
-        val versions = bestQualityFirst(group)
-        val representative = pickRepresentative(versions)
+        val versions = bestQualityFirst(group, backupIds)
+        val representative = pickRepresentative(versions, backupIds)
         representatives.add(representative)
         if (versions.size > 1) versionsById[representative.id] = versions
     }
@@ -760,8 +773,14 @@ fun vodQualityScore(rawName: String): Int = vodQualityScoreMemo.memoize(rawName)
  * qualities. Returns one representative (best-quality) Channel per group for
  * display, plus a map from that representative's id to every version sorted
  * best-quality-first, so playback can fall back to the next one on error.
+ *
+ * Backup sources sort behind visible ones (same rule as [bestQualityFirst]), so a
+ * backup copy never wins the card - while staying in the versions map as the failover.
  */
-fun groupLiveQualityVersions(channels: List<Channel>): Pair<List<Channel>, Map<String, List<Channel>>> {
+fun groupLiveQualityVersions(
+    channels: List<Channel>,
+    backupIds: Set<String> = emptySet()
+): Pair<List<Channel>, Map<String, List<Channel>>> {
     val groups = LinkedHashMap<String, MutableList<Channel>>()
     for (channel in channels) {
         val key = normalizeLiveChannelKey(channel.name).ifBlank { channel.id }
@@ -770,14 +789,17 @@ fun groupLiveQualityVersions(channels: List<Channel>): Pair<List<Channel>, Map<S
     val representatives = mutableListOf<Channel>()
     val versionsById = mutableMapOf<String, List<Channel>>()
     for (versions in groups.values) {
-        // Quality first, own-library only as the tie-break. Live TV is the one place where
-        // "prefer my own server" and "prefer the best feed" genuinely conflict: a Jellyfin
-        // server fed by the same IPTV sources carries its own RAW/HD copies of a channel, and
-        // ranking those above everything buried the provider's 4K feed several entries down
-        // and auto-tuned a lower-quality stream. Films and series have no quality ladder, so
+        // Quality first, own-library only as the tie-break, backup sources behind
+        // everything visible. Live TV is the one place where "prefer my own server" and
+        // "prefer the best feed" genuinely conflict: a Jellyfin server fed by the same
+        // IPTV sources carries its own RAW/HD copies of a channel, and ranking those
+        // above everything buried the provider's 4K feed several entries down and
+        // auto-tuned a lower-quality stream. Films and series have no quality ladder, so
         // they keep the plain own-library-first rule.
         val ranked = versions.sortedWith(
-            compareByDescending<Channel> { liveQualityScore(it.name) }.thenBy { if (it.isOwnLibrary) 0 else 1 }
+            compareBy<Channel> { if (it.sourceProviderId in backupIds) 1 else 0 }
+                .thenByDescending { liveQualityScore(it.name) }
+                .thenBy { if (it.isOwnLibrary) 0 else 1 }
         )
         val best = ranked.first()
         // Version list (picker/failover) keeps full raw names, since "NOW:" vs "VIP:"
@@ -791,6 +813,21 @@ fun groupLiveQualityVersions(channels: List<Channel>): Pair<List<Channel>, Map<S
         if (ranked.size > 1 && best.id.isNotBlank()) versionsById[best.id] = ranked
     }
     return representatives to versionsById
+}
+
+/** Drops representatives whose whole duplicate group lives on backup sources - with no
+ *  visible copy there is no card to show (a backup source is loaded for failover, not
+ *  for browsing). Unknown provenance (blank id, or a null source id) fails open: it
+ *  can't be attributed to a hidden source, so it stays. */
+internal fun List<Channel>.withoutBackupOnlyGroups(
+    versions: Map<String, List<Channel>>,
+    backupIds: Set<String>
+): List<Channel> {
+    if (backupIds.isEmpty()) return this
+    return filter { rep ->
+        val copies = versions[rep.id] ?: return@filter rep.sourceProviderId !in backupIds
+        copies.any { it.sourceProviderId !in backupIds }
+    }
 }
 
 // ── Brand/franchise clustering (Live TV) ───────────────────────────────────

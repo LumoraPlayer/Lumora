@@ -17,6 +17,7 @@ import com.lumora.util.isAdultCategory
 import com.lumora.util.groupDuplicateMovies
 import com.lumora.util.groupDuplicateSeries
 import com.lumora.util.groupLiveQualityVersions
+import com.lumora.util.withoutBackupOnlyGroups
 import com.lumora.util.isNonEnglishTitle
 import com.lumora.util.withResolvedYear
 import kotlinx.coroutines.*
@@ -338,6 +339,7 @@ internal fun MainActivity.deriveLiveHalf(list: List<Channel>) {
     val hideAdult = prefs.getBoolean(PREF_HIDE_ADULT, true)
     val useClassic = prefs.getBoolean(PREF_CLASSIC_CATEGORY_LAYOUT, false)
     val groupChannels = prefs.getBoolean(PREF_GROUP_CHANNELS, true)
+    val backupIds = backupSourceIds()
 
     // Same catalogue, same prefs, same answer - restore last time's grouping instead of
     // re-running it (see DerivedCache).
@@ -357,11 +359,11 @@ internal fun MainActivity.deriveLiveHalf(list: List<Channel>) {
     if (useClassic || !groupChannels) {
         // Classic: no quality version merging — show every channel as-is from the provider.
         // Version map is empty since every variant appears as its own channel entry.
-        liveChannels = rawLive
+        liveChannels = rawLive.withoutBackupOnlyGroups(emptyMap(), backupIds)
         liveVersions = emptyMap()
     } else {
-        val (grouped, vers) = groupLiveQualityVersions(rawLive)
-        liveChannels = grouped
+        val (grouped, vers) = groupLiveQualityVersions(rawLive, backupIds)
+        liveChannels = grouped.withoutBackupOnlyGroups(vers, backupIds)
         liveVersions = vers
     }
     perf("deriveLiveHalf", startedAt, "${list.size} in / ${liveChannels.size} live out")
@@ -402,6 +404,9 @@ internal fun MainActivity.deriveFilmsSeriesHalf(list: List<Channel>): MainActivi
     val hideNonEnglish = prefs.getBoolean(PREF_HIDE_NON_ENGLISH, true)
     val hideAdult = prefs.getBoolean(PREF_HIDE_ADULT, true)
     val groupChannels = prefs.getBoolean(PREF_GROUP_CHANNELS, true)
+    // Backup providers are loaded for failover but hidden from browsing - the grouping
+    // below keeps their copies in the versions maps while the display lists drop them.
+    val backupIds = backupSourceIds()
     val categorizeVod = prefs.getBoolean(PREF_CATEGORIZE_VOD, true)
     fun isAdult(ch: Channel) = hideAdult && isAdultCategory(ch.categoryName, ch.group)
 
@@ -426,8 +431,9 @@ internal fun MainActivity.deriveFilmsSeriesHalf(list: List<Channel>): MainActivi
             else if (isAdult(ch)) null
             else ch.withResolvedYear()
         }
-        val (groupedFilms, filmVers) = if (groupChannels) groupDuplicateMovies(rawFilms) else rawFilms to emptyMap()
+        val (groupedFilms, filmVers) = if (groupChannels) groupDuplicateMovies(rawFilms, backupIds) else rawFilms to emptyMap()
         films = groupedFilms.sortedByDescending { it.year?.toIntOrNull() ?: -1 }
+            .withoutBackupOnlyGroups(filmVers, backupIds)
         versions = filmVers
     }
     // "Newest" pools the most recent releases (by date, not rating) into one shelf
@@ -478,7 +484,7 @@ internal fun MainActivity.deriveFilmsSeriesHalf(list: List<Channel>): MainActivi
         // date is parsed rather than string-compared - panels send day-first and other
         // spellings that a raw comparison orders wrongly (see releaseDateSortKey). Keyed
         // once per item, not once per comparison.
-        val (groupedSeries, vers) = if (groupChannels) groupDuplicateSeries(rawSeries) else rawSeries to emptyMap()
+        val (groupedSeries, vers) = if (groupChannels) groupDuplicateSeries(rawSeries, backupIds) else rawSeries to emptyMap()
         series = groupedSeries
             .map { it to releaseDateSortKey(it.releaseDate, it.year) }
             .sortedWith(
@@ -486,6 +492,7 @@ internal fun MainActivity.deriveFilmsSeriesHalf(list: List<Channel>): MainActivi
                     .thenByDescending { it.first.year?.toIntOrNull() ?: -1 }
             )
             .map { it.first }
+            .withoutBackupOnlyGroups(vers, backupIds)
         seriesVers = vers
         DerivedCache.saveVod(
             this,

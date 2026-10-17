@@ -46,6 +46,10 @@
     <string name="sett_provider_row_detail">%1$s · %2$s</string>
     <string name="sett_remove_provider_confirm">Remove %1$s?</string>
     <string name="sett_remove_provider_message">This provider\'s channels will no longer appear.</string>
+    <string name="sett_provider_backup">Use as backup source</string>
+    <string name="sett_provider_backup_hint">Hidden from browsing. Still plays if the main source fails.</string>
+    <string name="sett_provider_backup_badge">Backup</string>
+    <string name="sett_provider_backup_needed">Keep at least one visible source</string>
     <string name="sett_remove_plex_confirm">Remove Plex?</string>
     <string name="sett_remove_plex_message">Its films and shows will no longer appear.</string>
     <string name="sett_remove_jellyfin_confirm">Remove Jellyfin?</string>

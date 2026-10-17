@@ -103,6 +103,7 @@
     <string name="versions">Versions</string>
     <string name="fit">Ajuster</string>
     <string name="audio">Audio</string>
+    <string name="quality">Qualité</string>
     <string name="subtitles">Sous-titres</string>
     <string name="chapters">Chapitres</string>
     <string name="seek_preview">Aperçu de recherche</string>

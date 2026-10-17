@@ -543,6 +543,7 @@ internal fun MainActivity.findCatalogMatches(item: Channel): List<Channel> {
     // Discover sitting on "Loading trending…". Cleaning only ever *removes* text, so any
     // real match must still contain the target's longest word verbatim; a plain substring
     // test rejects almost everything for the price of an indexOf.
+    val backupIds = backupSourceIds()
     val probe = target.split(' ').maxByOrNull { it.length }.orEmpty()
     val scored = mutableListOf<Pair<Int, Channel>>()
     for (candidate in allChannels) {
@@ -563,7 +564,10 @@ internal fun MainActivity.findCatalogMatches(item: Channel): List<Channel> {
         val yearBonus = if (item.year != null && candidate.year == item.year) 0 else 100
         val extra = (name.length - target.length).coerceIn(0, 99)
         val sourceBonus = if (candidate.isOwnLibrary) 0 else 200
-        scored += (rank * 10_000 + yearBonus + sourceBonus + extra) to candidate
+        // Backup copies stay playable through the detail screen, but a backup is never
+        // the copy a fresh search opens on - the visible source owns the card.
+        val backupPenalty = if (candidate.sourceProviderId in backupIds) 1000 else 0
+        scored += (rank * 10_000 + yearBonus + sourceBonus + backupPenalty + extra) to candidate
     }
     return scored.sortedBy { it.first }.map { it.second }.distinctBy { it.id.ifBlank { it.url } }
 }
@@ -571,7 +575,8 @@ internal fun MainActivity.findCatalogMatches(item: Channel): List<Channel> {
 /** The full set of copies to offer for [match] - the matches Discover found, plus whatever
  *  the duplicate-grouping pass already knows about (which is keyed by the group's
  *  representative, so a match that is a *member* of a group finds nothing by direct lookup
- *  and has to be searched for). Deduped, own-library copies first. */
+ *  and has to be searched for). Deduped, own-library copies first, backup copies last
+ *  (reachable for failover, never the copy a fresh search opens on). */
 internal fun MainActivity.catalogVersionsFor(matches: List<Channel>): List<Channel> {
     val versions = if (matches.firstOrNull()?.mediaType == MediaType.SERIES) seriesVersions else filmVersions
     val out = LinkedHashMap<String, Channel>()
@@ -581,7 +586,11 @@ internal fun MainActivity.catalogVersionsFor(matches: List<Channel>): List<Chann
         val group = versionGroupContaining(versions, match.id)
         group?.forEach { out.putIfAbsent(it.id.ifBlank { it.url }, it) }
     }
-    return out.values.sortedBy { if (it.isOwnLibrary) 0 else 1 }
+    val backupIds = backupSourceIds()
+    return out.values.sortedWith(
+        compareBy<Channel> { if (it.isOwnLibrary) 0 else 1 }
+            .thenBy { if (it.sourceProviderId in backupIds) 1 else 0 }
+    )
 }
 
 /** Tokens a catalogue appends to a title without changing which film it is: a bare release
@@ -1093,10 +1102,11 @@ internal fun MainActivity.buildUpNextSeriesTiles(): List<Channel> {
         .mapNotNullTo(HashSet()) { it.categoryId?.takeIf { id -> id.isNotBlank() } }
     val trails = PlaybackPositionStore.getCompletedSeriesTrails(this)
         .filterNot { it.categoryId in serverCovered }
-    // Trails of switched-off sources resolve nothing (their series left the catalog
-    // with them) and their stale memo tiles must not render - see disabledSourceIds.
-    // The fetch below is skipped for them too, so a rebuild fires no dead lookups.
-    val off = disabledSourceIds()
+    // Trails of switched-off or backup sources resolve nothing visible (their series
+    // left the catalog or the browse lists) and their stale memo tiles must not render -
+    // see disabledSourceIds. The fetch below is skipped for them too, so a rebuild fires
+    // no dead lookups.
+    val off = disabledSourceIds() + backupSourceIds()
     val liveTrails = if (off.isEmpty()) trails
         else trails.filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
     val pending = liveTrails
@@ -1367,15 +1377,19 @@ internal fun MainActivity.movieContinueItems(): List<Channel> {
     )
 }
 
-/** Ids of IPTV providers and media-server accounts the user switched off. Tiles
- *  owned by one hide from Continue Watching / Up Next (they are not deleted - see
- *  continueWatchingTiles and buildUpNextSeriesTiles). Empty in the common case, so
- *  callers can skip filtering entirely. */
+/** Ids of IPTV providers the user switched off. Tiles owned by one hide from Continue Watching / Up Next (they are not deleted - see continueWatchingTiles and buildUpNextSeriesTiles). Empty in the common case, so callers can skip filtering entirely. */
 internal fun MainActivity.disabledSourceIds(): Set<String> {
     val iptv = IptvProviderStore.load(prefs).filterNot { it.enabled }.map { it.id }
     val servers = mediaServers().filterNot { it.enabled }.map { it.id }
     return (iptv + servers).toSet()
 }
+
+/** Ids of IPTV providers marked as backup: loaded for failover, hidden from browsing.
+ *  Applied everywhere the disabled set is - a backup tile would otherwise leak the very
+ *  duplication the flag exists to hide - with one difference: nothing is ever pruned for
+ *  being backup, so re-enabling full visibility is instant and lossless. */
+internal fun MainActivity.backupSourceIds(): Set<String> =
+    IptvProviderStore.load(prefs).filter { it.backup }.map { it.id }.toSet()
 
 /** Trailing season split some panels bake into the series name ("Show Season 1",
  *  "Show S01" as its own catalogue entry). Stripped for Continue Watching dedup only:
@@ -1426,11 +1440,11 @@ internal fun tileSeasonNumber(episode: Channel): Int? =
         ?: ANY_SEASON_MARKER_REGEX.find(episode.name)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
 internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Channel> {
-    // A switched-off source hides its tiles (it does not delete them - re-enabling
-    // brings them back, progress intact). Matched on sourceProviderId only: snapshots
-    // without provenance can't be attributed, and guessing by host risks hiding
-    // another source's tile. See disabledSourceIds.
-    val off = disabledSourceIds()
+    // A switched-off or backup source hides its tiles (it does not delete them -
+    // re-enabling brings them back, progress intact). Matched on sourceProviderId only:
+    // snapshots without provenance can't be attributed, and guessing by host risks
+    // hiding another source's tile. See disabledSourceIds.
+    val off = disabledSourceIds() + backupSourceIds()
     val live = if (off.isEmpty()) items
         else items.filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
     val wanted = live.mapNotNullTo(HashSet()) { item ->

@@ -64,8 +64,11 @@
 
     <!-- Track picker (MainActivityLists.kt) -->
     <string name="list_audio_track">Audio Track</string>
+    <string name="list_video_quality">Video Quality</string>
+    <string name="list_auto">Auto</string>
     <string name="list_off">Off</string>
     <string name="list_no_alt_audio">No alternate audio tracks</string>
+    <string name="list_no_alt_video">No alternate video quality</string>
     <string name="list_no_subtitles">No subtitles available</string>
 
     <!-- Continue Watching row/grid (MainActivityDiscover.kt / MainActivityCategories.kt) -->

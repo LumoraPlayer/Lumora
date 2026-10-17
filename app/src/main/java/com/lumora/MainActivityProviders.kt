@@ -39,7 +39,11 @@ import kotlinx.coroutines.CancellationException
 /** Fixed, no-picker-required fallback location for devices (Fire TV, most Android TV
  *  boxes) with no Storage Access Framework document picker installed at all. */
 internal fun MainActivity.localBackupFile(): File {
-    val dir = File(getExternalFilesDir(null), "backups").apply { mkdirs() }
+    // getExternalFilesDir can be null when shared storage is unavailable (adopted
+    // storage mid-mount, restricted profiles) - File(null, ...) would NPE inside the
+    // export/import coroutine and take the app down, so fall back to internal storage.
+    val base = getExternalFilesDir(null) ?: filesDir
+    val dir = File(base, "backups").apply { mkdirs() }
     return File(dir, "lumora_backup.json")
 }
 
@@ -510,6 +514,15 @@ internal fun MainActivity.loadSavedProvider() {
  *  catalog that just arrived is first content, whatever the flag says. */
 internal fun MainActivity.shouldPreserveUiOnLoad(): Boolean =
     uiPainted && binding.emptyState.visibility != View.VISIBLE
+
+/** At least one browsable catalog source besides [excludeId]: an enabled, non-backup
+ *  IPTV provider, or an enabled media server that carries a catalogue (shares browse
+ *  folders on demand instead). Turning the last visible source into a backup would hide
+ *  every browse surface while providers stay configured, so the save is refused instead. */
+internal fun MainActivity.hasOtherVisibleSource(excludeId: String): Boolean {
+    if (IptvProviderStore.load(prefs).any { it.id != excludeId && it.enabled && !it.backup }) return true
+    return mediaServers().any { it.enabled && !it.isShare }
+}
 
 /** Reacts to a provider being switched on or off in Settings.
  *

@@ -17,6 +17,11 @@ data class IptvProviderConfig(
     val liveEnabled: Boolean = true,
     val moviesEnabled: Boolean = true,
     val seriesEnabled: Boolean = true,
+    // Backup source: hidden from browsing (shelves, grids, search, Continue Watching)
+    // but still loaded, so its copies stay in the version maps and keep playing when
+    // the visible source fails. One provider per library is usually enough on screen;
+    // the rest are failover, not clutter.
+    val backup: Boolean = false,
     val url: String? = null,
     val username: String? = null,
     val password: String? = null,

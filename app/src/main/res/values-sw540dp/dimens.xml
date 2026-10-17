@@ -261,5 +261,5 @@
     <dimen name="sports_live_channel_name_max_width">130dp</dimen>
     <dimen name="sports_live_logo_size">26dp</dimen>
     <dimen name="sports_live_grid_gap">24dp</dimen>
-    <dimen name="sports_live_card_min_width">300dp</dimen>
+    <dimen name="sports_live_card_min_width">220dp</dimen>
 </resources>

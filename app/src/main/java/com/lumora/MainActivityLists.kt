@@ -1890,6 +1890,41 @@ internal fun MainActivity.showTrackPicker(isAudio: Boolean) {
         .show()
 }
 
+/** In-manifest video rendition picker (DASH AdaptationSets / HLS variants): Auto (adaptive,
+ *  the default - ExoPlayer follows bandwidth) plus one fixed rendition per entry. A manual
+ *  choice is a per-playback override: starting another title resets to Auto (see
+ *  PlayerManager.playUrl). */
+internal fun MainActivity.showVideoQualityPicker() {
+    val player = playerManager.getExoPlayer()
+    val tracks = trackController.videoTracks(player)
+    if (tracks.isEmpty()) {
+        Toast.makeText(this, getString(R.string.list_no_alt_video), Toast.LENGTH_SHORT).show()
+        return
+    }
+    val isAuto = trackController.isVideoAuto(player)
+    val labels = mutableListOf(getString(R.string.list_auto))
+    val actions = mutableListOf<() -> Unit>({ trackController.selectVideoTrack(player, null) })
+    tracks.forEach { track ->
+        labels.add(track.name)
+        actions.add { trackController.selectVideoTrack(player, track.id) }
+    }
+    // In Auto the adaptive selector still marks its current rendition selected, so the
+    // check must follow the override state, not the per-track flag: Auto entry checked
+    // when no manual override exists, else the manually chosen rendition.
+    val checkedIndex = if (isAuto) 0 else {
+        val selected = tracks.indexOfFirst { it.isSelected }
+        if (selected >= 0) selected + 1 else 0
+    }
+    AlertDialog.Builder(this)
+        .setTitle(getString(R.string.list_video_quality))
+        .setSingleChoiceItems(labels.toTypedArray(), checkedIndex) { dialog, which ->
+            actions[which]()
+            dialog.dismiss()
+        }
+        .setNegativeButton(getString(R.string.cancel), null)
+        .show()
+}
+
 // ── Toolbar ────────────────────────────────────
 
 /** Toolbar clock. Ticks once a minute, aligned to the wall-clock minute boundary rather

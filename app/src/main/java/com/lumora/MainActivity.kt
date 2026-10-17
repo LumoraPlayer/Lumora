@@ -433,7 +433,10 @@ class MainActivity : AppCompatActivity() {
      *  the way down to the minSdk). An empty list clears any override and follows the device. */
     internal fun applyUiLanguageOverride(code: String) {
         val locales = if (code == "system" || code.isBlank()) LocaleListCompat.getEmptyLocaleList()
-        else LocaleListCompat.forLanguageTags(code)
+        else runCatching { LocaleListCompat.forLanguageTags(code) }.getOrNull()
+            // A restored backup can carry a tag this build can't parse - fall back to the
+            // device language rather than crashing the import that just restored it.
+            ?: LocaleListCompat.getEmptyLocaleList()
         AppCompatDelegate.setApplicationLocales(locales)
     }
 

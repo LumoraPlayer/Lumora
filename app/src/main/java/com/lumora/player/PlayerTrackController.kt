@@ -12,13 +12,35 @@ data class PlayerTrack(val id: String, val name: String, val isSelected: Boolean
 
 /**
  * Thin wrapper around ExoPlayer's TrackSelectionParameters API for picking
- * audio/subtitle tracks. Pure Media3 logic, no UI framework dependency.
+ * audio/subtitle/video tracks. Pure Media3 logic, no UI framework dependency.
  */
 class PlayerTrackController {
 
     fun audioTracks(player: ExoPlayer): List<PlayerTrack> = collect(player.currentTracks, C.TRACK_TYPE_AUDIO)
 
     fun subtitleTracks(player: ExoPlayer): List<PlayerTrack> = collect(player.currentTracks, C.TRACK_TYPE_TEXT)
+
+    /** In-manifest video renditions (DASH AdaptationSets / HLS variants). Empty until the
+     *  manifest's tracks are known. Sorted best-first so the picker reads top-down. */
+    fun videoTracks(player: ExoPlayer): List<PlayerTrack> =
+        collectVideo(player.currentTracks)
+
+    /** True when no manual video override is set, i.e. ExoPlayer's adaptive selector is
+     *  free to switch renditions with bandwidth (the "Auto" profile). */
+    fun isVideoAuto(player: ExoPlayer): Boolean =
+        player.trackSelectionParameters.overrides.values.none { it.type == C.TRACK_TYPE_VIDEO }
+
+    /** Select a fixed video rendition, or pass null for Auto (clear the override and let
+     *  the adaptive selector follow bandwidth). */
+    fun selectVideoTrack(player: ExoPlayer, trackId: String?) {
+        if (trackId == null) {
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+                .build()
+            return
+        }
+        selectTrack(player, C.TRACK_TYPE_VIDEO, trackId)
+    }
 
     /** Select a specific audio track, or pass null to clear the override and let the system auto-select. */
     fun selectAudioTrack(player: ExoPlayer, trackId: String?) {
@@ -82,7 +104,56 @@ class PlayerTrackController {
         return result
     }
 
+    private fun collectVideo(tracks: Tracks): List<PlayerTrack> {
+        val result = mutableListOf<PlayerTrack>()
+        for (group in tracks.groups) {
+            if (group.type != C.TRACK_TYPE_VIDEO) continue
+            for (i in 0 until group.length) {
+                val format = group.getTrackFormat(i)
+                // Unsupported renditions (no decoder) can't play - listing them only
+                // offers a choice that immediately errors.
+                if (!group.isSupported) continue
+                result.add(
+                    PlayerTrack(
+                        id = trackKey(group.mediaTrackGroup.id, i),
+                        name = buildVideoTrackName(format, i),
+                        isSelected = group.isTrackSelected(i)
+                    )
+                )
+            }
+        }
+        // Best-first: highest rendition on top, matching the Versions picker convention.
+        // Height dominates, bitrate splits ties (two 1080p encodes at different rates).
+        return result.sortedWith(
+            compareByDescending<PlayerTrack> { videoHeightForSort(it) }
+                .thenByDescending { videoBitrateForSort(it) }
+                .thenBy { it.name }
+        )
+    }
+
+    /** Height/bitrate stashed in the display name for sorting (see [buildVideoTrackName]):
+     *  parses the leading "<height>p" and trailing "<x.x> Mbps" the name carries. */
+    private fun videoHeightForSort(track: PlayerTrack): Int =
+        Regex("""^(\d+)p""").find(track.name)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+    private fun videoBitrateForSort(track: PlayerTrack): Double =
+        Regex("""([\d.]+)\s*Mbps""").find(track.name)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+
     private fun trackKey(groupId: String, index: Int) = "$groupId:$index"
+
+    /** Human label for an in-manifest video rendition: `1080p`, optionally with bitrate
+     *  (`1080p · 4.5 Mbps`) so two encodes at one height stay distinguishable. Falls back
+     *  to bitrate-only, then the authored label, then `Track N`. */
+    private fun buildVideoTrackName(format: Format, index: Int): String {
+        val label = format.label
+        val height = format.height
+        val bitrateMbps = if (format.bitrate > 0) format.bitrate / 1_000_000.0 else 0.0
+        val bitrateSuffix = if (bitrateMbps > 0) " · %.1f Mbps".format(bitrateMbps) else ""
+        if (height > 0) return "${height}p$bitrateSuffix"
+        if (bitrateMbps > 0) return "%.1f Mbps".format(bitrateMbps)
+        if (!label.isNullOrBlank()) return label
+        return "Track ${index + 1}"
+    }
 
     private fun buildTrackName(format: Format, index: Int): String {
         val label = format.label

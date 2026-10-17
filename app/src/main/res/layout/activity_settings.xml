@@ -766,6 +766,37 @@
                         android:textColor="@color/text_primary"
                         android:textSize="@dimen/settings_text_body" />
 
+                    <!-- Backup source toggle (IPTV types only - shown/hidden by
+                         selectType): the provider stays enabled and keeps serving
+                         failover versions, but none of its channels browse, search,
+                         or tile anywhere. -->
+                    <CheckBox
+                        android:id="@+id/settingsProviderBackup"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/settings_gap"
+                        android:background="@drawable/bg_toolbar_button"
+                        android:buttonTint="@color/primary"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:fontFamily="@font/inter_medium"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="8dp"
+                        android:stateListAnimator="@animator/focus_scale_flat"
+                        android:text="@string/sett_provider_backup"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/settings_text_caption" />
+
+                    <TextView
+                        android:id="@+id/settingsProviderBackupHint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/settings_gap_xs"
+                        android:text="@string/sett_provider_backup_hint"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="@dimen/settings_text_caption"
+                        android:fontFamily="@font/inter_regular" />
+
                     </LinearLayout>
 
                     <!-- Step 4: only the fields the chosen type actually needs -->

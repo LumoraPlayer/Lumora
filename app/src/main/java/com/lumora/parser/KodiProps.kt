@@ -16,6 +16,74 @@ object KodiProps {
         return v == "clearkey" || v == "org.w3.clearkey"
     }
 
+    /** Case-insensitive KODIPROP lookup: playlists vary the casing of
+     *  `inputstream.adaptive.*` keys, and a miss here used to drop DRM/headers silently. */
+    fun lookup(props: Map<String, String>, key: String): String? {
+        props[key]?.let { return it }
+        for ((k, v) in props) {
+            if (k.equals(key, ignoreCase = true)) return v
+        }
+        return null
+    }
+
+    /** True for a KODIPROP key that carries a User-Agent directly, e.g.
+     *  `#KODIPROP:http-user-agent=...`, `#KODIPROP:User-Agent=...` or
+     *  `#KODIPROP:inputstream.adaptive.http-user-agent=...` - the per-entry UA
+     *  fallback when neither `stream_headers` nor `#EXTVLCOPT` provides one. */
+    fun isUserAgentKey(key: String): Boolean {
+        val k = key.trim().lowercase()
+        return k == "http-user-agent" || k == "user-agent" ||
+            k.endsWith(".http-user-agent") || k.endsWith(".user-agent")
+    }
+
+    fun isReferrerKey(key: String): Boolean {
+        val k = key.trim().lowercase()
+        return k == "http-referrer" || k == "referer" || k == "referrer" ||
+            k.endsWith(".http-referrer") || k.endsWith(".referer") || k.endsWith(".referrer")
+    }
+
+    fun isOriginKey(key: String): Boolean {
+        val k = key.trim().lowercase()
+        return k == "http-origin" || k == "origin" || k.endsWith(".http-origin") || k.endsWith(".origin")
+    }
+
+    /** First direct per-entry UA/referrer/origin found in [props], or null.
+     *  Used only as a fallback: `stream_headers` / `#EXTVLCOPT` win when present. */
+    fun extractDirectHeaders(props: Map<String, String>): Map<String, String> {
+        var ua: String? = null
+        var referrer: String? = null
+        var origin: String? = null
+        for ((k, v) in props) {
+            val value = unquote(v.trim())
+            if (value.isEmpty()) continue
+            when {
+                ua == null && isUserAgentKey(k) -> ua = value
+                referrer == null && isReferrerKey(k) -> referrer = value
+                origin == null && isOriginKey(k) -> origin = value
+            }
+            if (ua != null && referrer != null && origin != null) break
+        }
+        val out = LinkedHashMap<String, String>()
+        if (ua != null) out["User-Agent"] = ua
+        if (referrer != null) out["Referer"] = referrer
+        if (origin != null) out["Origin"] = origin
+        return out
+    }
+
+    /** Strips one layer of surrounding single/double quotes:
+     *  `#EXTVLCOPT:http-user-agent="Foo Bar"` carries the quotes literally. */
+    fun unquote(value: String): String {
+        val t = value.trim()
+        if (t.length >= 2) {
+            val first = t.first()
+            val last = t.last()
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+                return t.substring(1, t.length - 1).trim()
+            }
+        }
+        return t
+    }
+
     /**
      * Parses `inputstream.adaptive.stream_headers` / `manifest_headers` values:
      * `User-Agent=Browser&token=blabla`. Split on `&`, each part on the FIRST `=`
