@@ -30,10 +30,12 @@ import com.lumora.util.resetFocusTransform
  *  the nested shelf/poster RecyclerViews to their header controls and the tab/search row. */
 class ShelfAdapter(
     private val onItemClick: (Channel) -> Unit,
-    /** Long-press on a poster - favourites the item (see MainActivity.toggleFavoriteVodItem).
-     *  Same gesture the live guide already uses on a channel row, so one hold means
-     *  "favourite this" everywhere in the app. */
-    private val onItemLongClick: ((Channel) -> Unit)? = null,
+    /** Long-press on a poster. Almost everywhere this favourites the item (see
+     *  MainActivity.toggleFavoriteVodItem) - the same gesture the live guide uses, so one
+     *  hold means "favourite this" across the app. The shelf is handed along because the
+     *  synthetic rows have their own contract: a hold on Home's Recently Played asks to
+     *  take one item off it, exactly as a hold in the Continue Watching grid does. */
+    private val onItemLongClick: ((Channel, ContentShelf?) -> Unit)? = null,
     private val onPinClick: (ContentShelf) -> Unit = {},
     private val onHideClick: (ContentShelf) -> Unit = {},
     private val onSeeAllClick: ((ContentShelf) -> Unit)? = null,
@@ -68,7 +70,11 @@ class ShelfAdapter(
         private val pinButton: TextView = itemView.findViewById(R.id.shelfPinButton)
         private val hideButton: TextView = itemView.findViewById(R.id.shelfHideButton)
         val itemsList: RecyclerView = itemView.findViewById(R.id.shelfItems)
-        private val posterAdapter = ShelfPosterAdapter(onItemClick, onItemLongClick)
+        // The shelf is captured per bind (current) so the poster's long-press can tell
+        // which row it was pressed on - the same adapter serves every Home shelf.
+        private val posterAdapter = ShelfPosterAdapter(onItemClick) { item ->
+            onItemLongClick?.invoke(item, current)
+        }
         private var current: ContentShelf? = null
 
         init {

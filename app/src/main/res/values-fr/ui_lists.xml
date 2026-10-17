@@ -78,4 +78,12 @@
     <string name="list_upnext_removed">Retiré de À suivre</string>
     <string name="list_upnext_restore">Restaurer les séries retirées</string>
     <string name="list_upnext_restored">Séries retirées restaurées</string>
+
+    <!-- Ligne Lus récemment (Accueil) - menu appui long, même contrat que la grille
+         Reprendre la lecture (MainActivityDiscover.kt) -->
+    <string name="list_recent_remove_item">Retirer de Lus récemment</string>
+    <string name="list_recent_clear_all">Vider Lus récemment</string>
+    <string name="list_recent_clear_all_confirm">Vider toutes les chaînes de Lus récemment ? Seule la liste de cet appareil est concernée.</string>
+    <string name="list_recent_removed">Retiré de Lus récemment</string>
+    <string name="list_recent_cleared">Lus récemment vidé</string>
 </resources>

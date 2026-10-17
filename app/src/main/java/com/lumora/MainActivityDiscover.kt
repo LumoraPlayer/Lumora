@@ -3,6 +3,7 @@ package com.lumora
 
 import android.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.RecyclerView
 import android.graphics.Typeface
 import android.view.View
 import android.view.ViewGroup
@@ -1036,6 +1037,94 @@ internal fun MainActivity.confirmClearContinueWatching() {
         }
         .setNegativeButton(android.R.string.cancel, null)
         .show()
+}
+
+/**
+ * Hold on Home's "Recently Played" shelf: the row is a list of what you were watching, so
+ * a hold there asks to take one channel off it - the same contract the Continue Watching
+ * grid has (see [onGridItemLongClick]). Everywhere else a hold favourites.
+ *
+ * Clear-all keeps the confirm step for the same reason Continue Watching's does: it wipes
+ * the row in one press, and this menu is the only place the gesture lives.
+ */
+internal fun MainActivity.onRecentlyPlayedLongClick(item: Channel) {
+    AlertDialog.Builder(this)
+        .setTitle(item.name)
+        .setItems(
+            arrayOf(
+                getString(R.string.list_recent_remove_item),
+                getString(R.string.list_recent_clear_all)
+            )
+        ) { _, which ->
+            when (which) {
+                0 -> {
+                    removeFromRecentlyPlayed(item)
+                    Toast.makeText(this, R.string.list_recent_removed, Toast.LENGTH_SHORT).show()
+                }
+                1 -> confirmClearRecentlyPlayed()
+            }
+        }
+        .show()
+}
+
+/** One channel off the Recently Played row. The store is local and nothing else keeps a
+ *  copy - live channels have no resume point and nothing is reported anywhere - so unlike
+ *  Continue Watching there is no server-side list to tell. The row is rebuilt immediately
+ *  and focus is re-aimed at the item that took the removed one's place (or the top of Home
+ *  when the row is gone), because the poster that held focus was just detached. */
+internal fun MainActivity.removeFromRecentlyPlayed(item: Channel) {
+    val shelfTitle = getString(R.string.category_recently_played)
+    val removedAt = homeShelfAdapter.currentList
+        .firstOrNull { it.title == shelfTitle }
+        ?.items?.indexOfFirst { it.id == item.id }
+        ?.takeIf { it >= 0 } ?: 0
+    RecentlyPlayedStore.remove(this, item.id)
+    refreshHomeShelvesIfShowing()
+    if (!showingHome) return
+    val shelfIndex = homeShelfAdapter.currentList.indexOfFirst { it.title == shelfTitle }
+    if (shelfIndex >= 0) focusHomeShelfPoster(shelfIndex, removedAt)
+    else focusHomeShelfPoster(0, 0)
+}
+
+/** Clear-all asks first, mirroring Continue Watching's - but this one's blast radius is
+ *  only this device's list: there is no server or Trakt copy of recently-played channels. */
+internal fun MainActivity.confirmClearRecentlyPlayed() {
+    AlertDialog.Builder(this)
+        .setTitle(R.string.list_recent_clear_all)
+        .setMessage(R.string.list_recent_clear_all_confirm)
+        .setPositiveButton(R.string.list_recent_clear_all) { _, _ ->
+            RecentlyPlayedStore.clear(this)
+            refreshHomeShelvesIfShowing()
+            if (showingHome) focusHomeShelfPoster(0, 0)
+            Toast.makeText(this, R.string.list_recent_cleared, Toast.LENGTH_SHORT).show()
+        }
+        .setNegativeButton(android.R.string.cancel, null)
+        .show()
+}
+
+/** Focuses a poster inside a Home shelf - the nested shape [focusItemWhenReady] cannot
+ *  reach (shelf row -> horizontal poster strip). Retries a few frames for the submitList
+ *  diff to lay the refreshed shelf out, then falls back to the tab row, which is always
+ *  there. */
+internal fun MainActivity.focusHomeShelfPoster(shelfIndex: Int, itemPosition: Int, attempts: Int = 5) {
+    fun attempt(remaining: Int) {
+        val row = binding.homeContent.layoutManager?.findViewByPosition(shelfIndex)
+        val items = row?.findViewById<RecyclerView>(R.id.shelfItems)
+        val count = items?.adapter?.itemCount ?: 0
+        if (items == null || count == 0) {
+            if (remaining > 0) binding.homeContent.post { attempt(remaining - 1) } else binding.tabHome.requestFocus()
+            return
+        }
+        val target = itemPosition.coerceIn(0, count - 1)
+        items.scrollToPosition(target)
+        binding.homeContent.post {
+            val view = items.layoutManager?.findViewByPosition(target)
+            if (view?.requestFocus() != true) {
+                if (remaining > 0) binding.homeContent.post { attempt(remaining - 1) } else binding.tabHome.requestFocus()
+            }
+        }
+    }
+    attempt(attempts)
 }
 
 /** Adult content never reaches a Home shelf, regardless of the "Hide adult categories"

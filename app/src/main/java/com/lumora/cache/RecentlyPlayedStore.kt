@@ -26,6 +26,15 @@ object RecentlyPlayedStore {
     @Synchronized
     fun getRecentIds(context: Context): List<String> = load(context)
 
+    /** Takes one channel off the list - the Home row's hold-OK "Remove from Recently Played".
+     *  No-op when the id isn't in the list, so a stale row can't rewrite the file. */
+    @Synchronized
+    fun remove(context: Context, channelId: String) {
+        if (channelId.isBlank()) return
+        val entries = load(context).toMutableList()
+        if (entries.removeAll { it == channelId }) save(context, entries)
+    }
+
     @Synchronized
     fun clear(context: Context) {
         runCatching { File(context.filesDir, FILE_NAME).delete() }

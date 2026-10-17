@@ -1207,21 +1207,27 @@ class MainActivity : AppCompatActivity() {
         // and playItem's SERIES branch would open the episode itself as a dead detail page.
         // onHomeItemClick resolves an episode to its series (with direct-play fallback).
         onItemClick = { item -> onHomeItemClick(item) },
-        onItemLongClick = { item -> toggleFavoriteVodItem(item) },
+        onItemLongClick = { item, _ -> toggleFavoriteVodItem(item) },
         onPinClick = { shelf -> togglePinShelfCategory(1, shelf) },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenShelfCategory(1, shelf) },
         onSeeAllClick = { shelf -> showSeeAll(shelf) }
     ).apply { topRowFocusUpTargetId = R.id.tabSeries }
     internal val filmsShelfAdapter = ShelfAdapter(
         onItemClick = { item -> playItem(item) },
-        onItemLongClick = { item -> toggleFavoriteVodItem(item) },
+        onItemLongClick = { item, _ -> toggleFavoriteVodItem(item) },
         onPinClick = { shelf -> togglePinShelfCategory(2, shelf) },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenShelfCategory(2, shelf) },
         onSeeAllClick = { shelf -> showSeeAll(shelf) }
     ).apply { topRowFocusUpTargetId = R.id.tabFilms }
     internal val homeShelfAdapter = ShelfAdapter(
         onItemClick = { item -> onHomeItemClick(item) },
-        onItemLongClick = { item -> toggleFavoriteVodItem(item) },
+        // Hold on Home's Recently Played asks to take the channel off that row (the same
+        // contract the Continue Watching grid has); every other Home shelf keeps the
+        // hold-to-favourite gesture.
+        onItemLongClick = { item, shelf ->
+            if (shelf?.title == getString(R.string.category_recently_played)) onRecentlyPlayedLongClick(item)
+            else toggleFavoriteVodItem(item)
+        },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenHomeShelf(shelf.title) },
         showPinButton = false
     ).apply { topRowFocusUpTargetId = R.id.tabHome }

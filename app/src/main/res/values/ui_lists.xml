@@ -81,4 +81,12 @@
     <string name="list_upnext_removed">Removed from Up Next</string>
     <string name="list_upnext_restore">Restore removed shows</string>
     <string name="list_upnext_restored">Removed shows restored</string>
+
+    <!-- Recently Played row (Home) - hold-OK menu, same contract as the Continue Watching
+         grid (MainActivityDiscover.kt) -->
+    <string name="list_recent_remove_item">Remove from Recently Played</string>
+    <string name="list_recent_clear_all">Clear Recently Played</string>
+    <string name="list_recent_clear_all_confirm">Clear every channel from Recently Played? Only this device\'s list is affected.</string>
+    <string name="list_recent_removed">Removed from Recently Played</string>
+    <string name="list_recent_cleared">Recently Played cleared</string>
 </resources>

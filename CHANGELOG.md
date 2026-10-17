@@ -7,6 +7,9 @@
 - **Multiview: watch up to four live channels at once.** The Multiview button beside the transport controls opens a grid with the channel already playing; the action bar adds, changes, closes and fullscreens screens, and the D-pad moves between them - the highlighted screen is the audible one, the rest are muted. Each screen is its own player with its own quality-version fallback, dead-feed skip and offline badge, so one bad stream never takes the grid down.
 - **Sized to the hardware and the subscription.** Auto (the default) opens as many screens as your providers' simultaneously-connection limits allow - set a provider's **Max connections** when adding or editing it - and the app remembers the largest count this device has actually sustained, so a stick that cannot decode a fourth stream stops being offered one. Adding a screen that would exceed its provider's limit warns before the stream is refused. Settings → Filters holds the master switch and the Auto/2/3/4 screen count.
 
+### Lists
+- **Single items can be taken off Recently Played.** Holding OK on the Home row now offers **Remove from Recently Played** / **Clear Recently Played** - the same hold-to-remove contract the Continue Watching grid already had - instead of only favouriting the channel. Nothing outside this device's list is touched, and focus stays on the row when a channel is removed.
+
 ## 5.6
 
 ### Playback & DRM
