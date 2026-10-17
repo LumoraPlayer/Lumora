@@ -2502,6 +2502,8 @@ internal fun MainActivity.hidePlayer() {
     if (showingHome) homeShelfAdapter.submitList(buildHomeShelves())
     // Same for the Series poster shelf and its Continue Watching / Up Next rows.
     refreshSeriesShelvesIfShowing()
+    // Same for the Films poster shelf and its Continue Watching row.
+    refreshFilmShelvesIfShowing()
     // Back from fullscreen, the guide is as old as the session that just closed - a
     // film watched for two hours leaves its rows two hours in the past until the next
     // minute tick fires, up to a full minute away. Trigger that tick now instead of

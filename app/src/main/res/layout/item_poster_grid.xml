@@ -20,11 +20,12 @@
         android:background="@drawable/bg_rounded_poster_large"
         android:clipToOutline="true">
 
-        <ImageView
+        <com.lumora.ui.RoundedImageView
             android:id="@+id/itemPoster"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scaleType="centerCrop" />
+            android:scaleType="centerCrop"
+            app:cornerRadius="@dimen/poster_image_corner_radius" />
 
         <View
             android:layout_width="match_parent"

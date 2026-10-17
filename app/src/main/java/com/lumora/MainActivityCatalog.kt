@@ -246,6 +246,7 @@ internal fun MainActivity.deriveFilmsSeries() {
             seriesVersions = result.seriesVersions
             seriesShelves = result.seriesShelves
             cachedSeriesCategoryRows = result.seriesCategoryRows
+            cachedFilmCategoryRows = result.filmCategoryRows
             // Mirror of classifyAndShow()'s shelf submits for the films/series shelves.
             seriesShelfAdapter.submitList(seriesShelves)
             filmsShelfAdapter.submitList(filmShelves)
@@ -325,6 +326,7 @@ internal fun MainActivity.computeDerivedContent(allChannels: List<Channel>): Mai
     seriesVersions = result.seriesVersions
     seriesShelves = result.seriesShelves
     cachedSeriesCategoryRows = result.seriesCategoryRows
+    cachedFilmCategoryRows = result.filmCategoryRows
     return MainActivity.DerivedContent(liveChannels, liveVersions, filmList, filmVersions, filmShelves, seriesList, seriesVersions, seriesShelves)
 }
 
@@ -450,6 +452,14 @@ internal fun MainActivity.deriveFilmsSeriesHalf(list: List<Channel>): MainActivi
     // order. Films keeps its single "Newest" prepend, exactly as before.
     val filmShelvesLocal = shelvesFromCategoryRows(filmCategoryRows.rows, films)
         .let { shelves -> if (newestFilms.isEmpty()) shelves else listOf(ContentShelf(getString(R.string.category_newest), newestFilms, categoryId = NEWEST_CATEGORY_ID)) + shelves }
+        // One merged Continue Watching row leads the poster, mirroring the Series tab's
+        // lead shelf (films have no Up Next and no poster favourites shelf, so it is
+        // Continue Watching alone rather than the merged row series use).
+        .let { shelves ->
+            val lead = movieContinueItems()
+            if (lead.isEmpty()) shelves
+            else listOf(ContentShelf(getString(R.string.category_continue_watching), lead)) + shelves
+        }
 
     val series: List<Channel>
     val seriesVers: Map<String, List<Channel>>
@@ -516,7 +526,8 @@ internal fun MainActivity.deriveFilmsSeriesHalf(list: List<Channel>): MainActivi
         seriesList = series,
         seriesVersions = seriesVers,
         seriesShelves = seriesShelvesLocal,
-        seriesCategoryRows = seriesCategoryRows.rows
+        seriesCategoryRows = seriesCategoryRows.rows,
+        filmCategoryRows = filmCategoryRows.rows
     )
 }
 

@@ -6,6 +6,7 @@
      two halves of the cast feature read as one component family - the sidebar's
      bg_select_item defaults to transparent and left the faces floating chrome-less. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="@dimen/cast_cell_width"
     android:layout_height="wrap_content"
     android:layout_marginStart="4dp"
@@ -25,11 +26,12 @@
         android:background="@drawable/bg_rounded_poster"
         android:clipToOutline="true">
 
-        <ImageView
+        <com.lumora.ui.RoundedImageView
             android:id="@+id/castPhotoImage"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scaleType="centerCrop" />
+            android:scaleType="centerCrop"
+            app:cornerRadius="@dimen/small_image_corner_radius" />
 
         <!-- Visible until a profile URL loads (and forever for a person TMDB has no shot
              of), on the frame's own surface colour so an absent face reads as deliberate. -->
@@ -51,6 +53,7 @@
         android:fontFamily="@font/inter_medium"
         android:gravity="center"
         android:maxLines="2"
+        android:minLines="2"
         android:textColor="@color/text_primary"
         android:textSize="@dimen/cast_name_text" />
 

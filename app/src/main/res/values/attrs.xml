@@ -5,4 +5,7 @@
         <attr name="outlineWidth" format="dimension" />
         <attr name="outlineColor" format="color" />
     </declare-styleable>
+    <declare-styleable name="RoundedImageView">
+        <attr name="cornerRadius" format="dimension" />
+    </declare-styleable>
 </resources>

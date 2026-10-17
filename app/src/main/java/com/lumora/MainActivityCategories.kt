@@ -319,6 +319,25 @@ internal fun MainActivity.refreshSeriesShelvesIfShowing() {
     seriesShelfAdapter.submitList(shelves)
 }
 
+/** Films-shelf counterpart of [refreshSeriesShelvesIfShowing]: the Continue Watching
+ *  lead shelf moves when playback ends, so the Films poster needs the same lightweight
+ *  refresh. Rebuilds the shelf list from cachedFilmCategoryRows - never re-runs the
+ *  expensive buildCategoryRows() pass. */
+internal fun MainActivity.refreshFilmShelvesIfShowing() {
+    if (showingHome || activeTab != 2) return
+    if (binding.filmsContent.visibility != View.VISIBLE) return
+    val newestFilms = newestByDate(filmList)
+    val shelves = shelvesFromCategoryRows(cachedFilmCategoryRows, filmList)
+        .let { s -> if (newestFilms.isEmpty()) s else listOf(ContentShelf(getString(R.string.category_newest), newestFilms, categoryId = NEWEST_CATEGORY_ID)) + s }
+        .let { s ->
+            val lead = movieContinueItems()
+            if (lead.isEmpty()) s
+            else listOf(ContentShelf(getString(R.string.category_continue_watching), lead)) + s
+        }
+    filmShelves = shelves
+    filmsShelfAdapter.submitList(shelves)
+}
+
 /** Long-press a future guide block to arm/disarm a 5-min-before notification for it. */
 internal fun MainActivity.toggleProgramReminder(channel: Channel, program: XtreamClient.EpgProgram) {
     if (channel.id.isBlank()) return
@@ -563,14 +582,18 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
         MainActivity.SyntheticCategoryRows(
             result = rows,
             newest = if (tab != 0) newestByDate(list) else emptyList(),
-            continueWatching = if (tab == 1) seriesContinueItems() else emptyList(),
+            continueWatching = when (tab) {
+                1 -> seriesContinueItems()
+                2 -> movieContinueItems()
+                else -> emptyList()
+            },
             upNext = if (tab == 1) seriesUpNextItems() else emptyList(),
             favouriteVod = if (tab != 0) list.filter { it.id in favoriteVodIds } else emptyList()
         )
     }
     val result = synthetic.result
     val newestByTab = synthetic.newest
-    val seriesContinue = synthetic.continueWatching
+    val continueWatching = synthetic.continueWatching
     // The children cache backs the on-screen sidebar's expand/collapse - only the tab
     // that owns the sidebar may write it (the side menu builds other tabs too).
     if (tab == activeTab) categoryChildrenCache = result.childrenByParent
@@ -590,17 +613,18 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
             )
         )
     }
-    // Continue Watching has no channelIds/matchIds - selecting it is a special case in
-    // applyCategoryFilter (its episodes are not seriesList members). Only added while it
-    // has items, like the Jellyfin row is only added while the tab has Jellyfin content.
-    if (tab == 1 && CONTINUE_WATCHING_CATEGORY_ID !in hiddenIds && CONTINUE_WATCHING_CATEGORY_ID !in pinned) {
-        if (seriesContinue.isNotEmpty()) {
+    // Continue Watching holds in-progress items, not catalogue members - selecting it
+    // is a special case in applyCategoryFilter (episodes are not seriesList members,
+    // films are). Only added while it has items, like the Jellyfin row is only added
+    // while the tab has Jellyfin content.
+    if ((tab == 1 || tab == 2) && CONTINUE_WATCHING_CATEGORY_ID !in hiddenIds && CONTINUE_WATCHING_CATEGORY_ID !in pinned) {
+        if (continueWatching.isNotEmpty()) {
             rows.add(
                 0,
                 CategoryFilter(
                     id = CONTINUE_WATCHING_CATEGORY_ID,
                     name = getString(R.string.category_continue_watching),
-                    count = seriesContinue.size,
+                    count = continueWatching.size,
                     isDynamic = true
                 )
             )
@@ -1477,6 +1501,17 @@ internal suspend fun MainActivity.applyCategoryFilter(focusFirstLiveChannel: Boo
         2 -> {
             val source = filmList
             val shelfItems = selectedShelfItems
+            // Continue Watching holds in-progress films, not filmList members - same
+            // direct serve as the Series branch. filmsGridAdapter's click is playItem,
+            // which opens a film's detail page (with its Resume button) rather than
+            // playing straight into it.
+            if (selectedRowId == CONTINUE_WATCHING_CATEGORY_ID) {
+                setGridSpan(binding.filmsContent, filmsGridAdapter, R.id.tabFilms)
+                binding.filmsContent.adapter = filmsGridAdapter
+                filmsGridAdapter.replaceAll(movieContinueItems())
+                binding.filmsContent.scrollToPosition(0)
+                return
+            }
             // Favourites re-reads the store rather than using the row's channelIds: the grid
             // is where items get un-starred (long-press), and a stale id set would leave the
             // dropped poster on screen until the next rebuild.

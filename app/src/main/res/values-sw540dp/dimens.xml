@@ -149,6 +149,9 @@
     <dimen name="cast_cell_width">56dp</dimen>
     <dimen name="cast_name_text">8sp</dimen>
     <dimen name="cast_role_text">7sp</dimen>
+    <dimen name="poster_image_corner_radius">18dp</dimen>
+    <dimen name="detail_image_corner_radius">14dp</dimen>
+    <dimen name="small_image_corner_radius">8dp</dimen>
     <dimen name="detail_actions_start_margin">16dp</dimen>
     <dimen name="person_photo_width">140dp</dimen>
     <dimen name="person_photo_height">210dp</dimen>

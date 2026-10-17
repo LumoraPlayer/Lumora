@@ -503,6 +503,7 @@ class MainActivity : AppCompatActivity() {
      *  can rebuild the Series shelf list (favourites/newest/continue move after playback) without
      *  re-running the expensive buildCategoryRows() pass. */
     internal var cachedSeriesCategoryRows: List<CategoryFilter> = emptyList()
+    internal var cachedFilmCategoryRows: List<CategoryFilter> = emptyList()
     internal var currentVersionGroup: List<Channel> = emptyList()
     internal var currentVersionIndex = 0
     /** The other channels carrying the game being watched, when it was started from the Sports
@@ -2697,7 +2698,8 @@ class MainActivity : AppCompatActivity() {
         val seriesList: List<Channel>,
         val seriesVersions: Map<String, List<Channel>>,
         val seriesShelves: List<ContentShelf>,
-        val seriesCategoryRows: List<CategoryFilter>
+        val seriesCategoryRows: List<CategoryFilter>,
+        val filmCategoryRows: List<CategoryFilter>
     )
 
     /** A channel's filter key: Xtream category id, or M3U group name as a fallback.

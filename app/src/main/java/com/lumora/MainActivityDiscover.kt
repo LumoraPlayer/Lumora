@@ -944,6 +944,7 @@ internal fun MainActivity.removeFromContinueWatching(item: Channel) {
     traktRemovePlayback(listOf(item))
     refreshHomeShelvesIfShowing()
     refreshSeriesShelvesIfShowing()
+    refreshFilmShelvesIfShowing()
     if (showingHome || activeTab == 0) return
     val grid = if (activeTab == 1) binding.seriesContent else binding.filmsContent
     val gridAdapter = if (activeTab == 1) seriesGridAdapter else filmsGridAdapter
@@ -953,7 +954,7 @@ internal fun MainActivity.removeFromContinueWatching(item: Channel) {
     val removedAt = gridAdapter.currentList.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
     val wasOnContinueWatching = selectedRowId == CONTINUE_WATCHING_CATEGORY_ID
     scope.launch {
-        val remaining = if (activeTab == 1) seriesContinueItems() else emptyList()
+        val remaining = if (activeTab == 1) seriesContinueItems() else if (activeTab == 2) movieContinueItems() else emptyList()
         // The row only exists while it has items: dropping the last one has to move the pane
         // off it, or the grid sits on a selection the rebuilt sidebar no longer contains.
         if (selectedRowId == CONTINUE_WATCHING_CATEGORY_ID && remaining.isEmpty()) {
@@ -1344,6 +1345,22 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
 internal fun MainActivity.seriesContinueItems(): List<Channel> {
     val local = PlaybackPositionStore.getAllInProgress(this).filter { it.mediaType == MediaType.SERIES }
     val server = (jellyfinResumeItems + plexResumeItems).filter { it.mediaType == MediaType.SERIES }
+    val serverIds = server.map { it.id }.toSet()
+    return continueWatchingTiles(
+        (server + local.filterNot { it.id in serverIds }).filterNot(::isAdultHomeItem)
+    )
+}
+
+/** Films-only Continue Watching for the Films tab - same merge as the Home shelf
+ *  (server resume list first, then local in-progress entries minus anything the server
+ *  already covered), filtered down to films and adult-dropped. Films pass through
+ *  [continueWatchingTiles] undecorated (no series to resolve, no episode marker to
+ *  print) but still get its switched-off-source filter and cross-provider title
+ *  dedup. Shared by the Films sidebar row, its content grid, and the Films poster
+ *  shelf lead item. */
+internal fun MainActivity.movieContinueItems(): List<Channel> {
+    val local = PlaybackPositionStore.getAllInProgress(this).filter { it.mediaType == MediaType.MOVIE }
+    val server = (jellyfinResumeItems + plexResumeItems).filter { it.mediaType == MediaType.MOVIE }
     val serverIds = server.map { it.id }.toSet()
     return continueWatchingTiles(
         (server + local.filterNot { it.id in serverIds }).filterNot(::isAdultHomeItem)
