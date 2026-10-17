@@ -260,7 +260,27 @@ object PlaybackPositionStore {
                                 pluginId = c.optString("pluginId", null),
                                 streamHeaders = c.optJSONObject("streamHeaders")?.let { h ->
                                     h.keys().asSequence().associateWith { k -> h.getString(k) }
-                                }
+                                },
+                                drmType = c.optString("drmType", null),
+                                drmKeys = c.optJSONArray("drmKeys")?.let { arr ->
+                                    (0 until arr.length()).mapNotNull { i ->
+                                        val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                                        val kid = o.optString("kid").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                                        val key = o.optString("key").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                                        com.lumora.model.DrmKey(kid, key)
+                                    }.takeIf { it.isNotEmpty() }
+                                },
+                                drmLicenseUrl = c.optString("drmLicenseUrl", null),
+                                drmSchemeData = c.optString("drmSchemeData", null),
+                                manifestType = c.optString("manifestType", null),
+                                manifestHeaders = c.optJSONObject("manifestHeaders")?.let { h ->
+                                    h.keys().asSequence().associateWith { k -> h.getString(k) }
+                                },
+                                drmLicenseHeaders = c.optJSONObject("drmLicenseHeaders")?.let { h ->
+                                    h.keys().asSequence().associateWith { k -> h.getString(k) }
+                                },
+                                drmPostData = c.optString("drmPostData", null),
+                                drmLicenseResponse = c.optString("drmLicenseResponse", null)
                             )
                         }.getOrNull()
                     }
@@ -314,6 +334,28 @@ object PlaybackPositionStore {
                             ch.streamHeaders?.takeIf { it.isNotEmpty() }?.let { headers ->
                                 put("streamHeaders", JSONObject(headers as Map<*, *>))
                             }
+                            ch.drmType?.let { put("drmType", it) }
+                            ch.drmKeys?.takeIf { it.isNotEmpty() }?.let { keys ->
+                                put("drmKeys", org.json.JSONArray().apply {
+                                    for (k in keys) {
+                                        put(JSONObject().apply {
+                                            put("kid", k.kid)
+                                            put("key", k.key)
+                                        })
+                                    }
+                                })
+                            }
+                            ch.drmLicenseUrl?.let { put("drmLicenseUrl", it) }
+                            ch.drmSchemeData?.let { put("drmSchemeData", it) }
+                            ch.manifestType?.let { put("manifestType", it) }
+                            ch.manifestHeaders?.takeIf { it.isNotEmpty() }?.let { headers ->
+                                put("manifestHeaders", JSONObject(headers as Map<*, *>))
+                            }
+                            ch.drmLicenseHeaders?.takeIf { it.isNotEmpty() }?.let { headers ->
+                                put("drmLicenseHeaders", JSONObject(headers as Map<*, *>))
+                            }
+                            ch.drmPostData?.let { put("drmPostData", it) }
+                            ch.drmLicenseResponse?.let { put("drmLicenseResponse", it) }
                         })
                     }
                 })

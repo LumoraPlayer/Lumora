@@ -16,6 +16,9 @@
     <string name="list_delete_download">Delete download?</string>
     <string name="list_delete_download_message">\"%1$s\" will be removed from this device.</string>
     <string name="list_delete">Delete</string>
+    <!-- ClearKey DRM: Media3 download of encrypted tracks needs the same DrmSessionManager;
+         blocked for now (OTT also notes DRM recording caveats). -->
+    <string name="list_download_drm_unsupported">Protected streams can\'t be downloaded</string>
 
     <!-- Episode rows (EpisodeAdapter.kt) -->
     <string name="list_resume_remaining">Resume · %1$dm left</string>

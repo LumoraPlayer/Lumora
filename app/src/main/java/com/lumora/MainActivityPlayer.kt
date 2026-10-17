@@ -1039,6 +1039,7 @@ internal fun MainActivity.showPlayerFor(
             }
         }
         else -> {
+            reportUnsupportedDrmScheme(startVersion)
             playerManager.playUrl(
                 startVersion.url,
                 startVersion.streamUserAgent,
@@ -1051,7 +1052,8 @@ internal fun MainActivity.showPlayerFor(
                 startPositionMs = resumeFromMs ?: 0L,
                 preferAudioLanguage = startVersion.mediaType != MediaType.LIVE,
                 maintainTokenQuery = maintainTokenQuery,
-                mimeType = mimeType,
+                mimeType = mimeType
+                    ?: com.lumora.player.ClearKeyDrm.mimeTypeForManifestHint(startVersion.manifestType),
                 // Set only by playDownload for a completed HLS download, which replays its
                 // original URL out of the download cache instead of over the network. Falls
                 // back to the share data source: an `smb://` URL has no HTTP transport at
@@ -1059,7 +1061,12 @@ internal fun MainActivity.showPlayerFor(
                 dataSourceOverride = offlineHlsPlaybackId
                     ?.takeIf { it == startVersion.id }
                     ?.let { HlsDownloads.offlineDataSourceFactory(this) }
-                    ?: shareDataSourceFor(startVersion)
+                    ?: shareDataSourceFor(startVersion),
+                drm = com.lumora.player.ClearKeyDrm.fromChannel(startVersion),
+                manifestHeaders = startVersion.manifestHeaders,
+                onDrmUnsupported = {
+                    Toast.makeText(this@showPlayerFor, getString(R.string.play_drm_unsupported), Toast.LENGTH_LONG).show()
+                }
             )
         }
     }
@@ -1386,6 +1393,7 @@ internal fun MainActivity.switchToVersionIndex(index: Int, message: String? = nu
     binding.playerChannelName.text = next.name
     Toast.makeText(this, message ?: getString(R.string.play_switching_to, extractLeadingTag(next.name) ?: next.name), Toast.LENGTH_SHORT).show()
     binding.bufferingSpinner.visibility = View.VISIBLE
+    reportUnsupportedDrmScheme(next)
     playerManager.playUrl(
         next.url,
         next.streamUserAgent,
@@ -1394,8 +1402,26 @@ internal fun MainActivity.switchToVersionIndex(index: Int, message: String? = nu
         // Share files keep their SMB data source across a version switch, same as any other
         // play path - a share item is usually its own single "version", but the watchdog can
         // still walk into this from a merged group.
-        dataSourceOverride = shareDataSourceFor(next)
+        dataSourceOverride = shareDataSourceFor(next),
+        mimeType = com.lumora.player.ClearKeyDrm.mimeTypeForManifestHint(next.manifestType),
+        drm = com.lumora.player.ClearKeyDrm.fromChannel(next),
+        manifestHeaders = next.manifestHeaders,
+        onDrmUnsupported = {
+            Toast.makeText(this, getString(R.string.play_drm_unsupported), Toast.LENGTH_LONG).show()
+        }
     )
+}
+
+/** Toasts when a channel names a DRM scheme the app cannot play (Widevine/PlayReady/unknown,
+ *  or a ClearKey entry with no usable key material) - detect and report rather than failing
+ *  silently. Playback is still attempted: a provider mislabel costs nothing. */
+internal fun MainActivity.reportUnsupportedDrmScheme(channel: Channel) {
+    val scheme = com.lumora.player.ClearKeyDrm.unsupportedSchemeName(
+        channel.drmType,
+        !channel.drmKeys.isNullOrEmpty(),
+        !channel.drmLicenseUrl.isNullOrBlank()
+    ) ?: return
+    Toast.makeText(this, getString(R.string.play_drm_scheme_unsupported, scheme), Toast.LENGTH_LONG).show()
 }
 
 /** Rebuilds the track-button row's left/right focus chain across only the buttons that are
@@ -2237,7 +2263,14 @@ internal fun MainActivity.checkForPreviewBlackFrame() {
     }
     previewVersionIndex = nextIndex
     val next = previewVersionGroup[nextIndex]
-    ensurePreviewPlayer().playUrl(next.url, next.streamUserAgent)
+    ensurePreviewPlayer().playUrl(
+        next.url,
+        next.streamUserAgent,
+        headers = next.streamHeaders,
+        drm = com.lumora.player.ClearKeyDrm.fromChannel(next),
+        manifestHeaders = next.manifestHeaders,
+        mimeType = com.lumora.player.ClearKeyDrm.mimeTypeForManifestHint(next.manifestType)
+    )
     mainHandler.postDelayed(previewBlackFrameCheckRunnable, BLACK_FRAME_CHECK_INTERVAL_MS)
 }
 

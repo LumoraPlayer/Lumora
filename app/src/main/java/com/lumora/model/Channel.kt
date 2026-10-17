@@ -109,10 +109,46 @@ data class Channel(
     // YouTube key for the panel's own trailer (Xtream `trailer` on VOD, `youtube_trailer` on
     // series). Playable as-is - no TMDB round trip, and it exists for plenty of titles TMDB
     // itself has no video for.
-    val trailerKey: String? = null
+    val trailerKey: String? = null,
+    // ClearKey DRM, from M3U `#KODIPROP:inputstream.adaptive.license_type/license_key`
+    // (see parser/KodiProps.kt). Null drmType = no DRM. drmKeys carry kid/key hex as
+    // given; hex→bytes→base64url happens in the player layer (ClearKeyDrm.kt).
+    val drmType: String? = null,
+    val drmKeys: List<DrmKey>? = null,
+    // Phase 2: hosted ClearKey license URL + license_data/default_kid. Parsed and kept
+    // so they are not mistaken for static keys, but not used for playback yet.
+    val drmLicenseUrl: String? = null,
+    val drmSchemeData: String? = null,
+    // MIME hint from `#KODIPROP:inputstream.adaptive.manifest_type` (mpd/dash/hls/ism).
+    val manifestType: String? = null,
+    // Phase 2: `#KODIPROP:inputstream.adaptive.manifest_headers`, kept apart from
+    // [streamHeaders] so playback can send them on the manifest request only (Kodi
+    // semantics - see clearkeydrmsupport.md §4.4). Null = phase-1 behaviour (one map).
+    val manifestHeaders: Map<String, String>? = null,
+    // Phase 2: the non-URL parts of a `url|headers|body|response` license wrapping.
+    // License request headers ride on the key request; postData carries the body template
+    // (`{SSM}` = the CDM challenge, which Media3 posts as the body anyway); response is
+    // the opaque response directive (raw passthrough unless handled).
+    val drmLicenseHeaders: Map<String, String>? = null,
+    val drmPostData: String? = null,
+    val drmLicenseResponse: String? = null
 ) {
     /** True for anything out of the user's own media server, whichever one it is. Used where
      *  the distinction that matters is "own library vs an IPTV panel" - version ranking,
      *  source labels, Discover match scoring - rather than which server it came from. */
     val isOwnLibrary: Boolean get() = isJellyfin || isPlex
+
+    /** True when this channel carries static ClearKey material playable without a license server. */
+    val hasStaticClearKey: Boolean get() = drmType == "clearkey" && !drmKeys.isNullOrEmpty()
+
+    /** True for any ClearKey entry (static keys and/or a hosted license URL) - neither can
+     *  be handed to an external player nor downloaded. */
+    val hasClearKey: Boolean get() = drmType == "clearkey" &&
+        (!drmKeys.isNullOrEmpty() || !drmLicenseUrl.isNullOrBlank())
 }
+
+/** One ClearKey kid/key pair, hex as given in the playlist. */
+data class DrmKey(
+    val kid: String,
+    val key: String
+)

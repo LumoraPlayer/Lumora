@@ -268,6 +268,10 @@ class PosterGridAdapter(
                 old.sourceProviderId == new.sourceProviderId &&
                 old.streamUserAgent == new.streamUserAgent &&
                 old.avOffsetMs == new.avOffsetMs &&
-                old.streamHeaders == new.streamHeaders
+                old.streamHeaders == new.streamHeaders &&
+                old.manifestHeaders == new.manifestHeaders &&
+                old.drmType == new.drmType &&
+                old.drmKeys == new.drmKeys &&
+                old.drmLicenseUrl == new.drmLicenseUrl
     }
 }

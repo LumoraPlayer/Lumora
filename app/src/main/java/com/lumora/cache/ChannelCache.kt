@@ -20,7 +20,7 @@ private const val LEGACY_JSON_CACHE_FILE = "channels_cache.json"
 private const val FIELD_SEP = ''
 /** Fields written per line. Append-only: new fields go at the end so older files stay
  *  readable. */
-private const val FIELD_COUNT = 28
+private const val FIELD_COUNT = 37
 /** Fields a line must have to be usable. Held at the pre-Catch-Up count on purpose - a
  *  cache written by an older build is still perfectly good, and every field added since
  *  is read with getOrElse. Raising this to FIELD_COUNT dropped every line of an existing
@@ -106,7 +106,19 @@ object ChannelCache {
                 // episode-count fallback read it straight off the cached catalogue. Without
                 // it, a restart from cache turned every M3U episode row back into an
                 // unnumbered row and the detail screen found no episodes at all.
-                sb.append(ch.episodeNum?.toString() ?: "").append('\n')
+                sb.append(ch.episodeNum?.toString() ?: "").append(FIELD_SEP)
+                // ClearKey DRM (append-only): drmKeys encodes as kid:key;kid2:key2 (hex
+                // values never contain the separators clean() strips).
+                sb.append(clean(ch.drmType)).append(FIELD_SEP)
+                sb.append(clean(ch.drmKeys?.joinToString(";") { "${it.kid}:${it.key}" })).append(FIELD_SEP)
+                sb.append(clean(ch.drmLicenseUrl)).append(FIELD_SEP)
+                sb.append(clean(ch.drmSchemeData)).append(FIELD_SEP)
+                sb.append(clean(ch.manifestType)).append(FIELD_SEP)
+                // Phase 2 DRM maps encode `&`/`=` so the column split stays unambiguous.
+                sb.append(clean(ch.manifestHeaders?.let { com.lumora.parser.KodiProps.encodeHeaderMap(it) })).append(FIELD_SEP)
+                sb.append(clean(ch.drmLicenseHeaders?.let { com.lumora.parser.KodiProps.encodeHeaderMap(it) })).append(FIELD_SEP)
+                sb.append(clean(ch.drmPostData)).append(FIELD_SEP)
+                sb.append(clean(ch.drmLicenseResponse)).append('\n')
                 out.append(sb)
             }
             }
@@ -182,7 +194,28 @@ object ChannelCache {
                             tmdbId = f.getOrElse(24) { "" }.ifEmpty { null },
                             trailerKey = f.getOrElse(25) { "" }.ifEmpty { null },
                             isPlex = f.getOrElse(26) { "0" } == "1",
-                            episodeNum = f.getOrElse(27) { "" }.toIntOrNull()
+                            episodeNum = f.getOrElse(27) { "" }.toIntOrNull(),
+                            drmType = f.getOrElse(28) { "" }.ifEmpty { null },
+                            drmKeys = f.getOrElse(29) { "" }.takeIf { it.isNotEmpty() }?.split(';')
+                                ?.mapNotNull { pair ->
+                                    val colon = pair.indexOf(':')
+                                    if (colon <= 0) return@mapNotNull null
+                                    val kid = pair.substring(0, colon).trim()
+                                    val key = pair.substring(colon + 1).trim()
+                                    if (kid.isEmpty() || key.isEmpty()) null
+                                    else com.lumora.model.DrmKey(kid, key)
+                                }?.takeIf { it.isNotEmpty() },
+                            drmLicenseUrl = f.getOrElse(30) { "" }.ifEmpty { null },
+                            drmSchemeData = f.getOrElse(31) { "" }.ifEmpty { null },
+                            manifestType = f.getOrElse(32) { "" }.ifEmpty { null },
+                            manifestHeaders = f.getOrElse(33) { "" }.takeIf { it.isNotEmpty() }
+                                ?.let { com.lumora.parser.KodiProps.decodeHeaderMap(it) }
+                                ?.takeIf { it.isNotEmpty() },
+                            drmLicenseHeaders = f.getOrElse(34) { "" }.takeIf { it.isNotEmpty() }
+                                ?.let { com.lumora.parser.KodiProps.decodeHeaderMap(it) }
+                                ?.takeIf { it.isNotEmpty() },
+                            drmPostData = f.getOrElse(35) { "" }.ifEmpty { null },
+                            drmLicenseResponse = f.getOrElse(36) { "" }.ifEmpty { null }
                         )
                     )
                 }

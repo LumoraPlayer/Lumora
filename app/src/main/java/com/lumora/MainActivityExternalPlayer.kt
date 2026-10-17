@@ -40,6 +40,12 @@ private val LICENCED_AUDIO_MIMES = mapOf(
  * connections, a second connection.
  */
 internal fun MainActivity.openInExternalPlayer(preselectedPackage: String? = null) {
+    // DRM cannot be handed off (no KODIPROP to VLC) - refuse with a clear message
+    // instead of a silent failure on the other side.
+    if (nowPlayingChannel?.hasClearKey == true) {
+        Toast.makeText(this, getString(R.string.play_drm_external_unsupported), Toast.LENGTH_LONG).show()
+        return
+    }
     val stream = playerManager.lastResolvedStream
     if (stream == null) {
         Toast.makeText(this, getString(R.string.play_nothing_playing), Toast.LENGTH_SHORT).show()

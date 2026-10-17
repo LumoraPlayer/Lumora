@@ -65,6 +65,11 @@ private fun MainActivity.seriesItemForEpisode(channel: Channel): Channel {
 
 internal fun MainActivity.downloadItem(channel: Channel) {
     if (channel.id.isBlank()) return
+    // ClearKey DRM downloads need the same DrmSessionManager - blocked for now.
+    if (channel.hasClearKey) {
+        Toast.makeText(this, getString(R.string.list_download_drm_unsupported), Toast.LENGTH_LONG).show()
+        return
+    }
     // Used to return silently when there was no URL, which is every Discover, scraper and
     // torrent item - so the button did nothing at all and said nothing about why.
     // No URL yet (a Discover title, or a TMDB episode placeholder): find a source first and
@@ -785,14 +790,6 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // person id, and the row is rebuilt when the enrichment lands.
     var castMembers: List<TmdbClient.CastMember> = emptyList()
 
-    fun firstDetailAction(): View? = listOf(
-        playButton,
-        favoriteButton,
-        downloadButton,
-        binding.detailFindStreamButton,
-        binding.detailTrailerButton
-    ).firstOrNull { it.isShown && it.isFocusable }
-
     fun selectedVersionChip(): View? {
         if (!versionsScroll.isShown) return null
         for (i in 0 until versionsRow.childCount) {
@@ -800,15 +797,6 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             if (chip.isSelected && chip.isShown) return chip
         }
         return versionsRow.getChildAt(0)?.takeIf { it.isShown }
-    }
-
-    fun focusFirstEpisode(): Boolean {
-        if (itemsList.visibility != View.VISIBLE || (itemsList.adapter?.itemCount ?: 0) == 0) return false
-        itemsList.scrollToPosition(0)
-        itemsList.post {
-            itemsList.post { itemsList.layoutManager?.findViewByPosition(0)?.requestFocus() }
-        }
-        return true
     }
 
     fun wireVerticalFocus(view: View, onUp: () -> Boolean, onDown: () -> Boolean) {
@@ -876,6 +864,16 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     castScroll.visibility = View.GONE
     castRow.removeAllViews()
     playButton.nextFocusDownId = View.NO_ID
+    // Static UP backup for the wireVerticalFocus listeners above: the Back button sits
+    // outside the ScrollView, where geometric focus search cannot reliably reach it from
+    // inside the scrolled strips - so every action carries the link explicitly, casts or
+    // no casts. A NO_ID here eats the press outright whenever the listener path misses,
+    // which is the "stuck on Play, can't reach the top" dead end.
+    playButton.nextFocusUpId = binding.detailBackButton.id
+    favoriteButton.nextFocusUpId = binding.detailBackButton.id
+    downloadButton.nextFocusUpId = binding.detailBackButton.id
+    binding.detailFindStreamButton.nextFocusUpId = binding.detailBackButton.id
+    binding.detailTrailerButton.nextFocusUpId = binding.detailBackButton.id
     sectionLabel.text = ""
     itemsList.visibility = View.GONE
     itemsList.adapter = null
@@ -1465,7 +1463,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                                     android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> check.isShown && check.requestFocus()
                                     android.view.KeyEvent.KEYCODE_DPAD_UP ->
                                         (selectedVersionChip() ?: firstDetailAction())?.requestFocus() ?: false
-                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusFirstEpisode()
+                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusFirstDetailEpisode()
                                     else -> false
                                 }
                             }
@@ -1475,7 +1473,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                                     android.view.KeyEvent.KEYCODE_DPAD_LEFT -> chip.requestFocus()
                                     android.view.KeyEvent.KEYCODE_DPAD_UP ->
                                         (selectedVersionChip() ?: firstDetailAction())?.requestFocus() ?: false
-                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusFirstEpisode()
+                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusFirstDetailEpisode()
                                     else -> false
                                 }
                             }

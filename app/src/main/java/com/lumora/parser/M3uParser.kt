@@ -125,6 +125,11 @@ object M3uParser {
         var header: String? = null
         val channels = mutableListOf<Channel>()
         var currentExtInf: String? = null
+        // `#KODIPROP` sits between `#EXTINF` and the stream URL and applies to that URL,
+        // so accumulate for the "current" entry and consume/reset on the URL line
+        // (props appearing before `#EXTINF` attach to the next entry too).
+        val pendingKodi = LinkedHashMap<String, String>()
+        val pendingVlcOpts = mutableListOf<String>()
 
         while (lineIterator.hasNext()) {
             val line = lineIterator.next().trim()
@@ -137,11 +142,26 @@ object M3uParser {
                 line.startsWith("#EXTINF:") -> {
                     currentExtInf = line.substring(8).trim()
                 }
+                line.startsWith("#KODIPROP:") -> {
+                    val body = line.removePrefix("#KODIPROP:").trim()
+                    val eq = body.indexOf('=')
+                    // Value keeps any further `=` (header values contain `=`).
+                    if (eq > 0) {
+                        val key = body.substring(0, eq).trim()
+                        val value = body.substring(eq + 1).trim()
+                        if (key.isNotEmpty()) pendingKodi[key] = value
+                    }
+                }
+                line.startsWith("#EXTVLCOPT:") -> {
+                    pendingVlcOpts.add(line.removePrefix("#EXTVLCOPT:").trim())
+                }
                 line.startsWith("#") -> { /* skip other tags */ }
                 else -> {
-                    val channel = parseChannel(line, currentExtInf, baseDir)
+                    val channel = parseChannel(line, currentExtInf, baseDir, pendingKodi, pendingVlcOpts)
                     if (channel != null) channels.add(channel)
                     currentExtInf = null
+                    pendingKodi.clear()
+                    pendingVlcOpts.clear()
                 }
             }
         }
@@ -149,7 +169,13 @@ object M3uParser {
         return ParseResult(channels = channels, header = header)
     }
 
-    private fun parseChannel(url: String, extInf: String?, baseDir: File? = null): Channel? {
+    private fun parseChannel(
+        url: String,
+        extInf: String?,
+        baseDir: File? = null,
+        kodiProps: Map<String, String> = emptyMap(),
+        vlcOpts: List<String> = emptyList()
+    ): Channel? {
         if (url.isBlank()) return null
         val trimmed = url.trim()
         // Remote stream URLs sometimes carry trailing parameters after a space - strip those.
@@ -214,6 +240,73 @@ object M3uParser {
         val episodeNum = if (mediaType == MediaType.SERIES) m3uEpisodeTag(name)?.second else null
         val parentShowId = if (episodeNum != null) seriesShowKey(name)?.let { m3uShowId(it) } else null
 
+        val (urlWithoutSuffix, urlSuffixHeaders) = KodiProps.mergeUrlHeaders(cleanUrl)
+        val streamHeaders = LinkedHashMap<String, String>()
+        // #EXTVLCOPT companions (cheap: they appear in the same playlists).
+        for (opt in vlcOpts) {
+            val eq = opt.indexOf('=')
+            if (eq <= 0) continue
+            val k = opt.substring(0, eq).trim().lowercase()
+            val v = opt.substring(eq + 1).trim()
+            if (v.isEmpty()) continue
+            when (k) {
+                "http-user-agent" -> streamHeaders["User-Agent"] = v
+                "http-referrer" -> streamHeaders["Referer"] = v
+                "http-origin" -> streamHeaders["Origin"] = v
+            }
+        }
+        // KODIPROP stream_headers ride on every request. manifest_headers are kept apart
+        // (phase 2): when present, Kodi sends them on the manifest request only and
+        // restricts stream_headers to segments/keys - PlayerManager splits per request.
+        kodiProps["inputstream.adaptive.stream_headers"]?.let { streamHeaders.putAll(KodiProps.parseKodiHeaders(it)) }
+        val manifestHeaders: Map<String, String>? =
+            kodiProps["inputstream.adaptive.manifest_headers"]
+                ?.let { KodiProps.parseKodiHeaders(it) }
+                ?.takeIf { it.isNotEmpty() }
+        streamHeaders.putAll(urlSuffixHeaders)
+
+        // DRM: license_type + license_key (+ license_data / manifest_type companions).
+        val licenseTypeRaw = kodiProps["inputstream.adaptive.license_type"]?.trim()?.lowercase()
+        var drmType: String? = null
+        var drmKeys: List<com.lumora.model.DrmKey>? = null
+        var drmLicenseUrl: String? = null
+        var drmLicenseHeaders: Map<String, String>? = null
+        var drmPostData: String? = null
+        var drmLicenseResponse: String? = null
+        if (!licenseTypeRaw.isNullOrEmpty()) {
+            drmType = licenseTypeRaw
+            if (KodiProps.isClearKeyLicenseType(licenseTypeRaw)) {
+                drmType = "clearkey"
+                kodiProps["inputstream.adaptive.license_key"]?.let { rawKey ->
+                    when (val parsed = KodiProps.parseClearKeyLicense(rawKey)) {
+                        is KodiProps.LicenseKeyParse.StaticKeys ->
+                            drmKeys = parsed.keys.takeIf { it.isNotEmpty() }
+                        is KodiProps.LicenseKeyParse.LicenseUrl ->
+                            drmLicenseUrl = parsed.url
+                        is KodiProps.LicenseKeyParse.WrappedLicense -> {
+                            drmLicenseUrl = parsed.url
+                            drmLicenseHeaders = parsed.headers.takeIf { it.isNotEmpty() }
+                            drmPostData = parsed.postData
+                            drmLicenseResponse = parsed.response
+                        }
+                        KodiProps.LicenseKeyParse.Empty -> Unit
+                    }
+                }
+            } else {
+                // Widevine/PlayReady: detect and keep (report rather than silently fail);
+                // a hosted license URL still goes to drmLicenseUrl for phase 2.
+                kodiProps["inputstream.adaptive.license_key"]?.trim()?.takeIf { it.isNotEmpty() }?.let { rawKey ->
+                    if (rawKey.startsWith("http://", ignoreCase = true) ||
+                        rawKey.startsWith("https://", ignoreCase = true)
+                    ) {
+                        drmLicenseUrl = rawKey.substringBefore('|').trim()
+                    }
+                }
+            }
+        }
+        val drmSchemeData = kodiProps["inputstream.adaptive.license_data"]?.trim()?.takeIf { it.isNotEmpty() }
+        val manifestType = KodiProps.normalizeManifestType(kodiProps["inputstream.adaptive.manifest_type"])
+
         return Channel(
             // The stream url, because an M3U has no id of its own and Channel.id defaults to
             // "". Every M3U channel therefore shared one blank id, and anything keyed on id
@@ -222,9 +315,9 @@ object M3uParser {
             // playing or previewing any channel resolved to whichever group won and the
             // guide appeared stuck on one channel. Not tvg-id: playlists repeat that across
             // quality variants, which would reintroduce the collision on a smaller scale.
-            id = cleanUrl,
+            id = urlWithoutSuffix,
             name = name,
-            url = cleanUrl,
+            url = urlWithoutSuffix,
             logoUrl = logoUrl,
             posterUrl = if (mediaType != MediaType.LIVE) logoUrl else null,
             group = group,
@@ -237,7 +330,17 @@ object M3uParser {
             description = null,
             episodeNum = episodeNum,
             year = year,
-            rating = rating
+            rating = rating,
+            streamHeaders = streamHeaders.ifEmpty { null },
+            manifestHeaders = manifestHeaders,
+            drmType = drmType,
+            drmKeys = drmKeys,
+            drmLicenseUrl = drmLicenseUrl,
+            drmLicenseHeaders = drmLicenseHeaders,
+            drmPostData = drmPostData,
+            drmLicenseResponse = drmLicenseResponse,
+            drmSchemeData = drmSchemeData,
+            manifestType = manifestType
         )
     }
 

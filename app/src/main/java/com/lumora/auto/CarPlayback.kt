@@ -9,6 +9,7 @@ import com.lumora.cache.FavoritesStore
 import com.lumora.cache.RecentlyPlayedStore
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import com.lumora.player.ClearKeyDrm
 import com.lumora.player.PlayerManager
 
 /**
@@ -78,6 +79,9 @@ class CarPlayback(private val context: Context) {
             url = channel.url,
             userAgent = channel.streamUserAgent,
             headers = channel.streamHeaders,
+            drm = ClearKeyDrm.fromChannel(channel),
+            manifestHeaders = channel.manifestHeaders,
+            mimeType = ClearKeyDrm.mimeTypeForManifestHint(channel.manifestType)
         )
     }
 

@@ -26,6 +26,8 @@ object VodDownloader {
      *    stops with the session - and the real file is already on disk anyway.
      */
     fun unsupportedReason(channel: Channel): String? = when {
+        channel.hasClearKey ->
+            "Protected streams can't be downloaded."
         channel.url.isBlank() ->
             "Play it once first - this title has no stream until a source is found for it."
         channel.url.contains("127.0.0.1") || channel.url.contains("localhost") ->

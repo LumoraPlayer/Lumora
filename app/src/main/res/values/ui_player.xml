@@ -86,6 +86,13 @@
     <string name="play_resume_message">Continue from %1$s?</string>
     <string name="play_resume">Resume</string>
     <string name="play_start_over">Start Over</string>
+    <!-- ClearKey DRM (phase 1): the device has no ClearKey MediaDrm plugin, so the
+         protected stream cannot be decrypted here. Reported instead of a spinner. -->
+    <string name="play_drm_unsupported">This device can\'t play this protected stream</string>
+    <string name="play_drm_external_unsupported">Protected streams can\'t be handed to another app</string>
+    <!-- Phase 2: a DRM scheme with no playback path (Widevine/PlayReady/unknown, or a
+         ClearKey entry with no usable key material). %1$s is the scheme name. -->
+    <string name="play_drm_scheme_unsupported">This protected stream uses %1$s, which isn\'t supported</string>
 
     <!-- MainActivityExternalPlayer -->
     <string name="play_nothing_playing">Nothing is playing</string>

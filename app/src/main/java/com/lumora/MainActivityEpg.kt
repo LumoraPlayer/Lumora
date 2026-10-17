@@ -562,7 +562,14 @@ internal fun MainActivity.loadPreview(channel: Channel) {
     previewVersionGroup = liveVersions[channel.id] ?: listOf(channel)
     previewVersionIndex = previewVersionGroup.indexOfFirst { !isStreamDead(it) }.takeIf { it >= 0 } ?: 0
     val startVersion = previewVersionGroup.getOrNull(previewVersionIndex) ?: channel
-    ensurePreviewPlayer().playUrl(startVersion.url, startVersion.streamUserAgent)
+    ensurePreviewPlayer().playUrl(
+        startVersion.url,
+        startVersion.streamUserAgent,
+        headers = startVersion.streamHeaders,
+        drm = com.lumora.player.ClearKeyDrm.fromChannel(startVersion),
+        manifestHeaders = startVersion.manifestHeaders,
+        mimeType = com.lumora.player.ClearKeyDrm.mimeTypeForManifestHint(startVersion.manifestType)
+    )
     startPreviewBlackFrameWatch()
 }
 
