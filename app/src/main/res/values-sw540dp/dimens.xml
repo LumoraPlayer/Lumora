@@ -111,7 +111,7 @@
          they were given came straight off the guide grid and the poster columns next to
          them. Long names wrap to a second line rather than taking more width - see
          item_category.xml. -->
-    <dimen name="category_sidebar_width">200dp</dimen>
+    <dimen name="category_sidebar_width">180dp</dimen>
 
     <!-- Toolbar / tab bar / poster grid, all +~30% over the phone scale. Tab padding drops
          from 36dp to 22dp to keep the five-tab row inside the panel at the larger type.
@@ -156,15 +156,15 @@
 
     <!-- Shelf headers sit above the posters and name the row, so they carry more weight than
          the 16sp/12sp they inherited from the shared scale. -->
-    <dimen name="shelf_title_text">22sp</dimen>
-    <dimen name="shelf_action_text">18sp</dimen>
+    <dimen name="shelf_title_text">19sp</dimen>
+    <dimen name="shelf_action_text">15sp</dimen>
     <!-- See All across a room, at D-pad distance - see values/dimens.xml for why these are
          dimens rather than literals in item_shelf.xml. Tightened with the phone tier: 18sp
          label is ~22dp tall, so 8dp vertical padding + a 40dp floor hugs it without losing
          the remote target. -->
     <dimen name="shelf_action_padding_h">16dp</dimen>
     <dimen name="shelf_action_padding_v">8dp</dimen>
-    <dimen name="shelf_action_min_height">40dp</dimen>
+    <dimen name="shelf_action_min_height">36dp</dimen>
 
     <!-- App-wide type scale, large-screen tier (see values/dimens.xml for the phone values
          and the rationale). Roughly +30% at the small end, tapering off at the top - a 48sp

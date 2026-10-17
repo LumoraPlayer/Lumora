@@ -2502,6 +2502,15 @@ internal fun MainActivity.hidePlayer() {
     if (showingHome) homeShelfAdapter.submitList(buildHomeShelves())
     // Same for the Series poster shelf and its Continue Watching / Up Next rows.
     refreshSeriesShelvesIfShowing()
+    // Back from fullscreen, the guide is as old as the session that just closed - a
+    // film watched for two hours leaves its rows two hours in the past until the next
+    // minute tick fires, up to a full minute away. Trigger that tick now instead of
+    // waiting for it: it rebuilds the ruler to now and rebinds the visible rows,
+    // which revalidates their aged-out EPG entries through the disk-first path. It
+    // no-ops unless the Live guide is actually showing, so returning anywhere else
+    // costs nothing - and nothing ticks in the background while fullscreen, the
+    // minute runnable already skips its work when the player owns the screen.
+    guideClockTick()
     // Backing out of a film or an episode lands on that title's poster - the screen it was
     // started from - instead of the grid behind it, which is several D-pad moves and a
     // scroll position away from where the user actually was.

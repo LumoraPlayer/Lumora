@@ -2623,21 +2623,19 @@
                     android:paddingHorizontal="12dp"
                     android:paddingVertical="4dp">
 
+                    <!-- Playback identity on its own full-width row above the
+                         transport: long titles get the whole width instead of the
+                         slot squeezed between the logo and the EPG note. -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
                         android:clipToPadding="false"
                         android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <!-- Channel/title at the left; keep the poster compact so this
-                             identity row stays no taller than the play button. -->
+                        android:orientation="vertical">
                         <LinearLayout
-                            android:layout_width="0dp"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginEnd="12dp"
-                            android:layout_weight="1"
                             android:clipChildren="false"
                             android:clipToPadding="false"
                             android:gravity="center_vertical"
@@ -2704,10 +2702,12 @@
                             </LinearLayout>
                         </LinearLayout>
 
-                        <!-- The transport controls remain centered between identity and EPG. -->
+                        <!-- The transport controls stay centered on their own row. -->
                         <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_gravity="center_horizontal"
+                            android:layout_marginTop="4dp"
                             android:clipChildren="false"
                             android:clipToPadding="false"
                             android:gravity="center"
@@ -2792,10 +2792,9 @@
                         </LinearLayout>
 
                         <FrameLayout
-                            android:layout_width="0dp"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="12dp"
-                            android:layout_weight="1">
+                            android:layout_marginTop="2dp">
 
                             <TextView
                                 android:id="@+id/playerSubtitle"
