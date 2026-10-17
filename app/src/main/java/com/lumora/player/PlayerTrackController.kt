@@ -10,6 +10,11 @@ import java.util.Locale
 
 data class PlayerTrack(val id: String, val name: String, val isSelected: Boolean)
 
+/** Bitrate label for the video picker. Locale.ROOT (see [PlayerTrackController]'s
+ *  buildVideoTrackName) so the decimal separator is always "." - the display name doubles
+ *  as the sort key, and a locale comma would break that parse. */
+private val VIDEO_BITRATE_FORMAT = "%.1f Mbps"
+
 /**
  * Thin wrapper around ExoPlayer's TrackSelectionParameters API for picking
  * audio/subtitle/video tracks. Pure Media3 logic, no UI framework dependency.
@@ -132,7 +137,8 @@ class PlayerTrackController {
     }
 
     /** Height/bitrate stashed in the display name for sorting (see [buildVideoTrackName]):
-     *  parses the leading "<height>p" and trailing "<x.x> Mbps" the name carries. */
+     *  parses the leading "<height>p" and trailing "<x.x> Mbps" the name carries. The name
+     *  is formatted with Locale.ROOT, so the decimal dot here always matches. */
     private fun videoHeightForSort(track: PlayerTrack): Int =
         Regex("""^(\d+)p""").find(track.name)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 
@@ -143,17 +149,24 @@ class PlayerTrackController {
 
     /** Human label for an in-manifest video rendition: `1080p`, optionally with bitrate
      *  (`1080p · 4.5 Mbps`) so two encodes at one height stay distinguishable. Falls back
-     *  to bitrate-only, then the authored label, then `Track N`. */
+     *  to bitrate-only, then the authored label, then `Track N`.
+     *
+     *  Locale.ROOT on purpose: a default-locale format renders `4,5 Mbps` in fr/de, which
+     *  both reads oddly and defeats [videoBitrateForSort]'s decimal-dot parse. */
     private fun buildVideoTrackName(format: Format, index: Int): String {
         val label = format.label
         val height = format.height
         val bitrateMbps = if (format.bitrate > 0) format.bitrate / 1_000_000.0 else 0.0
-        val bitrateSuffix = if (bitrateMbps > 0) " · %.1f Mbps".format(bitrateMbps) else ""
+        val bitrateSuffix = if (bitrateMbps > 0) " · ${formatMbps(bitrateMbps)}" else ""
         if (height > 0) return "${height}p$bitrateSuffix"
-        if (bitrateMbps > 0) return "%.1f Mbps".format(bitrateMbps)
+        if (bitrateMbps > 0) return formatMbps(bitrateMbps)
         if (!label.isNullOrBlank()) return label
         return "Track ${index + 1}"
     }
+
+    /** Locale.ROOT fixed formatting, so the label's decimal dot always matches the sort
+     *  regex in [videoBitrateForSort] whatever the device locale renders. */
+    private fun formatMbps(mbps: Double): String = VIDEO_BITRATE_FORMAT.format(Locale.ROOT, mbps)
 
     private fun buildTrackName(format: Format, index: Int): String {
         val label = format.label

@@ -154,6 +154,32 @@ class M3uDrmPropsTest {
     }
 
     @Test
+    fun `stream-headers win over extvlcopt user-agent`() {
+        val channels = parse(
+            "#EXTINF:-1,Ch\n" +
+                "#EXTVLCOPT:http-user-agent=ExtAgent\n" +
+                "#KODIPROP:inputstream.adaptive.stream_headers=User-Agent=StreamAgent\n" +
+                "http://ex.com/x.mpd\n"
+        )
+        // Both are per-entry; stream_headers is the documented inputstream.adaptive
+        // mechanism, so it holds the higher precedence (see PlayerManager UA handling).
+        assertEquals("StreamAgent", channels.single().streamHeaders?.get("User-Agent"))
+    }
+
+    @Test
+    fun `direct kodiprop referrer and origin companions captured`() {
+        val channels = parse(
+            "#EXTINF:-1,Ch\n" +
+                "#KODIPROP:http-referrer=http://ref.example/\n" +
+                "#KODIPROP:http-origin=http://origin.example\n" +
+                "http://ex.com/x.mpd\n"
+        )
+        val headers = channels.single().streamHeaders
+        assertEquals("http://ref.example/", headers?.get("Referer"))
+        assertEquals("http://origin.example", headers?.get("Origin"))
+    }
+
+    @Test
     fun `kodiprop keys match case-insensitively`() {
         val channels = parse(
             "#EXTINF:-1,Ch\n" +
