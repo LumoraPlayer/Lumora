@@ -35,5 +35,9 @@ data class IptvProviderConfig(
     // hand - e.g. "reddit.iptvscan". Null for everything hand-added. The Reddit scanner's
     // entries are re-probed on launch and dropped when they stop working (see
     // com.lumora.data.RedditProviderHealth), so its id has to survive here.
-    val discoveredBy: String? = null
+    val discoveredBy: String? = null,
+    // How many simultaneous streams this subscription allows (0 = unknown). Set by the
+    // user in the provider form; multiview reads it to size the pane grid and to warn
+    // when the same account is about to carry more panes than it will admit.
+    val maxConnections: Int = 0
 )

@@ -16,6 +16,8 @@ import com.lumora.PREF_GROUP_CHANNELS
 import com.lumora.PREF_HIDE_ADULT
 import com.lumora.PREF_HIDE_NON_ENGLISH
 import com.lumora.PREF_LIVE_PREVIEW
+import com.lumora.PREF_MULTIVIEW_ENABLED
+import com.lumora.PREF_MULTIVIEW_PANES
 import com.lumora.PREF_PARENTAL_PIN
 import com.lumora.PREF_PARENTAL_PIN_SALT
 import com.lumora.PREF_PREFER_DUB_AUDIO
@@ -151,6 +153,8 @@ internal val BACKED_UP_SETTINGS: Map<String, SettingType> = mapOf(
     PREF_SKIP_SEGMENTS to SettingType.BOOLEAN,
     PREF_SKIP_AUTO to SettingType.BOOLEAN,
     PREF_LIVE_PREVIEW to SettingType.BOOLEAN,
+    PREF_MULTIVIEW_ENABLED to SettingType.BOOLEAN,
+    PREF_MULTIVIEW_PANES to SettingType.INT,
     PREF_SUGGEST_EXTERNAL_PLAYER to SettingType.BOOLEAN,
     PREF_EXTERNAL_PLAYER_PACKAGE to SettingType.STRING,
     PREF_ASPECT_MODE to SettingType.STRING,
@@ -385,7 +389,10 @@ class BackupManager(private val context: Context) {
         val discoveredBy: String? = null,
         // Backup sources hide from browsing but keep their failover streams. Defaulted for
         // the same forward-compatibility: old backups restore as fully visible providers.
-        val backup: Boolean = false
+        val backup: Boolean = false,
+        // Simultaneous-connection limit (0 = unknown). Defaulted so old backups import as
+        // "unknown" instead of pretending the account allows none.
+        val maxConnections: Int = 0
     )
 
     /** One MediaServerConfig (Jellyfin/Silo/Plex session), round-tripped through the JSON backup. */
@@ -785,7 +792,7 @@ class BackupManager(private val context: Context) {
         liveEnabled = liveEnabled, moviesEnabled = moviesEnabled,
         seriesEnabled = seriesEnabled, url = url, username = username,
         password = password, userAgent = userAgent, discoveredBy = discoveredBy,
-        backup = backup
+        backup = backup, maxConnections = maxConnections
     )
 
     private fun MediaServerConfig.toBackup() = MediaServerBackup(
@@ -801,7 +808,7 @@ class BackupManager(private val context: Context) {
         liveEnabled = liveEnabled, moviesEnabled = moviesEnabled,
         seriesEnabled = seriesEnabled, url = url, username = username,
         password = password, userAgent = userAgent, discoveredBy = discoveredBy,
-        backup = backup
+        backup = backup, maxConnections = maxConnections
     )
 
     private fun MediaServerBackup.toConfig() = MediaServerConfig(

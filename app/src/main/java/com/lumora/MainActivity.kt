@@ -194,6 +194,18 @@ internal const val PREF_SUGGEST_EXTERNAL_PLAYER = "suggest_external_player"
  *  focusing a channel auto-plays it in the preview pane. OFF leaves the guide as a
  *  plain list - OK plays the focused channel fullscreen straight away. */
 internal const val PREF_LIVE_PREVIEW = "live_preview"
+/** Multiview (multi-screen live grid): master switch, pane count, and the largest pane
+ *  count this device has been seen to sustain. See MainActivityMultiview.
+ *
+ *  - [PREF_MULTIVIEW_ENABLED]: shows/hides the Multiview button in the player controls.
+ *  - [PREF_MULTIVIEW_PANES]: 0 = auto (derive from provider connection limits, capped by
+ *    the learned count), or an explicit 2..4 the user chose.
+ *  - [PREF_MULTIVIEW_WORKING_PANES]: 0 = never observed a failure. After a decoder
+ *    exhaustion at N panes, the count that did work is remembered and offers to exceed it
+ *    are clamped (with a toast naming why). */
+internal const val PREF_MULTIVIEW_ENABLED = "multiview_enabled"
+internal const val PREF_MULTIVIEW_PANES = "multiview_panes"
+internal const val PREF_MULTIVIEW_WORKING_PANES = "multiview_working_panes"
 internal const val PREF_ASPECT_MODE = "player_aspect_mode"
 internal const val PREF_CLASSIC_CATEGORY_LAYOUT = "classic_category_layout"
 internal const val PREF_SIMPLE_MODE = "simple_mode"
@@ -488,6 +500,26 @@ class MainActivity : AppCompatActivity() {
     internal var previewVersionIndex = 0
     internal var previewBlackFrameStreak = 0
     internal val previewBlackFrameCheckRunnable = Runnable { checkForPreviewBlackFrame() }
+
+    // ── Multiview (multi-screen live grid; see MainActivityMultiview) ──
+    // The grid is a second fullscreen mode: isPlayerVisible stays true while it is up (so
+    // every "player owns the screen" guard keeps holding), isMultiviewVisible says which
+    // of the two modes it is. nowPlayingChannel stays null throughout - the panes each
+    // hold their own channel, and null here is what keeps the single-player paths (numeric
+    // entry, surf, scrobbling) inert.
+    internal var isMultiviewVisible = false
+    internal var multiviewPanes: List<MultiviewPane> = emptyList()
+    internal var multiviewSelectedIndex = 0
+    internal val multiviewTickRunnable = Runnable { checkMultiviewPanes() }
+    internal var multiviewPickerDialog: AlertDialog? = null
+    /** Round-robin cursor for the per-pane black-frame sampling: one pane is sampled per
+     *  tick instead of four independent watchdogs - the same verdict at a quarter of the
+     *  TextureView.getBitmap cost on the sticks this runs on. */
+    internal var multiviewSampleCursor = 0
+    /** When the grid last resumed from the background; decoder errors inside the reclaim
+     *  suppression window are not treated as device-ceiling evidence (see
+     *  MainActivityMultiview.noteMultiviewCapabilityFailure). */
+    internal var multiviewLastResumeAt = 0L
 
     internal var allChannels = listOf<Channel>()
     internal var liveChannels = listOf<Channel>()
@@ -1344,6 +1376,7 @@ class MainActivity : AppCompatActivity() {
         setupChannelList()
         setupTabs()
         setupPlayerControls()
+        setupMultiviewControls()
         setupToolbar()
         loadDeadStreams()
         // Shown immediately rather than waiting for loadSavedProvider(): that call sits behind
@@ -1827,7 +1860,11 @@ class MainActivity : AppCompatActivity() {
         // Same for the guide: anything it painted before the app went to background is now
         // minutes-to-hours out of date, and its tick re-renders the visible rows immediately.
         startGuideClock()
-        if (isPlayerVisible && playerManager.playbackState == Player.STATE_READY && !userPausedPlayback) playerManager.play()
+        if (isPlayerVisible && !isMultiviewVisible && playerManager.playbackState == Player.STATE_READY && !userPausedPlayback) playerManager.play()
+        // Grid panes resume independently: each remembers whether it was playing when the
+        // app went to background, so a pane the user had left failed/paused doesn't spring
+        // back to life on return.
+        if (isMultiviewVisible) resumeMultiviewAfterBackground()
         // Never while the fullscreen player is up: a player that was buffering when the app
         // was backgrounded falls into this branch, and starting the inline preview then ran a
         // second player behind the fullscreen one - two surfaces and two audio sources.
@@ -1904,6 +1941,10 @@ class MainActivity : AppCompatActivity() {
                 // (onResume resumes it), but the server's resume point should already be
                 // current if the process is killed while backgrounded and no stop ever lands.
                 reportJellyfinProgress()
+                // N decoders and an audible pane behind Home is the worst case on the
+                // resource manager, and a phone left on the grid should not keep playing -
+                // pause every pane and remember which were playing (onResume resumes).
+                if (isMultiviewVisible) pauseMultiviewForBackground()
             }
             releaseLivePreview()
         }
@@ -1916,6 +1957,10 @@ class MainActivity : AppCompatActivity() {
         // usable picture, and onPause() deliberately keeps playing while in PiP, so the
         // only recovery was a force-stop. Gate it on a device that can actually show it.
         if (isTv || !packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        // The grid is four surfaces, not one - PiP's aspect-ratio contract (the single
+        // player's lastVideoWidth/Height) says nothing about it, and a PiP-sized grid is
+        // unusable. Backing out of the app from the grid simply pauses the panes.
+        if (isMultiviewVisible) return
         if (isPlayerVisible && playerManager.isPlaying && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             runCatching {
                 val aspectRatio = if (lastVideoWidth > 0 && lastVideoHeight > 0) {
@@ -1945,6 +1990,18 @@ class MainActivity : AppCompatActivity() {
      *  Rotating into portrait also drops any manual re-expand, so portrait re-hides. */
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
+        // The grid's column count follows the orientation on phones - re-flow it in place
+        // (the panes' TextureViews are re-parented; media3 re-attaches their surfaces).
+        if (isMultiviewVisible) {
+            layoutMultiviewCells()
+            // Re-parenting the cells drops D-pad focus with the old parent; put it back on
+            // the selected pane unless the user was walking the action bar when it landed.
+            binding.multiviewGrid.post {
+                if (binding.multiviewBar.findFocus() == null && binding.multiviewGrid.findFocus() == null) {
+                    multiviewPanes.getOrNull(multiviewSelectedIndex)?.root?.requestFocus()
+                }
+            }
+        }
         if (isTv) return
         if (newConfig.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
             portraitSidebarExpanded = false
@@ -1980,6 +2037,7 @@ class MainActivity : AppCompatActivity() {
         diagnosticsShareServer?.stopSharing()
         diagnosticsShareServer = null
         releaseLivePreview()
+        teardownMultiviewForDestroy()
         if (!isTv) runCatching { unregisterReceiver(downloadCompleteReceiver) }
     }
 
@@ -2023,6 +2081,9 @@ class MainActivity : AppCompatActivity() {
         // stop the episode the card is offering to continue from.
         else if (isPlayerVisible && upNextActive) { dismissUpNext() }
         else if (isPlayerVisible && isPlayerSideMenuOpen()) { closeSideMenu() }
+        // The grid unwinds as one level: Back closes it and lands on the guide with the
+        // selected pane's channel in the preview - not straight out of the player shell.
+        else if (isMultiviewVisible) { exitMultiview() }
         else if (isPlayerVisible) { hidePlayer(); restoreSearchIfPending() }
         // The person page is the topmost content screen when it is up, whether it covers the
         // title it was opened from or a credit's detail page took that slot over.
@@ -2396,7 +2457,7 @@ class MainActivity : AppCompatActivity() {
         // Skip pill: while it is up it is the end zone's one press, and swallowing the key
         // here (before the view tree and before onKeyDown) meant pressing it opened the bar
         // instead. Both fall through to the press handling below.
-        if (isPlayerVisible && !isPlayerSideMenuOpen() && !upNextActive &&
+        if (!isMultiviewVisible && isPlayerVisible && !isPlayerSideMenuOpen() && !upNextActive &&
             binding.btnSkipSegment.visibility != View.VISIBLE &&
             binding.controlsOverlay.visibility != View.VISIBLE &&
             (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
@@ -2458,6 +2519,12 @@ class MainActivity : AppCompatActivity() {
 
     /** DPAD up/down channel-surfs while fullscreen on a live channel, without needing the on-screen controls. */
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        // Multiview owns the D-pad while the grid is up: arrows move between panes and the
+        // action bar, media keys drive the selected pane. Claimed here, ahead of every
+        // single-player branch below (channel surf, controls reveal, LEFT = side menu) -
+        // those all read state a grid session deliberately doesn't have.
+        if (isMultiviewVisible && handleMultiviewKey(keyCode)) return true
+
         // Numeric remote input for direct channel entry - only while fullscreen on LIVE.
         // Buffer up to 6 digits, timeout after 1.5s of inactivity to resolve the channel.
         if (isPlayerVisible && nowPlayingChannel?.mediaType == MediaType.LIVE) {

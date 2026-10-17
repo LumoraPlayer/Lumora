@@ -797,6 +797,41 @@
                         android:textSize="@dimen/settings_text_caption"
                         android:fontFamily="@font/inter_regular" />
 
+                    <!-- Simultaneous-connection limit. Multi-screen reads it to size the
+                         grid (Auto pane count) and to warn when one account is asked to
+                         carry more streams than it admits; blank means unknown. IPTV types
+                         only, like the backup toggle above. -->
+                    <LinearLayout
+                        android:id="@+id/settingsProviderMaxConnGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/settings_gap"
+                            android:text="@string/mv_provider_max_conn"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="@dimen/settings_text_caption" />
+
+                        <EditText
+                            android:id="@+id/settingsProviderMaxConn"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/settings_gap_xs"
+                            android:background="@drawable/bg_input"
+                            android:hint="@string/mv_provider_max_conn_hint"
+                            android:importantForAutofill="no"
+                            android:inputType="number"
+                            android:padding="@dimen/settings_gap"
+                            android:paddingVertical="@dimen/settings_row_padding_vertical"
+                            android:textColor="@color/text_primary"
+                            android:textColorHint="@color/text_tertiary"
+                            android:textSize="@dimen/settings_text_body" />
+                    </LinearLayout>
+
                     </LinearLayout>
 
                     <!-- Step 4: only the fields the chosen type actually needs -->

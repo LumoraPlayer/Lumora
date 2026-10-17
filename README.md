@@ -27,6 +27,7 @@ Nothing is behind a paywall — the multi-playlist support, EPG guide, recording
 - **Jellyfin, Silo and Plex, properly done.** Point Lumora at your own servers and their films and series merge into the same shelves as your IPTV catalogue — the same title from several sources becomes one card. Resume points, watched marks and favourites sync with the server, and files your stick can't decode are converted server-side rather than opening to a black screen.
 - **Run every subscription at once.** Any number of Xtream Codes, M3U, Stalker Portal, Jellyfin, Silo and Plex sources active together, merged into one catalogue instead of switching between playlists.
 - **Live TV that tidies itself up.** Duplicate feeds of the same channel collapse into one entry at the best available quality (4K → FHD → HD → SD), with instant fallback to any other copy mid-playback; Sports, News, Music and Cinema surface at the top automatically whatever your provider filed them under.
+- **Multiview.** Watch several live channels at once in a D-pad-driven grid — each screen its own player with its own quality fallback, the selected one audible, the count sized to your providers' connection limits (set per provider).
 - **A proper EPG guide.** Scrollable program grid with per-channel schedules, now/next info, program reminders, timeshift/catch-up and DVR recording.
 - **Full VOD browsing.** Movies and Series with category shelves, poster grids, season/episode browsing, episode-level Continue Watching and auto-advance to the next episode.
 - **Discover, backed by TMDB.** Browse and search beyond what your providers carry; a title nobody in your libraries has offers **Find & Play**, which searches the sources you have enabled.
@@ -55,6 +56,7 @@ Nothing is behind a paywall — the multi-playlist support, EPG guide, recording
 
 ### Live TV
 - **Xtream Codes, M3U/M3U8, and Stalker Portal** provider support, any number at once — M3U playlists load from a remote URL or a local `.m3u`/`.m3u8` file on the device
+- **Multiview** — watch up to 4 live channels at once in a grid: D-pad driven, each screen its own player with its own quality fallback and dead-feed skip, selected screen audible. Pane count follows your providers' connection limits (set per provider) and is trimmed automatically if the device can't decode another stream
 - **Smart channel merging** — automatically collapses duplicate channel feeds (different quality tiers, source tags, or provider re-listings of the same channel) into a single entry, auto-selecting the best available quality (4K/UHD → FHD → HD → SD), with instant manual fallback to any other version mid-playback
 - **Dynamic categories** — Sports, News, Music, and Cinema surface automatically at the top of the channel list, pulling in matching content regardless of which raw provider category it's filed under; everything else cascades below
 - **Brand/franchise clustering** — channel families (e.g. all feeds of the same sports network) group into a single expandable category automatically

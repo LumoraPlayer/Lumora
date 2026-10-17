@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One multiview pane: a live channel playing in its own TextureView, with a label and a
+     status badge. The cell root is the focus target - the whole tile is one D-pad stop, and
+     focus == "this is the audible pane" (see MainActivityMultiview). TextureView, not
+     SurfaceView: a grid of SurfaceView hardware overlays hits overlay-count limits, and
+     TextureView also lets the black-frame watchdog sample each pane with getBitmap - the
+     same reason the guide's inline preview is a TextureView. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/mvCellRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_margin="2dp"
+    android:background="@drawable/bg_mv_cell"
+    android:clickable="true"
+    android:clipChildren="true"
+    android:clipToPadding="true"
+    android:focusable="true">
+
+    <com.lumora.player.VideoAspectFrameLayout
+        android:id="@+id/mvCellAspect"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <TextureView
+            android:id="@+id/mvCellSurface"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </com.lumora.player.VideoAspectFrameLayout>
+
+    <ProgressBar
+        android:id="@+id/mvCellSpinner"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_gravity="center"
+        android:indeterminate="true"
+        android:indeterminateTint="@color/primary"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/mvCellLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_margin="6dp"
+        android:background="@drawable/bg_player_bottom"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:maxWidth="220dp"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="2dp"
+        android:textColor="@color/text_primary"
+        android:textSize="@dimen/text_caption" />
+
+    <TextView
+        android:id="@+id/mvCellBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="6dp"
+        android:background="@drawable/bg_player_bottom"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="2dp"
+        android:textColor="@color/primary_light"
+        android:textSize="@dimen/text_tiny"
+        android:visibility="gone" />
+</FrameLayout>

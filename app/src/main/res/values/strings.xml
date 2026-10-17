@@ -553,4 +553,31 @@
         <item quantity="one">%1$d game isn\'t in your guide</item>
         <item quantity="other">%1$d games aren\'t in your guide</item>
     </plurals>
+
+    <!-- Multiview (multi-screen live grid). The grid watches several live channels at once,
+         one connection per screen on the provider, so most of these strings either label the
+         panes or explain a connection/decoder limit. -->
+    <string name="mv_multiview">Multiview</string>
+    <string name="mv_add_pane">Add screen</string>
+    <string name="mv_change">Change</string>
+    <string name="mv_fullscreen">Fullscreen</string>
+    <string name="mv_close_pane">Close</string>
+    <string name="mv_exit">Exit</string>
+    <string name="mv_status_offline">Offline \u2014 press OK to retry</string>
+    <string name="mv_status_audio">AUDIO</string>
+    <string name="mv_picker_title">Add a channel to the grid</string>
+    <string name="mv_toast_pane_limit">Multiview is limited to %1$d screens on this device (Settings \u2192 Filters)</string>
+    <string name="mv_toast_provider_limit">%1$s allows %2$d simultaneous connection(s) \u2014 another screen may be refused</string>
+    <string name="mv_toast_decoder_limit">This device could not start another stream \u2014 multiview screens reduced to %1$d</string>
+    <string name="mv_toast_decoder_stream">This device could not start another stream here \u2014 press OK on the screen to retry</string>
+    <string name="mv_toast_no_live">No live channels are loaded yet</string>
+    <string name="mv_settings_title">Multiview</string>
+    <string name="mv_settings_caption">Watch several live channels at once. Each screen counts as one simultaneous connection on its provider, and the first screen is audible.</string>
+    <string name="mv_panes_title">Multiview screens</string>
+    <string name="mv_panes_caption">Auto picks a count from your providers\' connection limits. Set a provider\'s limit when editing it so Auto can do its job.</string>
+    <string name="mv_panes_auto">Auto (recommended)</string>
+    <string name="mv_panes_value">%1$d screens</string>
+    <string name="mv_provider_max_conn">Max connections</string>
+    <string name="mv_provider_max_conn_hint">How many streams this subscription allows at once (blank = unknown)</string>
+    <string name="mv_provider_max_conn_label">Simultaneous connections</string>
 </resources>

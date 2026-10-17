@@ -157,6 +157,7 @@ object IptvProviderStore {
         c.password?.let { put("password", it) }
         c.userAgent?.let { put("userAgent", it) }
         c.discoveredBy?.let { put("discoveredBy", it) }
+        if (c.maxConnections > 0) put("maxConnections", c.maxConnections)
     }
 
     private fun fromJson(o: JSONObject): IptvProviderConfig? {
@@ -181,7 +182,8 @@ object IptvProviderStore {
             username = o.optString("username").takeIf { it.isNotBlank() },
             password = o.optString("password").takeIf { it.isNotBlank() },
             userAgent = o.optString("userAgent").takeIf { it.isNotBlank() },
-            discoveredBy = o.optString("discoveredBy").takeIf { it.isNotBlank() }
+            discoveredBy = o.optString("discoveredBy").takeIf { it.isNotBlank() },
+            maxConnections = o.optInt("maxConnections", 0)
         )
     }
 }

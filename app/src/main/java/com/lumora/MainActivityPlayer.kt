@@ -752,6 +752,10 @@ internal fun MainActivity.showPlayerFor(
     binding.playerChannelName.text = channel.name
     binding.playerSubtitle.visibility = View.GONE
     binding.playerLiveBadge.visibility = if (channel.mediaType == MediaType.LIVE) View.VISIBLE else View.GONE
+    // Multiview is a live-only feature and can be switched off entirely in Settings; the
+    // button is hidden rather than disabled so a VOD session's button row stays uncluttered.
+    binding.btnMultiview.visibility =
+        if (channel.mediaType == MediaType.LIVE && isMultiviewEnabled()) View.VISIBLE else View.GONE
     if (channel.mediaType == MediaType.LIVE) {
         // Don't add adult channels to recently played.
         if (!isAdultCategory(channel.categoryName, channel.group)) {
@@ -2385,7 +2389,7 @@ internal fun MainActivity.saveCurrentPlaybackPosition() {
     }
 }
 
-internal fun MainActivity.hidePlayer() {
+internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
     // The player no longer owns the screen: scraper-owned UI (the Cloudflare challenge bypass)
     // may surface again for fetches that are still running.
     com.lumora.scraper.ScraperApp.setPlayerActive(false)
@@ -2460,7 +2464,10 @@ internal fun MainActivity.hidePlayer() {
     activeTorrentSession = null
     TorrentForegroundService.stop(this)
     if (isCastManagerReady) castManager.stopCasting()
-    if (activeTab == 0 && !showingSports) {
+    // The multiview entry path passes restorePreview = false: the grid is taking the screen
+    // next, so restoring the guide's inline preview (and scrolling the guide to its channel)
+    // would build a player one line before the grid releases it again.
+    if (restorePreview && activeTab == 0 && !showingSports) {
         showLivePreviewPane()
         val previewTarget = lastFocusedLiveChannel ?: wasPlaying
         previewTarget?.let { requestPreviewLoad(it) }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One row of the multiview channel picker. A plain focusable TextView: the picker only
+     needs a name per channel, and a list this simple keeps the D-pad behaviour boring. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/card_surface_background"
+    android:clickable="true"
+    android:ellipsize="end"
+    android:focusable="true"
+    android:maxLines="1"
+    android:minHeight="44dp"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="10dp"
+    android:textColor="@color/text_primary"
+    android:textSize="@dimen/settings_text_body" />

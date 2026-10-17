@@ -2484,6 +2484,134 @@
             android:clickable="false"
             android:focusable="false" />
 
+        <!-- Multiview grid: up to four live panes in a 2-column arrangement, replacing the
+             single video surface while the grid is open (see MainActivityMultiview). Rows
+             and cells are inflated in code, since the shape depends on the pane count and
+             on whether the device is a portrait phone (single column). -->
+        <LinearLayout
+            android:id="@+id/multiviewGrid"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@android:color/black"
+            android:orientation="vertical"
+            android:visibility="gone" />
+
+        <!-- Multiview action bar: always up while the grid is open (there is no auto-hide -
+             every action has to be one D-pad move away, Down). The status line names the
+             selected screen and its current programme; the buttons act on it. -->
+        <LinearLayout
+            android:id="@+id/multiviewBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:background="@drawable/grad_player_bottom"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:orientation="vertical"
+            android:paddingHorizontal="@dimen/player_controls_safe_horizontal_inset"
+            android:paddingVertical="@dimen/player_controls_safe_vertical_inset"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/multiviewStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_caption" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/btnMvAdd"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/bg_toolbar_button"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="8dp"
+                    android:stateListAnimator="@animator/focus_scale"
+                    android:text="@string/mv_add_pane"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_tiny" />
+
+                <TextView
+                    android:id="@+id/btnMvChange"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/bg_toolbar_button"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="8dp"
+                    android:stateListAnimator="@animator/focus_scale"
+                    android:text="@string/mv_change"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_tiny" />
+
+                <TextView
+                    android:id="@+id/btnMvFullscreen"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/bg_toolbar_button"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="8dp"
+                    android:stateListAnimator="@animator/focus_scale"
+                    android:text="@string/mv_fullscreen"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_tiny" />
+
+                <TextView
+                    android:id="@+id/btnMvClose"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/bg_toolbar_button"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="8dp"
+                    android:stateListAnimator="@animator/focus_scale"
+                    android:text="@string/mv_close_pane"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_tiny" />
+
+                <TextView
+                    android:id="@+id/btnMvExit"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:background="@drawable/bg_toolbar_button"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="8dp"
+                    android:stateListAnimator="@animator/focus_scale"
+                    android:text="@string/mv_exit"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_tiny" />
+            </LinearLayout>
+        </LinearLayout>
+
+
         <!-- Skip Intro/Recap/Credits: shown only while playback sits inside a segment
              IntroDB reported (see MainActivitySkip). Bottom-end corner, above the controls
              bar - clear of the subtitles (bottom-center) and the channel card (top-start).
@@ -2891,10 +3019,33 @@
                                 android:focusable="true"
                                 android:gravity="center"
                                 android:nextFocusUp="@id/seekBar"
-                                android:nextFocusRight="@id/btnAudioOffset"
+                                android:nextFocusRight="@id/btnMultiview"
                                 android:paddingHorizontal="8dp"
                                 android:stateListAnimator="@animator/focus_scale"
                                 android:text="@string/speed_default"
+                                android:textAllCaps="true"
+                                android:textColor="@color/text_primary"
+                                android:textSize="@dimen/text_tiny" />
+
+                            <!-- Opens the multiview grid with the live channel playing
+                                 (see MainActivityMultiview). Live only - hidden for VOD in
+                                 showPlayerFor - and only one of the ways into the grid: the
+                                 grid itself adds more screens from its own bar. -->
+                            <TextView
+                                android:id="@+id/btnMultiview"
+                                android:layout_width="wrap_content"
+                                android:layout_height="30dp"
+                                android:layout_marginEnd="4dp"
+                                android:background="@drawable/bg_toolbar_button"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:nextFocusUp="@id/seekBar"
+                                android:nextFocusLeft="@id/btnSpeed"
+                                android:nextFocusRight="@id/btnAudioOffset"
+                                android:paddingHorizontal="8dp"
+                                android:stateListAnimator="@animator/focus_scale"
+                                android:text="@string/mv_multiview"
                                 android:textAllCaps="true"
                                 android:textColor="@color/text_primary"
                                 android:textSize="@dimen/text_tiny" />
@@ -2909,7 +3060,7 @@
                                 android:focusable="true"
                                 android:gravity="center"
                                 android:nextFocusUp="@id/seekBar"
-                                android:nextFocusLeft="@id/btnSpeed"
+                                android:nextFocusLeft="@id/btnMultiview"
                                 android:nextFocusRight="@id/btnSleepTimer"
                                 android:paddingHorizontal="8dp"
                                 android:stateListAnimator="@animator/focus_scale"

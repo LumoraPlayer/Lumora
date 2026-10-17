@@ -645,6 +645,56 @@ internal fun MainActivity.dubCheckBoxRow(title: String, subtitle: String, key: S
     return checkBox
 }
 
+/**
+ * The multiview pane-count row: Auto, or an explicit 2/3/4. Shaped like
+ * [languageChoiceRow], but the pref is an Int (0 = auto) and the current resolved value is
+ * shown beside the choice - Auto's answer depends on the providers and on what the device
+ * has been seen to sustain, so "Auto" alone would not say what the grid will actually open.
+ */
+internal fun MainActivity.multiviewPanesRow(): TextView {
+    val row = TextView(this)
+    row.setTextColor(getColor(R.color.text_primary))
+    row.setBackgroundResource(R.drawable.card_surface_background)
+    val hPad = resources.getDimensionPixelSize(R.dimen.settings_gap_l)
+    val vPad = resources.getDimensionPixelSize(R.dimen.settings_row_padding_vertical)
+    row.setPadding(hPad, vPad, hPad, vPad)
+    row.stateListAnimator = AnimatorInflater.loadStateListAnimator(this, R.animator.focus_scale_flat)
+    row.isClickable = true
+    row.isFocusable = true
+    row.layoutParams = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT
+    ).apply { topMargin = resources.getDimensionPixelSize(R.dimen.settings_gap_m) }
+
+    fun render() {
+        row.text = twoLineSettingsText(
+            getString(R.string.mv_panes_title),
+            "${multiviewLimitDisplay()} \u00b7 ${getString(R.string.mv_panes_caption)}"
+        )
+    }
+    render()
+    row.setOnClickListener {
+        val values = intArrayOf(0, 2, 3, 4)
+        val labels = arrayOf(
+            getString(R.string.mv_panes_auto),
+            getString(R.string.mv_panes_value, 2),
+            getString(R.string.mv_panes_value, 3),
+            getString(R.string.mv_panes_value, 4)
+        )
+        val current = prefs.getInt(PREF_MULTIVIEW_PANES, 0)
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.mv_panes_title))
+            .setSingleChoiceItems(labels, values.indexOf(current).coerceAtLeast(0)) { dialog, which ->
+                prefs.edit().putInt(PREF_MULTIVIEW_PANES, values[which]).apply()
+                render()
+                dialog.dismiss()
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+    return row
+}
+
 /** Whether the Settings rail is collapsed on this device: a persisted pref, except on a
  *  portrait phone, where the rail auto-hides and only the transient (unpersisted)
  *  [MainActivity.portraitSettingsRailExpanded] can bring it back - mirrors the category
@@ -771,6 +821,8 @@ internal fun MainActivity.showProviderSettings() {
     val uaInput = dialogView.findViewById<EditText>(R.id.settingsUserAgent)
     val backupCheckBox = dialogView.findViewById<CheckBox>(R.id.settingsProviderBackup)
     val backupHint = dialogView.findViewById<View>(R.id.settingsProviderBackupHint)
+    val maxConnInput = dialogView.findViewById<EditText>(R.id.settingsProviderMaxConn)
+    val maxConnGroup = dialogView.findViewById<View>(R.id.settingsProviderMaxConnGroup)
     val xtreamUrl = dialogView.findViewById<EditText>(R.id.settingsXtreamUrl)
     val xtreamUser = dialogView.findViewById<EditText>(R.id.settingsXtreamUser)
     val xtreamPass = dialogView.findViewById<EditText>(R.id.settingsXtreamPass)
@@ -993,6 +1045,7 @@ internal fun MainActivity.showProviderSettings() {
         val backupVisible = type == "m3u" || type == "xtream" || type == "stalker"
         backupCheckBox.visibility = if (backupVisible) View.VISIBLE else View.GONE
         backupHint.visibility = if (backupVisible) View.VISIBLE else View.GONE
+        maxConnGroup.visibility = if (backupVisible) View.VISIBLE else View.GONE
         typeCards.forEach { (t, card) ->
             card.setBackgroundResource(if (t == type) R.drawable.bg_type_option_selected else R.drawable.card_surface_background)
         }
@@ -1404,6 +1457,7 @@ internal fun MainActivity.showProviderSettings() {
         iptvListSection.visibility = View.GONE
         providerNameInput.setText(existing?.name ?: "")
         backupCheckBox.isChecked = existing?.backup == true
+        maxConnInput.setText(existing?.maxConnections?.takeIf { it > 0 }?.toString() ?: "")
         if (existing != null) {
             iptvFormTitle.text = getString(R.string.sett_editing_provider, existing.name)
             iptvFormTitle.visibility = View.VISIBLE
@@ -2064,6 +2118,18 @@ internal fun MainActivity.showProviderSettings() {
         }
     ))
 
+    // Multiview: the master switch (hides the player's entry button) and the pane count.
+    // Live-only and each pane costs a decoder plus one provider connection, so both rows
+    // carry a caption rather than just a title.
+    filtersPane.addView(dubCheckBoxRow(
+        getString(R.string.mv_settings_title),
+        getString(R.string.mv_settings_caption),
+        PREF_MULTIVIEW_ENABLED,
+        default = true,
+        onToggle = { on -> if (!on && isMultiviewVisible) exitMultiview() }
+    ))
+    filtersPane.addView(multiviewPanesRow())
+
     // Playback pane: skip-intro rows. Appended in code because the pane's own rows are
     // declared in XML and this keeps the IntroDB feature self-contained - one place that
     // knows its two prefs.
@@ -2441,7 +2507,8 @@ internal fun MainActivity.showProviderSettings() {
                     liveEnabled = prevConfig?.liveEnabled ?: true,
                     moviesEnabled = prevConfig?.moviesEnabled ?: true, seriesEnabled = prevConfig?.seriesEnabled ?: true,
                     url = url, userAgent = uaInput.text.toString().trim().ifBlank { null },
-                    backup = wantBackup
+                    backup = wantBackup,
+                    maxConnections = maxConnInput.text.toString().trim().toIntOrNull()?.coerceIn(0, 20) ?: 0
                 ))
             }
             "xtream" -> {
@@ -2452,7 +2519,8 @@ internal fun MainActivity.showProviderSettings() {
                     liveEnabled = prevConfig?.liveEnabled ?: true,
                     moviesEnabled = prevConfig?.moviesEnabled ?: true, seriesEnabled = prevConfig?.seriesEnabled ?: true,
                     url = url, username = xtreamUser.text.toString().trim(), password = xtreamPass.text.toString().trim(),
-                    backup = wantBackup
+                    backup = wantBackup,
+                    maxConnections = maxConnInput.text.toString().trim().toIntOrNull()?.coerceIn(0, 20) ?: 0
                 ))
             }
             "stalker" -> {
@@ -2463,7 +2531,8 @@ internal fun MainActivity.showProviderSettings() {
                     liveEnabled = prevConfig?.liveEnabled ?: true,
                     moviesEnabled = prevConfig?.moviesEnabled ?: true, seriesEnabled = prevConfig?.seriesEnabled ?: true,
                     url = url, userAgent = stalkerMac.text.toString().trim(),
-                    backup = wantBackup
+                    backup = wantBackup,
+                    maxConnections = maxConnInput.text.toString().trim().toIntOrNull()?.coerceIn(0, 20) ?: 0
                 ))
             }
             "jellyfin" -> {

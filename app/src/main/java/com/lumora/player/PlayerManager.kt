@@ -30,21 +30,36 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Manages player lifecycle and provides simple playback control.
  */
 class PlayerManager(
-    private val context: Context
+    private val context: Context,
+    /**
+     * Whether ExoPlayer should request audio focus itself. Every single-player path wants the
+     * default (true). Multiview panes pass false - several players each grabbing focus would
+     * duck/pause each other - and the grid takes the focus for whichever pane is selected via
+     * [updateAudioFocus].
+     */
+    private val handleAudioFocus: Boolean = true,
+    /**
+     * A deliberately small buffer profile for multiview panes. N players each holding
+     * Media3's default 50s (or, worse, the 5-minute extra-buffering profile the user may
+     * have enabled) would take real gigabytes of headroom on the hardware this app targets,
+     * so panes bound their buffer instead - see [MULTIVIEW_MAX_BUFFER_MS].
+     */
+    private val smallBuffer: Boolean = false
 ) {
     // Microseconds, read live by AvOffsetRenderersFactory's video renderer on every output
     // frame - updating it takes effect immediately, no player rebuild needed.
     private var avOffsetUs: Long = AvOffsetManager(context).load().toLong() * 1000L
 
+    /** Kept so [updateAudioFocus] can flip focus handling at runtime without rebuilding the
+     *  player - ExoPlayer allows setAudioAttributes at any point. */
+    private val audioAttributes: AudioAttributes = AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+        .build()
+
     private val player: ExoPlayer = ExoPlayer.Builder(context)
         .setRenderersFactory(AvOffsetRenderersFactory(context) { avOffsetUs })
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(C.USAGE_MEDIA)
-                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                .build(),
-            true /* handleAudioFocus */
-        )
+        .setAudioAttributes(audioAttributes, handleAudioFocus)
         .apply {
             // Only deviates from Media3's defaults when the user has asked for it. The scraper
             // providers stream from third-party embed hosts that deliver in bursts and stall
@@ -55,7 +70,18 @@ class PlayerManager(
             // A LoadControl can only be set when the player is built, so this is read once at
             // construction: toggling the setting takes effect on the next app start, which is
             // what the settings row says.
-            if (isExtraBufferingEnabled(context)) {
+            if (smallBuffer) {
+                setLoadControl(
+                    DefaultLoadControl.Builder()
+                        .setBufferDurationsMs(
+                            MULTIVIEW_MIN_BUFFER_MS,
+                            MULTIVIEW_MAX_BUFFER_MS,
+                            MULTIVIEW_BUFFER_FOR_PLAYBACK_MS,
+                            MULTIVIEW_BUFFER_AFTER_REBUFFER_MS,
+                        )
+                        .build()
+                )
+            } else if (isExtraBufferingEnabled(context)) {
                 setLoadControl(
                     DefaultLoadControl.Builder()
                         .setBufferDurationsMs(
@@ -833,7 +859,21 @@ class PlayerManager(
         player.release()
     }
 
-    fun setVolume(volume: Float) = player.setVolume(volume)
+    fun setVolume(volume: Float) {
+        if (released) return
+        player.setVolume(volume)
+    }
+
+    /**
+     * Flips audio-focus handling for this player at runtime - multiview hands focus to
+     * whichever pane is selected and away from the rest, without rebuilding any player.
+     * No-op before first play on some devices is fine; ExoPlayer applies it when a track
+     * next requests focus.
+     */
+    fun updateAudioFocus(handle: Boolean) {
+        if (released) return
+        player.setAudioAttributes(audioAttributes, handle)
+    }
 
     /** Get the underlying ExoPlayer instance for advanced use. */
     fun getExoPlayer(): ExoPlayer = player
@@ -856,6 +896,14 @@ class PlayerManager(
          * that only covers one burst does not help.
          */
         private const val EXTRA_MAX_BUFFER_MS = 300_000
+
+        // Multiview pane buffer. Kept well under Media3's default ceiling: four panes each
+        // holding 50s of HD would be ~1GB of media buffers on a device chosen for being
+        // cheap, so panes ride a short buffer and accept the occasional re-buffer instead.
+        private const val MULTIVIEW_MIN_BUFFER_MS = 10_000
+        private const val MULTIVIEW_MAX_BUFFER_MS = 30_000
+        private const val MULTIVIEW_BUFFER_FOR_PLAYBACK_MS = 1_500
+        private const val MULTIVIEW_BUFFER_AFTER_REBUFFER_MS = 3_000
 
         fun isExtraBufferingEnabled(context: Context): Boolean =
             context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
