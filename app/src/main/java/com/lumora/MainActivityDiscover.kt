@@ -744,10 +744,26 @@ internal fun MainActivity.resolveHomeTileSeries(channel: Channel): Channel? {
             it.isJellyfin == channel.isJellyfin && it.isPlex == channel.isPlex &&
             (channel.sourceProviderId == null || it.sourceProviderId == channel.sourceProviderId)
     }
+    // Episode-id prefix for snapshots saved before the parent id was stamped (or from a
+    // path that never stamps it): every episode id scheme embeds the series id as a
+    // prefix ("<seriesId>:<season>:<ep>", "<showId>:epN", "<seriesId>:sNeM"). Longest
+    // match wins, and the boundary past the prefix must not be alphanumerical so series
+    // "12" never claims an episode of series "123".
+    val episodeId = channel.id
+    if (episodeId.isNotBlank()) {
+        candidates.filter {
+            it.id.isNotBlank() && episodeId.length > it.id.length &&
+                episodeId.startsWith(it.id) && !episodeId[it.id.length].isLetterOrDigit()
+        }.maxByOrNull { it.id.length }?.let { return it }
+    }
     // Name-prefix fallback for old snapshots: "Series Name · S01E02 · Title", longest
-    // name wins.
-    candidates.filter { it.name.isNotBlank() && channel.name.startsWith(it.name + " · ") }
-        .maxByOrNull { it.name.length }?.let { return it }
+    // name wins. Compared raw and display-cleaned: the tile the row builds is labelled
+    // with the cleaned series name, so a show carrying source/quality decoration that
+    // cleanVodTitle strips would otherwise miss its own tile.
+    candidates.filter {
+        it.name.isNotBlank() &&
+            (channel.name.startsWith(it.name + " · ") || channel.name.startsWith(cleanVodTitle(it.name) + " · "))
+    }.maxByOrNull { it.name.length }?.let { return it }
     // Some panels write the show and the marker with no separator ("Marshals (2026)
     // S02E02"), so the part before the first season/episode marker is the show - a snapshot
     // like that must not fall through to direct play purely because of the missing "·".

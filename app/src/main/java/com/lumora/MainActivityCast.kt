@@ -18,6 +18,38 @@ import kotlinx.coroutines.launch
 // have been in, every one a door into that title's detail screen. A provider that ships
 // only a cast string (or no TMDB key at all) keeps the old name-only line; see applyDetails.
 
+/** First visible action on the detail screen's button row - the D-pad's way back up
+ *  out of the cast faces (UP) and the Back button's way back down (DOWN). */
+internal fun MainActivity.firstDetailAction(): View? = listOf(
+    binding.detailPlayButton,
+    binding.detailFavoriteButton,
+    binding.detailDownloadButton,
+    binding.detailFindStreamButton,
+    binding.detailTrailerButton
+).firstOrNull { it.isShown && it.isFocusable }
+
+/** Focuses row 0 of the detail screen's episode list, scrolling it in first when it is
+ *  not laid out yet. True when the key is claimed (focus lands on the next frames). */
+internal fun MainActivity.focusFirstDetailEpisode(): Boolean {
+    val list = binding.detailItemsList
+    if (list.visibility != View.VISIBLE || (list.adapter?.itemCount ?: 0) == 0) return false
+    list.scrollToPosition(0)
+    list.post { list.post { list.layoutManager?.findViewByPosition(0)?.requestFocus() } }
+    return true
+}
+
+/** Whatever sits below the detail header for a DOWN press out of the cast faces: the
+ *  version chips, else the season for the episode on screen, else the episode list
+ *  itself - so DOWN never dead-ends on the faces while the strips below are still
+ *  loading (they build on a different coroutine than these faces, in any order). */
+internal fun MainActivity.focusBelowDetailHeader(): Boolean {
+    val versionsFirst = binding.detailVersionsRow.getChildAt(0)
+        ?.takeIf { binding.detailVersionsScroll.isShown && it.isShown }
+    if (versionsFirst?.requestFocus() == true) return true
+    if (selectedSeasonChip?.takeIf { it.isShown }?.requestFocus() == true) return true
+    return focusFirstDetailEpisode()
+}
+
 /**
  * Fills the detail screen's cast row with [members], replacing whatever the previous title
  * left there. Each cell opens the person's page through [onCastClick].
@@ -35,8 +67,9 @@ internal fun MainActivity.populateCastRow(
     row.removeAllViews()
     if (members.isEmpty()) {
         binding.detailCastScroll.visibility = View.GONE
-        // The row is gone, so a stale UP target from it would dead-end on detached views.
-        binding.detailPlayButton.nextFocusUpId = View.NO_ID
+        // The row is gone, so the actions keep the explicit UP link to the Back button
+        // they were given when the screen opened - a NO_ID here would eat the press.
+        binding.detailPlayButton.nextFocusUpId = binding.detailBackButton.id
         return
     }
     binding.detailCastScroll.visibility = View.VISIBLE
@@ -61,6 +94,20 @@ internal fun MainActivity.populateCastRow(
         character.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         cell.tag = member.personId
         cell.setOnClickListener { onCastClick(member) }
+        // Explicit vertical links, resolved at press time rather than baked here: the
+        // strips below the header (versions, seasons) load on a different coroutine
+        // than these faces, so a static nextFocusDownId written now goes stale (NO_ID)
+        // whenever the faces land first - and DOWN then dies on them, bouncing focus
+        // between the faces and Play with the episodes unreachable below. UP/DOWN
+        // alone are claimed; LEFT/RIGHT and OK fall through untouched.
+        cell.setOnKeyListener { _, keyCode, event ->
+            if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            when (keyCode) {
+                android.view.KeyEvent.KEYCODE_DPAD_UP -> firstDetailAction()?.requestFocus() ?: false
+                android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusBelowDetailHeader()
+                else -> false
+            }
+        }
         row.addView(cell)
         val profileUrl = member.profileUrl
         if (profileUrl != null) {
@@ -75,11 +122,11 @@ internal fun MainActivity.populateCastRow(
     // Back from the person page lands on the face that was picked (the row was rebuilt
     // from the title's own detail screen - see hidePersonDetail), not on the Play button.
     // The actions sit beside the cast row in the title column, so UP out of the faces
-    // reaches Play and DOWN reaches whatever versions/seasons sit below the header -
-    // Play's own DOWN enters the faces first (see focusActionBelow), making the pair
-    // symmetric. The default focus search runs over the whole scrolling page (cast row,
-    // version chips, plot area all mixed), which is exactly the geometry the rest of this
-    // screen wires around explicitly.
+    // reaches the actions and DOWN reaches whatever versions/seasons sit below the
+    // header - resolved at press time by each cell's key listener above, since the
+    // strips below load on their own schedule. The static ids below are only the
+    // fallback for framework focus search; the DOWN one may legitimately be NO_ID when
+    // the faces land before the strips exist.
     val firstCell = row.getChildAt(0)
     if (firstCell != null) {
         val upTarget = binding.detailPlayButton.id

@@ -108,7 +108,12 @@ class StalkerProvider(private val httpClient: OkHttpClient) {
                     url = "",
                     episodeNum = ep,
                     stalkerCmd = season.cmd,
-                    mediaType = MediaType.SERIES
+                    mediaType = MediaType.SERIES,
+                    // Stamp the parent series id so Continue Watching / Next Up tiles
+                    // resolve back to the show (resolveHomeTileSeries matches categoryId
+                    // against the catalog) instead of direct-playing - the same stamp
+                    // Xtream, Jellyfin, Plex and M3U episodes already carry.
+                    categoryId = seriesId
                 )
             }
         }
