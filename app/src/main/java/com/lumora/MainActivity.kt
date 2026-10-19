@@ -520,6 +520,11 @@ class MainActivity : AppCompatActivity() {
      *  suppression window are not treated as device-ceiling evidence (see
      *  MainActivityMultiview.noteMultiviewCapabilityFailure). */
     internal var multiviewLastResumeAt = 0L
+    /** True while the Live tab is being browsed to pick the next multiview screen (see
+     *  enterMultiviewAddMode): the grid's panes are stopped but kept, the player overlay is
+     *  down, and OK on a channel adds it and brings the grid straight back. Back returns to
+     *  the grid without adding; an explicit tab choice abandons the session. */
+    internal var isMultiviewAddMode = false
 
     internal var allChannels = listOf<Channel>()
     internal var liveChannels = listOf<Channel>()
@@ -2090,6 +2095,9 @@ class MainActivity : AppCompatActivity() {
         // The grid unwinds as one level: Back closes it and lands on the guide with the
         // selected pane's channel in the preview - not straight out of the player shell.
         else if (isMultiviewVisible) { exitMultiview() }
+        // Add mode unwinds to the grid it came from: Back is the "never mind" gesture,
+        // while the dropdown's tab choices are what abandon the session outright.
+        else if (isMultiviewAddMode) { cancelMultiviewAddMode() }
         else if (isPlayerVisible) { hidePlayer(); restoreSearchIfPending() }
         // The person page is the topmost content screen when it is up, whether it covers the
         // title it was opened from or a credit's detail page took that slot over.

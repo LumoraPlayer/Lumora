@@ -570,6 +570,8 @@
     <string name="mv_toast_provider_limit">%1$s allows %2$d simultaneous connection(s) \u2014 another screen may be refused</string>
     <string name="mv_toast_decoder_limit">This device could not start another stream \u2014 multiview screens reduced to %1$d</string>
     <string name="mv_toast_decoder_stream">This device could not start another stream here \u2014 press OK on the screen to retry</string>
+    <string name="mv_add_mode_hint">Browse to a channel and press OK to add it as a screen \u2014 Back returns to the grid</string>
+    <string name="mv_toast_already_on_screen">That channel is already on a screen</string>
     <string name="mv_toast_no_live">No live channels are loaded yet</string>
     <string name="mv_settings_title">Multiview</string>
     <string name="mv_settings_caption">Watch several live channels at once. Each screen counts as one simultaneous connection on its provider, and the first screen is audible.</string>

@@ -115,7 +115,7 @@ internal fun MainActivity.setupMultiviewControls() {
         }
         openMultiview(channel)
     }
-    binding.btnMvAdd.setOnClickListener { promptAddMultiviewPane() }
+    binding.btnMvAdd.setOnClickListener { enterMultiviewAddMode() }
     binding.btnMvChange.setOnClickListener { promptChangeSelectedMultiviewPane() }
     binding.btnMvFullscreen.setOnClickListener { activateSelectedMultiviewPane() }
     binding.btnMvClose.setOnClickListener { closeMultiviewPane(multiviewSelectedIndex) }
@@ -176,15 +176,27 @@ internal fun MainActivity.multiviewLimitDisplay(): String {
  * guide-preview restore, since the grid is what comes up instead.
  */
 internal fun MainActivity.openMultiview(startChannel: Channel) {
-    if (isMultiviewVisible || startChannel.mediaType != MediaType.LIVE) return
+    if (isMultiviewVisible || isMultiviewAddMode || startChannel.mediaType != MediaType.LIVE) return
     if (isPlayerVisible) hidePlayer(restorePreview = false) else releaseLivePreview()
+    com.lumora.diagnostics.SessionLog.event("multiview", "open with ${startChannel.name}")
+    returnToMultiviewGrid(addChannel = startChannel)
+}
+
+/**
+ * Shows the grid, re-tuning every pane that survived a browse detour and optionally adding
+ * [addChannel] as a new screen. One entry point for both a fresh open and the return from
+ * add mode: the panes were stopped for the detour (their decoders went back to the system
+ * for the browse preview), and their TextureViews may have been torn down with the hidden
+ * overlay, so each is re-attached before it plays again.
+ */
+internal fun MainActivity.returnToMultiviewGrid(addChannel: Channel?) {
+    releaseLivePreview()
     // The grid owns the screen from here: scraper-owned UI must stay away, exactly as while
     // the single player is up.
     com.lumora.scraper.ScraperApp.setPlayerActive(true)
     isMultiviewVisible = true
     isPlayerVisible = true
     userPausedPlayback = false
-    multiviewSelectedIndex = 0
     multiviewSampleCursor = 0
     binding.mainContent.visibility = View.GONE
     binding.playerLayout.visibility = View.VISIBLE
@@ -196,10 +208,91 @@ internal fun MainActivity.openMultiview(startChannel: Channel) {
     binding.bufferingSpinner.visibility = View.GONE
     binding.multiviewGrid.visibility = View.VISIBLE
     binding.multiviewBar.visibility = View.VISIBLE
-    addMultiviewPane(startChannel, select = true)
-    com.lumora.diagnostics.SessionLog.event("multiview", "open with ${startChannel.name}")
+    multiviewPanes.forEach { pane ->
+        if (pane.released) return@forEach
+        pane.manager.setTextureView(pane.surface)
+        playMultiviewPane(pane, pane.channel)
+    }
+    if (addChannel != null) addMultiviewPane(addChannel, select = true)
+    else selectMultiviewPane(multiviewSelectedIndex, takeFocus = true)
     mainHandler.removeCallbacks(multiviewTickRunnable)
     mainHandler.postDelayed(multiviewTickRunnable, MULTIVIEW_TICK_MS)
+}
+
+/**
+ * Drops out of the grid (or off the Live TV dropdown) into normal Live TV browsing to pick
+ * the next screen. The grid's panes are stopped - their decoders go back to the system for
+ * the browse preview, which matters on the low-end sticks this runs on - but kept, so Back
+ * or a pick brings the same session straight back. OK on a channel adds it and returns;
+ * Back returns without adding; the dropdown's Live TV / Catch Up abandon the session.
+ */
+internal fun MainActivity.enterMultiviewAddMode() {
+    if (isMultiviewAddMode || !isMultiviewEnabled()) return
+    if (multiviewPanes.size >= multiviewPaneLimit()) {
+        Toast.makeText(this, getString(R.string.mv_toast_pane_limit, multiviewPaneLimit()), Toast.LENGTH_SHORT).show()
+        return
+    }
+    if (isMultiviewVisible) {
+        multiviewPanes.forEach { pane ->
+            if (pane.released) return@forEach
+            runCatching { pane.manager.stop() }
+            pane.spinner.visibility = View.VISIBLE
+        }
+        // The guide should open on the screen the grid had selected, and its preview on the
+        // same channel - continuity from what the user was just watching.
+        multiviewPanes.getOrNull(multiviewSelectedIndex)?.channel?.let { lastFocusedLiveChannel = it }
+        // The normal player-shell teardown: reports and runnables unwind, the browse screen
+        // comes back, and the inline preview re-arms on lastFocusedLiveChannel.
+        hidePlayer()
+    }
+    isMultiviewAddMode = true
+    if (activeTab != 0 || showingHome || showingDiscover || showingDownloads || showingCatchup) selectTab(0)
+    // Land the D-pad on the selected screen's channel (the guide is already scrolled to it
+    // by the preview restore) rather than leaving focus nowhere.
+    val target = lastFocusedLiveChannel
+    val index = target?.let { ch -> liveAdapter.currentList.indexOfFirst { it.id == ch.id } } ?: -1
+    if (index >= 0) focusItemWhenReady(binding.liveContent, index) else focusFirstItemWhenReady(binding.liveContent)
+    Toast.makeText(this, getString(R.string.mv_add_mode_hint), Toast.LENGTH_LONG).show()
+}
+
+/** OK on a channel while browsing in add mode: it becomes the next screen and the grid
+ *  comes straight back. Over the pane cap - or on a channel already on screen, which the
+ *  old picker used to exclude and would cost a second connection for nothing - the user
+ *  keeps browsing (the toast says why). */
+internal fun MainActivity.addChannelToMultiviewFromBrowse(channel: Channel) {
+    if (!isMultiviewAddMode || channel.mediaType != MediaType.LIVE) return
+    if (multiviewPanes.any { !it.released && it.channel.id == channel.id }) {
+        Toast.makeText(this, getString(R.string.mv_toast_already_on_screen), Toast.LENGTH_SHORT).show()
+        return
+    }
+    if (multiviewPanes.size >= multiviewPaneLimit()) {
+        Toast.makeText(this, getString(R.string.mv_toast_pane_limit, multiviewPaneLimit()), Toast.LENGTH_SHORT).show()
+        return
+    }
+    isMultiviewAddMode = false
+    com.lumora.diagnostics.SessionLog.event("multiview", "add ${channel.name}")
+    returnToMultiviewGrid(addChannel = channel)
+}
+
+/** Back in add mode: undo the detour - the grid comes back exactly as it was (its panes
+ *  re-tune from their stopped state). Nothing to return to when the mode was entered from
+ *  the dropdown without a session, in which case this just leaves plain Live TV. */
+internal fun MainActivity.cancelMultiviewAddMode() {
+    if (!isMultiviewAddMode) return
+    isMultiviewAddMode = false
+    if (multiviewPanes.any { !it.released }) {
+        com.lumora.diagnostics.SessionLog.event("multiview", "add cancelled")
+        returnToMultiviewGrid(addChannel = null)
+    }
+}
+
+/** An explicit tab choice (Live TV / Catch Up) while in add mode: the grid session ends -
+ *  its stopped panes are released, since there is no longer any way back to them. */
+internal fun MainActivity.abandonMultiviewAddMode() {
+    if (!isMultiviewAddMode) return
+    isMultiviewAddMode = false
+    com.lumora.diagnostics.SessionLog.event("multiview", "add abandoned")
+    teardownMultiview()
 }
 
 /** User-facing close (Back, the Exit button, or the settings kill switch taking it down):
@@ -833,15 +926,6 @@ private fun MainActivity.moveMultiviewBarFocus(delta: Int) {
 }
 
 // ── Channel picker ───────────────────────────────────────────────────────────────────────
-
-internal fun MainActivity.promptAddMultiviewPane() {
-    if (!isMultiviewVisible) return
-    if (multiviewPanes.size >= multiviewPaneLimit()) {
-        Toast.makeText(this, getString(R.string.mv_toast_pane_limit, multiviewPaneLimit()), Toast.LENGTH_SHORT).show()
-        return
-    }
-    showMultiviewChannelPicker { channel -> addMultiviewPane(channel) }
-}
 
 internal fun MainActivity.promptChangeSelectedMultiviewPane() {
     val pane = multiviewPanes.getOrNull(multiviewSelectedIndex) ?: return

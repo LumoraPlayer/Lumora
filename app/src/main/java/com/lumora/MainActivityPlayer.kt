@@ -669,6 +669,9 @@ internal fun MainActivity.showPlayerFor(
     /** Container MIME when the source knows it - see PlayerManager.playUrl. */
     mimeType: String? = null
 ) {
+    // Playing something from the browse screen supersedes a pending multiview add: the
+    // panes that were waiting behind it are stopped and nothing is coming back for them.
+    if (isMultiviewAddMode) abandonMultiviewAddMode()
     // The copy this call is replacing - captured before nowPlayingChannel is overwritten
     // below. The only callers that pass resumeFromMs are the version switches (manual
     // picker, failover, quality watchdog), which replace the playing copy of one title.

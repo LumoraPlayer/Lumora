@@ -524,8 +524,15 @@ internal fun MainActivity.cancelUpNextCountdown() {
 
 /** Two-press channel open: first OK opens the channel in the preview pane; a second
  *  OK on the same channel opens it fullscreen. With the preview disabled (issue #9)
- *  there is no first step - OK plays fullscreen straight away. */
+ *  there is no first step - OK plays fullscreen straight away.
+ *
+ *  In multiview add mode (browsing to pick the next screen) OK adds the channel to the
+ *  grid instead - one press, since there is no preview/fullscreen choice to make. */
 internal fun MainActivity.onChannelOkPress(channel: Channel) {
+    if (isMultiviewAddMode) {
+        addChannelToMultiviewFromBrowse(channel)
+        return
+    }
     if (!isLivePreviewEnabled()) {
         playItem(channel)
         return

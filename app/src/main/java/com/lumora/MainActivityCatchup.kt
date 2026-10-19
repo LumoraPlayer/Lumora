@@ -54,24 +54,32 @@ internal fun MainActivity.catchupCategories(): List<Pair<String, List<Channel>>>
         .sortedBy { it.first.lowercase() }
 
 /** Catch Up hangs off the Live TV tab as a dropdown, so all this has to keep current is
- *  the caret that advertises it - shown only when some enabled provider actually reports
- *  archive channels, since a dropdown with one dead entry reads as a broken tab. Called
- *  after every pane switch (selectTab/selectHome/selectDiscover/selectDownloads/
- *  selectCatchup), since none of those otherwise touch it. */
+ *  the caret that advertises it - shown when some enabled provider actually reports archive
+ *  channels *or* multiview is switched on (the dropdown is the way into multiview from the
+ *  tab itself now). Called after every pane switch (selectTab/selectHome/selectDiscover/
+ *  selectDownloads/selectCatchup), since none of those otherwise touch it. */
 internal fun MainActivity.updateCatchupTabVisibility() {
     val hasArchive = catchupChannels().isNotEmpty()
+    val hasMultiview = isMultiviewEnabled()
     // The archive vanishing under the user (its provider disabled while they are inside
     // Catch Up) must not leave the pane on screen with no way back to it.
     if (!hasArchive && showingCatchup) { selectTab(0); return }
-    if (!hasArchive) dismissLiveTabMenu()
-    binding.tabLiveChevron.visibility = if (hasArchive) View.VISIBLE else View.GONE
+    if (!hasArchive && !hasMultiview) dismissLiveTabMenu()
+    binding.tabLiveChevron.visibility = if (hasArchive || hasMultiview) View.VISIBLE else View.GONE
 }
 
 /** Opens the Live TV tab's dropdown, anchored under the tab itself. Its own focusable
  *  window: the D-pad walks the rows without the tab bar's key intercepts in the way, and
- *  BACK closes it before the Activity ever sees the press. */
+ *  BACK closes it before the Activity ever sees the press.
+ *
+ *  Rows without anything behind them are hidden (Catch Up with no archive channels,
+ *  Multiview when the feature is switched off); the focus chain is re-linked around
+ *  whatever is left, since the XML chain assumes all three. */
 internal fun MainActivity.showLiveTabMenu() {
     dismissLiveTabMenu()
+    val hasArchive = catchupChannels().isNotEmpty()
+    val hasMultiview = isMultiviewEnabled()
+    if (!hasArchive && !hasMultiview) return
     val view = layoutInflater.inflate(R.layout.popup_live_menu, null)
     val popup = android.widget.PopupWindow(
         view,
@@ -83,20 +91,56 @@ internal fun MainActivity.showLiveTabMenu() {
     // default popup background, and outside taps still dismiss (needs a background set).
     popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
     popup.setOnDismissListener { liveTabMenu = null }
-    view.findViewById<View>(R.id.liveMenuLive).setOnClickListener {
+    val liveRow = view.findViewById<View>(R.id.liveMenuLive)
+    val multiviewRow = view.findViewById<View>(R.id.liveMenuMultiview)
+    val catchupRow = view.findViewById<View>(R.id.liveMenuCatchup)
+    multiviewRow.visibility = if (hasMultiview) View.VISIBLE else View.GONE
+    catchupRow.visibility = if (hasArchive) View.VISIBLE else View.GONE
+    // The XML chain assumes all three rows exist; re-link it around whatever is visible
+    // (wrapping at the ends, the same shape the original two-row menu had), or a D-pad
+    // move toward a hidden row dead-ends.
+    val visibleRows = listOf(liveRow, multiviewRow, catchupRow).filter { it.visibility == View.VISIBLE }
+    visibleRows.forEachIndexed { index, row ->
+        row.nextFocusUpId = visibleRows.getOrNull(index - 1)?.id ?: visibleRows.last().id
+        row.nextFocusDownId = visibleRows.getOrNull(index + 1)?.id ?: visibleRows.first().id
+    }
+    // Live TV: leave the dropdown for plain browsing. In multiview add mode that also
+    // abandons the grid session (the panes were stopped for the detour and nothing is
+    // coming back for them) - BACK is the gesture that returns to the grid instead.
+    liveRow.setOnClickListener {
+        popup.dismiss()
+        showingHome = false
+        if (isMultiviewAddMode) abandonMultiviewAddMode()
+        selectTab(0)
+    }
+    // Multiview: browse Live TV to add the next screen of the grid. With a grid session
+    // waiting (entered from its Add screen), this is already the current mode; the row is
+    // then just a no-op landing spot.
+    multiviewRow.setOnClickListener {
         popup.dismiss()
         showingHome = false
         selectTab(0)
+        enterMultiviewAddMode()
     }
-    view.findViewById<View>(R.id.liveMenuCatchup).setOnClickListener {
+    // Catch Up: same abandon rule as Live TV - a grid session cannot stay behind a pane
+    // switch it has no way back from.
+    catchupRow.setOnClickListener {
         popup.dismiss()
         showingHome = false
+        if (isMultiviewAddMode) abandonMultiviewAddMode()
         selectCatchup()
     }
     liveTabMenu = popup
     popup.showAsDropDown(binding.tabLive, 0, 0)
-    // Landing on the pane you are already in is the no-op choice; open on the other one.
-    view.findViewById<View>(if (showingCatchup) R.id.liveMenuLive else R.id.liveMenuCatchup).requestFocus()
+    // Landing on the pane you are already in is the no-op choice; open on the first other
+    // row that exists (Multiview above Catch Up), falling back to Live TV.
+    val initial = when {
+        showingCatchup || isMultiviewAddMode -> liveRow
+        hasMultiview -> multiviewRow
+        hasArchive -> catchupRow
+        else -> liveRow
+    }
+    initial.requestFocus()
 }
 
 internal fun MainActivity.dismissLiveTabMenu() {

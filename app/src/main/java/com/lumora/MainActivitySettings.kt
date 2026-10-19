@@ -2126,7 +2126,14 @@ internal fun MainActivity.showProviderSettings() {
         getString(R.string.mv_settings_caption),
         PREF_MULTIVIEW_ENABLED,
         default = true,
-        onToggle = { on -> if (!on && isMultiviewVisible) exitMultiview() }
+        onToggle = { on ->
+            if (!on) {
+                // Take whatever the feature is showing down with it: the grid itself, or
+                // the browse-to-add session whose grid is waiting behind it.
+                if (isMultiviewVisible) exitMultiview()
+                else if (isMultiviewAddMode) abandonMultiviewAddMode()
+            }
+        }
     ))
     filtersPane.addView(multiviewPanesRow())
 

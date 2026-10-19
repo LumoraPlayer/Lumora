@@ -1701,11 +1701,14 @@ internal fun MainActivity.applyStatus() {
 internal fun MainActivity.setupTabs() {
     binding.tabHome.setOnClickListener { selectHome() }
     // First press goes to Live TV; pressing the tab you are already inside opens its
-    // dropdown (Live TV / Catch Up), which is where Catch Up now lives. With no archive
-    // channels there is nothing to drop down, so the tab stays a plain tab.
+    // dropdown (Live TV / Multiview / Catch Up), which is where Catch Up and the
+    // browse-to-add Multiview mode now live. With neither behind it there is nothing to
+    // drop down, so the tab stays a plain tab.
     binding.tabLive.setOnClickListener {
         val onLiveSection = (activeTab == 0 && !showingHome && !showingDiscover && !showingDownloads && !showingSports) || showingCatchup
-        if (onLiveSection && catchupChannels().isNotEmpty()) showLiveTabMenu()
+        // The dropdown carries Catch Up and Multiview, so it opens when either has
+        // something behind it - with only one row left it is still a real menu.
+        if (onLiveSection && (catchupChannels().isNotEmpty() || isMultiviewEnabled())) showLiveTabMenu()
         else selectTab(0)
     }
     binding.tabSeries.setOnClickListener { selectTab(1) }
