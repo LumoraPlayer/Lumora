@@ -2537,7 +2537,7 @@ class MainActivity : AppCompatActivity() {
         // action bar, media keys drive the selected pane. Claimed here, ahead of every
         // single-player branch below (channel surf, controls reveal, LEFT = side menu) -
         // those all read state a grid session deliberately doesn't have.
-        if (isMultiviewVisible && handleMultiviewKey(keyCode)) return true
+        if (isMultiviewVisible && !isMultiviewAddMode && handleMultiviewKey(keyCode)) return true
 
         // Numeric remote input for direct channel entry - only while fullscreen on LIVE.
         // Buffer up to 6 digits, timeout after 1.5s of inactivity to resolve the channel.

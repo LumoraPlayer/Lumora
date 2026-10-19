@@ -242,6 +242,11 @@ internal fun MainActivity.enterMultiviewAddMode() {
         // The guide should open on the screen the grid had selected, and its preview on the
         // same channel - continuity from what the user was just watching.
         multiviewPanes.getOrNull(multiviewSelectedIndex)?.channel?.let { lastFocusedLiveChannel = it }
+        // The flag follows what is on screen: the grid is going away (its panes only wait
+        // behind add mode), and leaving it set kept handleMultiviewKey alive over the browse
+        // screen - which swallowed every D-pad move (they were aimed at hidden panes) and
+        // left the user stranded in the categories.
+        isMultiviewVisible = false
         // The normal player-shell teardown: reports and runnables unwind, the browse screen
         // comes back, and the inline preview re-arms on lastFocusedLiveChannel.
         hidePlayer()
@@ -870,7 +875,7 @@ internal fun MainActivity.checkMultiviewPanes() {
 /** Every key the grid claims while it is up. Called from onKeyDown before any single-player
  *  branch: those read state (nowPlayingChannel, the surf list) a grid session doesn't have. */
 internal fun MainActivity.handleMultiviewKey(keyCode: Int): Boolean {
-    if (!isMultiviewVisible) return false
+    if (!isMultiviewVisible || isMultiviewAddMode) return false
     val panes = multiviewPanes
     val barHasFocus = binding.multiviewBar.findFocus() != null
     val columns = multiviewColumns()
