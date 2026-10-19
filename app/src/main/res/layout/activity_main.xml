@@ -2497,18 +2497,16 @@
             android:visibility="gone" />
 
         <!-- Multiview action bar: always up while the grid is open (there is no auto-hide -
-             every action has to be one D-pad move away, Down). Floats above the screen edge
-             on its own rounded panel (it used to sit flush on the bottom pixels, half-cut
-             under the pane labels), and each action carries a filled pill so the row reads
-             against any video behind it. The status line names the selected screen and its
-             current programme; the buttons act on it. -->
+             every action has to be one D-pad move away, Down). It floats above the screen
+             edge, but with no panel behind it - the purple action pills carry themselves
+             against the video. The status line names the selected screen and its current
+             programme; the buttons act on it. -->
         <LinearLayout
             android:id="@+id/multiviewBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
             android:layout_marginBottom="@dimen/multiview_bar_bottom_gap"
-            android:background="@drawable/bg_player_bottom"
             android:clipChildren="false"
             android:clipToPadding="false"
             android:orientation="vertical"
@@ -2539,7 +2537,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
                     android:layout_marginEnd="6dp"
-                    android:background="@drawable/card_surface_background"
+                    android:background="@drawable/bg_mv_bar_button"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
@@ -2555,7 +2553,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
                     android:layout_marginEnd="6dp"
-                    android:background="@drawable/card_surface_background"
+                    android:background="@drawable/bg_mv_bar_button"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
@@ -2571,7 +2569,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
                     android:layout_marginEnd="6dp"
-                    android:background="@drawable/card_surface_background"
+                    android:background="@drawable/bg_mv_bar_button"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
@@ -2587,7 +2585,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
                     android:layout_marginEnd="6dp"
-                    android:background="@drawable/card_surface_background"
+                    android:background="@drawable/bg_mv_bar_button"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
@@ -2602,7 +2600,7 @@
                     android:id="@+id/btnMvExit"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
-                    android:background="@drawable/card_surface_background"
+                    android:background="@drawable/bg_mv_bar_button"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"

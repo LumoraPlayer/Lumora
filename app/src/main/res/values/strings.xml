@@ -564,6 +564,7 @@
     <string name="mv_close_pane">Close</string>
     <string name="mv_exit">Exit</string>
     <string name="mv_status_offline">Offline \u00b7 retrying</string>
+    <string name="mv_status_connecting">Connecting\u2026</string>
     <string name="mv_status_audio">AUDIO</string>
     <string name="mv_picker_title">Add a channel to the grid</string>
     <string name="mv_toast_pane_limit">Multiview is limited to %1$d screens on this device (Settings \u2192 Filters)</string>

@@ -66,17 +66,20 @@ private const val MULTIVIEW_STALL_REBUFFER_MS = 45_000L
  *  learning from a reclaim would shrink Auto permanently for a transient condition. */
 private const val MULTIVIEW_RECLAIM_SUPPRESS_MS = 15_000L
 
-/** Offline-pane auto-retry: the first attempt waits 30s, then doubles up to every 2
- *  minutes. Dead feeds do not recover run by run (and a provider that is throttling you
- *  answers a hammering client worse), but the point of the grid is that nobody should have
- *  to babysit a tile for its match to come back on. */
-private const val PANE_RETRY_FIRST_MS = 30_000L
+/** Offline-pane auto-retry ladder: first attempt after 10s, then 30s, 60s, and every 2
+ *  minutes from there. Dead feeds do not recover run by run (and a provider that is
+ *  throttling you answers a hammering client worse), but a pane that comes back should be
+ *  back while the user is still looking at it - nobody should have to babysit a tile. */
+private const val PANE_RETRY_FIRST_MS = 10_000L
 private const val PANE_RETRY_MAX_MS = 120_000L
 
-/** Backoff behind [PANE_RETRY_FIRST_MS]'s ladder: 30s, 60s, then capped at 2 minutes. */
-private fun paneRetryDelay(attempt: Int): Long =
-    if (attempt <= 0) PANE_RETRY_FIRST_MS
-    else minOf(PANE_RETRY_FIRST_MS shl attempt, PANE_RETRY_MAX_MS)
+/** Backoff behind [PANE_RETRY_FIRST_MS]'s ladder: 10s, 30s, 60s, then capped at 2 minutes. */
+private fun paneRetryDelay(attempt: Int): Long = when {
+    attempt <= 0 -> PANE_RETRY_FIRST_MS
+    attempt == 1 -> 30_000L
+    attempt == 2 -> 60_000L
+    else -> PANE_RETRY_MAX_MS
+}
 
 /**
  * One grid cell: the playing pane and everything the controller needs to shepherd it.
@@ -113,6 +116,10 @@ internal class MultiviewPane(
      *  - a feed that comes back is picked up on its own instead of waiting for OK. */
     var retryAttempt = 0
     var nextRetryAtMs = 0L
+    /** True from the moment an auto/user retry starts until the pane plays or fails again -
+     *  the badge shows "Connecting…" for that window, so a retry in progress is visible
+     *  rather than looking identical to a dead tile. */
+    var retrying = false
     /** Bumped on every (re)tune of the pane. Anything asynchronous that wants to hand
      *  [manager] a stream later must capture this and refuse to land if it has moved on -
      *  a Stalker create_link for the same channel id would otherwise beat a newer attempt. */
@@ -519,6 +526,7 @@ internal fun MainActivity.playMultiviewPane(pane: MultiviewPane, channel: Channe
     pane.bufferingSinceMs = 0L
     pane.retryAttempt = 0
     pane.nextRetryAtMs = 0L
+    pane.retrying = false
     pane.streamStartMs = System.currentTimeMillis()
     val group = liveVersions[channel.id] ?: listOf(channel)
     pane.versionGroup = group
@@ -589,6 +597,7 @@ internal fun MainActivity.multiviewPaneListener(pane: MultiviewPane): Player.Lis
                     // Back playing: the offline ladder is spent and forgotten.
                     pane.retryAttempt = 0
                     pane.nextRetryAtMs = 0L
+                    pane.retrying = false
                     pane.versionGroup.getOrNull(pane.versionIndex)?.let { clearStreamDead(it) }
                 }
                 else -> {
@@ -704,12 +713,18 @@ internal fun MainActivity.advanceMultiviewVersion(pane: MultiviewPane, markDead:
 
 /** Terminal per-pane state: a visible badge, the decoder released, the rest of the grid
  *  untouched - and the auto-retry ladder scheduled, so an offline pane comes back on its
- *  own when the feed recovers (30s, then every 2 minutes; see [paneRetryDelay]). Never a
- *  dialog - a dialog would take the whole grid hostage for one channel. */
+ *  own when the feed recovers (10s, then 30s/60s/2min; see [paneRetryDelay]). Never a
+ *  dialog - a dialog would take the whole grid hostage for one channel.
+ *
+ *  Re-entry while already failed is refused: the only caller that could repeat is a
+ *  duplicate error report, and re-arming the ladder on every duplicate pushed
+ *  [MultiviewPane.nextRetryAtMs] forward faster than the tick could ever reach it - the
+ *  pane then sat on "Offline - retrying" forever. */
 internal fun MainActivity.failMultiviewPane(pane: MultiviewPane) {
-    if (pane.released) return
+    if (pane.released || pane.failed) return
     pane.failed = true
     pane.played = false
+    pane.retrying = false
     pane.bufferingSinceMs = 0L
     pane.spinner.visibility = View.GONE
     pane.nextRetryAtMs = System.currentTimeMillis() + paneRetryDelay(pane.retryAttempt)
@@ -724,6 +739,7 @@ internal fun MainActivity.retryMultiviewPane(pane: MultiviewPane) {
     if (pane.released) return
     pane.generation++
     pane.failed = false
+    pane.retrying = true
     pane.switchCount = 0
     pane.played = false
     pane.blackStreak = 0
@@ -816,6 +832,14 @@ internal fun MainActivity.refreshMultiviewPaneUi(pane: MultiviewPane) {
             pane.badge.text = getString(R.string.mv_status_offline)
             pane.badge.setTextColor(getColor(R.color.text_secondary))
         }
+        // A retry in flight (auto or user): say so, rather than showing the tile as if
+        // nothing were happening - this is the one state where a working retry and a dead
+        // feed look otherwise identical.
+        pane.retrying -> {
+            pane.badge.visibility = View.VISIBLE
+            pane.badge.text = getString(R.string.mv_status_connecting)
+            pane.badge.setTextColor(getColor(R.color.primary_light))
+        }
         pane.index == multiviewSelectedIndex -> {
             pane.badge.visibility = View.VISIBLE
             pane.badge.text = getString(R.string.mv_status_audio)
@@ -854,16 +878,22 @@ internal fun MainActivity.checkMultiviewPanes() {
         if (pane.failed) {
             // The auto-retry ladder fires here - this tick is the one thing running while
             // the pane is offline, so a feed that recovers comes back by itself, without
-            // anyone babysitting the tile. Each fresh failure re-arms the ladder; the
-            // first confirmed READY spends it again.
-            if (pane.nextRetryAtMs in 1 until now) {
-                pane.nextRetryAtMs = 0L
-                pane.retryAttempt++
-                com.lumora.diagnostics.SessionLog.event(
-                    "multiview",
-                    "pane ${pane.index} auto-retry #${pane.retryAttempt} ${pane.channel.name}"
-                )
-                retryMultiviewPane(pane)
+            // anyone babysitting the tile. Each fresh failure re-arms the ladder; the first
+            // confirmed READY spends it again. A failed pane with no schedule at all
+            // (failMultiviewPane always arms one, but any missed arm would otherwise park
+            // the tile on "Offline" forever) is re-armed here instead of ignored.
+            when {
+                pane.nextRetryAtMs <= 0L ->
+                    pane.nextRetryAtMs = now + paneRetryDelay(pane.retryAttempt)
+                pane.nextRetryAtMs < now -> {
+                    pane.nextRetryAtMs = 0L
+                    pane.retryAttempt++
+                    com.lumora.diagnostics.SessionLog.event(
+                        "multiview",
+                        "pane ${pane.index} auto-retry #${pane.retryAttempt} ${pane.channel.name}"
+                    )
+                    retryMultiviewPane(pane)
+                }
             }
             continue
         }
