@@ -2497,19 +2497,23 @@
             android:visibility="gone" />
 
         <!-- Multiview action bar: always up while the grid is open (there is no auto-hide -
-             every action has to be one D-pad move away, Down). The status line names the
-             selected screen and its current programme; the buttons act on it. -->
+             every action has to be one D-pad move away, Down). Floats above the screen edge
+             on its own rounded panel (it used to sit flush on the bottom pixels, half-cut
+             under the pane labels), and each action carries a filled pill so the row reads
+             against any video behind it. The status line names the selected screen and its
+             current programme; the buttons act on it. -->
         <LinearLayout
             android:id="@+id/multiviewBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
-            android:background="@drawable/grad_player_bottom"
+            android:layout_marginBottom="@dimen/multiview_bar_bottom_gap"
+            android:background="@drawable/bg_player_bottom"
             android:clipChildren="false"
             android:clipToPadding="false"
             android:orientation="vertical"
             android:paddingHorizontal="@dimen/player_controls_safe_horizontal_inset"
-            android:paddingVertical="@dimen/player_controls_safe_vertical_inset"
+            android:paddingVertical="10dp"
             android:visibility="gone">
 
             <TextView
@@ -2533,13 +2537,13 @@
                 <TextView
                     android:id="@+id/btnMvAdd"
                     android:layout_width="wrap_content"
-                    android:layout_height="30dp"
-                    android:layout_marginEnd="4dp"
-                    android:background="@drawable/bg_toolbar_button"
+                    android:layout_height="36dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/card_surface_background"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:paddingHorizontal="8dp"
+                    android:paddingHorizontal="10dp"
                     android:stateListAnimator="@animator/focus_scale"
                     android:text="@string/mv_add_pane"
                     android:textAllCaps="true"
@@ -2549,13 +2553,13 @@
                 <TextView
                     android:id="@+id/btnMvChange"
                     android:layout_width="wrap_content"
-                    android:layout_height="30dp"
-                    android:layout_marginEnd="4dp"
-                    android:background="@drawable/bg_toolbar_button"
+                    android:layout_height="36dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/card_surface_background"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:paddingHorizontal="8dp"
+                    android:paddingHorizontal="10dp"
                     android:stateListAnimator="@animator/focus_scale"
                     android:text="@string/mv_change"
                     android:textAllCaps="true"
@@ -2565,13 +2569,13 @@
                 <TextView
                     android:id="@+id/btnMvFullscreen"
                     android:layout_width="wrap_content"
-                    android:layout_height="30dp"
-                    android:layout_marginEnd="4dp"
-                    android:background="@drawable/bg_toolbar_button"
+                    android:layout_height="36dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/card_surface_background"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:paddingHorizontal="8dp"
+                    android:paddingHorizontal="10dp"
                     android:stateListAnimator="@animator/focus_scale"
                     android:text="@string/mv_fullscreen"
                     android:textAllCaps="true"
@@ -2581,13 +2585,13 @@
                 <TextView
                     android:id="@+id/btnMvClose"
                     android:layout_width="wrap_content"
-                    android:layout_height="30dp"
-                    android:layout_marginEnd="4dp"
-                    android:background="@drawable/bg_toolbar_button"
+                    android:layout_height="36dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/card_surface_background"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:paddingHorizontal="8dp"
+                    android:paddingHorizontal="10dp"
                     android:stateListAnimator="@animator/focus_scale"
                     android:text="@string/mv_close_pane"
                     android:textAllCaps="true"
@@ -2597,12 +2601,12 @@
                 <TextView
                     android:id="@+id/btnMvExit"
                     android:layout_width="wrap_content"
-                    android:layout_height="30dp"
-                    android:background="@drawable/bg_toolbar_button"
+                    android:layout_height="36dp"
+                    android:background="@drawable/card_surface_background"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:paddingHorizontal="8dp"
+                    android:paddingHorizontal="10dp"
                     android:stateListAnimator="@animator/focus_scale"
                     android:text="@string/mv_exit"
                     android:textAllCaps="true"

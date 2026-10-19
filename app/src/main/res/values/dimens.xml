@@ -225,6 +225,10 @@
     <dimen name="player_controls_safe_horizontal_inset">16dp</dimen>
     <dimen name="player_controls_safe_vertical_inset">8dp</dimen>
     <dimen name="player_controls_safe_margin">6dp</dimen>
+    <!-- Multiview bar: how far the action bar floats above the screen edge. It used to sit
+         flush on the last pixels, half-cut and under the bottom pane labels; a floating
+         rounded panel reads as the chrome it is. -->
+    <dimen name="multiview_bar_bottom_gap">16dp</dimen>
     <!-- Gap between the three toolbar cluster buttons (search/settings/refresh) and the air
          after the last one. Was a 4dp literal on settings/refresh with nothing on the right;
          the search pill's own 14dp padding made the cluster read as one wide gap then two

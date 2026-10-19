@@ -66,6 +66,18 @@ private const val MULTIVIEW_STALL_REBUFFER_MS = 45_000L
  *  learning from a reclaim would shrink Auto permanently for a transient condition. */
 private const val MULTIVIEW_RECLAIM_SUPPRESS_MS = 15_000L
 
+/** Offline-pane auto-retry: the first attempt waits 30s, then doubles up to every 2
+ *  minutes. Dead feeds do not recover run by run (and a provider that is throttling you
+ *  answers a hammering client worse), but the point of the grid is that nobody should have
+ *  to babysit a tile for its match to come back on. */
+private const val PANE_RETRY_FIRST_MS = 30_000L
+private const val PANE_RETRY_MAX_MS = 120_000L
+
+/** Backoff behind [PANE_RETRY_FIRST_MS]'s ladder: 30s, 60s, then capped at 2 minutes. */
+private fun paneRetryDelay(attempt: Int): Long =
+    if (attempt <= 0) PANE_RETRY_FIRST_MS
+    else minOf(PANE_RETRY_FIRST_MS shl attempt, PANE_RETRY_MAX_MS)
+
 /**
  * One grid cell: the playing pane and everything the controller needs to shepherd it.
  *
@@ -96,6 +108,11 @@ internal class MultiviewPane(
     var bufferingSinceMs = 0L
     var blackStreak = 0
     var lastLuma: IntArray? = null
+    /** Auto-retry ladder while offline: attempts since the last success, and the tick when
+     *  the next attempt is due (0 = none scheduled). The tick's failed-pane branch drives it
+     *  - a feed that comes back is picked up on its own instead of waiting for OK. */
+    var retryAttempt = 0
+    var nextRetryAtMs = 0L
     /** Bumped on every (re)tune of the pane. Anything asynchronous that wants to hand
      *  [manager] a stream later must capture this and refuse to land if it has moved on -
      *  a Stalker create_link for the same channel id would otherwise beat a newer attempt. */
@@ -500,6 +517,8 @@ internal fun MainActivity.playMultiviewPane(pane: MultiviewPane, channel: Channe
     pane.blackStreak = 0
     pane.lastLuma = null
     pane.bufferingSinceMs = 0L
+    pane.retryAttempt = 0
+    pane.nextRetryAtMs = 0L
     pane.streamStartMs = System.currentTimeMillis()
     val group = liveVersions[channel.id] ?: listOf(channel)
     pane.versionGroup = group
@@ -567,6 +586,9 @@ internal fun MainActivity.multiviewPaneListener(pane: MultiviewPane): Player.Lis
                     pane.bufferingSinceMs = 0L
                     pane.played = true
                     pane.switchCount = 0
+                    // Back playing: the offline ladder is spent and forgotten.
+                    pane.retryAttempt = 0
+                    pane.nextRetryAtMs = 0L
                     pane.versionGroup.getOrNull(pane.versionIndex)?.let { clearStreamDead(it) }
                 }
                 else -> {
@@ -680,15 +702,17 @@ internal fun MainActivity.advanceMultiviewVersion(pane: MultiviewPane, markDead:
     startMultiviewStream(pane)
 }
 
-/** Terminal per-pane state: a visible retry badge, the decoder released, the rest of the
- *  grid untouched. Never a dialog - a dialog would take the whole grid hostage for one
- *  channel. */
+/** Terminal per-pane state: a visible badge, the decoder released, the rest of the grid
+ *  untouched - and the auto-retry ladder scheduled, so an offline pane comes back on its
+ *  own when the feed recovers (30s, then every 2 minutes; see [paneRetryDelay]). Never a
+ *  dialog - a dialog would take the whole grid hostage for one channel. */
 internal fun MainActivity.failMultiviewPane(pane: MultiviewPane) {
     if (pane.released) return
     pane.failed = true
     pane.played = false
     pane.bufferingSinceMs = 0L
     pane.spinner.visibility = View.GONE
+    pane.nextRetryAtMs = System.currentTimeMillis() + paneRetryDelay(pane.retryAttempt)
     runCatching { pane.manager.stop() }
     refreshMultiviewPaneUi(pane)
     com.lumora.diagnostics.SessionLog.event("multiview", "pane ${pane.index} failed ${pane.channel.name}")
@@ -819,13 +843,30 @@ internal fun MainActivity.refreshMultiviewStatus() {
 
 // ── Watchdogs ────────────────────────────────────────────────────────────────────────────
 
-/** One tick: stall verdicts for every pane, then one round-robin black-frame sample. */
+/** One tick: offline-pane auto-retries, stall verdicts for every pane, then one
+ *  round-robin black-frame sample. */
 internal fun MainActivity.checkMultiviewPanes() {
     if (!isMultiviewVisible) return
     val now = System.currentTimeMillis()
     val panes = multiviewPanes
     for (pane in panes) {
-        if (pane.released || pane.failed) continue
+        if (pane.released) continue
+        if (pane.failed) {
+            // The auto-retry ladder fires here - this tick is the one thing running while
+            // the pane is offline, so a feed that recovers comes back by itself, without
+            // anyone babysitting the tile. Each fresh failure re-arms the ladder; the
+            // first confirmed READY spends it again.
+            if (pane.nextRetryAtMs in 1 until now) {
+                pane.nextRetryAtMs = 0L
+                pane.retryAttempt++
+                com.lumora.diagnostics.SessionLog.event(
+                    "multiview",
+                    "pane ${pane.index} auto-retry #${pane.retryAttempt} ${pane.channel.name}"
+                )
+                retryMultiviewPane(pane)
+            }
+            continue
+        }
         if (pane.manager.playbackState == Player.STATE_BUFFERING) {
             if (pane.bufferingSinceMs == 0L) pane.bufferingSinceMs = now
             val limit = if (pane.played) MULTIVIEW_STALL_REBUFFER_MS else MULTIVIEW_STALL_NEVER_PLAYED_MS
