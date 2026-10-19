@@ -199,10 +199,10 @@ class LiveGuideAdapter(
 
         /** Focuses this row's channel column - used to land D-pad focus (and thus the
          *  preview pane) on the first channel as soon as a category is opened, instead of
-         *  leaving the guide sitting there unfocused until the user presses something. */
-        fun requestChannelFocus() {
-            channelInfo.requestFocus()
-        }
+         *  leaving the guide sitting there unfocused until the user presses something.
+         *  Returns whether the request took, so callers that retry until the row is laid
+         *  out can tell a miss from a hit. */
+        fun requestChannelFocus(): Boolean = channelInfo.requestFocus()
 
         /** Reserves [px] of end margin so this row's content clears the floating preview
          *  pane - 0 once the row is no longer behind it. Driven by MainActivity's

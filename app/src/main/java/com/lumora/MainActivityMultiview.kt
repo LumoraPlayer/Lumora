@@ -17,6 +17,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.lumora.adapter.LiveGuideAdapter
 import com.lumora.data.IptvProviderStore
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
@@ -247,12 +248,40 @@ internal fun MainActivity.enterMultiviewAddMode() {
     }
     isMultiviewAddMode = true
     if (activeTab != 0 || showingHome || showingDiscover || showingDownloads || showingCatchup) selectTab(0)
-    // Land the D-pad on the selected screen's channel (the guide is already scrolled to it
-    // by the preview restore) rather than leaving focus nowhere.
+    // Land the D-pad on the selected screen's channel - the same landing selectTab(0) gives
+    // the Live tab - rather than on the category rail. The guide's row root is not
+    // focusable; its channel column is (see LiveGuideAdapter.requestChannelFocus), which is
+    // why focusItemWhenReady's flat row-root lookup fell through to the rail here and left
+    // the user able to select categories but never a channel.
     val target = lastFocusedLiveChannel
     val index = target?.let { ch -> liveAdapter.currentList.indexOfFirst { it.id == ch.id } } ?: -1
-    if (index >= 0) focusItemWhenReady(binding.liveContent, index) else focusFirstItemWhenReady(binding.liveContent)
+    focusLiveChannelRow(if (index >= 0) index else 0)
     Toast.makeText(this, getString(R.string.mv_add_mode_hint), Toast.LENGTH_LONG).show()
+}
+
+/**
+ * Focuses a guide row's channel column once the row is laid out - the guide counterpart of
+ * [focusItemWhenReady], which cannot be used here: the row root is not focusable, only the
+ * channel column inside it is. Retries a few frames for the adapter's diff/layout to land,
+ * then falls back to the rail (the only other thing guaranteed to exist).
+ */
+internal fun MainActivity.focusLiveChannelRow(index: Int, attempts: Int = 6) {
+    val list = binding.liveContent
+    fun attempt(remaining: Int) {
+        val count = list.adapter?.itemCount ?: 0
+        if (count <= 0) {
+            if (remaining > 0) list.post { attempt(remaining - 1) } else focusSelectedSidebarRow()
+            return
+        }
+        val target = index.coerceIn(0, count - 1)
+        list.scrollToPosition(target)
+        list.post {
+            val holder = list.findViewHolderForAdapterPosition(target) as? LiveGuideAdapter.RowViewHolder
+            if (holder?.requestChannelFocus() == true) return@post
+            if (remaining > 0) list.post { attempt(remaining - 1) } else focusSelectedSidebarRow()
+        }
+    }
+    attempt(attempts)
 }
 
 /** OK on a channel while browsing in add mode: it becomes the next screen and the grid
