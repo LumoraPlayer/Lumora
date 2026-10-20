@@ -23,6 +23,9 @@
 - **An XMLTV guide no longer goes blank for hours.** The feed was re-downloaded on exactly the period the reader's window allows, leaving no margin: there was always a stretch where the stored guide had aged out and the new copy had not arrived yet. The feed is now fetched more often than that window, and a source that has never been fetched is asked for straight away instead of waiting a whole period for the first run.
 - **A fetched guide is no longer lost on the way to disk.** The write is now one transaction (a crash between the delete and the insert used to leave a channel with no guide at all) and it is no longer cancelled when the screen closes - the fetch was already paid for.
 
+### Start screen
+- **The app can open on Home, Series or Movies instead of Live TV.** Settings → General has a new **Open the app on** row - Live TV (the default), Home, Series or Movies - and the choice is read once per launch, before the first paint, so it decides where the app opens and nothing else: it never moves you around while the app is running, and a provider reload half a minute later cannot send you back to where it opened. The labels are the tab bar's own, so the choice reads as the same thing the tab bar shows. Series and Movies fall back to Live TV when VOD is off (simple mode hides those tabs outright, and the VOD toggle leaves them there but empty), and a setup with no provider still lands on Discover, which is the only thing there is to show.
+
 ### Lists
 - **Single items can be taken off Recently Played.** Holding OK on the Home row now offers **Remove from Recently Played** / **Clear Recently Played** - the same hold-to-remove contract the Continue Watching grid already had - instead of only favouriting the channel. Nothing outside this device's list is touched, and focus stays on the row when a channel is removed.
 

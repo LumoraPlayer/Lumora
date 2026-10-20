@@ -120,6 +120,9 @@
     <string name="sett_simple_mode_caption">Show only Live TV - hides the tab bar so the EPG fills the screen</string>
     <string name="sett_disable_vod">Disable VOD content</string>
     <string name="sett_disable_vod_caption">Fetch only live TV from providers - movies and series are hidden everywhere</string>
+    <string name="sett_start_screen">Open the app on</string>
+    <string name="sett_start_screen_row">%1$s  ·  %2$s</string>
+    <string name="sett_start_screen_caption">Applies the next time the app opens</string>
     <string name="sett_audio_language">Audio language</string>
     <string name="sett_audio_language_caption">preferred track on films and series</string>
     <string name="sett_subtitle_language">Subtitle language</string>

@@ -24,6 +24,7 @@ import com.lumora.PREF_PREFER_DUB_AUDIO
 import com.lumora.PREF_SIMPLE_MODE
 import com.lumora.PREF_SKIP_AUTO
 import com.lumora.PREF_SKIP_SEGMENTS
+import com.lumora.PREF_START_SCREEN
 import com.lumora.PREF_SUBTITLES_ENABLED
 import com.lumora.PREF_SUBTITLES_WITH_DUB
 import com.lumora.PREF_SUBTITLE_LANGUAGE
@@ -137,6 +138,7 @@ internal val BACKED_UP_SETTINGS: Map<String, SettingType> = mapOf(
     PREF_UI_LANGUAGE to SettingType.STRING,
     PREF_SIMPLE_MODE to SettingType.BOOLEAN,
     PREF_DISABLE_VOD to SettingType.BOOLEAN,
+    PREF_START_SCREEN to SettingType.STRING,
     PREF_AUDIO_LANGUAGE to SettingType.STRING,
     PREF_SUBTITLE_LANGUAGE to SettingType.STRING,
     // Filters

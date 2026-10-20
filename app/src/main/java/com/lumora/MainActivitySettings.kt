@@ -646,6 +646,65 @@ internal fun MainActivity.dubCheckBoxRow(title: String, subtitle: String, key: S
 }
 
 /**
+ * The row that picks what the app opens on: Live TV (the default), Home, Series or Movies.
+ *
+ * The choice is read at launch, before the first paint, so it decides where the app opens
+ * and nothing else - it never moves the user around while the app is running, and the row
+ * says so. The labels are the tab bar's own, so the choice reads as the same thing the
+ * tab bar shows.
+ */
+internal fun MainActivity.startScreenChoiceRow(): TextView {
+    val row = TextView(this)
+    row.setTextColor(getColor(R.color.text_primary))
+    row.setBackgroundResource(R.drawable.card_surface_background)
+    val hPad = resources.getDimensionPixelSize(R.dimen.settings_gap_l)
+    val vPad = resources.getDimensionPixelSize(R.dimen.settings_row_padding_vertical)
+    row.setPadding(hPad, vPad, hPad, vPad)
+    row.stateListAnimator = AnimatorInflater.loadStateListAnimator(this, R.animator.focus_scale_flat)
+    row.isClickable = true
+    row.isFocusable = true
+    row.layoutParams = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT
+    ).apply { topMargin = resources.getDimensionPixelSize(R.dimen.settings_gap_m) }
+
+    val screens = listOf(START_SCREEN_LIVE, START_SCREEN_HOME, START_SCREEN_SERIES, START_SCREEN_FILMS)
+    fun label(screen: String): String = when (screen) {
+        START_SCREEN_HOME -> getString(R.string.tab_home)
+        START_SCREEN_SERIES -> getString(R.string.series_tab)
+        START_SCREEN_FILMS -> getString(R.string.films_tab)
+        else -> getString(R.string.tab_live_tv)
+    }
+    fun render() {
+        row.text = twoLineSettingsText(
+            getString(R.string.sett_start_screen),
+            getString(
+                R.string.sett_start_screen_row,
+                label(startScreenPref()),
+                getString(R.string.sett_start_screen_caption)
+            )
+        )
+    }
+    render()
+    row.setOnClickListener {
+        val current = startScreenPref()
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.sett_start_screen))
+            .setSingleChoiceItems(
+                screens.map { label(it) }.toTypedArray(),
+                screens.indexOf(current).coerceAtLeast(0)
+            ) { dialog, which ->
+                prefs.edit().putString(PREF_START_SCREEN, screens[which]).apply()
+                render()
+                dialog.dismiss()
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+    return row
+}
+
+/**
  * The multiview pane-count row: Auto, or an explicit 2/3/4. Shaped like
  * [languageChoiceRow], but the pref is an Int (0 = auto) and the current resolved value is
  * shown beside the choice - Auto's answer depends on the providers and on what the device
@@ -2184,6 +2243,9 @@ internal fun MainActivity.showProviderSettings() {
             onSelect = { code -> onUiLanguageSelected(code) }
         )
     )
+    // Which screen the app opens on. Next to the other whole-app choices, and above the
+    // language rows: it is the one a new TV owner changes first.
+    generalPane.addView(startScreenChoiceRow())
     generalPane.addView(
         languageChoiceRow(
             getString(R.string.sett_audio_language),

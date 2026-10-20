@@ -246,6 +246,48 @@ internal fun MainActivity.refreshDownloadsList(focusPosition: Int? = null) {
 
 // ── Tabs ───────────────────────────────────────
 
+/** The screen the app opens on, from Settings → General. Live TV unless the user says
+ *  otherwise. */
+internal fun MainActivity.startScreenPref(): String =
+    prefs.getString(PREF_START_SCREEN, START_SCREEN_LIVE) ?: START_SCREEN_LIVE
+
+/**
+ * The tab a start screen means. Home is not a tab (it is a pane of its own), so it has no
+ * number here.
+ *
+ * Series and Movies fall back to Live TV when VOD is off: simple mode hides those tabs
+ * outright, and the VOD toggle leaves them there but empty - so opening on one of them
+ * would mean opening on a tab with nothing in it.
+ */
+internal fun MainActivity.startScreenTab(screen: String): Int = when (screen) {
+    START_SCREEN_SERIES -> if (isVodDisabled()) 0 else 1
+    START_SCREEN_FILMS -> if (isVodDisabled()) 0 else 2
+    else -> 0
+}
+
+/**
+ * The start screen, once.
+ *
+ * Taken by the first paint and only by it: the choice decides where the app opens, and
+ * nothing else - a provider reload a moment later, or a catalogue that lands after the
+ * empty state, must not send the user back to where the app happened to open.
+ */
+internal fun MainActivity.takeStartScreen(): String? {
+    val screen = pendingStartScreen ?: return null
+    pendingStartScreen = null
+    return screen
+}
+
+/**
+ * Whether the app should still honour its start screen - nothing else has moved yet.
+ *
+ * The user can tap a tab while the first paint is still loading, and the app's own "no
+ * provider, land on Discover" is set before that first paint. In both cases what is on
+ * screen wins over where the app was going to open.
+ */
+internal fun MainActivity.canApplyStartScreen(screen: String?): Boolean =
+    screen != null && activeTab == 0 && !showingHome && !showingDiscover && !showingSports
+
 internal fun MainActivity.selectTab(index: Int) {
     activeSettingsOverlay?.dismiss()
     activeSearchOverlay?.dismiss()

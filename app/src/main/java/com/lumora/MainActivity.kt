@@ -216,6 +216,12 @@ internal const val PREF_DISABLE_VOD = "disable_vod"
 internal const val PREF_CATEGORIZE_LIVE = "categorize_live"
 internal const val PREF_CATEGORIZE_VOD = "categorize_vod"
 internal const val PREF_GROUP_CHANNELS = "group_channels"
+/** The screen the app opens on: live | home | series | films. Live TV is the default. */
+internal const val PREF_START_SCREEN = "start_screen"
+internal const val START_SCREEN_LIVE = "live"
+internal const val START_SCREEN_HOME = "home"
+internal const val START_SCREEN_SERIES = "series"
+internal const val START_SCREEN_FILMS = "films"
 // When the catalog was last fetched from the network; the cache serves every launch until
 // this is CATALOG_TTL_MS old (a provider change force-refreshes regardless).
 internal const val PREF_CATALOG_REFRESHED_AT = "catalog_refreshed_at"
@@ -787,6 +793,15 @@ class MainActivity : AppCompatActivity() {
     // meaningful once there's watch history to fill them. The first render after a catalog
     // load routes on this flag (see the tail of classifyAndShow).
     internal var showingHome = false
+    /**
+     * The screen the app opens on (Settings → General), read once per launch and taken by
+     * the first paint.
+     *
+     * Kept as a pending value rather than applied straight to [activeTab]/[showingHome] so
+     * it can only ever decide where the app *opens*: a provider reload a moment later must
+     * not send the user back to where the app happened to open. Null once taken.
+     */
+    internal var pendingStartScreen: String? = null
     internal var showingDownloads = false
     internal var showingDiscover = false
     /** Sports is a pane of its own rather than a fourth catalogue tab, for the same reason
@@ -1325,6 +1340,9 @@ class MainActivity : AppCompatActivity() {
         applySystemBarInsets()
 
         prefs = getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+        // Which screen the app opens on (Settings → General). Read here, before anything
+        // renders, and taken by the first paint - see pendingStartScreen.
+        pendingStartScreen = startScreenPref()
         // Seed the skip-button pref on first run so its settings row (a plain boolean
         // checkbox, default false when absent) agrees with the player's read of the same
         // key (default true - a feature that does nothing until the database has an entry

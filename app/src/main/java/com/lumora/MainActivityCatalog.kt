@@ -172,10 +172,20 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
         } else {
             // The Sports board's channel matching reads liveChannels, so a fresh catalogue is
             // exactly what it needs - re-render in place rather than bouncing the user to Live.
-            if (showingHome) selectHome()
-            else if (showingDiscover) selectDiscover()
-            else if (showingSports) refreshSportsBoard()
-            else selectTab(activeTab)
+            // The start screen is taken here too: on a cold start with no cached catalogue
+            // this is the first paint, and it is where the app opens.
+            val start = takeStartScreen()
+            when {
+                showingHome -> selectHome()
+                showingDiscover -> selectDiscover()
+                showingSports -> refreshSportsBoard()
+                canApplyStartScreen(start) -> when (start) {
+                    START_SCREEN_HOME -> selectHome()
+                    START_SCREEN_SERIES, START_SCREEN_FILMS -> selectTab(startScreenTab(start))
+                    else -> selectTab(0)
+                }
+                else -> selectTab(activeTab)
+            }
         }
     } else {
         showEmptyState()
@@ -209,9 +219,20 @@ internal fun MainActivity.classifyAndShowLiveFirst() {
             binding.emptyState.visibility = View.GONE
             binding.contentRow.visibility = View.VISIBLE
             updateTopChromeVisibility()
+            // The screen the app opens on (Settings → General), taken by the first paint
+            // and only by it - see takeStartScreen.
+            val start = takeStartScreen()
             when {
+                // The user's own move wins: they can tap a tab while the first paint is
+                // still loading, and the app's "no provider, land on Discover" is set
+                // before that first paint.
                 showingHome -> selectHome()
                 showingDiscover -> selectDiscover()
+                canApplyStartScreen(start) -> when (start) {
+                    START_SCREEN_HOME -> selectHome()
+                    START_SCREEN_SERIES, START_SCREEN_FILMS -> selectTab(startScreenTab(start))
+                    else -> selectTab(0)
+                }
                 activeTab == 0 -> selectTab(activeTab)
                 // Guard: user already moved to another tab - live side only, no selectTab.
                 else -> Unit
