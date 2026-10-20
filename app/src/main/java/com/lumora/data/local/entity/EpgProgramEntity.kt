@@ -12,17 +12,23 @@ import androidx.room.Index
  * as rows scrolled into view - the "EPG takes ages after opening the app" case. Persisting it
  * makes the second and later launches read the guide off disk instead.
  *
- * Keyed by (channelId, startTimestamp): a provider re-sending the same programme (a title
+ * Keyed by (guideKey, startTimestamp): a provider re-sending the same programme (a title
  * correction, a schedule shuffle) replaces the row rather than duplicating it. [fetchedAt] is
  * per row so a channel's freshness is judged by the newest row written for it.
  */
 @Entity(
     tableName = "epg_programs",
-    primaryKeys = ["channelId", "startTimestamp"],
+    primaryKeys = ["guideKey", "startTimestamp"],
     indices = [Index("channelId"), Index("stopTimestamp")]
 )
 data class EpgProgramEntity(
+    /** The app's channel id - the plain one, the way every other part of the app names a
+     *  channel. Kept beside [guideKey] so a row can be traced back to the channel it belongs
+     *  to without decoding the key. */
     val channelId: String,
+    /** Which copy of this channel's guide the row belongs to: the channel id, the provider
+     *  that owns it, and the source the guide came from. See [epgGuideKey]. */
+    val guideKey: String,
     /** Unix seconds - the same unit XtreamClient.EpgProgram uses. */
     val startTimestamp: Long,
     val stopTimestamp: Long,
@@ -52,3 +58,41 @@ fun guideDescription(raw: String?): String? {
     val trimmed = raw?.trim().orEmpty()
     return trimmed.takeIf { it.isNotEmpty() }?.take(MAX_DESCRIPTION_CHARS)
 }
+
+/** The source component of a guide key: the provider's own guide for the stream. */
+const val EPG_SOURCE_XTREAM = "xtream"
+
+/** The scope of a channel whose provider is not known - a channel from a source that does not
+ *  name one. Its guide is still stored and read, just without the provider's identity in
+ *  the key. */
+const val EPG_NO_PROVIDER_SCOPE = "?"
+
+/** The separator between the parts of a guide key. */
+private const val GUIDE_KEY_SEPARATOR = '|'
+
+/**
+ * The storage key for one copy of one channel's guide.
+ *
+ * Three parts, and each of them earns its place:
+ *
+ *  - the **channel id**, so the guide for one channel is found by a prefix scan on the key;
+ *  - the **provider** that owns the channel, because two panels both number their streams
+ *    from 1 - provider A's channel 42 and provider B's channel 42 are different channels
+ *    with the same id, and one provider's schedule must never be shown for the other's.
+ *    Without this, switching provider left the new provider's channel reading the old
+ *    provider's guide straight off disk;
+ *  - the **source**, because the panel's own guide and an XMLTV feed's guide are different
+ *    answers for the same channel. Replacing one with the other threw away the other's
+ *    rows: the XMLTV copy's descriptions (which the Sports matcher reads) and the panel
+ *    copy's full day (which the guide draws).
+ */
+fun epgGuideKey(channelId: String, providerScope: String, source: String): String =
+    "$channelId$GUIDE_KEY_SEPARATOR$providerScope$GUIDE_KEY_SEPARATOR$source"
+
+/**
+ * The prefix every copy of one channel's guide shares, so a reader can ask for the channel
+ * and get all of its sources at once - the panel's own guide and the XMLTV feed's, which
+ * are stored under different keys but belong to the same channel.
+ */
+fun epgGuideKeyPrefix(channelId: String, providerScope: String): String =
+    "$channelId$GUIDE_KEY_SEPARATOR$providerScope$GUIDE_KEY_SEPARATOR"

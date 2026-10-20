@@ -304,48 +304,73 @@ class LiveGuideAdapter(
                 }
             }
             if (channel.id.isNotBlank() && !EpgListCache.has(channel.id)) {
-                loadJob = scope.launch {
-                    delay(LOAD_DEBOUNCE_MS)
-                    while (current === channel) {
-                        val fresh = EpgListCache.get(channel.id)
-                        if (fresh != null) {
-                            renderPrograms(channel, fresh)
-                            return@launch
-                        }
-                        if (EpgListCache.markInFlight(channel.id)) {
-                            // Captured before the fetch: a provider reload bumps the cache's
-                            // generation, and a fetch that resumes after it must not write the
-                            // old provider's schedule back into the fresh cache.
-                            val generation = EpgListCache.generation
-                            val programs = try {
-                                fetchPrograms(channel.id)
-                            } catch (e: CancellationException) {
-                                // Cancelled mid-fetch (row recycled): release the claim
-                                // without caching. Swallowing this (the old runCatching did)
-                                // cached null as "no EPG", freezing the channel at
-                                // "No programme info" for the rest of the session.
-                                EpgListCache.clearInFlight(channel.id)
-                                throw e
-                            } catch (_: Exception) {
-                                null
-                            }
-                            if (generation != EpgListCache.generation) {
-                                EpgListCache.clearInFlight(channel.id)
+                if (EpgListCache.isFailed(channel.id)) {
+                    // The last fetch failed and its backoff is still running: show what there
+                    // is (nothing) and do not ask again yet. A failure is not an answer - the
+                    // provider said nothing, which is not the same as saying "there is no
+                    // guide here" - so the row says plainly that there is none rather than
+                    // sitting on a pending placeholder that never resolves.
+                    renderPrograms(channel, EpgListCache.peek(channel.id))
+                } else {
+                    loadJob = scope.launch {
+                        delay(LOAD_DEBOUNCE_MS)
+                        while (current === channel) {
+                            val fresh = EpgListCache.get(channel.id)
+                            if (fresh != null) {
+                                renderPrograms(channel, fresh)
                                 return@launch
                             }
-                            // Only a real result is cached: caching null/empty marked the
-                            // channel "no EPG" for the rest of the session (the shared cache
-                            // the guide and the player flyout both read), so a rate-limited
-                            // burst permanently blanked channels that do have a schedule.
-                            if (programs.isNullOrEmpty()) EpgListCache.clearInFlight(channel.id)
-                            else EpgListCache.put(channel.id, programs)
-                            if (current === channel) renderPrograms(channel, programs)
-                            return@launch
+                            if (EpgListCache.markInFlight(channel.id)) {
+                                // Captured before the fetch: a provider reload bumps the cache's
+                                // generation, and a fetch that resumes after it must not write the
+                                // old provider's schedule back into the fresh cache.
+                                val generation = EpgListCache.generation
+                                val programs = try {
+                                    fetchPrograms(channel.id)
+                                } catch (e: CancellationException) {
+                                    // Cancelled mid-fetch (row recycled): release the claim
+                                    // without caching. Swallowing this (the old runCatching did)
+                                    // cached null as "no EPG", freezing the channel at
+                                    // "No programme info" for the rest of the session. A
+                                    // cancelled fetch never really failed either, so the
+                                    // failure backoff it may have left behind goes too.
+                                    EpgListCache.clearInFlight(channel.id)
+                                    EpgListCache.clearFailure(channel.id)
+                                    throw e
+                                } catch (_: Exception) {
+                                    null
+                                }
+                                if (generation != EpgListCache.generation) {
+                                    EpgListCache.clearInFlight(channel.id)
+                                    return@launch
+                                }
+                                // Three answers, kept apart. A guide is cached. A provider that
+                                // says "no guide here" is cached too - as an empty entry, so the
+                                // guide stops asking - but only for as long as an entry lasts, so
+                                // a channel that gains a schedule later still picks it up. A
+                                // failure is neither: it is remembered as a failure, with a
+                                // backoff, because caching it as "no EPG" would blank a channel
+                                // that does have a schedule for the rest of the session, and not
+                                // remembering it at all had the provider asked again for every
+                                // visible guide-less channel once a minute.
+                                when {
+                                    !programs.isNullOrEmpty() -> EpgListCache.put(channel.id, programs)
+                                    programs != null -> EpgListCache.put(channel.id, emptyList())
+                                    else -> EpgListCache.markFailed(channel.id)
+                                }
+                                // A failed fetch paints what is already known rather than
+                                // nothing: the stale copy is better than a blank row, and the
+                                // failure is not the guide's answer.
+                                if (current === channel) {
+                                    renderPrograms(channel, programs ?: EpgListCache.peek(channel.id))
+                                }
+                                return@launch
+                            }
+                            // Another row's fetch for this same id is in flight - poll until it
+                            // lands (or claim it ourselves if that fetch gets cancelled) instead
+                            // of bailing, which left this row stuck on the placeholder.
+                            delay(200)
                         }
-                        // Another row's fetch for this same id is in flight - poll until it
-                        // lands (or claim it ourselves if that fetch gets cancelled) instead
-                        // of bailing, which left this row stuck on the placeholder.
-                        delay(200)
                     }
                 }
             }

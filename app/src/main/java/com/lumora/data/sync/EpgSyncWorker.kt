@@ -9,6 +9,7 @@ import com.lumora.BaseApplication
 import com.lumora.data.local.LumoraDatabase
 import com.lumora.cache.ChannelCache
 import com.lumora.data.local.entity.EpgProgramEntity
+import com.lumora.data.local.entity.epgGuideKey
 import com.lumora.data.local.entity.guideDescription
 import com.lumora.data.parser.XmltvParser
 import com.lumora.util.normalizeLiveChannelKey
@@ -131,21 +132,28 @@ class EpgSyncWorker(
                     // afterwards: rows runs to six figures for a large source, and
                     // `rows.map { it.channelId }.distinct()` materialised a second list that
                     // size purely to reach the handful of distinct ids inside it.
-                    val touchedChannelIds = HashSet<String>()
+                    // The key, not the channel id: each source's copy of a channel's guide is
+                    // stored under its own key, so replacing one never touches another.
+                    val touchedGuideKeys = HashSet<String>()
+                    // This source's own slot in the key, so two feeds' rows for the same
+                    // channel do not overwrite each other either.
+                    val sourceKey = "xmltv:${source.id}"
                     var mapped = 0
                     var skipped = 0
                     for (programme in result.programmes) {
-                        val ids = tvgIdToChannelIds[programme.channel] ?: xmltvIdToChannelIds[programme.channel]
-                        if (ids.isNullOrEmpty()) {
+                        val targets = tvgIdToChannelIds[programme.channel] ?: xmltvIdToChannelIds[programme.channel]
+                        if (targets.isNullOrEmpty()) {
                             skipped++
                             continue
                         }
                         mapped++
-                        for (channelId in ids) {
-                            touchedChannelIds.add(channelId)
+                        for (target in targets) {
+                            val guideKey = epgGuideKey(target.channelId, target.providerScope, sourceKey)
+                            touchedGuideKeys.add(guideKey)
                             rows.add(
                                 EpgProgramEntity(
-                                    channelId = channelId,
+                                    channelId = target.channelId,
+                                    guideKey = guideKey,
                                     startTimestamp = programme.startTimestamp,
                                     stopTimestamp = programme.stopTimestamp,
                                     title = programme.title,
@@ -165,8 +173,8 @@ class EpgSyncWorker(
                         // atomic, so a sync killed midway can no longer leave channels whose
                         // old programmes are deleted and whose new ones were never written.
                         db.withTransaction {
-                            for (channelId in touchedChannelIds) {
-                                db.epgProgramDao().deleteForChannel(channelId)
+                            for (guideKey in touchedGuideKeys) {
+                                db.epgProgramDao().deleteForGuide(guideKey)
                             }
                             db.epgProgramDao().upsertAll(rows)
                         }
@@ -228,12 +236,15 @@ class EpgSyncWorker(
                 .enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
         }
 
-        /** Re-download interval, matched to [com.lumora.EPG_DISK_TTL_MS]. The guide treats a
-         *  stored programme older than that as stale and refuses to paint it, and the only
-         *  other refill path is Xtream's per-channel short EPG - so an XMLTV-only channel
-         *  (M3U/Stalker) went blank once the disk copy aged out. Syncing on the same 6h
-         *  period keeps the stored guide inside the window that the reader accepts. */
-        const val DEFAULT_INTERVAL_HOURS = 6L
+        /** Re-download interval. Deliberately *shorter* than the reader's window
+         *  ([com.lumora.EPG_DISK_TTL_MS]): the guide treats a stored programme older than that
+         *  as stale and refuses to paint it, and an XMLTV-only channel (M3U/Stalker) has no
+         *  other way to get a guide - so the writer has to run again inside the window the
+         *  reader accepts. Matching the two exactly left no margin at all: WorkManager's
+         *  periodic run drifts, so there was always a stretch where the reader had given up
+         *  on the stored guide and the writer had not replaced it yet, and the row read "No
+         *  programme info" until the next run - hours of an empty guide. */
+        const val DEFAULT_INTERVAL_HOURS = 4L
 
         fun schedulePeriodic(context: Context, intervalHours: Long = DEFAULT_INTERVAL_HOURS) {
             val request = PeriodicWorkRequestBuilder<EpgSyncWorker>(intervalHours, TimeUnit.HOURS)
@@ -251,6 +262,31 @@ class EpgSyncWorker(
                     ExistingPeriodicWorkPolicy.UPDATE,
                     request
                 )
+        }
+
+        /**
+         * Fetches the sources now if none of them has succeeded recently.
+         *
+         * The periodic work's first run happens a whole period after it is scheduled, so on a
+         * fresh install - or after the sources were added - the guide stayed empty until the
+         * first period was up, with the panel's own short EPG the only thing to show. This
+         * asks for the sources straight away instead.
+         *
+         * Afterwards it only fires when the last success is more than two periods old: the
+         * periodic run is the routine path, and a device that opens the app often would
+         * otherwise re-download the whole feed every launch, on top of the periodic run.
+         */
+        suspend fun ensureFresh(context: Context) {
+            val db = LumoraDatabase.getInstance(context)
+            val sources = db.epgSourceDao().getEnabled()
+            if (sources.isEmpty()) return
+            val now = System.currentTimeMillis()
+            val period = DEFAULT_INTERVAL_HOURS * 60 * 60 * 1000L
+            val stale = sources.any { source ->
+                val last = source.lastSuccessAt ?: return@any true
+                now - last >= period * 2
+            }
+            if (stale) enqueue(context)
         }
     }
 }

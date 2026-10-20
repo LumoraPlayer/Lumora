@@ -16,6 +16,11 @@ private const val MAX_CACHE_SIZE = 500
  *  not a provider request. */
 private const val ENTRY_TTL_MS = 15 * 60 * 1000L
 
+/** How long a channel whose fetch failed is left alone before the guide asks again. Short
+ *  enough that a provider which blips is picked up again within a minute or two, long enough
+ *  that a portal which is down is not asked once a second per visible row. */
+private const val FAILURE_BACKOFF_MS = 5 * 60 * 1000L
+
 /** In-memory cache of upcoming EPG entries per live channel, used by the guide grid. */
 object EpgListCache {
     // ConcurrentHashMap: guide fetches can put/remove from background scopes, and a plain
@@ -33,6 +38,19 @@ object EpgListCache {
     /** When each entry was written - the age test behind [has]/[get]/[isStale]. */
     private val cachedAt = ConcurrentHashMap<String, Long>()
     private val inFlight = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    /**
+     * Channels whose last fetch *failed*, and when the next attempt is due.
+     *
+     * A failure is not an answer: the provider said nothing, which is not the same as saying
+     * "there is no guide here". The guide row is rebound every minute (the guide clock), so a
+     * failure that was remembered as an answer - or not remembered at all - had the provider
+     * asked again for every visible channel that had no schedule, once a minute, for as long
+     * as the guide was on screen. The backoff is short enough that a provider which comes
+     * back is picked up again quickly, and long enough that a portal which rate-limits a
+     * burst is not hammered by it.
+     */
+    private val failedUntil = ConcurrentHashMap<String, Long>()
 
     /** True only for an entry young enough to serve without revalidating. A stale entry is
      *  still readable through [peek] (the guide paints it while the re-fetch runs). */
@@ -62,8 +80,37 @@ object EpgListCache {
         val now = System.currentTimeMillis()
         cachedAt[channelId] = now
         lastAccess[channelId] = now
+        failedUntil.remove(channelId)
         inFlight.remove(channelId)
         evictIfNeeded()
+    }
+
+    /**
+     * Remembers that the last fetch for this channel failed, and holds off the next one.
+     *
+     * The guide row is rebound every minute, so without this a provider that was down (or
+     * rate-limiting) was asked again for every visible channel on screen, once a minute -
+     * the requests piled up on a portal that was already struggling, and the channel that did
+     * have a schedule went blank along with the ones that did not.
+     */
+    fun markFailed(channelId: String) {
+        failedUntil[channelId] = System.currentTimeMillis() + FAILURE_BACKOFF_MS
+        inFlight.remove(channelId)
+    }
+
+    /** True while the last failure's backoff is still running - the caller should not ask
+     *  again yet. */
+    fun isFailed(channelId: String): Boolean {
+        val until = failedUntil[channelId] ?: return false
+        if (System.currentTimeMillis() < until) return true
+        failedUntil.remove(channelId)
+        return false
+    }
+
+    /** Releases a failure's backoff - for a fetch that was cancelled, or that has since been
+     *  answered by another path. */
+    fun clearFailure(channelId: String) {
+        failedUntil.remove(channelId)
     }
 
     /** Drops every entry - for provider reloads, where the channel ids on screen may now
@@ -72,6 +119,7 @@ object EpgListCache {
         cache.clear()
         lastAccess.clear()
         cachedAt.clear()
+        failedUntil.clear()
         // In-flight claims belong to fetches started before the reload; leaving them set made
         // a suspended fetch resume and put() the old provider's schedule back after the clear.
         // Callers also compare [generation] before their put() for the same reason.

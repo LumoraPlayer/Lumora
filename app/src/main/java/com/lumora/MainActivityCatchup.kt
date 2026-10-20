@@ -337,9 +337,15 @@ internal fun MainActivity.showCatchupProgrammes(channel: Channel, dayStartMillis
     catchupEpgJob?.cancel()
     catchupEpgJob = scope.launch {
         val provider = xtreamProviderFor(channel)
-        val listings = if (provider == null) emptyList() else runCatching {
-            XtreamClient(BaseApplication.instance.okHttpClient).getEpgTable(provider, channel.id)
-        }.getOrDefault(emptyList())
+        val client = XtreamClient(BaseApplication.instance.okHttpClient)
+        val listings = if (provider == null) emptyList() else {
+            // The clock shift has to be measured from a short EPG: a whole table cannot be
+            // measured against (it starts days ago on every panel), and the guide may never
+            // have asked this provider - so the catch-up listing would be hours off the
+            // device clock. Measuring here is one request, once per provider.
+            client.ensureEpgShift(provider, channel.id)
+            runCatching { client.getEpgTable(provider, channel.id) }.getOrNull().orEmpty()
+        }
         // A day that ends in the future is today: nothing past "now" can be in the archive.
         val dayEnd = dayStartMillis + DAY_MS
         val cutoff = minOf(dayEnd, System.currentTimeMillis())

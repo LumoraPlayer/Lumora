@@ -27,6 +27,12 @@ private const val TAG = "XtreamClient"
  *  per-call XtreamClient instances so the guide stays consistent across channels. */
 private val epgShiftSecondsCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
+/** Per-provider EPG text encoding, keyed by server URL: true when the panel base64-encodes
+ *  the guide's titles and descriptions. Same lifetime and the same reasoning as the clock
+ *  shift above - it is a property of the panel, measured once and reused, not a property of
+ *  each title (see [EpgTextEncoding]). */
+private val epgTextEncodedCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
 class XtreamClient(private val client: OkHttpClient) {
 
     // fetchJson() swallows exceptions into a null return so most callers can just treat
@@ -130,23 +136,22 @@ class XtreamClient(private val client: OkHttpClient) {
     suspend fun getSeries(provider: Provider, categoryId: String? = null): List<Channel> =
         fetchSeriesList(provider, categoryId)
 
-    /** Fetch the next few EPG entries for a live channel. Not every channel has EPG data. */
-    suspend fun getShortEpg(provider: Provider, streamId: String, limit: Int = 2): List<EpgProgram> =
+    /** Fetch the next few EPG entries for a live channel. Not every channel has EPG data.
+     *
+     *  Null when the request itself failed, an empty list when the provider answered and has
+     *  no guide for this channel. The two are different answers: "there is nothing there" is
+     *  worth remembering, "we could not ask" is not, and the guide's request rate depends on
+     *  telling them apart (see MainActivityEpg.resolveEpgPrograms). */
+    suspend fun getShortEpg(provider: Provider, streamId: String, limit: Int = 2): List<EpgProgram>? =
         withContext(Dispatchers.IO) {
             val url = buildApiUrl(provider, "action=get_short_epg&stream_id=$streamId&limit=$limit")
-            val json = fetchJson(url) ?: return@withContext emptyList()
+            val json = fetchJson(url) ?: return@withContext null
             val arr = json.optJSONArray("epg_listings") ?: return@withContext emptyList()
-            val listings = (0 until arr.length()).mapNotNull { i ->
-                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
-                val title = decodeEpgText(obj.optString("title", "")) ?: return@mapNotNull null
-                val start = obj.optString("start_timestamp", "0").toLongOrNull() ?: return@mapNotNull null
-                val stop = obj.optString("stop_timestamp", "0").toLongOrNull() ?: return@mapNotNull null
-                EpgProgram(title, start, stop, decodeEpgText(obj.optString("description", "")))
-            }
+            val listings = parseEpgListings(arr, provider.serverUrl)
             // Some panels store their local wall-clock as the UTC epoch, so their listings
             // read hours in the future on a UTC-reckoning device. Shift them so the guide
             // lines up with the device clock. Computed once per provider and cached.
-            val shift = epgEpochShiftSeconds(provider.serverUrl, listings)
+            val shift = epgEpochShiftSeconds(provider.serverUrl, listings, cacheable = true)
             if (shift == 0L) listings
             else listings.map { it.copy(startTimestamp = it.startTimestamp - shift, stopTimestamp = it.stopTimestamp - shift) }
         }
@@ -158,26 +163,37 @@ class XtreamClient(private val client: OkHttpClient) {
      *
      * Same panel quirks as [getShortEpg]: base64 titles and the local-clock-as-UTC epoch
      * offset, corrected through the same shared shift so a catch-up listing lines up with
-     * the guide the user saw live.
+     * the guide the user saw live - except that this call never *measures* the shift (see
+     * [epgEpochShiftSeconds]): a whole table starts days ago on every panel, and measuring
+     * there would cache a wrong answer for the whole provider.
      */
-    suspend fun getEpgTable(provider: Provider, streamId: String): List<EpgProgram> =
+    suspend fun getEpgTable(provider: Provider, streamId: String): List<EpgProgram>? =
         withContext(Dispatchers.IO) {
             val url = buildApiUrl(provider, "action=get_simple_data_table&stream_id=$streamId")
-            val json = fetchJson(url) ?: return@withContext emptyList()
+            val json = fetchJson(url) ?: return@withContext null
             val arr = json.optJSONArray("epg_listings") ?: json.optJSONArray("items")
                 ?: return@withContext emptyList()
-            val listings = (0 until arr.length()).mapNotNull { i ->
-                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
-                val title = decodeEpgText(obj.optString("title", "")) ?: return@mapNotNull null
-                val start = obj.optString("start_timestamp", "0").toLongOrNull() ?: return@mapNotNull null
-                val stop = obj.optString("stop_timestamp", "0").toLongOrNull() ?: return@mapNotNull null
-                if (start <= 0L || stop <= start) return@mapNotNull null
-                EpgProgram(title, start, stop, decodeEpgText(obj.optString("description", "")))
-            }.sortedBy { it.startTimestamp }
-            val shift = epgEpochShiftSeconds(provider.serverUrl, listings)
+            val listings = parseEpgListings(arr, provider.serverUrl)
+                .filter { it.startTimestamp > 0L && it.stopTimestamp > it.startTimestamp }
+                .sortedBy { it.startTimestamp }
+            val shift = epgEpochShiftSeconds(provider.serverUrl, listings, cacheable = false)
             if (shift == 0L) listings
             else listings.map { it.copy(startTimestamp = it.startTimestamp - shift, stopTimestamp = it.stopTimestamp - shift) }
         }
+
+    /**
+     * Measures this provider's guide clock shift, if it has not been measured yet.
+     *
+     * The measurement needs a listing whose air time is known, and only the short EPG has
+     * one: its first entry is the programme the panel believes is on air, so its distance
+     * from the device clock *is* the skew. A whole table cannot answer it - it starts days
+     * ago on every panel, so measuring there reads a large negative gap, concludes "no
+     * shift" and (worse) caches that conclusion for the provider.
+     */
+    suspend fun ensureEpgShift(provider: Provider, streamId: String) {
+        if (hasEpgShift(provider.serverUrl)) return
+        runCatching { getShortEpg(provider, streamId, 1) }
+    }
 
     /**
      * True once this provider's guide epoch shift has been measured (see [epgEpochShiftSeconds]).
@@ -194,12 +210,19 @@ class XtreamClient(private val client: OkHttpClient) {
      * Estimated per-provider EPG timezone shift, seconds. 0 = panel is spec-compliant.
      *
      * Only ever measured from a short EPG: its first entry is the programme the panel believes is
-     * on air, so its distance from the device clock *is* the skew. The whole-table fetch reuses
-     * whatever this cached, which is why the caller primes it (see [hasEpgShift]).
+     * on air, so its distance from the device clock *is* the skew. The whole-table fetch reads
+     * whatever this cached and never writes it - hence [cacheable] - because a table's first
+     * entry is days old on every panel and would measure as a large negative gap, i.e. "no
+     * shift", and that wrong answer would then be cached for the whole provider.
      */
-    private fun epgEpochShiftSeconds(serverUrl: String?, listings: List<EpgProgram>): Long {
+    private fun epgEpochShiftSeconds(
+        serverUrl: String?,
+        listings: List<EpgProgram>,
+        cacheable: Boolean
+    ): Long {
         if (serverUrl == null) return 0L
         epgShiftSecondsCache[serverUrl]?.let { return it }
+        if (!cacheable) return 0L
         val firstStart = listings.minOfOrNull { it.startTimestamp } ?: return 0L
         val now = System.currentTimeMillis() / 1000
         val gap = firstStart - now
@@ -214,13 +237,98 @@ class XtreamClient(private val client: OkHttpClient) {
         return shift
     }
 
-    private fun decodeEpgText(value: String): String? {
+    /**
+     * The listings in an `epg_listings` array, with the panel's own text conventions undone.
+     *
+     * The text encoding is a per-provider property, not a per-value one (see
+     * [epgTextIsEncoded]), so it is decided once for the whole batch and applied to every
+     * title and description in it.
+     */
+    private fun parseEpgListings(arr: JSONArray, serverUrl: String?): List<EpgProgram> {
+        val raw = (0 until arr.length()).mapNotNull { i ->
+            val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+            val title = obj.optString("title", "")
+            val start = obj.optString("start_timestamp", "0").toLongOrNull() ?: return@mapNotNull null
+            val stop = obj.optString("stop_timestamp", "0").toLongOrNull() ?: return@mapNotNull null
+            RawEpgListing(title, start, stop, obj.optString("description", ""))
+        }
+        val encoded = epgTextIsEncoded(serverUrl, raw.map { it.title })
+        return raw.mapNotNull { listing ->
+            val title = decodeEpgText(listing.title, encoded) ?: return@mapNotNull null
+            EpgProgram(
+                title = title,
+                startTimestamp = listing.start,
+                stopTimestamp = listing.stop,
+                description = decodeEpgText(listing.description, encoded)
+            )
+        }
+    }
+
+    /**
+     * Whether this provider base64-encodes the guide's text.
+     *
+     * Some Xtream panels encode their listings' titles and descriptions; most do not. The
+     * difference matters because a title that is *not* base64 but happens to be valid base64
+     * - "Live", "News", "Sky", "ETV1" - decodes to garbage, and the old per-value guess
+     * silently replaced the real title with that garbage on every plain-text panel.
+     *
+     * So the question is asked of the panel, not of the value: a panel that encodes encodes
+     * everything it sends, and one that does not encodes nothing. Decided once per provider
+     * from a batch of titles - the panel encodes when most of them are base64-shaped and
+     * decode to clean text. A plain-text panel's titles carry spaces and punctuation, which
+     * are not in the base64 alphabet at all, so they fail that test; an encoding panel's
+     * are base64 by construction.
+     */
+    private fun epgTextIsEncoded(serverUrl: String?, rawTitles: List<String>): Boolean {
+        if (serverUrl == null) return false
+        epgTextEncodedCache[serverUrl]?.let { return it }
+        val samples = rawTitles.filter { it.isNotBlank() }
+        // Too few titles to tell a panel's habit from a coincidence.
+        if (samples.size < EpgTextEncoding.MIN_SAMPLES) return false
+        val encoded = samples.count { looksLikeBase64Text(it) }
+        val answer = EpgTextEncoding.panelEncodes(encoded, samples.size)
+        epgTextEncodedCache[serverUrl] = answer
+        return answer
+    }
+
+    /** Base64 alphabet only, a length a base64 body can have, and a decode that is clean text
+     *  that reads like a title. */
+    private fun looksLikeBase64Text(value: String): Boolean {
+        if (!EpgTextEncoding.isBase64Shaped(value)) return false
+        val bytes = runCatching {
+            android.util.Base64.decode(value, android.util.Base64.DEFAULT)
+        }.getOrNull() ?: return false
+        if (bytes.isEmpty()) return false
+        val decoded = String(bytes, Charsets.UTF_8)
+        return EpgTextEncoding.isCleanText(decoded) && EpgTextEncoding.isPlausibleTitle(decoded)
+    }
+
+    /**
+     * The panel's own text, with its base64 encoding undone when it uses one.
+     *
+     * [encoded] is the provider's answer (see [epgTextIsEncoded]). When the panel does not
+     * encode, the text is taken exactly as it arrived: guessing per value is what turned
+     * "Live" into ".+\uFFFD" and "ETV1" into "5u" on every plain-text panel. When it does,
+     * a value that is not base64-shaped is left alone - a panel that encodes some titles
+     * and not others still reads correctly.
+     */
+    private fun decodeEpgText(value: String, encoded: Boolean): String? {
         if (value.isBlank()) return null
+        if (!encoded) return value
+        if (!EpgTextEncoding.isBase64Shaped(value)) return value
         val decoded = runCatching {
             String(android.util.Base64.decode(value, android.util.Base64.DEFAULT), Charsets.UTF_8)
-        }.getOrNull()
-        return decoded?.ifBlank { null } ?: value
+        }.getOrNull() ?: return value
+        return decoded.ifBlank { value }
     }
+
+    /** One listing as it arrived, before the panel's text conventions are undone. */
+    private data class RawEpgListing(
+        val title: String,
+        val start: Long,
+        val stop: Long,
+        val description: String
+    )
 
     /** Fetch a movie's plot/cast/director/genre for the detail screen. */
     suspend fun getVodInfo(provider: Provider, vodId: String): ContentDetails? = withContext(Dispatchers.IO) {

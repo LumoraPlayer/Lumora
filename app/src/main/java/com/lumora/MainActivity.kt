@@ -1383,6 +1383,11 @@ class MainActivity : AppCompatActivity() {
         // so re-asserting it on every start is free; WorkManager keeps the timer across process
         // death.
         EpgSyncWorker.schedulePeriodic(this)
+        // The periodic work's first run is a whole period away, so on a fresh install the
+        // guide had nothing until then. This asks for the sources now if none of them has
+        // succeeded recently - and afterwards only when the last success is older than a
+        // period, so the routine path stays the periodic run.
+        scope.launch(Dispatchers.IO) { EpgSyncWorker.ensureFresh(this@MainActivity) }
 
         setupChannelList()
         setupTabs()

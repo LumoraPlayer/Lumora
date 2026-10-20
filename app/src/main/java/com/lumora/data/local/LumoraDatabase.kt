@@ -11,7 +11,7 @@ import com.lumora.data.local.dao.*
 import com.lumora.data.local.entity.*
 
 @Database(
-    version = 5,
+    version = 6,
     exportSchema = true,
     entities = [
         ProviderEntity::class,
@@ -86,6 +86,38 @@ abstract class LumoraDatabase : RoomDatabase() {
             }
         }
 
+        /** v6 re-keys the guide: a row is now filed under the channel, the provider that owns
+         * it and the source it came from, instead of under the bare channel id.
+         *
+         *  The old key could not say whose guide a row was: two panels both number their
+         *  streams from 1, so provider A's channel 42 and provider B's channel 42 shared one
+         *  set of rows - and switching provider left the new provider's channel reading the
+         *  old provider's schedule straight off disk. The XMLTV feed's rows for a channel
+         *  shared those rows too, so replacing one source's guide threw the other's away.
+         *
+         *  The table is dropped and rebuilt rather than migrated: the guide is a cache, it
+         *  refills itself from the provider within a minute and the XMLTV worker refills its
+         *  half on its next run, and every existing row would have to be re-attributed by
+         *  hand to a key that says where it came from. */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `epg_programs`")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `epg_programs` (" +
+                        "`channelId` TEXT NOT NULL, " +
+                        "`guideKey` TEXT NOT NULL, " +
+                        "`startTimestamp` INTEGER NOT NULL, " +
+                        "`stopTimestamp` INTEGER NOT NULL, " +
+                        "`title` TEXT NOT NULL, " +
+                        "`description` TEXT, " +
+                        "`fetchedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`guideKey`, `startTimestamp`))"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_epg_programs_channelId` ON `epg_programs` (`channelId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_epg_programs_stopTimestamp` ON `epg_programs` (`stopTimestamp`)")
+            }
+        }
+
         fun getInstance(context: Context): LumoraDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -93,7 +125,7 @@ abstract class LumoraDatabase : RoomDatabase() {
                     LumoraDatabase::class.java,
                     "lumora.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                     .also { instance = it }
             }

@@ -177,6 +177,13 @@ class SideMenuCategoryAdapter(
                 renderNow(EpgListCache.peek(channelId))
                 return
             }
+            // A fetch failed and its backoff is still running: the provider said nothing,
+            // which is not the same as saying "there is no guide here", so it is not asked
+            // again until the backoff is over.
+            if (EpgListCache.isFailed(channelId)) {
+                renderNow(EpgListCache.peek(channelId))
+                return
+            }
             val fetch = fetchPrograms ?: return
             if (nowJob?.isActive == true) return
             nowJob = scope.launch {
@@ -200,18 +207,22 @@ class SideMenuCategoryAdapter(
                     fetch(channelId)
                 } catch (e: Exception) {
                     EpgListCache.clearInFlight(channelId)
+                    EpgListCache.clearFailure(channelId)
                     throw e
                 }
                 if (generation != EpgListCache.generation) {
                     EpgListCache.clearInFlight(channelId)
                     return@launch
                 }
-                // Only a real result is cached. Caching an empty/failed fetch would mark the
-                // channel "no EPG" for the rest of the session - for the guide as well,
-                // since the cache is shared - and a panel that rate-limits one burst would
-                // permanently blank rows that do have a schedule.
-                if (programs.isNullOrEmpty()) EpgListCache.clearInFlight(channelId)
-                else EpgListCache.put(channelId, programs)
+                // Three answers, kept apart: a guide, a provider that says "no guide here",
+                // and a question that could not be answered. The second is cached as an empty
+                // entry (so the row stops asking) and the third as a failure with a backoff
+                // (so a rate-limited burst cannot blank a channel that does have a schedule).
+                when {
+                    !programs.isNullOrEmpty() -> EpgListCache.put(channelId, programs)
+                    programs != null -> EpgListCache.put(channelId, emptyList())
+                    else -> EpgListCache.markFailed(channelId)
+                }
                 if (current === category) renderNow(programs)
             }
         }
