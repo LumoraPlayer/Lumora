@@ -65,6 +65,17 @@ internal object SportsTime {
     }.timeInMillis
 
     /**
+     * True when two instants fall on the same local day.
+     *
+     * The guide's clock times are the one thing on a listing that is not a guess, and a bare
+     * "01:00" says which day it belongs to only if the reader already knows - a game that
+     * kicked off at 23:30 and runs until 01:30 reads as this morning's game unless the day is
+     * on the row.
+     */
+    fun isSameLocalDay(millis: Long, other: Long): Boolean =
+        localDayStart(millis) == localDayStart(other)
+
+    /**
      * Which calendar dates to ask a provider for so that every fixture in the local day is in
      * one of them: the local date, plus the one on the side the local day overhangs. East of
      * UTC that overhang is the previous date (a 00:30 UK tip-off is filed under yesterday);

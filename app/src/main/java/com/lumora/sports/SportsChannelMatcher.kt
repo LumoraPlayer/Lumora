@@ -155,13 +155,23 @@ object SportsChannelMatcher {
      * Sport names mapped to the [Sport] they belong to. Stops a competition-name hit crossing
      * sports: the English Championship and rugby's United Rugby Championship share the word
      * "championship", and a football fixture must not land on the rugby listing.
+     *
+     * Every sport the board can show, not just the ones with a fixture feed: a football fixture
+     * carried by "Formula 1 Motor Racing" or "Live Tennis" is the same failure in a different
+     * sport's clothes, and the guard only works if it knows what those words mean.
      */
     private val SPORT_WORDS = mapOf(
         "football" to Sport.FOOTBALL, "soccer" to Sport.FOOTBALL, "footy" to Sport.FOOTBALL,
-        "basketball" to Sport.BASKETBALL, "baseball" to Sport.BASEBALL,
-        "hockey" to Sport.HOCKEY, "rugby" to Sport.RUGBY,
-        "handball" to Sport.HANDBALL, "volley" to Sport.VOLLEYBALL,
-        "volleyball" to Sport.VOLLEYBALL, "afl" to Sport.AFL
+        "basketball" to Sport.BASKETBALL, "nba" to Sport.BASKETBALL, "wnba" to Sport.BASKETBALL,
+        "baseball" to Sport.BASEBALL, "mlb" to Sport.BASEBALL,
+        "hockey" to Sport.HOCKEY, "nhl" to Sport.HOCKEY,
+        "rugby" to Sport.RUGBY, "handball" to Sport.HANDBALL,
+        "volley" to Sport.VOLLEYBALL, "volleyball" to Sport.VOLLEYBALL,
+        "afl" to Sport.AFL, "nfl" to Sport.AMERICAN_FOOTBALL,
+        "formula" to Sport.FORMULA_1, "f1" to Sport.FORMULA_1, "racing" to Sport.FORMULA_1,
+        "motogp" to Sport.FORMULA_1, "motorsport" to Sport.FORMULA_1,
+        "tennis" to Sport.TENNIS, "golf" to Sport.GOLF, "cricket" to Sport.CRICKET,
+        "darts" to Sport.DARTS, "snooker" to Sport.SNOOKER, "boxing" to Sport.BOXING
     )
 
     /**
@@ -281,6 +291,9 @@ object SportsChannelMatcher {
                 // name one of the countries: the guard applies to every tier, not just to
                 // competition names.
                 if (crossesSports(fixture.sport, row.title)) continue
+                // ...and the channel's own name has the last word: a football fixture is not on
+                // Sky Sports F1, however well the listing on it fits.
+                if (crossesSports(fixture.sport, channelTokensById[row.channelId].orEmpty())) continue
                 // A men's fixture must not be carried by a women's listing: "Panama W" and
                 // "Panama" name the same clubs, and both titles name both sides.
                 if (isWomensTitle(row.title) && !isWomensTeam(fixture)) continue
@@ -329,8 +342,15 @@ object SportsChannelMatcher {
                     ) {
                         continue
                     }
-                    if (!competitionMatches(competitionTokens, rowTextTokens[i])) continue
+                    // The title, not the blurb: a competition named in a listing's title is the
+                    // listing, and one named only in its blurb is a mention of it - "The Story of
+                    // Frank Soo", whose description names the Premier League, is a documentary
+                    // about football, and it is not where an Armenian league match is on.
+                    if (!competitionMatches(competitionTokens, rowTokens[i])) continue
                     if (crossesSports(fixture.sport, row.title)) continue
+                    // The channel's own name has the last word: a football fixture is not on Sky
+                    // Sports F1, whatever the listing on it happens to be called.
+                    if (crossesSports(fixture.sport, channelTokensById[row.channelId].orEmpty())) continue
                     // A talk show about the competition is not the competition: "NHL on the Fly"
                     // during a game is not that game, and naming it as the channel to watch is
                     // worse than leaving the row without one.
@@ -358,6 +378,9 @@ object SportsChannelMatcher {
             }
             for (channelId in channelCandidates) {
                 val tokens = channelTokensById[channelId] ?: continue
+                // A channel named after another sport is not this fixture's channel, however
+                // much its name looks like a team's.
+                if (crossesSports(fixture.sport, tokens)) continue
                 val homeHit = hits(homeTokens, tokens)
                 val awayHit = hits(awayTokens, tokens)
                 val channelScore = when {
@@ -413,15 +436,24 @@ object SportsChannelMatcher {
      * events and the replays, classics, round-ups and studio shows that fill the same channels
      * all day ("Retro C'Ship SF 19", "PL Greatest Games"). A word like "relive" or a club like
      * "Liverpool" does not claim a live broadcast - the match is on whole words only.
+     *
+     * A listing for a *later* day is not an event either: the board is today's, and a game's
+     * own start time is the one thing about it that is not a guess - "Live NBA" tonight at 01:00
+     * sat under "On now" beside the games of this morning, its clock time alone saying which
+     * of the two it was.
      */
     fun liveEvents(
         rows: List<EpgProgramRow>,
         nowSeconds: Long,
         sportsChannelIds: Set<String> = emptySet(),
         limit: Int = 60
-    ): List<EpgProgramRow> =
-        rows.filter { row ->
+    ): List<EpgProgramRow> {
+        // The end of the local day, in seconds: a listing that starts after it belongs to
+        // tomorrow's board.
+        val dayEndSeconds = SportsTime.plusDays(SportsTime.localDayStart(nowSeconds * 1000), 1) / 1000
+        return rows.filter { row ->
             row.stopTimestamp >= nowSeconds &&
+                row.startTimestamp < dayEndSeconds &&
                 mentionsLive(row.title, row.description) && (
                     looksLikeLiveEvent(row.title) ||
                         (row.channelId in sportsChannelIds && looksLikeSportsProgramme(row.title))
@@ -429,6 +461,7 @@ object SportsChannelMatcher {
         }
             .sortedWith(compareBy({ it.startTimestamp }, { it.title }))
             .take(limit)
+    }
 
     /**
      * True when the listing says it is live - "Live: Formula 1 Qualifying", "Australian Racing
@@ -531,7 +564,7 @@ object SportsChannelMatcher {
      *  evidence ("Cup", "League"). */
     internal fun competitionTokens(fixture: SportsFixture): Set<String> {
         if (fixture.league.isBlank()) return emptySet()
-        return normalise(fixture.league).filterTo(LinkedHashSet()) { token ->
+        val tokens = normalise(fixture.league).filterTo(LinkedHashSet()) { token ->
             // TITLE_NOISE deliberately does not apply here: it exists to keep *team* matching off
             // league words, and "NHL"/"NFL"/"NBA" are precisely what a competition-titled
             // listing says. Only words too generic to be evidence are dropped.
@@ -541,6 +574,12 @@ object SportsChannelMatcher {
             // below still enforces for everything that is not digits.
             token.all { it.isDigit() } || token.length >= 3
         }
+        // A competition whose whole identity is a bare number is not evidence of anything:
+        // "Liga 1" leaves the "1" and nothing else, and every listing with a number in it
+        // answers to that - "Formula 1 Motor Racing" carried an Indonesian football match on
+        // Sky Sports F1. The number needs a word to belong to ("Top 14" keeps both).
+        if (tokens.isNotEmpty() && tokens.all { token -> token.all { it.isDigit() } }) return emptySet()
+        return tokens
     }
 
     /** Every token of the competition has to be in the title, with the same prefix tolerance
@@ -595,10 +634,21 @@ object SportsChannelMatcher {
 
     /** True when a title carries a *different* sport's name - the guard that keeps "United Rugby
      *  Championship" off a football fixture. The fixture's own sport never blocks. */
-    internal fun crossesSports(sport: Sport, title: String): Boolean {
-        val words = normalise(title)
+    internal fun crossesSports(sport: Sport, title: String): Boolean =
+        crossesSports(sport, normalise(title))
+
+    /**
+     * The same guard over an already-tokenised text.
+     *
+     * A channel's own name is checked with it: a football fixture is not on Sky Sports F1,
+     * whatever the listing on that channel happens to say - and a listing can say a great deal
+     * about a competition it is not ("British Kart Championships" on the F1 channel carried a
+     * Kazakh football match, because the league's name and the listing's name both had the
+     * word "championship" in it).
+     */
+    private fun crossesSports(sport: Sport, tokens: Set<String>): Boolean {
         for ((word, otherSport) in SPORT_WORDS) {
-            if (word in words && otherSport != sport) return true
+            if (word in tokens && otherSport != sport) return true
         }
         return false
     }
@@ -638,11 +688,11 @@ object SportsChannelMatcher {
         if (text.isBlank()) return emptySet()
         val stripped = stripDecorativeTags(text).lowercase()
         if (stripped.isEmpty()) return emptySet()
-        return tokenize(stripped)
+        return LinkedHashSet(tokenize(stripped))
     }
 
     /**
-     * [normalise] without the leading provider-tag strip, for programme titles.
+     * [normaliseTitle] without the leading provider-tag strip, for programme titles.
      *
      * "Calcio: Serie A" and "Tennis: Wimbledon" open with the sport's own name, and the tag
      * strip - built for channel names' "UK:", "VIP:" chains - was eating that first word whole,
@@ -651,11 +701,28 @@ object SportsChannelMatcher {
      */
     internal fun normaliseTitle(text: String): Set<String> {
         if (text.isBlank()) return emptySet()
+        return LinkedHashSet(tokenize(deSuperscript(text).lowercase()))
+    }
+
+    /**
+     * The same tokens as [normalise], in order - a phrase is matched as a run of whole words, so
+     * the order and the count are what it needs, not a set.
+     */
+    internal fun normaliseTokens(text: String): List<String> {
+        if (text.isBlank()) return emptyList()
+        val stripped = stripDecorativeTags(text).lowercase()
+        if (stripped.isEmpty()) return emptyList()
+        return tokenize(stripped)
+    }
+
+    /** [normaliseTitle] in order - see [normaliseTokens]. */
+    internal fun normaliseTitleTokens(text: String): List<String> {
+        if (text.isBlank()) return emptyList()
         return tokenize(deSuperscript(text).lowercase())
     }
 
-    private fun tokenize(stripped: String): Set<String> {
-        val out = LinkedHashSet<String>(6)
+    private fun tokenize(stripped: String): List<String> {
+        val out = ArrayList<String>(6)
         var start = -1
         for (i in stripped.indices) {
             val c = stripped[i]
@@ -682,7 +749,7 @@ object SportsChannelMatcher {
      *  "Futbol Americano" are one key, and an accented keyword can hit unaccented text. */
     internal fun foldForMatch(text: String): String = foldDiacritics(text.lowercase())
 
-    private fun addToken(raw: String, out: MutableSet<String>) {
+    private fun addToken(raw: String, out: MutableList<String>) {
         val token = foldDiacritics(raw)
         if (token.isEmpty()) return
         out.add(token)

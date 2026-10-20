@@ -25,8 +25,8 @@ import com.lumora.R
  *    is the Singapore Grand Prix, and [com.lumora.sports.GuideSports] is what reads that off a
  *    listing.
  *
- * Declaration order is the order of the board's filter row: the five the row always shows first,
- * then the rest behind them when they have events of their own.
+ * Declaration order is the order of the board's filter row: the five the row leads with
+ * ([FILTER_ROW]) first, then the rest behind them when they have events of their own.
  */
 enum class Sport(
     val id: String,
@@ -72,10 +72,10 @@ enum class Sport(
     companion object {
         fun fromId(id: String?): Sport? = entries.firstOrNull { it.id.equals(id, ignoreCase = true) }
 
-        /** The chips the board's filter row always carries, in this order, whether or not the
-         *  sport has anything on today - the board's shape stays put and a sport with nothing on
-         *  reads as empty rather than as absent. The rest of [entries] join them once the day
-         *  has events of that sport. */
+        /** The sports the board's filter row leads with, in this order - football, Formula 1,
+         *  golf, rugby, American football. They hold their place at the head of the row when
+         *  they have games on and are absent from it when they do not; the rest of [entries]
+         *  follow them, in declaration order, once the day has events of that sport. */
         val FILTER_ROW = listOf(FOOTBALL, FORMULA_1, GOLF, RUGBY, AMERICAN_FOOTBALL)
 
         /** The sports a key with no sport prefix is offered to. Deliberately the ones that

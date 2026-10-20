@@ -1461,11 +1461,10 @@
                             android:orientation="horizontal" />
                     </HorizontalScrollView>
 
-                    <!-- Sport filter: All, then one chip per sport the day has anything on
-                         (plus the fixed set the row always carries, greyed at zero). The row is
-                         the board's shape rather than a control that only appears when it has
-                         something to say. Same scrolling chip row as the season selector on a
-                         series detail page. -->
+                    <!-- Sport filter: All, then one chip per sport with games on in the current
+                         board mode - a sport with nothing on carries no chip at all, so the row
+                         reads as the games that are on rather than as the sports that are not.
+                         Same scrolling chip row as the season selector on a series detail page. -->
                     <HorizontalScrollView
                         android:id="@+id/sportsFilterScroll"
                         android:layout_width="match_parent"

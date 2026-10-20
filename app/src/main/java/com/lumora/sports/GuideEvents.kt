@@ -274,22 +274,40 @@ object GuideSports {
      */
     fun of(channelName: String, channelGroup: String?, title: String, description: String?): Sport? {
         val channel = keywordIn("$channelName ${channelGroup.orEmpty()}", CHANNEL_KEYWORDS_ALL, programmeTitle = false)
-        val text = keywordIn("$title ${description.orEmpty()}", TEXT_KEYWORDS_ALL, programmeTitle = true)
-        // The channel decides when it names a sport; the listing only when it doesn't, which is
-        // what keeps a Sky Sports Golf documentary off the football chip and a "Formula 1" title
-        // on a general channel on it.
-        val sport = channel ?: text ?: return null
-        // A talk show is about the sport rather than being it. Only the title may say so: a
-        // description is prose, and "ahead of the Premier League action" is not a show there.
-        if (isAboutRatherThanSport(title)) return null
-        return sport
+        if (channel != null) return sportUnlessAbout(title, channel)
+        // The title is what the listing is called, and the blurb is prose about it. The title is
+        // asked first, and alone: a title that names the sport is the listing's own claim about
+        // what it is, and a blurb must not overrule it - an NBA game's blurb reads "in a contest
+        // from the opening round of 2026-27 NBA fixtures", and the word "opening" is not golf.
+        val byTitle = keywordIn(title, TEXT_KEYWORDS_ALL, programmeTitle = true)
+        val sport = byTitle
+            ?: keywordIn(description.orEmpty(), TEXT_KEYWORDS_ALL, programmeTitle = true)
+            ?: return null
+        return sportUnlessAbout(title, sport)
     }
+
+    /** A talk show is about the sport rather than being it, so it is filed under no sport at
+     *  all. Only the title may say so: a description is prose, and "ahead of the Premier League
+     *  action" is not a show there. */
+    private fun sportUnlessAbout(title: String, sport: Sport): Sport? =
+        if (isAboutRatherThanSport(title)) null else sport
 
     /** True when a title reads as a programme about the sport - "The Premier League Show",
      *  "Top 14 Highlights", "Formula 1: The Preview". */
     internal fun isAboutRatherThanSport(title: String): Boolean =
         SportsChannelMatcher.normalise(title).any { it in SHOW_WORDS }
 
+    /**
+     * The sport a piece of text names, by the keyword lists.
+     *
+     * A phrase is matched as a run of whole words, never as a substring: "the open" is the golf
+     * championship and it is not the golf championship inside "from the opening round", but a
+     * raw substring match read every longer word that begins with a keyword as that keyword -
+     * which is how a live NBA game came to be filed under golf.
+     *
+     * The squashed form is still consulted, as a whole word of its own: a guide writes
+     * "Formula1" and "LaLiga" as one word, and that word is the key spelled without its space.
+     */
     private fun keywordIn(
         text: String,
         keywords: List<Pair<String, Sport>>,
@@ -298,31 +316,37 @@ object GuideSports {
         if (text.isBlank()) return null
         // A programme's first "word:" is its topic ("Calcio:", "Tennis:"), not a provider tag -
         // see normaliseTitle - so the two halves tokenise by different rules.
-        val haystack = if (programmeTitle) {
-            SportsChannelMatcher.normaliseTitle(text)
+        val tokens = if (programmeTitle) {
+            SportsChannelMatcher.normaliseTitleTokens(text)
         } else {
-            SportsChannelMatcher.normalise(text)
+            SportsChannelMatcher.normaliseTokens(text)
         }
-        if (haystack.isEmpty()) return null
-        // Both sides fold the same way: an accented keyword ("ποδόσφαιρο") must hit unaccented
-        // text and vice versa, which the bare lowercase comparison could never do.
-        val lowered = SportsChannelMatcher.foldForMatch(text)
-        val squashed = lowered.filter { it.isLetterOrDigit() }
+        if (tokens.isEmpty()) return null
         for ((keyword, sport) in keywords) {
-            // Phrase keys (a space or a separator inside them) match the raw text and its
-            // squashed form, so "La Liga", "LaLiga" and "la-liga" are one key. Single words
-            // match the token set exactly, so "f1" cannot hit "f1s" or a channel called
-            // "F150" - prefixes are not honoured here: "f" must never be Formula 1.
-            val key = SportsChannelMatcher.foldForMatch(keyword)
-            val phrase = ' ' in keyword || keyword.any { !it.isLetterOrDigit() }
-            val hit = if (phrase) {
-                key in lowered || key.filter { it.isLetterOrDigit() } in squashed
+            // Both sides fold the same way: an accented keyword ("ποδόσφαιρο") must hit unaccented
+            // text and vice versa, which the bare lowercase comparison could never do.
+            val keyTokens = SportsChannelMatcher.normaliseTitleTokens(keyword)
+            if (keyTokens.isEmpty()) continue
+            val hit = if (keyTokens.size > 1) {
+                containsRun(tokens, keyTokens) || tokens.any { it == keyTokens.joinToString("") }
             } else {
-                key in haystack
+                // A single word matches a whole token exactly, so "f1" cannot hit "f1s" or a
+                // channel called "F150" - prefixes are not honoured here: "f" must never be
+                // Formula 1.
+                keyTokens[0] in tokens
             }
             if (hit) return sport
         }
         return null
+    }
+
+    /** True when [needle] appears in [haystack] as consecutive whole words. */
+    private fun containsRun(haystack: List<String>, needle: List<String>): Boolean {
+        if (needle.isEmpty() || needle.size > haystack.size) return false
+        for (start in 0..haystack.size - needle.size) {
+            if (haystack.subList(start, start + needle.size) == needle) return true
+        }
+        return false
     }
 }
 

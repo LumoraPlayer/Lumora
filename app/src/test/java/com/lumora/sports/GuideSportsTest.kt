@@ -108,6 +108,41 @@ class GuideSportsTest {
     }
 
     @Test
+    fun `a keyword is not a substring of a longer word`() {
+        // Off a real board: an NBA game's blurb reads "in a contest from the opening round of
+        // 2026-27 NBA fixtures", and "the open" - the golf championship - is inside "the
+        // opening". A substring match read that as golf, and the game was filed under the golf
+        // chip instead of the basketball one.
+        assertEquals(
+            Sport.BASKETBALL,
+            sportOf(
+                "SKY SPORTS MAIN EVENT",
+                null,
+                "Live NBA",
+                "In a contest from the opening round of 2026-27 NBA fixtures, the New York Knicks " +
+                    "host the Philadelphia 76ers."
+            )
+        )
+        // The golf championship is still golf, and "The Open" is still the open.
+        assertEquals(Sport.GOLF, sportOf("SOME CHANNEL", null, "The Open: Day 2"))
+    }
+
+    @Test
+    fun `the title names the sport before the blurb does`() {
+        // The title is what the listing is called; the blurb is prose about it. A blurb that
+        // mentions another sport must not overrule the title's own claim.
+        assertEquals(
+            Sport.TENNIS,
+            sportOf("SOME CHANNEL", null, "Live Tennis", "From the opening round of the 2026 season.")
+        )
+        // ...and a title that says nothing leaves the blurb to place the listing.
+        assertEquals(
+            Sport.GOLF,
+            sportOf("SOME CHANNEL", null, "Round 2", "Live from the DP World Tour in Delhi.")
+        )
+    }
+
+    @Test
     fun `the picker drops what the fixture matching already claimed and keeps the rest`() {
         val now = 1_800_000_000L
         val rows = listOf(

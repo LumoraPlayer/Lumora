@@ -255,6 +255,79 @@ class SportsChannelMatcherTest {
     }
 
     @Test
+    fun `a competition that is only a number is no competition at all`() {
+        // Off a real board: "Liga 1" leaves the "1" and nothing else, and every listing with a
+        // number in it answered to that - "Formula 1 Motor Racing" carried an Indonesian football
+        // match on Sky Sports F1. A number needs a word to belong to.
+        val liga = fixture("Isenmulang Kalteng", "Java United", league = "Liga 1", sport = Sport.FOOTBALL)
+        assertTrue(SportsChannelMatcher.competitionTokens(liga).isEmpty())
+        val result = SportsChannelMatcher.match(
+            listOf(liga),
+            listOf(row("skysportsf1.uk", "Formula 1 Motor Racing"))
+        )
+        assertTrue(result.getValue(liga.id).channels.isEmpty())
+        // "Top 14" keeps both its words, so the tier that serves a real competition still runs.
+        val top14 = fixture("Toulouse", "La Rochelle", league = "Top 14", sport = Sport.RUGBY)
+        assertEquals(setOf("top", "14"), SportsChannelMatcher.competitionTokens(top14))
+    }
+
+    @Test
+    fun `a competition named only in the blurb is not the listing`() {
+        // "The Story of Frank Soo" is a documentary that mentions the Premier League in its
+        // blurb; it is not where an Armenian league match is on. The title is what the listing
+        // is called - the blurb is prose about it.
+        val armenian = fixture("Lernayin Artsakh", "Shirak II", league = "Premier League", sport = Sport.FOOTBALL)
+        val result = SportsChannelMatcher.match(
+            listOf(armenian),
+            listOf(
+                row(
+                    "skysportsfootball.uk",
+                    "The Story of Frank Soo",
+                    description = "A story from the Premier League and the players who shaped it."
+                )
+            )
+        )
+        assertTrue(result.getValue(armenian.id).channels.isEmpty())
+    }
+
+    @Test
+    fun `a fixture is not carried by another sport's listing`() {
+        // The cross-sport guard has to know every sport the board can show, not just the ones
+        // with a fixture feed: an Uzbek football match sat on Sky Sports Tennis, and an
+        // Indonesian one on Sky Sports F1.
+        assertTrue(SportsChannelMatcher.crossesSports(Sport.FOOTBALL, "Formula 1 Motor Racing"))
+        assertTrue(SportsChannelMatcher.crossesSports(Sport.FOOTBALL, "Live Tennis"))
+        assertTrue(SportsChannelMatcher.crossesSports(Sport.FOOTBALL, "Live Golf"))
+        // A fixture's own sport never blocks it.
+        assertFalse(SportsChannelMatcher.crossesSports(Sport.BASKETBALL, "Live NBA"))
+        assertFalse(SportsChannelMatcher.crossesSports(Sport.FOOTBALL, "Live: EFL"))
+    }
+
+    @Test
+    fun `a fixture is not carried by another sport's channel`() {
+        // The channel's own name has the last word: a football fixture is not on Sky Sports F1,
+        // whatever the listing on it says. "British Kart Championships" is a karting listing
+        // whose name happens to share a word with the Kazakh league's, and it carried three
+        // football matches before this guard existed.
+        val kazakh = fixture("Aktobe", "Kulager", league = "Championship", sport = Sport.FOOTBALL)
+        val result = SportsChannelMatcher.match(
+            listOf(kazakh),
+            listOf(row("skysportsf1.uk", "British Kart Championships")),
+            channelNames = mapOf("skysportsf1.uk" to "SKY SPORTS F1")
+        )
+        assertTrue(result.getValue(kazakh.id).channels.isEmpty())
+        // The same listing on a channel that names no sport is still evidence - the guard is
+        // about the sport, not about the words.
+        val general = fixture("Aktobe", "Kulager", league = "Championship", sport = Sport.FOOTBALL)
+        val onGeneral = SportsChannelMatcher.match(
+            listOf(general),
+            listOf(row("sportsgeneral.uk", "Championship")),
+            channelNames = mapOf("sportsgeneral.uk" to "Sky Sports Main Event")
+        )
+        assertEquals("sportsgeneral.uk", onGeneral.getValue(general.id).channels.single().channelId)
+    }
+
+    @Test
     fun `only a whole-word live claim marks a listing as live`() {
         assertTrue(SportsChannelMatcher.mentionsLive("Live: Formula 1 Qualifying", null))
         assertTrue(SportsChannelMatcher.mentionsLive("Australian Racing Live", null))
@@ -305,5 +378,29 @@ class SportsChannelMatcherTest {
             setOf("skysportsfootball.uk")
         )
         assertEquals(listOf("LALIGA", "Norwich City v Southampton"), events.map { it.title })
+    }
+
+    @Test
+    fun `a listing for a later day is not on today's board`() {
+        // The board is today's, and a listing's own start time is the one thing about it that is
+        // not a guess: "Live NBA" at 01:00 tonight sat under "On now" beside the games of this
+        // morning, its clock time alone saying which of the two it was.
+        val now = 1_800_000_000L
+        val dayEnd = SportsTime.plusDays(SportsTime.localDayStart(now * 1000), 1) / 1000
+        val events = SportsChannelMatcher.liveEvents(
+            listOf(
+                row(
+                    "skysportsmainevent.uk", "Live Tennis",
+                    start = now * 1000, stop = (now + 3600) * 1000
+                ),
+                row(
+                    "skysportsmainevent.uk", "Live NBA",
+                    start = (dayEnd + 3600) * 1000, stop = (dayEnd + 7200) * 1000
+                )
+            ),
+            now,
+            setOf("skysportsmainevent.uk")
+        )
+        assertEquals(listOf("Live Tennis"), events.map { it.title })
     }
 }

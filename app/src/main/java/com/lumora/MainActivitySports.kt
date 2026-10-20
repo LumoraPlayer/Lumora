@@ -25,6 +25,7 @@ import com.lumora.sports.SportsSectionRows
 import com.lumora.sports.SportsStatus
 import com.lumora.sports.SportsTime
 import com.lumora.sports.sectionFixtures
+import com.lumora.sports.sportFilterRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -232,7 +233,28 @@ internal class SportsBoardState(
      *  Prix or a golf round can be on this board at all - no feed in this app has a product for
      *  either. */
     val guideEvents: List<SportsListItem.GuideEvent>
-)
+) {
+    /**
+     * The fixtures that can actually be watched: the ones the guide matched to a channel in the
+     * user's visible catalogue.
+     *
+     * A fixture with no such match is not on the board. The board is a list of things to watch -
+     * a row whose only outcome is "no guide entry matched a channel you have" is a row the user
+     * can do nothing with, and it takes up the space of a game they could have picked. What
+     * happened to those games is not lost, though: the header says how many were left out.
+     *
+     * A match on a channel the filters hid (a hidden category, an adult channel) counts as no
+     * match: the channel is not there to be watched, so the game is not there to be watched
+     * either.
+     */
+    val playableFixtureIds: Set<String> = board.fixtures
+        .filter { fixture ->
+            matched[fixture.id]?.channels?.any { channelById.containsKey(it.channelId) } == true
+        }
+        .mapTo(HashSet()) { it.id }
+
+    val playableFixtures: List<SportsFixture> = board.fixtures.filter { it.id in playableFixtureIds }
+}
 
 /**
  * One line per board load saying what the guide actually gave the matcher, then a handful of
@@ -488,8 +510,16 @@ private fun MainActivity.renderSportsBoard() {
     val state = sportsBoardState ?: return
     val filter = activeSportFilter(state)
     val mode = SportsConfig.boardMode(prefs)
-    val fixtures = if (filter == null) state.board.fixtures else state.board.fixtures.filter { it.sport == filter }
+    // Only the games a channel of the user's carries: a fixture the guide could not place is
+    // not a row on this board (see SportsBoardState.playableFixtures).
+    val fixtures = if (filter == null) state.playableFixtures else state.playableFixtures.filter { it.sport == filter }
     val guide = if (filter == null) state.guideEvents else state.guideEvents.filter { it.sport == filter }
+    // The games this board leaves out - the ones of this mode and this sport that no channel
+    // could be found for. The header says how many, so a board smaller than the feeds' own
+    // count does not read as a wrong one.
+    val hidden = modeFixtures(state.board.fixtures, mode).count { fixture ->
+        (filter == null || fixture.sport == filter) && fixture.id !in state.playableFixtureIds
+    }
 
     val out = ArrayList<SportsListItem>(fixtures.size + guide.size + 8)
     out.addAll(sportsNoticeRows(state.board))
@@ -536,7 +566,7 @@ private fun MainActivity.renderSportsBoard() {
     }
     updateSportsModeRow(mode)
     updateSportsFilterRow(state, filter, mode)
-    updateSportsHeader(state, mode, out.filterIsInstance<SportsListItem.Event>(), guide.size)
+    updateSportsHeader(state, mode, out.filterIsInstance<SportsListItem.Event>(), guide.size, hidden)
 }
 
 /** How many rows the header's board shows: the events it was handed, plus the guide's listings
@@ -545,13 +575,32 @@ private fun shownCount(events: List<SportsListItem.Event>, mode: SportsConfig.Bo
     events.size + if (mode == SportsConfig.BoardMode.LIVE) guideCount else 0
 
 /**
+ * The fixtures of one half of the day: the ones in play, or the ones still to come - the rows
+ * the board would show for that mode, before the sport filter and before the channel filter.
+ *
+ * Shared by the chips and the header so the two cannot disagree about what "live" and
+ * "upcoming" mean.
+ */
+private fun modeFixtures(fixtures: List<SportsFixture>, mode: SportsConfig.BoardMode): List<SportsFixture> {
+    val sections = sectionFixtures(fixtures)
+    return when (mode) {
+        SportsConfig.BoardMode.LIVE ->
+            sections.firstOrNull { it.section == SportsSection.LIVE }?.fixtures.orEmpty()
+        SportsConfig.BoardMode.UPCOMING ->
+            sections.firstOrNull { it.section == SportsSection.UPCOMING }?.fixtures.orEmpty()
+    }
+}
+
+/**
  * The filter to render with: the stored one, or All when the stored sport has nothing on today.
  * A filter left over from yesterday's board must not open the tab onto an empty list - and it is
  * written back, so the chips and the list agree from then on.
  */
 private fun MainActivity.activeSportFilter(state: SportsBoardState): Sport? {
     val stored = SportsConfig.sportFilter(prefs) ?: return null
-    if (state.board.fixtures.any { it.sport == stored }) return stored
+    // The games the board can actually show, not every fixture the feeds listed: a sport whose
+    // every game is on a channel the user does not have is not a sport with anything on.
+    if (state.playableFixtures.any { it.sport == stored }) return stored
     // The guide's own events count here as much as the fixtures do: a user filtered to Formula 1
     // yesterday afternoon would otherwise be reset to All every time the feeds have no football,
     // which on a Saturday is never and on a Wednesday is always.
@@ -581,14 +630,29 @@ private fun MainActivity.buildGuideSectionRows(events: List<SportsListItem.Guide
     return out
 }
 
-/** One fixture section: a header and its rows. */
+/**
+ * One fixture section: a header and its rows.
+ *
+ * A fixture no channel of the user's carries is not a row: the board is a list of things to
+ * watch, and a row whose only outcome is "no guide entry matched a channel you have" is a row
+ * the user can do nothing with. The section's header counts the rows it kept, so the two cannot
+ * disagree.
+ */
 private fun MainActivity.buildFixtureSectionRows(
     section: SportsSectionRows?,
     matched: Map<String, SportsChannelMatcher.FixtureChannels>,
     channelById: Map<String, Channel>
 ): List<SportsListItem> {
     if (section == null || section.fixtures.isEmpty()) return emptyList()
-    val out = ArrayList<SportsListItem>(section.fixtures.size + 1)
+    // Only matches resolving to a channel in the visible catalogue are kept: a match on
+    // a channel the filters hid would render a name that nothing can play - and a game with
+    // no such match has no row at all.
+    val playable = section.fixtures.mapNotNull { fixture ->
+        val matches = matched[fixture.id]?.channels.orEmpty().filter { channelById.containsKey(it.channelId) }
+        if (matches.isEmpty()) null else fixture to matches
+    }
+    if (playable.isEmpty()) return emptyList()
+    val out = ArrayList<SportsListItem>(playable.size + 1)
     out.add(
         SportsListItem.Header(
             title = getString(
@@ -598,7 +662,7 @@ private fun MainActivity.buildFixtureSectionRows(
                     else -> R.string.sports_section_upcoming
                 }
             ),
-            count = section.fixtures.size,
+            count = playable.size,
             live = section.section == SportsSection.LIVE
         )
     )
@@ -607,16 +671,12 @@ private fun MainActivity.buildFixtureSectionRows(
     // a stretched card at the 1.06x focus scale grew wider than the board's padding and the
     // screen itself cut its edges off.
     val useCards = sportsColumns() > 1
-    for (fixture in section.fixtures) {
-        val matches = matched[fixture.id]?.channels.orEmpty()
-        // Only matches resolving to a channel in the visible catalogue are kept: a match on
-        // a channel the filters hid would render a name that nothing can play.
-        val playable = matches.filter { channelById.containsKey(it.channelId) }
+    for ((fixture, matches) in playable) {
         out.add(
             SportsListItem.Event(
                 fixture = fixture,
-                matches = playable,
-                channels = playable.mapNotNull { channelById[it.channelId] }.associateBy { it.id },
+                matches = matches,
+                channels = matches.mapNotNull { channelById[it.channelId] }.associateBy { it.id },
                 isCard = useCards
             )
         )
@@ -645,12 +705,16 @@ private fun MainActivity.sportsStatusNotice(status: com.lumora.sports.SportsProv
  * the same chips over the other half of the day. The numbers used to be day-wide, and sat there
  * reading 104 over a board of 47 live games.
  *
- * Always shown, and always those five, even when only one of them has anything on: the row is
- * the board's shape, and a sport reading "0" says "nothing of this on" where a row that shrinks
- * to one chip says nothing at all. A zero chip is not a target - it is greyed and unfocusable -
- * because pressing it could only ever open an empty board. The exception is the selected chip
- * itself: it stays a target at zero (greyed, but focusable) so a mode switch that empties the
- * chosen sport cannot strand focus on an unfocusable view.
+ * A sport with nothing on in this mode has no chip at all: a greyed-out pill is a target that
+ * could only ever open an empty board, and the row reads better as the games that are on than as
+ * the sports that are not. The fixed five (football, Formula 1, golf, rugby, American football)
+ * lead the row when they have games on and are absent when they do not, and the rest of the
+ * sports the day has follow them.
+ *
+ * The selected sport is the one exception: it stays on the row (greyed at zero) even when this
+ * mode has nothing of it, so the board's own filter stays legible - a row that dropped the
+ * selected sport would leave the board filtered to a sport the row does not mention, and the
+ * empty board would read as "nothing on today" rather than "nothing of this sport on".
  *
  * Rebuilt on every render rather than diffed - a dozen views - and the selected chip is
  * re-focused by the caller when the user picked one, so the D-pad stays where they were.
@@ -660,15 +724,10 @@ private fun MainActivity.updateSportsFilterRow(
     filter: Sport?,
     mode: SportsConfig.BoardMode
 ) {
-    // The same sections the board renders from, so the chips and the list cannot disagree about
-    // what "live" and "upcoming" mean.
-    val sections = sectionFixtures(state.board.fixtures)
-    val visibleFixtures = when (mode) {
-        SportsConfig.BoardMode.LIVE ->
-            sections.firstOrNull { it.section == SportsSection.LIVE }?.fixtures.orEmpty()
-        SportsConfig.BoardMode.UPCOMING ->
-            sections.firstOrNull { it.section == SportsSection.UPCOMING }?.fixtures.orEmpty()
-    }
+    // The same rows the board renders, so the chips and the list cannot disagree about what
+    // "live" and "upcoming" mean - and only the games a channel of the user's carries, so a
+    // chip's count is the number of rows behind it.
+    val visibleFixtures = modeFixtures(state.playableFixtures, mode)
     val counts = HashMap<Sport, Int>()
     for (fixture in visibleFixtures) counts.merge(fixture.sport, 1, Int::plus)
     if (mode == SportsConfig.BoardMode.LIVE) {
@@ -691,38 +750,31 @@ private fun MainActivity.updateSportsFilterRow(
             visibleFixtures.size + if (mode == SportsConfig.BoardMode.LIVE) state.guideEvents.size else 0
         )
     )
-    // The fixed five first, then the rest of the sports the day actually has - a basketball key,
-    // a cricket channel the classifier placed, whatever shows up.
-    val extra = counts.keys.filterNot { it in Sport.FILTER_ROW }.sortedBy { it.ordinal }
-    for (sport in Sport.FILTER_ROW + extra) {
+    // The sports the day has, in the row's order - and no chip at all for a sport with nothing
+    // on in this mode (see sportFilterRow).
+    for (sport in sportFilterRow(counts, filter)) {
         val count = counts[sport] ?: 0
         chips.add(sport to buildSportChip(binding.sportsFilterRow, sport, getString(sport.labelRes), count))
     }
     for ((sport, chip) in chips) {
         val count = if (sport == null) null else counts[sport] ?: 0
         chip.isSelected = sport == filter
-        if (count == 0 && sport != filter) {
-            // Nothing of this sport on in this mode: kept in the row for the board's shape, but
-            // not a target - pressing it could only ever open an empty board.
-            chip.isClickable = false
-            chip.isFocusable = false
+        if (count == 0) {
+            // Only the selected chip can be at zero now - the others have no chip at all - and it
+            // stays a target (greyed, but focusable) so a mode switch that empties the chosen
+            // sport cannot strand focus on an unfocusable view.
             chip.alpha = 0.4f
-        } else {
-            // The selected chip is a target even at zero (greyed, but focusable): a mode switch
-            // can empty the chosen sport's half of the day, and focus must not be stranded on a
-            // view that cannot take it.
-            if (count == 0) chip.alpha = 0.4f
-            chip.setOnClickListener {
-                SportsConfig.setSportFilter(prefs, sport)
-                renderSportsBoard()
-                // The board was just recut for the filter, so it starts from the top rather than
-                // keeping the old offset over a shorter list - and focus follows the choice into
-                // the row the render just rebuilt: the chip that was clicked is a detached view
-                // by the time this runs, so the request goes to the chip the adapter was told UP
-                // from the list leads to - the one just made current.
-                binding.sportsContent.scrollToPosition(0)
-                binding.sportsFilterRow.post { sportsAdapter.topRowFocusUpTarget?.requestFocus() }
-            }
+        }
+        chip.setOnClickListener {
+            SportsConfig.setSportFilter(prefs, sport)
+            renderSportsBoard()
+            // The board was just recut for the filter, so it starts from the top rather than
+            // keeping the old offset over a shorter list - and focus follows the choice into
+            // the row the render just rebuilt: the chip that was clicked is a detached view
+            // by the time this runs, so the request goes to the chip the adapter was told UP
+            // from the list leads to - the one just made current.
+            binding.sportsContent.scrollToPosition(0)
+            binding.sportsFilterRow.post { sportsAdapter.topRowFocusUpTarget?.requestFocus() }
         }
         // The gap between chips is the row's whole breathing room: the pills are deliberately
         // small, so the air around them is what keeps the row readable as separate choices.
@@ -742,9 +794,9 @@ private fun MainActivity.updateSportsFilterRow(
                 // screen. The whole chain is list -> sport chips -> mode -> tab.
                 android.view.KeyEvent.KEYCODE_DPAD_UP ->
                     focusChipRow(binding.sportsModeRow, preferSelected = true)
-                // LEFT/RIGHT walk the chips and wrap at the ends, stepping over the greyed
-                // zeros: the row is the only stop between the list and the tab bar, and without
-                // this the D-pad either dead-ends at an edge or leaves the screen.
+                // LEFT/RIGHT walk the chips and wrap at the ends: the row is the only stop
+                // between the list and the tab bar, and without this the D-pad either
+                // dead-ends at an edge or leaves the screen.
                 android.view.KeyEvent.KEYCODE_DPAD_LEFT -> moveChipFocus(binding.sportsFilterRow, view, forward = false)
                 android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> moveChipFocus(binding.sportsFilterRow, view, forward = true)
                 else -> false
@@ -757,8 +809,8 @@ private fun MainActivity.updateSportsFilterRow(
 }
 
 /**
- * LEFT/RIGHT along a chip row: one step, wrapping at both ends and stepping over the greyed
- * zero-sport pills (they are not focusable, so the walk is over the focusable children only).
+ * LEFT/RIGHT along a chip row: one step, wrapping at both ends and stepping over the chips that
+ * are not focusable (the walk is over the focusable children only).
  *
  * Focus stays inside the row - at an edge without this, the D-pad either dead-ended or escaped
  * to whatever the framework found next (the tab bar), neither of which is where the row's user
@@ -858,15 +910,18 @@ private fun MainActivity.buildSportChip(parent: ViewGroup, sport: Sport?, label:
  * The "no channel" explanation lives here, once, rather than as a caption repeated down every
  * row that has no channel - on a board where most fixtures have no match (a guide that doesn't
  * cover the sports channels, a competition nobody carries) that caption was most of the screen.
+ * Those rows are not on the board at all any more, and this is where the count of the games left
+ * out lives instead - once, at the top, so a board smaller than the feeds' own count reads as
+ * "the guide does not carry these" rather than as a board that is wrong.
  */
 private fun MainActivity.updateSportsHeader(
     state: SportsBoardState,
     mode: SportsConfig.BoardMode,
     events: List<SportsListItem.Event>,
-    guideCount: Int
+    guideCount: Int,
+    hidden: Int
 ) {
     val board = state.board
-    val matchedCount = events.count { it.matches.isNotEmpty() }
     val liveCount = events.count { it.fixture.status.isLive }
 
     binding.sportsHeaderTitle.text = getString(
@@ -898,13 +953,15 @@ private fun MainActivity.updateSportsHeader(
         resources.getQuantityString(R.plurals.sports_header_summary, shown, shown)
     }
     binding.sportsHeaderLiveDot.visibility = if (liveCount > 0) View.VISIBLE else View.GONE
-    val unmatched = events.size - matchedCount
-    binding.sportsHeaderNote.text = if (unmatched > 0) {
-        resources.getQuantityString(R.plurals.sports_header_unmatched, unmatched, unmatched)
+    // The games the board left out, not the rows without a channel: a game no channel could be
+    // found for is not a row any more (see SportsBoardState.playableFixtures), and this is where
+    // the board says so - once, at the top, rather than as a caption down every such row.
+    binding.sportsHeaderNote.text = if (hidden > 0) {
+        resources.getQuantityString(R.plurals.sports_header_unmatched, hidden, hidden)
     } else {
         null
     }
-    binding.sportsHeaderNote.visibility = if (unmatched > 0) View.VISIBLE else View.GONE
+    binding.sportsHeaderNote.visibility = if (hidden > 0) View.VISIBLE else View.GONE
 }
 
 internal fun MainActivity.focusFirstSportsRow() {

@@ -21,6 +21,7 @@ import com.lumora.model.Channel
 import com.lumora.sports.SportsChannelMatcher
 import com.lumora.sports.Sport
 import com.lumora.sports.SportsStatus
+import com.lumora.sports.SportsTime
 import com.lumora.util.PosterLoader
 import com.lumora.util.resetFocusTransform
 import kotlinx.coroutines.CoroutineScope
@@ -131,6 +132,10 @@ class SportsAdapter(
     var topRowFocusUpTarget: View? = null
 
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+    /** The same time with the day on it, for a listing whose clock time alone would not say
+     *  which day it belongs to. */
+    private val dayTimeFormat = SimpleDateFormat("EEE HH:mm", Locale.getDefault())
 
     /** Channel logo loads, cancelled per row on rebind (see EventHolder.loadLogo). */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -446,9 +451,27 @@ class SportsAdapter(
             currentEvent = null
             guidesChannel = item.channel
             val context = itemView.context
-            time.text = timeFormat.format(Date(item.startTimestamp * 1000))
+            // A clock time on its own does not say which day it belongs to: a game that kicked
+            // off at 23:30 and runs until 01:30 reads as this morning's game, and a listing for
+            // tomorrow reads as one that finished hours ago. The day goes on the row whenever it
+            // is not the obvious one.
+            val startMillis = item.startTimestamp * 1000
+            val stopMillis = item.stopTimestamp * 1000
+            val nowMillis = System.currentTimeMillis()
+            time.text = if (SportsTime.isSameLocalDay(startMillis, nowMillis)) {
+                timeFormat.format(Date(startMillis))
+            } else {
+                dayTimeFormat.format(Date(startMillis))
+            }
             if (item.stopTimestamp > item.startTimestamp) {
-                status.text = context.getString(R.string.sports_until, timeFormat.format(Date(item.stopTimestamp * 1000)))
+                status.text = context.getString(
+                    R.string.sports_until,
+                    if (SportsTime.isSameLocalDay(stopMillis, startMillis)) {
+                        timeFormat.format(Date(stopMillis))
+                    } else {
+                        dayTimeFormat.format(Date(stopMillis))
+                    }
+                )
                 status.setBackgroundResource(R.drawable.bg_sports_neutral_pill)
                 status.setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
                 status.visibility = View.VISIBLE
