@@ -70,6 +70,12 @@
         <package android:name="com.mxtech.videoplayer.ad" />
         <package android:name="com.brouken.player" />
         <package android:name="is.xyz.mpv" />
+        <!-- Google Play services, for the Cast button's availability check: without the
+             declaration, targetSdk 36's package-visibility rules hide the package, the
+             lookup comes back empty, and the button would be hidden on every device
+             that has Play services. The declaration itself costs nothing at runtime -
+             it is what makes the (local, binder-free) package query answer at all. -->
+        <package android:name="com.google.android.gms" />
     </queries>
 
     <!-- largeHeap: merged catalogues run to six figures of Channel objects across several

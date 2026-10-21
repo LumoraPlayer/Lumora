@@ -48,16 +48,22 @@ class BaseApplication : Application() {
                 " on Android ${android.os.Build.VERSION.RELEASE} (${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL})"
         )
 
-        // Initialize Google Cast framework (required before any Cast calls)
-        try {
-            com.google.android.gms.cast.framework.CastContext.getSharedInstance(this)
-        } catch (_: Exception) {
-            // Google Play Services not available on this device
-        }
-
-        // Loads the native QuickJS .so; every QuickJSContext.create() call throws until this
-        // has run once (see com.lumora.plugin.js.JsPluginEngine).
-        com.whl.quickjs.android.QuickJSLoader.init()
+        // The Google Cast framework is NOT initialized here any more. It used to be, and it
+        // was one of the most expensive things in the whole startup path: getSharedInstance
+        // binds to Play Services, and on a TV stick or a cheap phone that is easily 100-300ms
+        // of the user's wait before the first frame. Nothing on the launch path needs Cast -
+        // the framework is only needed once someone actually casts, and both callers of
+        // getSharedInstance (CastManager.init and CastButtonFactory.setUpMediaRouteButton)
+        // are now reached from the Cast button itself, which initializes the framework on
+        // first use instead (see MainActivityPlayer.ensureCastUiReady). On a TV the button
+        // is GONE entirely, so the framework is never initialized at all.
+        //
+        // The native QuickJS .so is not loaded here either, for the same reason: it is
+        // loaded by the plugin engine on the thread that creates the first QuickJSContext
+        // (see com.lumora.plugin.js.JsPluginEngine), which keeps the .so load off the
+        // main thread. Every QuickJSContext.create() still happens after that load, so the
+        // "throws until this has run once" invariant holds - it just no longer runs on the
+        // UI thread during startup.
 
         // Application context for the ported site-scraper stack (com.lumora.scraper) - its
         // network layer reads a bundled root certificate out of raw resources and shares the
@@ -80,7 +86,6 @@ class BaseApplication : Application() {
             .followRedirects(true)
             .followSslRedirects(true)
             .connectionPool(okhttp3.ConnectionPool(4, 30, TimeUnit.SECONDS))
-            .dns(okhttp3.internal.platform.Platform.get().let { okhttp3.Dns.SYSTEM })
             .addInterceptor(JellyfinAuthInterceptor())
             .addInterceptor(PlexAuthInterceptor())
             .cache(Cache(File(cacheDir, "okhttp_cache"), 50L * 1024 * 1024))  // 50MB disk cache

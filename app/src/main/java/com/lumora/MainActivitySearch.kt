@@ -492,17 +492,29 @@ internal suspend fun MainActivity.buildEpgSearchResults(query: String, filter: M
         }
     }
 
-    // Already-loaded EPG (channels the guide has visited).
-    for (ch in liveChannels) {
-        EpgListCache.get(ch.id)?.let { addPrograms(ch, it) }
-        if (results.size >= MAX_EPG_SEARCH_RESULTS) break
+    // The catalogue scan is CPU work over the whole live list: a lowercased copy of every
+    // channel name, a lowercased copy of every programme title of every channel whose guide
+    // is already in memory. It used to run on whichever thread called this - the main
+    // thread, because the search coroutine lives there - so on a catalogue of tens of
+    // thousands of channels it held the UI up for as long as the scan took, right after
+    // the media results had been published. It runs on Dispatchers.Default now.
+    //
+    // The network fetches below stay on the caller's dispatcher: they are suspend calls
+    // that hop to IO themselves (see XtreamClient), and the guide they read is written
+    // back into the cache from here.
+    val toFetch = withContext(Dispatchers.Default) {
+        // Already-loaded EPG (channels the guide has visited).
+        for (ch in liveChannels) {
+            EpgListCache.get(ch.id)?.let { addPrograms(ch, it) }
+            if (results.size >= MAX_EPG_SEARCH_RESULTS) break
+        }
+        // On-demand: name-matching channels that have no guide data cached yet.
+        liveChannels.asSequence()
+            .filter { it.name.lowercase().contains(lower) && !EpgListCache.has(it.id) }
+            .distinctBy { it.id }
+            .take(MAX_EPG_SEARCH_FETCHES)
+            .toList()
     }
-    // On-demand: name-matching channels that have no guide data cached yet.
-    val toFetch = liveChannels.asSequence()
-        .filter { it.name.lowercase().contains(lower) && !EpgListCache.has(it.id) }
-        .distinctBy { it.id }
-        .take(MAX_EPG_SEARCH_FETCHES)
-        .toList()
     for (ch in toFetch) {
         if (results.size >= MAX_EPG_SEARCH_RESULTS) break
         val generation = EpgListCache.generation

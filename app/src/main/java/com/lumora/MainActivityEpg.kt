@@ -310,20 +310,33 @@ internal fun MainActivity.pruneStoredEpg() {
  *  Rows are a snapshot: the currently-airing block is truncated to its remaining minutes and
  *  the now/next line resolved, both at bind time. Nothing re-ran on a clock, so a guide left
  *  on screen stayed frozen - the highlight never advanced, the ruler drifted away from the
- *  programme blocks, and rows kept their minutes-ago "now" line. Rebinding the visible rows
- *  re-runs exactly that bind-time maths, and rebuilding the ruler keeps the two in step;
- *  both are cheap (a screenful of rows, 24 labels) and once a minute.
+ *  programme blocks, and rows kept their minutes-ago "now" line. The tick re-runs that
+ *  maths on the rows that are on screen (LiveGuideAdapter.refreshNow) and rebuilds the ruler
+ *  so the two stay in step; both are cheap and once a minute.
  *
- *  The rebind is also what lets [EpgListCache] entries age out: a row whose cached guide has
+ *  The rows are updated in place rather than rebound: a rebind rebuilds every programme
+ *  block of every row, which is a screenful of rows times a dozen blocks, once a minute, for
+ *  as long as the tab is open - a periodic hitch on a slow TV stick for a change that touches
+ *  two things per row.
+ *
+ *  The tick is also what lets [EpgListCache] entries age out: a row whose cached guide has
  *  passed ENTRY_TTL_MS takes the fetch path again while painting the stale copy, so the guide
- *  self-refreshes through resolveEpgPrograms without a scroll or a relaunch. */
+ *  self-refreshes through resolveEpgPrograms without a scroll or a relaunch. Only the rows
+ *  that need it are rebound for that (LiveGuideAdapter.revalidateExpiredRows) - usually none
+ *  at all, since the cache holds a guide for a quarter of an hour. */
 internal fun MainActivity.guideClockTick() {
     if (activeTab != 0 || isPlayerVisible || showingHome || showingDiscover || showingDownloads || showingSports) return
     if (!binding.liveRow.isShown || liveAdapter.itemCount == 0) return
     buildGuideHeader()
-    // Range change rather than notifyDataSetChanged: RecyclerView can rebind the attached
-    // rows in place and leave D-pad focus on whatever the user was on.
-    liveAdapter.notifyItemRangeChanged(0, liveAdapter.itemCount)
+    // The visible rows are refreshed in place rather than rebound: a rebind rebuilds every
+    // programme block of every row, and the clock runs once a minute for as long as the
+    // tab is open. The tick changes two things per row - the now/next line and the width
+    // of the block that is airing right now - and the adapter updates exactly those.
+    val nowSeconds = System.currentTimeMillis() / 1000
+    liveAdapter.refreshNow(nowSeconds)
+    // The rebind was also what let [EpgListCache] entries age out, so the rows whose guide
+    // has expired are the ones that still need one - and they are the only ones asked for.
+    liveAdapter.revalidateExpiredRows()
 }
 
 internal fun MainActivity.startGuideClock() {
@@ -398,15 +411,28 @@ internal fun MainActivity.updateGuideRowWrap() {
         previewGlobalRect.width()
     } else 0
     var anyVisibleRowOverlaps = false
-    for (i in 0 until binding.liveContent.childCount) {
-        val child = binding.liveContent.getChildAt(i)
-        val overlapsPreview = showingPreview && run {
-            child.getGlobalVisibleRect(guideRowGlobalRect)
-            guideRowGlobalRect.bottom > previewGlobalRect.top && guideRowGlobalRect.top < previewGlobalRect.bottom
+    // One global-rect read for the list, instead of one per visible row. A row's band on
+    // screen is its layout band inside the list, offset by where the list itself sits -
+    // the same answer the per-row getGlobalVisibleRect gave, for a fraction of the cost:
+    // that call walks the view hierarchy and composes transforms, and this function runs
+    // on every scroll event (twice a frame on a fast fling), over a screenful of rows.
+    if (binding.liveContent.getGlobalVisibleRect(listGlobalRect)) {
+        val listTop = listGlobalRect.top
+        val listHeight = binding.liveContent.height
+        for (i in 0 until binding.liveContent.childCount) {
+            val child = binding.liveContent.getChildAt(i)
+            val overlapsPreview = showingPreview && run {
+                // The row's visible band: its layout band, clipped to the list's own
+                // bounds - a row half-scrolled out of the list is only as visible as the
+                // part still inside it.
+                val rowTop = listTop + maxOf(child.top, 0)
+                val rowBottom = listTop + minOf(child.bottom, listHeight)
+                rowBottom > previewGlobalRect.top && rowTop < previewGlobalRect.bottom
+            }
+            if (overlapsPreview) anyVisibleRowOverlaps = true
+            (binding.liveContent.getChildViewHolder(child) as? LiveGuideAdapter.RowViewHolder)
+                ?.setReservedEnd(if (overlapsPreview) reservedPx else 0)
         }
-        if (overlapsPreview) anyVisibleRowOverlaps = true
-        (binding.liveContent.getChildViewHolder(child) as? LiveGuideAdapter.RowViewHolder)
-            ?.setReservedEnd(if (overlapsPreview) reservedPx else 0)
     }
     // The ruler and the rows share a horizontal scroll offset. Reserve the same viewport
     // while any visible row wraps around the preview so labels don't continue into a region

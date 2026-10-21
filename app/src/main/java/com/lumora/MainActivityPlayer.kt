@@ -280,9 +280,21 @@ internal fun MainActivity.setupPlayerControls() {
     // Hidden on Android TV because the TV itself is a Cast receiver, not a sender.
     if (isTv) {
         binding.btnCast.visibility = View.GONE
+    } else if (!hasGooglePlayServices()) {
+        // No Play Services on this device: the Cast framework could never start, so the
+        // button has nothing to offer. Decided by the package being installed rather than
+        // by initializing the framework - the package query is local, while the framework's
+        // initialization is a Play Services bind, which is exactly the startup cost this
+        // path exists to avoid.
+        binding.btnCast.visibility = View.GONE
     } else {
         castManager = com.lumora.player.CastManager(this).apply {
-            init()
+            // init() is NOT called here any more: it reaches CastContext.getSharedInstance,
+            // which binds to Play Services and costs 100-300ms on cheap hardware - a slice
+            // of the user's wait before the first frame, for a feature most sessions never
+            // touch. The Cast framework is initialized on the first interaction with the
+            // Cast button instead (see ensureCastUiReady), which is the first moment any
+            // Cast API is actually needed.
             onCastSessionConnected = { _ ->
                 val channel = nowPlayingChannel
                 if (channel != null) {
@@ -310,12 +322,16 @@ internal fun MainActivity.setupPlayerControls() {
             // playing with no player visible to stop it.
             onCastSessionDisconnected = { if (isPlayerVisible && !userPausedPlayback) playerManager.play() }
         }
-        try {
-            com.google.android.gms.cast.framework.CastButtonFactory.setUpMediaRouteButton(
-                this, binding.btnCast
-            )
-        } catch (_: Exception) {
-            binding.btnCast.visibility = View.GONE
+        // The button is wired by hand rather than left to CastButtonFactory's own click
+        // listener, because the framework has to be set up first - and that setup is what
+        // initializes the Cast framework. The first press therefore initializes it and
+        // then opens the picker itself; every later press is the framework's own button.
+        binding.btnCast.setOnClickListener { ensureCastUiReady(openPicker = true) }
+        // A D-pad user reaches the button before pressing it, and the focus is enough of a
+        // hint that the framework can be brought up then - so the press that follows is
+        // already the framework's own button and opens the picker directly.
+        binding.btnCast.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) ensureCastUiReady(openPicker = false)
         }
     }
 
@@ -621,6 +637,51 @@ internal fun MainActivity.setupPlayerControls() {
         }
     })
 }
+
+// ── Cast ─────────────────────────────────────────
+
+/**
+ * Brings the Cast framework up the first time the Cast button is used.
+ *
+ * Both halves of the setup - the session manager ([com.lumora.player.CastManager.init]) and
+ * the route button ([com.google.android.gms.cast.framework.CastButtonFactory]) - reach
+ * `CastContext.getSharedInstance`, which binds to Play Services. Doing that at startup cost
+ * 100-300ms of the user's wait before the first frame on cheap hardware, for a feature most
+ * sessions never touch, so it happens here instead: on the first focus or press of the
+ * button, which is the first moment any Cast API is actually needed.
+ *
+ * [openPicker] is true for the press that triggered the setup. The framework's own click
+ * listener is installed *by* the setup, so that press would otherwise be swallowed - hence
+ * the picker is opened here, and every later press is the framework's own button.
+ */
+private fun MainActivity.ensureCastUiReady(openPicker: Boolean) {
+    if (!castUiReady) {
+        castUiReady = true
+        try {
+            castManager.init()
+            com.google.android.gms.cast.framework.CastButtonFactory.setUpMediaRouteButton(
+                this, binding.btnCast
+            )
+        } catch (_: Exception) {
+            // Play Services refused to start (outdated, disabled, restricted profile). The
+            // button has nothing to offer, so it goes away instead of failing every press.
+            binding.btnCast.visibility = View.GONE
+            return
+        }
+    }
+    if (openPicker) runCatching { binding.btnCast.showDialog() }
+}
+
+/**
+ * Whether Google Play services are installed on this device.
+ *
+ * A local package query, not a framework call: it answers "could the Cast framework ever
+ * start here?" without paying the Play Services bind that the answer would otherwise cost.
+ */
+private fun MainActivity.hasGooglePlayServices(): Boolean = runCatching {
+    packageManager.getPackageInfo("com.google.android.gms", 0)
+    true
+}.getOrDefault(false)
 
 // ── Aspect ratio / zoom ─────────────────────────
 

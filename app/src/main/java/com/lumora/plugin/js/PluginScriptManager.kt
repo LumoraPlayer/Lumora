@@ -6,6 +6,8 @@ import android.content.SharedPreferences
 import com.lumora.BaseApplication
 import com.lumora.R
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Finds installed JS plugin scripts and remembers which are enabled. Replaces
@@ -54,19 +56,30 @@ class PluginScriptManager(
         val enabledIds = enabledScriptIds()
         val result = mutableListOf<PluginScript>()
 
-        userScriptsDir().listFiles { f -> f.isFile && f.name.endsWith(".js") }?.forEach { file ->
-            val text = runCatching { file.readText() }.getOrNull()
-            if (text != null) {
-                val fallbackId = file.name.removeSuffix(".js")
-                // Built first, then asked whether it is enabled - the answer is keyed on the
-                // script's own manifest id, which is what setEnabled() writes. It used to be
-                // keyed on the file name, and the two only agree while the id contains nothing
-                // fileNameFor() rewrites: an id with a space or a colon in it produced a file
-                // whose name never matched the stored key, so the plugin read back with the
-                // wrong enabled state in both directions.
-                toPluginScript(file.name, fallbackId, text, enabled = false)?.let {
-                    result.add(it.copy(enabled = it.id in enabledIds))
+        // The directory scan and the reads happen on Dispatchers.IO. This function is
+        // `suspend` but does not suspend on its own - it used to run its file I/O on
+        // whichever thread called it, and the cold-start caller is the main thread
+        // (MainActivity's plugin discovery), so every installed script was read off the
+        // UI thread while the first content was trying to paint. The manifest probe below
+        // keeps its own background executor, so only the I/O moves here.
+        val sources = withContext(Dispatchers.IO) {
+            userScriptsDir().listFiles { f -> f.isFile && f.name.endsWith(".js") }
+                ?.mapNotNull { file ->
+                    val text = runCatching { file.readText() }.getOrNull() ?: return@mapNotNull null
+                    file.name to text
                 }
+                ?: emptyList()
+        }
+        for ((fileName, text) in sources) {
+            val fallbackId = fileName.removeSuffix(".js")
+            // Built first, then asked whether it is enabled - the answer is keyed on the
+            // script's own manifest id, which is what setEnabled() writes. It used to be
+            // keyed on the file name, and the two only agree while the id contains nothing
+            // fileNameFor() rewrites: an id with a space or a colon in it produced a file
+            // whose name never matched the stored key, so the plugin read back with the
+            // wrong enabled state in both directions.
+            toPluginScript(fileName, fallbackId, text, enabled = false)?.let {
+                result.add(it.copy(enabled = it.id in enabledIds))
             }
         }
 

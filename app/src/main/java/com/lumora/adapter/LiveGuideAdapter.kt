@@ -88,6 +88,9 @@ class LiveGuideAdapter(
     // scrolling one (by D-pad focus or drag) keeps every other row in sync.
     private var sharedScrollX: Int = 0
     private val boundScrollViews = mutableSetOf<HorizontalScrollView>()
+    /** The rows currently on screen - the guide clock refreshes these in place instead of
+     *  rebinding the whole list (see refreshNow). */
+    private val attachedHolders = mutableSetOf<RowViewHolder>()
     private var headerScrollView: HorizontalScrollView? = null
     private var broadcasting = false
 
@@ -130,13 +133,52 @@ class LiveGuideAdapter(
     override fun onViewAttachedToWindow(holder: RowViewHolder) {
         super.onViewAttachedToWindow(holder)
         boundScrollViews.add(holder.scrollView)
+        attachedHolders.add(holder)
         if (holder.scrollView.scrollX != sharedScrollX) holder.scrollView.scrollTo(sharedScrollX, 0)
     }
 
     override fun onViewDetachedFromWindow(holder: RowViewHolder) {
         super.onViewDetachedFromWindow(holder)
         boundScrollViews.remove(holder.scrollView)
+        attachedHolders.remove(holder)
         holder.cancelPendingLoad()
+    }
+
+    /**
+     * The guide clock's refresh, on the rows that are actually on screen.
+     *
+     * The clock used to rebind every visible row once a minute, and a rebind rebuilds
+     * every programme block of that row - a screenful of rows times a dozen blocks, once
+     * a minute, for as long as the tab was open. The tick only changes two things: the
+     * now/next line under the channel name, and the width of the block that is airing
+     * right now (it is truncated to the programme's remaining time, so every row's
+     * timeline starts flush at "now"). Both are updated in place here.
+     */
+    fun refreshNow(nowSeconds: Long) {
+        for (holder in attachedHolders) holder.refreshNowState(nowSeconds)
+    }
+
+    /**
+     * Rebinds the rows whose guide has expired, and only those.
+     *
+     * A rebind is also what asked the guide cache again (the row's bind path fetches a
+     * guide that is no longer in the cache), so with the rebind gone from the clock tick
+     * this has to happen somewhere - otherwise a guide left open would keep showing the
+     * schedule it loaded at launch and never refresh it. Usually no row at all: the
+     * cache holds a guide for a quarter of an hour, and the clock only asks about the
+     * rows on screen.
+     */
+    fun revalidateExpiredRows() {
+        for (holder in attachedHolders) {
+            val channel = holder.channel ?: continue
+            if (channel.id.isBlank()) continue
+            // Fresh in the cache, or a failure whose backoff is still running: neither
+            // wants a fetch, and the second one must not be asked again yet.
+            if (EpgListCache.has(channel.id)) continue
+            if (EpgListCache.isFailed(channel.id)) continue
+            val position = holder.bindingAdapterPosition
+            if (position != RecyclerView.NO_POSITION) notifyItemChanged(position)
+        }
     }
 
     inner class RowViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -158,12 +200,19 @@ class LiveGuideAdapter(
         private val initialBackground = GradientDrawable().apply { shape = GradientDrawable.OVAL }
 
         private var current: Channel? = null
+
+        /** The channel this row is showing - the guide clock needs it to tell whether the
+         *  row's guide has expired (see revalidateExpiredRows). */
+        internal val channel: Channel? get() = current
         private var loadJob: Job? = null
         private var logoJob: Job? = null
         // The EPG last rendered into this row, reused to fill the now/next line under the
         // channel name - never re-fetched. Cleared on every bind so a recycled row can't
         // carry a previous channel's schedule into its now line.
         private var lastPrograms: List<XtreamClient.EpgProgram>? = null
+        /** The block currently drawn as the airing one - the guide clock moves it on when
+         *  the programme changes (see refreshNowState). */
+        private var currentBlockIndex = -1
 
         init {
             initialText.background = initialBackground
@@ -434,17 +483,75 @@ class LiveGuideAdapter(
                     block.setBackgroundResource(backgroundRes)
                 }
                 val lp = block.layoutParams as LinearLayout.LayoutParams
-                lp.width = widthPx
-                block.layoutParams = lp
+                // Only when the width actually changed. Assigning layoutParams always
+                // schedules a layout pass, and this runs for every block of every row -
+                // on a rebind that is a screenful of rows times a dozen blocks, each
+                // asking for a relayout it did not need.
+                if (lp.width != widthPx) {
+                    lp.width = widthPx
+                    block.layoutParams = lp
+                }
             }
             while (programRow.childCount > blocks.size) {
                 programRow.removeViewAt(programRow.childCount - 1)
             }
+            // Which block is the airing one - the guide clock moves the highlight on when
+            // the programme changes (see refreshNowState).
+            currentBlockIndex = blocks.indexOfFirst { it.isCurrent }
             // Store and render the now/next line from the same data that built the blocks,
             // so it tracks the timeline highlight. Runs on both the synchronous bind path
             // and the async loadJob path (callers guard with `current === channel`), which
             // is exactly what keeps a recycled row's line from going stale.
             lastPrograms = programs
+            updateNowLine()
+        }
+
+        /**
+         * The guide clock, on one row: the airing block shrinks as its programme runs out
+         * and the now/next line moves on.
+         *
+         * Done in place, on the row's own views. A rebind would rebuild every programme
+         * block of the row to change two of them.
+         */
+        fun refreshNowState(nowSeconds: Long) {
+            val programs = lastPrograms
+            if (programs.isNullOrEmpty()) {
+                updateNowLine()
+                return
+            }
+            val currentIndex = programs.indexOfFirst { nowSeconds in it.startTimestamp until it.stopTimestamp }
+            // The block that was airing a minute ago, if a different one is airing now:
+            // it goes back to being an ordinary block.
+            if (currentBlockIndex >= 0 && currentBlockIndex != currentIndex) {
+                (programRow.getChildAt(currentBlockIndex) as? TextView)?.let { block ->
+                    val state = block.tag as? BlockState
+                    if (state != null && state.backgroundRes != R.drawable.bg_guide_block) {
+                        state.backgroundRes = R.drawable.bg_guide_block
+                        block.setBackgroundResource(R.drawable.bg_guide_block)
+                    }
+                }
+            }
+            if (currentIndex >= 0) {
+                val block = programRow.getChildAt(currentIndex) as? TextView
+                if (block != null) {
+                    // The airing block is truncated to the programme's remaining time, so
+                    // every row's timeline starts flush at "now" - the same width
+                    // renderPrograms gives it.
+                    val minutes = ((programs[currentIndex].stopTimestamp - nowSeconds) / 60).coerceAtLeast(1)
+                    val widthPx = (minutes * MINUTE_WIDTH_DP * density).toInt()
+                    val lp = block.layoutParams as? LinearLayout.LayoutParams
+                    if (lp != null && lp.width != widthPx) {
+                        lp.width = widthPx
+                        block.layoutParams = lp
+                    }
+                    val state = block.tag as? BlockState
+                    if (state != null && state.backgroundRes != R.drawable.bg_guide_block_current) {
+                        state.backgroundRes = R.drawable.bg_guide_block_current
+                        block.setBackgroundResource(R.drawable.bg_guide_block_current)
+                    }
+                }
+            }
+            currentBlockIndex = currentIndex
             updateNowLine()
         }
 

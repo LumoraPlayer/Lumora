@@ -456,28 +456,45 @@ internal fun MainActivity.buildGuideHeader() {
     // cell is wide enough for the word (36dp covers 14sp text plus the start padding).
     val nowFits = leadMinutes * LiveGuideAdapter.MINUTE_WIDTH_DP >= 36f
 
-    binding.guideHeaderRow.removeAllViews()
-    repeat(24) { index ->
-        // Within the last minute before a boundary the lead cell floors to zero minutes;
-        // drop it rather than adding an empty view.
-        if (index == 0 && leadMinutes <= 0) return@repeat
+    // The cells are reused, not rebuilt. This runs once a minute (the guide clock) and on
+    // every guide rebuild, and 24 fresh TextViews per rebuild meant 24 allocations, 24
+    // measure/layout passes and a pile of garbage - a periodic hitch on a slow TV stick,
+    // for a ruler whose labels and widths are the only things that change.
+    //
+    // Within the last minute before a boundary the lead cell floors to zero minutes;
+    // drop it rather than keeping an empty cell - so the ruler has one cell fewer in
+    // that minute, and the cells that are left shift up by one.
+    val firstIndex = if (leadMinutes <= 0) 1 else 0
+    val cellCount = 24 - firstIndex
+    val labels = guideHeaderLabels
+    while (labels.size < cellCount) {
         val label = TextView(this).apply {
-            text = when {
-                index == 0 -> if (nowFits) getString(R.string.list_now) else ""
-                else -> timeFmt.format(java.util.Date(nextHalfHourMs + (index - 1) * halfHourMs))
-            }
             setTextColor(getColor(R.color.text_tertiary))
             // Built in code, so it needs the dimen read explicitly to pick up the
             // large-screen tier that the XML-inflated guide rows below it get for free.
             setTextSize(TypedValue.COMPLEX_UNIT_PX, resources.getDimension(R.dimen.guide_program_text))
             gravity = android.view.Gravity.CENTER_VERTICAL
             setPadding((6 * density).toInt(), 0, 0, 0)
-            layoutParams = LinearLayout.LayoutParams(
-                (if (index == 0) leadMinutes * unitPx else 30 * unitPx).toInt(),
-                LinearLayout.LayoutParams.MATCH_PARENT
-            )
         }
+        labels.add(label)
         binding.guideHeaderRow.addView(label)
+    }
+    while (labels.size > cellCount) {
+        val label = labels.removeAt(labels.size - 1)
+        binding.guideHeaderRow.removeView(label)
+    }
+    for (i in labels.indices) {
+        val index = firstIndex + i
+        val label = labels[i]
+        label.text = when {
+            index == 0 -> if (nowFits) getString(R.string.list_now) else ""
+            else -> timeFmt.format(java.util.Date(nextHalfHourMs + (index - 1) * halfHourMs))
+        }
+        val widthPx = (if (index == 0) leadMinutes * unitPx else 30 * unitPx).toInt()
+        val lp = label.layoutParams as? LinearLayout.LayoutParams
+        if (lp == null || lp.width != widthPx) {
+            label.layoutParams = LinearLayout.LayoutParams(widthPx, LinearLayout.LayoutParams.MATCH_PARENT)
+        }
     }
     liveAdapter.attachHeader(binding.guideHeaderScroll)
 }
@@ -532,7 +549,7 @@ internal fun MainActivity.playItem(channel: Channel, gameOtherChannels: List<Cha
         MediaType.MOVIE -> { showContentDetail(channel); return }
         else -> {}
     }
-    val idx = liveChannels.indexOf(channel)
+    val idx = liveChannels.indexOfChannel(channel)
     if (idx >= 0) { currentIndex = idx; showPlayerFor(channel) }
 }
 
@@ -1102,7 +1119,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 val season = chosen.id.substringAfterLast(":s").substringBefore("e").toIntOrNull()
                 showFindStreamDialog(item, season, chosen.episodeNum)
             } else {
-                currentIndex = if (isSeries) -1 else filmList.indexOf(item)
+                currentIndex = if (isSeries) -1 else filmList.indexOfChannel(item)
                 // Auto-advance walks this queue on its own, with no user press to check - an
                 // episode that hasn't aired would end the run in a Find Stream dialog for
                 // something that doesn't exist, so it never enters the queue. The chain is
@@ -1449,7 +1466,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 detailReturnItem = item
                 detailReturnGroup = seriesGroup
                 currentEpisodeQueue = ordered
-                currentEpisodeQueueIndex = ordered.indexOf(target)
+                currentEpisodeQueueIndex = ordered.indexOfChannel(target)
                 currentSeriesVersionContext = item to (seriesGroup ?: listOf(item))
                 updateVersionsButtonVisibility()
             }
@@ -1633,7 +1650,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                         showFindStreamDialog(item)
                         return@setOnClickListener
                     }
-                    currentIndex = filmList.indexOf(item)
+                    currentIndex = filmList.indexOfChannel(item)
                     showPlayerFor(opened)
                     detailReturnItem = item
                     detailReturnGroup = versionGroup
@@ -1662,7 +1679,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                         )
                         chip.setOnClickListener {
                             hideContentDetail()
-                            currentIndex = filmList.indexOf(item)
+                            currentIndex = filmList.indexOfChannel(item)
                             showPlayerFor(version)
                             detailReturnItem = item
                             detailReturnGroup = versionGroup

@@ -122,6 +122,13 @@ private const val RE_ALERT_UPDATE_RELEASES_BEHIND = 10
  *  disables the mandatory-update block above - that check still runs, so a build that must
  *  update is still told so. */
 internal const val PREF_UPDATE_CHECKS = "update_checks_enabled"
+/** How long after launch the "is the guide stale?" check waits before it asks.
+ *
+ *  The check itself is a cheap read, but what it can trigger is a full XMLTV download and
+ *  parse - and on a budget stick that competes with the catalogue load and the first
+ *  playback for the same CPU, disk and bandwidth. Half a minute of delay buys the first
+ *  content a clear run at it, and the guide still fills in while the user is browsing. */
+private const val EPG_FRESH_DEFER_MS = 30_000L
 /** Preferred subtitle language, as an ISO 639-1 code. Drives which track is picked when
  *  subtitles are on, and which forced track is allowed through when they're off. Read by
  *  PlayerManager straight from the same prefs file. */
@@ -408,6 +415,10 @@ class MainActivity : AppCompatActivity() {
     /** `::castManager.isInitialized` reads the backing field, which only the declaring class
      *  can do - sibling files (MainActivityPlayer) go through this instead. */
     internal val isCastManagerReady: Boolean get() = ::castManager.isInitialized
+    /** Whether the Cast framework has been brought up for this Activity's Cast button.
+     *  Per-Activity on purpose: a recreated Activity has a fresh button, which has to be
+     *  handed to the framework again. See MainActivityPlayer.ensureCastUiReady. */
+    internal var castUiReady = false
     internal lateinit var prefs: SharedPreferences
 
     /** "system" or an ISO 639-1 code — the single source of truth for the whole app's
@@ -534,6 +545,9 @@ class MainActivity : AppCompatActivity() {
 
     internal var allChannels = listOf<Channel>()
     internal var liveChannels = listOf<Channel>()
+    /** The live list indexed by channel id - see [liveChannelsById]. Rebuilt whenever the
+     *  list itself is replaced (the list is only ever reassigned, never mutated in place). */
+    private var liveChannelsIndex: Pair<List<Channel>, Map<String, Channel>>? = null
     internal var seriesList = listOf<Channel>()
     internal var filmList = listOf<Channel>()
     internal var filmVersions: Map<String, List<Channel>> = emptyMap()
@@ -1409,7 +1423,17 @@ class MainActivity : AppCompatActivity() {
         // guide had nothing until then. This asks for the sources now if none of them has
         // succeeded recently - and afterwards only when the last success is older than a
         // period, so the routine path stays the periodic run.
-        scope.launch(Dispatchers.IO) { EpgSyncWorker.ensureFresh(this@MainActivity) }
+        //
+        // Delayed, not immediate: what this triggers is a full XMLTV download and parse, and
+        // on a budget stick that competes with the catalogue load and the first playback for
+        // the same CPU, disk and bandwidth. A guide that fills in half a minute after the
+        // app opens is a better trade than a slow first content, and the panel's own
+        // per-channel guide (fetched on demand as rows scroll into view) is unaffected -
+        // it is not part of this worker.
+        scope.launch(Dispatchers.IO) {
+            delay(EPG_FRESH_DEFER_MS)
+            EpgSyncWorker.ensureFresh(this@MainActivity)
+        }
 
         setupChannelList()
         setupTabs()
@@ -2841,8 +2865,35 @@ class MainActivity : AppCompatActivity() {
 
     internal var lastFocusedLiveChannel: Channel? = null
 
+    /**
+     * The live channels indexed by id.
+     *
+     * For the handful of places that look a channel up by id in a list of tens of thousands
+     * - the Home screen's "Recently Played" row, mostly. Scanning the list per lookup was
+     * O(lookups x channels) on the main thread; this is one pass, kept until the list is
+     * replaced.
+     *
+     * The cache is keyed on the list *instance*: [liveChannels] is only ever reassigned
+     * (never mutated in place), so a different instance means a different catalogue and the
+     * index is rebuilt. A stale index would show a channel that is no longer in the
+     * catalogue, so it is worth being explicit about that.
+     */
+    internal fun liveChannelsById(): Map<String, Channel> {
+        val current = liveChannels
+        val cached = liveChannelsIndex
+        if (cached != null && cached.first === current) return cached.second
+        val index = current.associateBy { it.id }
+        liveChannelsIndex = current to index
+        return index
+    }
+
     internal val previewGlobalRect = android.graphics.Rect()
-    internal val guideRowGlobalRect = android.graphics.Rect()
+    /** The guide list's own on-screen band - see updateGuideRowWrap, which reads it once
+     *  per scroll event instead of asking every row for its own global rect. */
+    internal val listGlobalRect = android.graphics.Rect()
+    /** The guide ruler's cells, kept between rebuilds - see buildGuideHeader, which updates
+     *  their labels and widths instead of recreating them once a minute. */
+    internal val guideHeaderLabels = mutableListOf<android.widget.TextView>()
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -3007,4 +3058,22 @@ internal fun carRotaryDirection(scroll: Float, vscroll: Float, hscroll: Float): 
     vscroll != 0f -> if (vscroll > 0f) 1 else -1
     hscroll != 0f -> if (hscroll > 0f) 1 else -1
     else -> 0
+}
+
+/**
+ * Where [channel] sits in [list] - by identity, or by id.
+ *
+ * `List.indexOf` compares with the data-class equality of [Channel], and that equality
+ * walks all of its fields (25+ of them, including header maps and DRM key lists) for every
+ * element before the match. On a catalogue of 50-60k channels that is tens of milliseconds
+ * on the main thread, at exactly the moment the user pressed play or opened a title.
+ *
+ * The id is what identifies an item across the app, and the reference check catches the
+ * common case for free: the tile the user pressed usually holds the very instance the
+ * list holds, so the match is a pointer compare.
+ */
+internal fun List<Channel>.indexOfChannel(channel: Channel): Int {
+    val id = channel.id
+    if (id.isBlank()) return indexOfFirst { it === channel }
+    return indexOfFirst { it === channel || it.id == id }
 }

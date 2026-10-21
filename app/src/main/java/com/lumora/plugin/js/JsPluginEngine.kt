@@ -294,6 +294,16 @@ class JsPluginEngine(
                 suspendCancellableCoroutine { cont ->
                     executor.execute {
                         val outcome: ScriptOutcome = try {
+                            // The native library is loaded here, on the thread that is about
+                            // to create the first context - not in Application.onCreate any
+                            // more. A .so load is a disk read plus a relocation pass, and on
+                            // the main thread it was a slice of the user's wait before the
+                            // first frame for a feature most installs never touch. Loading
+                            // it here keeps that cost on the plugin's own background
+                            // thread, where it belongs. System.loadLibrary is idempotent
+                            // (the runtime ignores a repeat load of the same library), so
+                            // the guard is belt and braces rather than the mechanism.
+                            ensureNativeLibraryLoaded()
                             val context = QuickJSContext.create()
                             try {
                                 host.install(context)
@@ -318,6 +328,25 @@ class JsPluginEngine(
             // perspective: flag it so onMain drops any callback the (still-running, in the
             // timeout case) executor thread reports afterwards.
             finished.set(true)
+        }
+    }
+
+    /**
+     * Loads the QuickJS native library once per process.
+     *
+     * Every native call in the wrapper goes through the library, so it has to be loaded
+     * before the first [QuickJSContext.create()] - which is why this sits at the top of
+     * the script-runner body rather than in a static initialiser. A failure here is an
+     * UnsatisfiedLinkError (the .so is missing from the APK on an unsupported ABI), and
+     * it is left to propagate into the runScript catch: the run fails with a message, the
+     * app does not.
+     */
+    private fun ensureNativeLibraryLoaded() {
+        if (nativeLibraryLoaded) return
+        synchronized(nativeLibraryLock) {
+            if (nativeLibraryLoaded) return
+            com.whl.quickjs.android.QuickJSLoader.init()
+            nativeLibraryLoaded = true
         }
     }
 
@@ -400,5 +429,14 @@ class JsPluginEngine(
         private const val MANIFEST_PROBE_TIMEOUT_MS = 5_000L
         /** Cap on sideloaded tracks, same idea as the report caps in [JsPluginContract]. */
         private const val MAX_SUBTITLES = 20
+
+        /**
+         * The native library is loaded at most once per process, whichever engine gets
+         * there first - the load itself is process-wide, so a per-engine flag would let
+         * two engines race it (harmless, but pointless).
+         */
+        private val nativeLibraryLock = Any()
+        @Volatile
+        private var nativeLibraryLoaded = false
     }
 }

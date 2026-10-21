@@ -690,7 +690,7 @@ internal fun MainActivity.onHomeItemClick(channel: Channel) {
     when (channel.mediaType) {
         MediaType.LIVE -> playItem(channel)
         MediaType.MOVIE -> {
-            currentIndex = filmList.indexOf(channel)
+            currentIndex = filmList.indexOfChannel(channel)
             showPlayerFor(channel)
             // Back out to the film's own poster, same as playing it from its detail page.
             // Not for a plugin-resolved entry: its id is a resolve token, not a catalog
@@ -1462,8 +1462,12 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
         .filterNot(::isAdultHomeItem)
     if (nextUpItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_next_up), nextUpItems))
 
+    // Recently Played: the ids are looked up in a map, not by scanning the live list once
+    // per id. The scan was O(ids x channels) - up to 20 ids against a catalogue of tens of
+    // thousands of channels - and this function runs on the main thread (it is called from
+    // the derive pass's UI hand-off), so every scroll back to Home paid for it.
     val recentItems = RecentlyPlayedStore.getRecentIds(this)
-        .mapNotNull { id -> liveChannels.firstOrNull { it.id == id } }
+        .mapNotNull { id -> liveChannelsById()[id] }
         .filterNot(::isAdultHomeItem)
     if (recentItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_recently_played), recentItems))
 
@@ -1478,8 +1482,12 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     // One shelf for both, since favourite VOD is stored in a single set (see
     // FavoritesStore.KEY_FAVORITE_SERIES) - a favourited film used to be saved and then
     // never shown anywhere, because only seriesList was searched for the ids.
+    // Two passes over the two lists rather than one over their concatenation: joining
+    // them first allocated a copy of the whole VOD catalogue (tens of thousands of
+    // entries) on the main thread, just to filter it by a handful of ids.
     val favIds = FavoritesStore.getFavoriteSeriesIds(this)
-    val favItems = (seriesList + filmList).filter { it.id in favIds }.filterNot(::isAdultHomeItem)
+    val favItems = (seriesList.filter { it.id in favIds } + filmList.filter { it.id in favIds })
+        .filterNot(::isAdultHomeItem)
     if (favItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_favourites), favItems))
 
     return shelves.filter { it.title !in hidden }
