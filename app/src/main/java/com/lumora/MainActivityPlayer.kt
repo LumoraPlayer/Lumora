@@ -638,6 +638,38 @@ internal fun MainActivity.setupPlayerControls() {
     })
 }
 
+// ── Update ──────────────────────────────────────
+
+/**
+ * Pauses everything that is playing, for as long as an update is being downloaded.
+ *
+ * An update runs in the background: the APK comes down through DownloadManager while the
+ * app keeps running, and the system package installer only takes over at the very end.
+ * Everything that was playing therefore kept playing - and kept decoding - for the whole
+ * download, which on a TV stick is the difference between an update that lands quietly
+ * and one that fights the app for the decoder and the bandwidth.
+ *
+ * Three things are playing at once in this app, and all three are stopped: the fullscreen
+ * player, every Multiview pane, and the inline live preview in the guide.
+ *
+ * The player is paused as the *user's* pause, so coming back from a cancelled install does
+ * not start playing again by itself - the same thing a press of the pause button does.
+ * The Multiview panes are paused the same way, which also keeps the background/resume
+ * bookkeeping from bringing them back: it records what was playing when the app was
+ * backgrounded, and by then nothing is.
+ */
+internal fun MainActivity.pauseAllPlaybackForUpdate() {
+    if (isPlayerVisible) {
+        playerManager.pause()
+        userPausedPlayback = true
+        updatePlayPauseIcon()
+    }
+    multiviewPanes.forEach { pane ->
+        if (!pane.released) pane.manager.pause()
+    }
+    previewPlayerManager?.pause()
+}
+
 // ── Cast ─────────────────────────────────────────
 
 /**

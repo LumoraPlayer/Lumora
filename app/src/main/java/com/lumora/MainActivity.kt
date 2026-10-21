@@ -1844,8 +1844,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Downloads the release APK via DownloadManager, then hands it to the system package
-     *  installer as soon as the download finishes - no separate "tap to install" step. */
+     *  installer as soon as the download finishes - no separate "tap to install" step.
+     *
+     *  Everything that is playing is paused first: the download runs in the background
+     *  while the app is up, and a stream that kept playing (and decoding) through it made
+     *  the update fight the app for the decoder - see [pauseAllPlaybackForUpdate]. */
     internal fun downloadAndInstallUpdate(downloadUrl: String, versionName: String) {
+        pauseAllPlaybackForUpdate()
         val installer = AppUpdateInstaller(this)
         val downloadId = installer.downloadApk(downloadUrl, versionName)
         Toast.makeText(this, getString(R.string.plug_downloading_update), Toast.LENGTH_SHORT).show()
