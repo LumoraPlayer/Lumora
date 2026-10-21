@@ -61,9 +61,58 @@ import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.*
 
-/** Matches the JSON field holding the file's own checksum, value included. The value is
- *  always hex (see [backupMd5]), so no string content can make this over-match. */
+/** The root object's own checksum member, in the shape Gson's pretty printer writes it: two
+ *  spaces of indent, the member name, and its value.
+ *
+ *  Only the root object's members sit at exactly that indent - a nested object indents its own
+ *  members deeper - so the anchor picks the file's own checksum and not a member of the same
+ *  name somewhere inside it. */
+private val BACKUP_CHECKSUM_MEMBER_REGEX = Regex("""(?m)^ {2}"checksum"\s*:\s*"(?<value>[^"]*)"""")
+
+/** Matches a "checksum": "..." pair anywhere in the text. The value is always hex (see
+ *  [backupMd5]), so no content can make this over-match the *value*; it is the fallback for a
+ *  file whose text was re-indented in transit, where the root member is no longer at the
+ *  indent the rule above anchors on. */
 private val BACKUP_CHECKSUM_FIELD_REGEX = Regex(""""checksum"\s*:\s*"[^"]*"""")
+
+/**
+ * Where the checksum's value sits in the exported text, so the digest can be written into it
+ * without holding a second copy of the document.
+ *
+ * The export used to serialise the whole backup twice: once with a blank checksum to hash,
+ * then again with the checksum filled in. Peak memory was therefore three copies of the
+ * document (two strings plus Gson's buffer) on top of the object graph, on devices whose heap
+ * the app already fills with the catalogue - a failed export there surfaced as an
+ * OutOfMemoryError, which the export path's `catch (Exception)` cannot see. Writing the text
+ * that was hashed, with the digest substituted into the member it belongs to, produces
+ * byte-for-byte what the second serialisation produced, in one copy.
+ *
+ * The member is located structurally (the root object's own member), not by "the first
+ * `"checksum": "..."` in the text": a member of the same name nested inside the document -
+ * a hand-edited file, a future schema - would otherwise be rewritten by the substitution,
+ * which would corrupt it and leave the file's real checksum field blank.
+ *
+ * Null when the member is not where it is expected, so the caller can fall back to the old
+ * two-pass serialisation.
+ */
+internal fun backupChecksumValueRange(blankJson: String): IntRange? =
+    BACKUP_CHECKSUM_MEMBER_REGEX.find(blankJson)?.groups?.get("value")?.range
+
+/**
+ * Writes [blankJson] to [out] with [checksum] in the checksum member's place - the bytes the
+ * second serialisation produced, without a second copy of the document in memory.
+ */
+internal fun writeBackupJsonWithChecksum(
+    out: Appendable,
+    blankJson: String,
+    checksum: String
+): Boolean {
+    val range = backupChecksumValueRange(blankJson) ?: return false
+    out.append(blankJson, 0, range.first)
+    out.append(checksum)
+    out.append(blankJson, range.last + 1, blankJson.length)
+    return true
+}
 
 /**
  * The checksum of a backup file, computed over the exact text that was written with the
@@ -79,9 +128,21 @@ private val BACKUP_CHECKSUM_FIELD_REGEX = Regex(""""checksum"\s*:\s*"[^"]*"""")
  * The blanked form reproduces the text every build has always hashed at export time
  * (`gson.toJson(data)` with `checksum = ""`, pretty-printed), so files from older builds
  * verify too. [backupMd5] is shared with the writer so both ends can never drift.
+ *
+ * The root object's own member is blanked when it is there - the shape the export writes - and
+ * the first `"checksum": "..."` pair anywhere is the fallback for a file whose text was
+ * re-indented in transit (a human tidying the JSON, say), which is what the old check did for
+ * every file.
  */
-internal fun backupRawChecksum(rawJson: String): String =
-    backupMd5(BACKUP_CHECKSUM_FIELD_REGEX.replaceFirst(rawJson, "\"checksum\": \"\""))
+internal fun backupRawChecksum(rawJson: String): String {
+    val value = backupChecksumValueRange(rawJson)
+    val blanked = if (value != null) {
+        rawJson.substring(0, value.first) + rawJson.substring(value.last + 1)
+    } else {
+        BACKUP_CHECKSUM_FIELD_REGEX.replaceFirst(rawJson, "\"checksum\": \"\"")
+    }
+    return backupMd5(blanked)
+}
 
 /** MD5 hex digest, lower-case, of [input]'s UTF-8 bytes. */
 internal fun backupMd5(input: String): String {
@@ -480,10 +541,11 @@ class BackupManager(private val context: Context) {
             val db = LumoraDatabase.getInstance(context)
             val data = collectBackupData(db)
 
-            val json = gson.toJson(data)
-            val checksum = backupMd5(json)
-            val finalData = data.copy(checksum = checksum)
-            val finalJson = gson.toJson(finalData)
+            // One serialisation, not two - see writeBackupJsonWithChecksum for why that
+            // matters on a TV stick's heap. The document is written out in two chunks plus the
+            // digest, so no second copy of it is ever held.
+            val blankJson = gson.toJson(data)
+            val checksum = backupMd5(blankJson)
 
             val stream = context.contentResolver.openOutputStream(uri)
             if (stream == null) {
@@ -493,9 +555,14 @@ class BackupManager(private val context: Context) {
                 return@withContext false
             }
             stream.use { outputStream ->
-                OutputStreamWriter(outputStream, Charsets.UTF_8).use { writer ->
-                    writer.write(finalJson)
-                    writer.flush()
+                OutputStreamWriter(outputStream, Charsets.UTF_8).use { out ->
+                    if (!writeBackupJsonWithChecksum(out, blankJson, checksum)) {
+                        // The document does not carry the member this build expects (a schema
+                        // that stopped writing it). Nothing has been written yet, so the
+                        // two-pass form - which always has one - can still produce the file.
+                        out.append(gson.toJson(data.copy(checksum = checksum)))
+                    }
+                    out.flush()
                 }
             }
 
@@ -517,6 +584,10 @@ class BackupManager(private val context: Context) {
             } ?: return@withContext ImportResult(errorMessage = "Could not open backup file")
 
             val data = gson.fromJson(json, BackupData::class.java)
+                // "null" is a valid JSON document and parses into a null object - without this
+                // the next line reads a field off it and the import dies with an NPE instead
+                // of saying the file is not a backup.
+                ?: return@withContext ImportResult(errorMessage = "Not a Lumora backup")
 
             // Verify checksum. Computed over the raw file text (checksum value blanked),
             // not over a re-serialization of the parsed data - see backupRawChecksum for
@@ -526,12 +597,18 @@ class BackupManager(private val context: Context) {
             val storedChecksum = data.checksum.orEmpty()
             if (storedChecksum.isNotBlank()) {
                 val fromRawText = backupRawChecksum(json)
-                val fromReserialization = backupMd5(gson.toJson(data.copy(checksum = "")))
-                if (storedChecksum != fromRawText && storedChecksum != fromReserialization) {
-                    Log.e(TAG, "Backup checksum mismatch - rejecting import")
-                    return@withContext ImportResult(
-                        errorMessage = "Checksum mismatch - backup is corrupt or was modified"
-                    )
+                // Only rebuilt on a miss: the re-serialisation below is a second full copy of
+                // the file in memory (plus its object graph round trip), which is pure waste
+                // on the normal path - and on a device with the heap already full of catalogue
+                // it was enough, at import time, to turn a good backup into an OOM.
+                if (storedChecksum != fromRawText) {
+                    val fromReserialization = backupMd5(gson.toJson(data.copy(checksum = "")))
+                    if (storedChecksum != fromReserialization) {
+                        Log.e(TAG, "Backup checksum mismatch - rejecting import")
+                        return@withContext ImportResult(
+                            errorMessage = "Checksum mismatch - backup is corrupt or was modified"
+                        )
+                    }
                 }
             }
 

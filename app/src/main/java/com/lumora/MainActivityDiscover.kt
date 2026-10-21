@@ -19,9 +19,11 @@ import com.lumora.plugin.js.PluginScript
 import com.lumora.ui.attachBlinkingCursor
 import com.lumora.util.cleanVodTitle
 import com.lumora.util.normalizeTitleForGrouping
+import com.lumora.util.seriesTileIndex
 import com.lumora.util.versionGroupContaining
 import com.lumora.util.isAdultCategory
 import kotlinx.coroutines.*
+import java.lang.ref.WeakReference
 import java.util.Locale
 
 // ── Discover (TMDB browse) & Home shelves ──
@@ -734,22 +736,68 @@ internal fun MainActivity.onHomeItemClick(channel: Channel) {
     }
 }
 
+/**
+ * Caches [seriesTileIndex] for the catalogue in memory now.
+ *
+ * Keyed by the identity of the two lists it is built from: both are replaced wholesale (a
+ * provider load swaps `allChannels`, the films/series derive swaps `seriesList`), so a new
+ * instance means a new index and the same instance means the same answer. Synchronised because
+ * the detail screen's row binds, the shelves and the background enrichment all reach it.
+ *
+ * The lists are held weakly: a reloaded catalogue must not be kept alive by this cache - on a
+ * heap that already holds a six-figure catalogue, an old list pinned here until the next
+ * lookup is exactly what turns a provider switch into an OOM.
+ */
+private object SeriesTileIndexCache {
+    private var catalogue: WeakReference<List<Channel>>? = null
+    private var derived: WeakReference<List<Channel>>? = null
+    private var index: Map<String, List<Channel>> = emptyMap()
+
+    @Synchronized
+    fun of(catalogue: List<Channel>, derived: List<Channel>): Map<String, List<Channel>> {
+        if (this.catalogue?.get() === catalogue && this.derived?.get() === derived) return index
+        index = seriesTileIndex(catalogue, derived)
+        this.catalogue = WeakReference(catalogue)
+        this.derived = WeakReference(derived)
+        return index
+    }
+}
+
 /** Resolves the series a Home-tile episode belongs to: exact categoryId (the series id
  *  Xtream parseEpisode and the Jellyfin/Plex toChannel both stamp on episodes) match through the
  *  catalog first, then the "{series} · {episode}" name-prefix fallback for snapshots that
  *  predate categoryId. Null if unresolvable - callers fall back to direct play. */
 internal fun MainActivity.resolveHomeTileSeries(channel: Channel): Channel? {
+    val lookup = SeriesTileIndexCache.of(allChannels, seriesList)
     // Exact series-id match. Ids are provider-scoped (Xtream series id, Jellyfin item id,
     // Plex rating key), so cross-matching is impossible - matching the source flags is the
     // only guard needed, with sourceProviderId compared only when the snapshot carries one
     // (older saves don't).
     channel.categoryId?.takeIf { it.isNotBlank() }?.let { id ->
+        // Indexed first: this path runs once per episode row bind (episode watched state),
+        // so the catalogue scan below must not be the common case. The index also carries
+        // the derived Series tab cards, which is where an m3u_plus panel's show lives -
+        // its episode rows stamp that card's id as their parent, and the catalogue itself
+        // holds episodes only.
+        lookup[id]
+            ?.firstOrNull {
+                it.mediaType == MediaType.SERIES &&
+                    it.isJellyfin == channel.isJellyfin && it.isPlex == channel.isPlex &&
+                    (channel.sourceProviderId == null || it.sourceProviderId == channel.sourceProviderId)
+            }
+            ?.let { return it }
         allChannels.firstOrNull {
             it.mediaType == MediaType.SERIES && it.id == id &&
                 it.isJellyfin == channel.isJellyfin && it.isPlex == channel.isPlex &&
                 (channel.sourceProviderId == null || it.sourceProviderId == channel.sourceProviderId)
         }?.let { return it }
     }
+    // The name-based fallbacks below walk the provider's series rows. That list is copied
+    // out of the catalogue here rather than kept: the fallbacks are only reached for rows
+    // whose parent id names nothing in the catalogue (a snapshot of a show that has since
+    // been removed, a panel that never stamped one), and the hot path - an episode row's
+    // watched state - reads the show out of the row's own name instead (see
+    // seriesTitleForEpisode).
     val candidates = allChannels.filter {
         it.mediaType == MediaType.SERIES &&
             it.isJellyfin == channel.isJellyfin && it.isPlex == channel.isPlex &&

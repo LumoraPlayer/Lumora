@@ -41,6 +41,7 @@ import com.lumora.util.vodQualityScore
 import com.lumora.data.remote.stalker.StalkerProvider
 import kotlinx.coroutines.*
 import okhttp3.Request
+import java.lang.ref.WeakReference
 
 // ── Playback: controls, aspect, stream resolution, failover & overlays ──
 //
@@ -1974,10 +1975,35 @@ internal fun MainActivity.vodVersionGroupFor(playing: Channel): Pair<String, Lis
         return (group.firstOrNull()?.id?.ifBlank { null } ?: series.id.ifBlank { series.name }) to group
     }
     filmVersions[playing.id]?.let { return playing.id to it }
-    return filmVersions.entries
+    // Membership, cached for the title being played. The scan it replaces ran every 2.5s for
+    // as long as a film played, and for a copy that is not its group's representative (a
+    // Continue Watching resume, a search hit, a chip switch) - and for a film with no
+    // duplicate at all - that meant a full pass over every duplicate group on the main thread
+    // each tick: the picture stuttered on a film with a perfectly good stream. Cached per
+    // title it costs one pass per title instead of one per tick, and keeps no index of its
+    // own in memory.
+    val cached = vodVersionGroupCache
+    if (cached != null && cached.playingId == playing.id && cached.source?.get() === filmVersions) {
+        return cached.group
+    }
+    val found = filmVersions.entries
         .firstOrNull { entry -> entry.value.any { it.id == playing.id } }
         ?.let { it.key to it.value }
+    // The "no group at all" answer is cached too - that is the common case for a film with no
+    // duplicates, and it is the one that used to be re-scanned on every tick.
+    vodVersionGroupCache = VODVersionGroupCache(playing.id, WeakReference(filmVersions), found)
+    return found
 }
+
+/** One resolved version group, remembered for the title it was resolved for. */
+internal class VODVersionGroupCache(
+    val playingId: String,
+    /** The versions map it was resolved against - a new map means a new answer. Weak, so a
+     *  replaced map is not kept alive by this cache. */
+    val source: WeakReference<Map<String, List<Channel>>>,
+    /** The group, or null when the copy belongs to none. */
+    val group: Pair<String, List<Channel>>?
+)
 
 /**
  * Swaps the playing film/episode for another copy of the same title, from the same position.

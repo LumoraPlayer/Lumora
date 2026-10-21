@@ -1154,3 +1154,43 @@ fun groupSeriesFilmCategories(leaves: List<CategoryFilter>): List<CategoryGroup>
  */
 fun versionGroupContaining(groups: Map<String, List<Channel>>, id: String): List<Channel>? =
     groups[id] ?: groups.values.firstOrNull { group -> group.any { it.id == id } }
+
+/**
+ * Show-level series entries keyed by id, for resolving an episode back to the show it belongs
+ * to ([com.lumora.MainActivity.resolveHomeTileSeries]).
+ *
+ * Both lists are needed and neither is enough on its own. Catalogue entries are what the
+ * panel/Xtream/Jellyfin/Plex backends carry a series as; an m3u_plus panel, however, lists
+ * episodes only, and its show cards are *derived* - they live in the Series tab's list, not in
+ * the catalogue. Without the derived half an episode row's parent id (`m3u-show:…`) matched
+ * nothing, so every resolution fell through to the name-based scans, which copy the whole
+ * catalogue's series rows per call. That call runs once per episode row bind, which is what
+ * made a large M3U show's detail screen freeze (and, with the per-row copies of a six-figure
+ * episode list, could exhaust a TV stick's heap).
+ *
+ * Episode rows are excluded: they are not shows, and including them would put an id in the
+ * index that nothing ever asks for while multiplying its size by the episode count.
+ */
+fun seriesTileIndex(
+    catalogue: List<Channel>,
+    derivedSeries: List<Channel>
+): Map<String, List<Channel>> {
+    val byId = HashMap<String, MutableList<Channel>>()
+    fun add(ch: Channel) {
+        if (ch.mediaType != MediaType.SERIES || ch.id.isBlank() || ch.episodeNum != null) return
+        // A cache written before the episode stamps existed carries rows whose only mark is the
+        // "SxxEyy" in the name. They are episodes, not shows - indexing them by their stream
+        // URL would add one useless entry per episode of the whole panel.
+        //
+        // The marker test, not the show key: the show key normalises the title (five regexes
+        // and a lowercase per name), and this runs over every row of the catalogue - the
+        // episode rows of a big m3u_plus panel are a six-figure list, and normalising each
+        // one would cost seconds on the first episode row bind.
+        if (m3uEpisodeTag(ch.name) != null) return
+        byId.getOrPut(ch.id) { mutableListOf() }.add(ch)
+    }
+    for (ch in catalogue) add(ch)
+    for (ch in derivedSeries) add(ch)
+    if (byId.isEmpty()) return emptyMap()
+    return byId.mapValues { it.value }
+}

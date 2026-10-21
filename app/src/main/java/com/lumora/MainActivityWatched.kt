@@ -151,22 +151,50 @@ private fun normalizeForWatchedKey(title: String): String? {
 }
 
 /**
+ * The show title an episode row carries in its own name, or null when it carries none.
+ *
+ * "Ilusão Mortal (2026) S01E02" -> "Ilusão Mortal (2026)"; "Some Show S01 E01" -> "Some Show";
+ * "Episode 4" -> null (the name says nothing about the show).
+ *
+ * The marker and everything after it is dropped, and the separator in front of it with it, so
+ * the leading show name is what is left. This is the same title the catalogue would answer
+ * with for a panel that bakes the show into its episode names - the show card an m3u_plus
+ * panel produces is named after exactly this prefix - which is what lets the catalogue be
+ * left out of the way.
+ *
+ * Only the spellings that survive the decoration count: "SAS Rogue Heroes - S03E03 - The Road
+ * Home" does not, because the middle " - " chain reads as a source tag and is stripped with
+ * the rest of it - the catalogue has to answer for that one.
+ */
+internal fun seriesTitleFromEpisodeName(name: String): String? {
+    val cleaned = cleanVodTitle(name)
+    val marker = ANY_SEASON_MARKER_REGEX.find(cleaned) ?: return null
+    val prefix = cleaned.substring(0, marker.range.first).trim().trim('-', '·', ':').trim()
+    return prefix.ifBlank { null }
+}
+
+/**
  * The show an episode belongs to, by name.
  *
- * Preferred source is the catalogue entry the episode's parent id points at, because that is
- * the show's real title. Falling back to the episode's own name only works for the providers
- * that bake the series into it, and the marker/title decoration has to come off first or two
- * copies of one show would normalise differently.
+ * The episode's own name is read first, because that is where most providers bake the show
+ * in - "Ilusão Mortal (2026) S01E02" (m3u_plus), "Some Show S01 E01" - and the title it
+ * yields is the one the catalogue would answer with anyway.
+ *
+ * That order is also what keeps this off the catalogue: the catalogue lookup that used to come
+ * first ([resolveHomeTileSeries]) copies the provider's whole series list per call, and this
+ * runs once per bound episode row - on an m3u_plus panel, where every episode is its own
+ * series row, that copied the panel's six-figure episode list per row, which froze the
+ * detail screen and could exhaust the heap.
+ *
+ * The catalogue is still consulted for the rows whose name says nothing about the show - a
+ * Jellyfin or Plex episode is titled "Episode 4" - because there the parent id is the only
+ * way to the show's real title.
  */
 private fun MainActivity.seriesTitleForEpisode(item: Channel): String? {
     if (item.episodeNum == null) return null
+    seriesTitleFromEpisodeName(item.name)?.let { return it }
     resolveHomeTileSeries(item)?.let { return cleanVodTitle(it.name) }
-    // "SAS Rogue Heroes - S03E03 - Title" / "S03E03 · Title" / "Series · Title": drop the
-    // marker and anything after it, leaving the leading show name if there is one.
-    val name = cleanVodTitle(item.name)
-    val marker = ANY_SEASON_MARKER_REGEX.find(name) ?: return null
-    val prefix = name.substring(0, marker.range.first).trim().trim('-', '·', ':').trim()
-    return prefix.ifBlank { null }
+    return null
 }
 
 /**

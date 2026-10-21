@@ -592,6 +592,10 @@ class MainActivity : AppCompatActivity() {
     /** Which title the two above belong to: they survive a version swap (same title, new
      *  stream) and reset when playback moves to a different title. */
     internal var vodQualityGroupKey: String? = null
+    /** The version group of the title playing now, resolved once instead of on every
+     *  watchdog tick (which ran a full pass over the duplicate groups each time) - see
+     *  vodVersionGroupFor. Dropped when the versions map is replaced. */
+    internal var vodVersionGroupCache: VODVersionGroupCache? = null
     // Keyed by stream key (id, or url when id is blank) - a version that just failed over
     // out of is skipped by both fullscreen and preview auto-pick/failover for a cooldown
     // window instead of being retried again a few seconds later.
@@ -2859,37 +2863,48 @@ class MainActivity : AppCompatActivity() {
             pendingM3uUrlTarget = null
             return
         }
-        if (resultCode != RESULT_OK || data?.data == null) return
+        if (resultCode != RESULT_OK || data?.data == null) {
+            // The picker was cancelled (or returned nothing): drop the manager the launch
+            // stashed so a later result can't be answered by a stale one.
+            if (requestCode == REQUEST_EXPORT_BACKUP || requestCode == REQUEST_IMPORT_BACKUP) {
+                pendingBackupManager = null
+            }
+            return
+        }
         val uri = data.data!!
+        // The stashed manager when it is still there, a fresh one when it is not: the Activity
+        // can be recreated (process restored, configuration change) while the system picker is
+        // in front, and the field does not survive that. Backing out with "nothing happened"
+        // was the old behaviour - the restore never ran, and the tap read as a broken button.
+        val backupManager = pendingBackupManager ?: BackupManager(this)
         when (requestCode) {
             REQUEST_EXPORT_BACKUP -> {
                 scope.launch {
-                    val success = pendingBackupManager?.exportTo(uri) == true
+                    val success = backupManager.exportTo(uri)
                     Toast.makeText(this@MainActivity, if (success) getString(R.string.plug_backup_exported) else getString(R.string.plug_export_failed), Toast.LENGTH_SHORT).show()
                     pendingBackupManager = null
                 }
             }
             REQUEST_IMPORT_BACKUP -> {
                 scope.launch {
-                    var result = pendingBackupManager?.importFrom(uri)
+                    var result = backupManager.importFrom(uri)
                     // The user explicitly chose Import, so "conflicts" are not a decision
                     // point - importFrom(confirmed=false) returned without applying anything
                     // over existing data, so re-run with confirmed=true to actually restore.
                     // Without this the toast reported success while 0 rows were imported.
-                    if (result != null && result.conflicts > 0 &&
+                    if (result.conflicts > 0 &&
                         result.providersImported == 0 && result.epgSourcesImported == 0
                     ) {
-                        result = pendingBackupManager?.importFrom(uri, confirmed = true)
+                        result = backupManager.importFrom(uri, confirmed = true)
                     }
                     // Report the failure's actual reason when there is one; the summary of
                     // zeroes read as a successful-but-empty import either way (a corrupt or
                     // previously-unreadable backup looked identical to "nothing to restore").
-                    val msg = result?.errorMessage?.let { getString(R.string.plug_import_failed_reason, it) }
-                        ?: result?.let { getString(R.string.plug_imported_summary, it.providersImported, it.epgSourcesImported, it.customGroupsImported, it.settingsImported) }
-                        ?: getString(R.string.plug_import_failed)
+                    val msg = result.errorMessage?.let { getString(R.string.plug_import_failed_reason, it) }
+                        ?: getString(R.string.plug_imported_summary, result.providersImported, result.epgSourcesImported, result.customGroupsImported, result.settingsImported)
                     Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
                     // A restore the app never applies looks like a restore that never happened.
-                    if (result?.errorMessage == null) applyImportedConfiguration()
+                    if (result.errorMessage == null) applyImportedConfiguration()
                     pendingBackupManager = null
                 }
             }

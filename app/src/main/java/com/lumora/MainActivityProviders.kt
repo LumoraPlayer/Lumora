@@ -611,21 +611,35 @@ internal fun MainActivity.isCatalogStale(): Boolean {
  *  looks like it did nothing - which is exactly how "the export makes a file but the import
  *  loads nothing" reads from the couch. */
 internal fun MainActivity.applyImportedConfiguration() {
+    // Every step below is a refresh of live UI from data the restore already wrote, not part
+    // of the restore itself. None of them may take the app down: a failure here used to escape
+    // the import coroutine (which only guards the file work), so a successful restore could
+    // crash the app the moment it tried to show its result - reported as "import crashes".
+    // The restored data is on disk either way, so the worst case is a stale screen until the
+    // next launch.
+    fun step(what: String, block: () -> Unit) {
+        runCatching(block).onFailure {
+            android.util.Log.w(
+                "BackupRestore",
+                "post-import refresh '$what' failed: ${it.javaClass.simpleName}: ${it.message}"
+            )
+        }
+    }
     // A restored UI language otherwise waits for the next launch to show (onCreate applies it
     // there) and the import is supposed to be visible without a restart. AppCompatDelegate
     // no-ops when the language did not change, so an ordinary import does not recreate anything.
-    applyUiLanguageOverride(uiLanguageCode())
+    step("ui language") { applyUiLanguageOverride(uiLanguageCode()) }
     // Restored share entries may carry different addresses or credentials under ids that a
     // live SMB session was already built from - drop every session so the next listing or
     // play reconnects with the imported values.
-    com.lumora.shares.SmbSessions.closeAll()
-    refreshIptvProviderList.invoke()
+    step("smb sessions") { com.lumora.shares.SmbSessions.closeAll() }
+    step("provider list") { refreshIptvProviderList.invoke() }
     // The Streaming sites pane's settings live in the scraper side's own prefs file: re-render
     // the open pane from the imported values, and point the DNS resolver - which caches its
     // built DoH client - at whatever DoH the restore left behind.
-    refreshScraperSettings.invoke()
-    DnsResolver.setDnsUrl(UserPreferences.dohProviderUrl)
-    loadAllConfiguredProviders(forceRefresh = true)
+    step("streaming sites pane") { refreshScraperSettings.invoke() }
+    step("dns resolver") { DnsResolver.setDnsUrl(UserPreferences.dohProviderUrl) }
+    step("catalog reload") { loadAllConfiguredProviders(forceRefresh = true) }
 }
 
 /** The one place that loads whatever's configured+enabled across every IPTV provider
