@@ -36,8 +36,8 @@ android {
         applicationId = "com.lumora"
         minSdk = 25
         targetSdk = 36
-        versionCode = 57
-        versionName = "5.7"
+        versionCode = 58
+        versionName = "5.8"
 
         ksp {
             arg("room.schemaLocation", "$projectDir/schemas")
