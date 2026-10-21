@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * The day's board: every configured sport's fixtures, merged, deduplicated, in kick-off order.
@@ -65,6 +66,18 @@ object SportsRepository {
      *  paints from cache, and tomorrow it fetches again. */
     private const val BUDGET_DETAIL = "daily request allowance reached"
 
+    /**
+     * How long a fixtures feed is given to answer.
+     *
+     * Deliberately far below the app's own read timeout: these are small JSON documents, and
+     * the board is painted only once every sport has answered. A feed that has not said
+     * anything in ten seconds is not going to say anything at all, and the tab's "Loading
+     * today's games" is the app's own doing while it waits.
+     */
+    private const val FEED_CALL_TIMEOUT_MS = 12_000L
+    private const val FEED_CONNECT_TIMEOUT_MS = 8_000L
+    private const val FEED_READ_TIMEOUT_MS = 12_000L
+
     /** Board for [nowMillis]'s local day, from cache when it is fresh enough. */
     suspend fun board(context: Context, nowMillis: Long = System.currentTimeMillis(), forceRefresh: Boolean = false): SportsDayBoard {
         val day = SportsTime.localDayKey(nowMillis)
@@ -116,7 +129,18 @@ object SportsRepository {
     private class Fetched(val fixtures: List<SportsFixture>, val statuses: List<SportsProviderStatus>)
 
     private suspend fun fetch(context: Context, sports: List<Sport>, nowMillis: Long): Fetched = coroutineScope {
-        val client = BaseApplication.instance.okHttpClient
+        // The feeds get their own client, with their own timeouts. The app-wide client allows
+        // a minute of read timeout, which is right for a video stream and far too long for a
+        // fixtures feed: the board waits for every sport before it paints, so a feed that
+        // stops answering (a host that hangs, a network that blackholes it) held the whole
+        // tab on "Loading today's games" for a minute per date - two dates, two minutes -
+        // while the other feeds' games were already in hand. A feed that has not answered in
+        // a few seconds is not going to.
+        val client = BaseApplication.instance.okHttpClient.newBuilder()
+            .callTimeout(FEED_CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .connectTimeout(FEED_CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .readTimeout(FEED_READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .build()
         val dates = SportsTime.feedDates(nowMillis)
         val apiSports = ApiSportsClient(client)
         val sportApi = SportApiClient(client)
@@ -183,18 +207,35 @@ object SportsRepository {
             val collected = mutableListOf<SportsFixture>()
             var anyOk = false
             var fatal = false
+            // Spent before the request, not after: a request that fails on the network
+            // still counts against the provider's allowance, and a budget that only
+            // counted successes would happily spend a whole day's quota on retries.
+            //
+            // Spent for every date up front, so the requests below can go out together. A
+            // date the allowance cannot cover is dropped and the sport still shows what it
+            // did get - the status line says why the rest is missing.
+            val affordable = mutableListOf<String>()
+            var budgetSpent = false
             for (date in dates) {
-                // Spent before the request, not after: a request that fails on the network
-                // still counts against the provider's allowance, and a budget that only
-                // counted successes would happily spend a whole day's quota on retries.
-                if (!budget.trySpend(name, dailyLimit)) {
-                    Log.w(TAG, "$name daily allowance spent ($dailyLimit); not fetching $sport")
-                    return ProviderMerge(
-                        collected,
-                        SportsProviderStatus(name, sport, ok = false, detail = BUDGET_DETAIL)
-                    )
-                }
-                val result = withContext(Dispatchers.IO) { fetchDate(key, date) }
+                if (budget.trySpend(name, dailyLimit)) affordable += date else budgetSpent = true
+            }
+            if (affordable.isEmpty()) {
+                Log.w(TAG, "$name daily allowance spent ($dailyLimit); not fetching $sport")
+                return ProviderMerge(
+                    collected,
+                    SportsProviderStatus(name, sport, ok = false, detail = BUDGET_DETAIL)
+                )
+            }
+            // The dates are independent of each other, so they are asked for at once. Near the
+            // day boundary there are two of them, and a feed that is down then costs one
+            // timeout for the sport instead of one per date - the board waits for every sport,
+            // so a host that hangs used to double the time the tab sat on its spinner.
+            val results = coroutineScope {
+                affordable.map { date ->
+                    async(Dispatchers.IO) { fetchDate(key, date) }
+                }.awaitAll()
+            }
+            for (result in results) {
                 if (result.ok) {
                     anyOk = true
                     collected += result.fixtures
@@ -202,9 +243,16 @@ object SportsRepository {
                     lastDetail = result.detail
                     if (result.fatal) {
                         fatal = true
-                        break
                     }
                 }
+            }
+            // A date the allowance could not cover: the sport is still on the board with
+            // what it did get, and the board says why the rest is not there.
+            if (budgetSpent) {
+                return ProviderMerge(
+                    collected,
+                    SportsProviderStatus(name, sport, ok = anyOk, detail = BUDGET_DETAIL)
+                )
             }
             if (anyOk) return ProviderMerge(collected)
             // Not answerable and not fatal: a network blip. Try the next key, and if that was
