@@ -8,6 +8,9 @@
 - **A show spelled differently by the tracker and the panel still lands on the right episode.** A watched mark is keyed by the show's title, so a mark from Trakt ("SAS Rogue Heroes") only reached an episode a panel spells differently ("SAS: Rogue Heroes") by luck - and when it missed, the Up Next row offered episode one instead of the one after the last thing watched. The pulled marks are now also written under the catalogue's own spelling of the show, matched by TMDB id where the panel carries one and by title where it does not. Additive only: nothing is ever un-marked by it, and the mark under the tracker's spelling stays so an un-tick still clears it.
 - **Simkl feeds Up Next rather than Continue Watching, by design.** Simkl's API has no account-wide "paused" list - a scrobble's stop only records a watched mark - so there is no resume point to fetch from it. Its watched history already answers "what comes next", which is what the Up Next row is for. The Trakt pane's toggle is now **Sync watch history and Continue Watching**, since it governs both.
 
+### Up Next
+- **A show taken off Up Next leaves Trakt's Up Next as well.** The removal used to be local only, so a show dropped from the row here was still the first thing trakt.tv and every other Trakt client offered - which read as the removal having been ignored. Trakt's own *drop* is the same idea (off Up Next, Progress and Calendars, watched history untouched), so removing a tile now drops the show there too, matched by TMDB id and only while signed in - independent of the sync toggles, because a removal is an instruction rather than a report. Restore removed shows undrops them again. A show that cannot be matched to a TMDB id, or a Trakt account that refuses the call, still comes off the row locally: the local removal lands first and never waits on the network. Watching the show again undrops it on Trakt by itself, and Trakt's settings page can always put it back.
+
 ## 5.8
 
 ### Fixes

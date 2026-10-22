@@ -1343,6 +1343,24 @@ internal fun upNextSeriesId(item: Channel): String =
 internal fun MainActivity.getHiddenUpNextSeries(): MutableSet<String> =
     prefs.getStringSet(PREF_UP_NEXT_HIDDEN, emptySet())?.toMutableSet() ?: mutableSetOf()
 
+/** TMDB ids of the shows this app has dropped on Trakt - see [PREF_UP_NEXT_DROPPED_TRAKT]. */
+internal fun MainActivity.getUpNextDroppedOnTrakt(): Set<Int> =
+    prefs.getStringSet(PREF_UP_NEXT_DROPPED_TRAKT, emptySet())
+        ?.mapNotNull { it.toIntOrNull() }?.toSet() ?: emptySet()
+
+internal fun MainActivity.rememberUpNextDroppedOnTrakt(tmdbId: Int) {
+    prefs.edit()
+        .putStringSet(
+            PREF_UP_NEXT_DROPPED_TRAKT,
+            (getUpNextDroppedOnTrakt() + tmdbId).map(Int::toString).toSet()
+        )
+        .apply()
+}
+
+internal fun MainActivity.clearUpNextDroppedOnTrakt() {
+    prefs.edit().remove(PREF_UP_NEXT_DROPPED_TRAKT).apply()
+}
+
 /**
  * Takes one show off Up Next for good.
  *
@@ -1351,9 +1369,13 @@ internal fun MainActivity.getHiddenUpNextSeries(): MutableSet<String> =
  * parent series id, and every source the row is built from is filtered through it.
  *
  * Deliberately not a watched mark: marking the episode watched would just promote the one after
- * it, which is the opposite of what "take this off the row" means. Nothing is reported to
- * Jellyfin, Plex or Trakt either - none of them model "don't suggest this to me" in a way the
- * app can write, and asserting watched state to make a row shorter would corrupt real history.
+ * it, which is the opposite of what "take this off the row" means. Jellyfin and Plex have no
+ * list this could be written to, so nothing is reported to them.
+ *
+ * Trakt does have one - its *drop* list, which is exactly "off Up Next, history intact" - so the
+ * removal is mirrored there through [dropOnTrakt]. Without that the show stayed on trakt.tv's
+ * Up Next (and every other Trakt client's) while gone here, which read as the removal being
+ * ignored. Locally the refusal lands first, so the row responds even if the report fails.
  */
 internal fun MainActivity.removeFromUpNext(item: Channel) {
     val seriesId = upNextSeriesId(item)
@@ -1364,6 +1386,7 @@ internal fun MainActivity.removeFromUpNext(item: Channel) {
     // The memo is what buildUpNextSeriesTiles serves from; leaving the tile in it costs a
     // pointless resolve on every rebuild even though the filter now drops it.
     upNextTiles.remove(seriesId)
+    dropOnTrakt(item)
     refreshHomeShelvesIfShowing()
     refreshSeriesShelvesIfShowing()
     if (showingHome || activeTab != 1) return
@@ -1387,11 +1410,15 @@ internal fun MainActivity.removeFromUpNext(item: Channel) {
     }
 }
 
-/** Puts every refused show back. The only way back from [removeFromUpNext], which is otherwise
- *  permanent - offered on the sidebar row's own menu, where the row is. */
+/** Puts every refused show back, including the ones dropped on Trakt on the row's behalf - the
+ *  only way back from [removeFromUpNext], which is otherwise permanent. Offered on the sidebar
+ *  row's own menu, where the row is. */
 internal fun MainActivity.restoreRemovedUpNext() {
     if (getHiddenUpNextSeries().isEmpty()) return
     prefs.edit().remove(PREF_UP_NEXT_HIDDEN).apply()
+    // Read before undropOnTrakt clears the set: these ids are the only handle Trakt's drop list
+    // has, and undropping is what keeps the row from staying empty on every other Trakt client.
+    undropOnTrakt(getUpNextDroppedOnTrakt())
     // Trails for the restored shows were never resolved while they were hidden.
     clearUpNextMemo()
     refreshHomeShelvesIfShowing()

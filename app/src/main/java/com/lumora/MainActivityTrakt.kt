@@ -253,6 +253,64 @@ internal fun MainActivity.traktRemovePlayback(items: List<Channel>) {
     }
 }
 
+// ── Up Next ─────────────────────────────────────
+
+/**
+ * Mirrors an Up Next removal onto Trakt, as a **drop**.
+ *
+ * Trakt keeps an Up Next of its own, worked out from the same watched history this app pulls
+ * from (and, for marks made here, pushes to) - so a show taken off this row locally came
+ * straight back on trakt.tv and on every other Trakt client, the one place the removal was
+ * still ignored. Dropping is Trakt's exact counterpart: the show leaves its Up Next, Progress
+ * and Calendars while the history that put it there stays untouched. Unwatched-marking would
+ * corrupt real history, and removing the last watched episode would promote the one before it.
+ *
+ * Gated on being signed in, not on the watched-sync toggle, for the same reason the playback
+ * delete is: a removal is an explicit instruction, and entries can predate a toggle being
+ * switched off. Best effort and silent, like the rest of the Trakt path - a show that cannot be
+ * resolved to a TMDB id just stays a local removal.
+ *
+ * The show's TMDB id is recorded so [undropOnTrakt] can put it back: the local hidden set is
+ * keyed by provider-scoped series ids, which Trakt has never heard of.
+ */
+internal fun MainActivity.dropOnTrakt(item: Channel) {
+    if (!isTraktSignedIn()) return
+    if (item.mediaType != MediaType.SERIES) return
+    scope.launch {
+        val target = traktTargetFor(item) ?: return@launch
+        val token = traktAccessToken() ?: return@launch
+        val tmdbId = target.tmdbId
+        withContext(Dispatchers.IO) {
+            val dropped = runCatching { traktClient.setDropped(token, tmdbId, dropped = true) }
+                .getOrDefault(false)
+            if (dropped) rememberUpNextDroppedOnTrakt(tmdbId)
+        }
+    }
+}
+
+/**
+ * Puts back every show this app dropped on Trakt, to follow [restoreRemovedUpNext].
+ *
+ * The ids are the ones [dropOnTrakt] recorded, and they are cleared first whether or not the
+ * calls land: the local restore is the whole of what the user asked for, and a drop left behind
+ * on Trakt is visible and reversible in Trakt's own settings, while a pref that retries a dead
+ * id forever is not. Bounded by the number of shows the row had, so it is one small request
+ * each rather than anything worth batching.
+ */
+internal fun MainActivity.undropOnTrakt(ids: Set<Int>) {
+    if (ids.isEmpty()) return
+    clearUpNextDroppedOnTrakt()
+    if (!isTraktSignedIn()) return
+    scope.launch {
+        val token = traktAccessToken() ?: return@launch
+        withContext(Dispatchers.IO) {
+            for (id in ids) {
+                runCatching { traktClient.setDropped(token, id, dropped = false) }
+            }
+        }
+    }
+}
+
 // ── Watched sync ────────────────────────────────
 
 /**

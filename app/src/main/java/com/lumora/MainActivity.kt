@@ -89,6 +89,11 @@ internal const val PREF_ALPHABETICAL_LIVE_CATEGORIES = "alphabetical_live_catego
  *  way to say "not this one" is to remember the refusal - a removal that lived in memory would
  *  be undone by the next catalog load recomputing the same trail. */
 internal const val PREF_UP_NEXT_HIDDEN = "up_next_hidden_series"
+/** The shows (by TMDB id) this app has dropped on Trakt on behalf of a local Up Next removal.
+ *  Trakt's ids are the only handle its own drop list accepts, and the local refusal above is
+ *  keyed by provider ids it has never heard of - so the translation is kept here for the
+ *  restore to undo. */
+internal const val PREF_UP_NEXT_DROPPED_TRAKT = "up_next_dropped_trakt"
 // Dub handling: prefer dub-flagged search results, and keep sideloaded subtitles on when a
 // stream plays back with its dubbed audio track (both default off).
 internal const val PREF_PREFER_DUB_AUDIO = "prefer_dub_audio"

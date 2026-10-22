@@ -356,6 +356,37 @@ class TraktClient(private val http: OkHttpClient) {
         code == 204 || code == 200 || code == 404
     }
 
+    // ── Dropped shows (Trakt's own Up Next) ─────
+
+    /**
+     * Drops a show, or undrops it with [dropped] = false.
+     *
+     * Trakt's *drop* is the account-side counterpart of taking a series off this app's Up Next
+     * row: the show leaves Trakt's Up Next, Progress and Calendars, and the watched history
+     * behind it stays exactly as it was. That is why it is the right call and deleting history
+     * is not - removing the last watched episode would promote the one before it rather than
+     * hide the show. Trakt undrops a show by itself the next time something in it is watched,
+     * so a later re-watch beats a refusal left over from here.
+     *
+     * `hidden_at` is omitted, which Trakt dates to now. Both directions answer 200 with
+     * added/removed counts; an id Trakt does not know lands in `not_found` and is not an error
+     * here - the outcome the caller wanted holds either way.
+     */
+    suspend fun setDropped(
+        accessToken: String,
+        tmdbShowId: Int,
+        dropped: Boolean
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (!isConfigured) return@withContext false
+        val body = JSONObject().put(
+            "shows",
+            JSONArray().put(JSONObject().put("ids", JSONObject().put("tmdb", tmdbShowId)))
+        )
+        val path = if (dropped) "$API_BASE/users/hidden/dropped" else "$API_BASE/users/hidden/dropped/remove"
+        val code = postJson(path, body, accessToken)?.first
+        code == 200 || code == 201
+    }
+
     /** One watched title pulled from Trakt: a film, or a show with the episodes seen in it. */
     data class WatchedEntry(
         val title: String,
