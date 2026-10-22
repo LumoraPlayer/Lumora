@@ -30,6 +30,13 @@ data class IptvProviderConfig(
     // playback sends the right one without needing to know which provider a channel came
     // from at that point.
     val userAgent: String? = null,
+    // Stalker device identity, for portals that bind a subscription to one specific MAG box
+    // rather than accepting any MAC. Blank means "derive it from the MAC", which is the
+    // profile every Stalker portal used before these fields existed. Portals that issue a
+    // serial number and device IDs reject a fingerprint generated from the MAC alone.
+    val stalkerSerialNumber: String? = null,
+    val stalkerDeviceId: String? = null,
+    val stalkerDeviceId2: String? = null,
     // The provider_discovery plugin (its `PLUGIN.id`) whose proposed candidate the user
     // accepted, when the entry was added from that plugin's page rather than typed in by
     // hand - e.g. "reddit.iptvscan". Null for everything hand-added. The Reddit scanner's

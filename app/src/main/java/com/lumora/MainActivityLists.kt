@@ -37,6 +37,7 @@ import com.lumora.util.rawMediaItemId
 import com.lumora.util.seriesShowKey
 import com.lumora.util.versionGroupContaining
 import com.lumora.data.remote.stalker.StalkerProvider
+import com.lumora.data.remote.stalker.stalkerIdentity
 import com.lumora.data.remote.jellyfin.JellyfinProvider
 import com.lumora.data.remote.plex.PlexProvider
 import com.lumora.data.remote.tmdb.TmdbClient
@@ -659,7 +660,7 @@ internal suspend fun MainActivity.loadSeriesContent(
                 }
         }
         stalkerConfig != null -> {
-            val stalker = StalkerProvider(BaseApplication.instance.okHttpClient)
+            val stalker = StalkerProvider(BaseApplication.instance.okHttpClient, stalkerConfig.stalkerIdentity())
             itemDetails to withContext(Dispatchers.IO) {
                 stalker.getEpisodes(stalkerProviderStub(stalkerConfig), item.id, item.categoryId)
                     .map { (label, eps) ->

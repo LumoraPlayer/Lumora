@@ -538,6 +538,13 @@ button:active{background:#1565c0}
     <button type="button" onclick="genMac()">Generate</button>
   </div>
   <div class="hint">Register this MAC on your portal, or paste one you already have.</div>
+  <label>Serial number (optional)</label>
+  <input name="stalkerSerial" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="As issued with your subscription">
+  <label>Device ID 1 (optional)</label>
+  <input name="stalkerDeviceId" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Leave blank to derive from the MAC">
+  <label>Device ID 2 (optional)</label>
+  <input name="stalkerDeviceId2" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Leave blank for the default">
+  <div class="hint">Only fill these in if your provider registered a specific box. Leave them blank to generate a device profile from the MAC.</div>
 </div>
 <div id="jellyfinFields" class="field-group ${if (presetType == "jellyfin") "active" else ""}">
   <label>Server URL</label>

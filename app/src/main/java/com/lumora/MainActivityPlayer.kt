@@ -39,6 +39,7 @@ import com.lumora.util.rawMediaItemId
 import com.lumora.util.versionGroupContaining
 import com.lumora.util.vodQualityScore
 import com.lumora.data.remote.stalker.StalkerProvider
+import com.lumora.data.remote.stalker.stalkerIdentity
 import kotlinx.coroutines.*
 import okhttp3.Request
 import java.lang.ref.WeakReference
@@ -1197,7 +1198,7 @@ internal suspend fun MainActivity.resolveStalkerPlayUrl(channel: Channel): Strin
     // A non-Stalker channel has no base64 play command - guard instead of crashing on a
     // force-unwrap. Callers already treat null as "no resolvable URL".
     val cmd = channel.stalkerCmd ?: return null
-    val stalker = StalkerProvider(BaseApplication.instance.okHttpClient)
+    val stalker = StalkerProvider(BaseApplication.instance.okHttpClient, config.stalkerIdentity())
     return withContext(Dispatchers.IO) {
         // A series episode passes its number so create_link picks the right one within the
         // season it shares a cmd with; a film passes none.

@@ -447,6 +447,11 @@ class BackupManager(private val context: Context) {
         val moviesEnabled: Boolean, val seriesEnabled: Boolean,
         val url: String?, val username: String?, val password: String?,
         val userAgent: String?,
+        // Stalker-only device fingerprint overrides. Defaulted so backups written before
+        // these fields existed still import (as "derive from the MAC").
+        val stalkerSerialNumber: String? = null,
+        val stalkerDeviceId: String? = null,
+        val stalkerDeviceId2: String? = null,
         // Which discovery plugin proposed this entry, when one did. Defaulted, so backups
         // written before the field existed import as absent rather than failing.
         val discoveredBy: String? = null,
@@ -871,6 +876,8 @@ class BackupManager(private val context: Context) {
         liveEnabled = liveEnabled, moviesEnabled = moviesEnabled,
         seriesEnabled = seriesEnabled, url = url, username = username,
         password = password, userAgent = userAgent, discoveredBy = discoveredBy,
+        stalkerSerialNumber = stalkerSerialNumber, stalkerDeviceId = stalkerDeviceId,
+        stalkerDeviceId2 = stalkerDeviceId2,
         backup = backup, maxConnections = maxConnections
     )
 
@@ -887,6 +894,8 @@ class BackupManager(private val context: Context) {
         liveEnabled = liveEnabled, moviesEnabled = moviesEnabled,
         seriesEnabled = seriesEnabled, url = url, username = username,
         password = password, userAgent = userAgent, discoveredBy = discoveredBy,
+        stalkerSerialNumber = stalkerSerialNumber, stalkerDeviceId = stalkerDeviceId,
+        stalkerDeviceId2 = stalkerDeviceId2,
         backup = backup, maxConnections = maxConnections
     )
 

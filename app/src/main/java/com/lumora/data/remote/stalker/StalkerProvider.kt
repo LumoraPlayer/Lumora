@@ -2,6 +2,7 @@
 package com.lumora.data.remote.stalker
 
 import com.lumora.model.Channel
+import com.lumora.model.IptvProviderConfig
 import com.lumora.model.MediaType
 import com.lumora.model.Provider
 import okhttp3.OkHttpClient
@@ -9,8 +10,13 @@ import okhttp3.OkHttpClient
 /**
  * High-level Stalker Portal provider integration.
  * Handles auth flow, channel/VOD/series fetching with MAC-based device registration.
+ * [identity] carries the optional serial/device-ID overrides a portal may require; blank
+ * values keep the fingerprint generated from the MAC.
  */
-class StalkerProvider(private val httpClient: OkHttpClient) {
+class StalkerProvider(
+    private val httpClient: OkHttpClient,
+    private val identity: StalkerIdentity = StalkerIdentity()
+) {
 
     private val api = StalkerApiService(httpClient)
     private var authenticated = false
@@ -19,7 +25,7 @@ class StalkerProvider(private val httpClient: OkHttpClient) {
      *  on this instance hasn't already done so. */
     private suspend fun ensureAuthenticated(serverUrl: String, mac: String): Result<Unit> {
         if (authenticated) return Result.success(Unit)
-        val auth = api.authenticate(serverUrl, mac)
+        val auth = api.authenticate(serverUrl, mac, identity)
         if (auth.isFailure) return Result.failure(auth.exceptionOrNull() ?: Exception("Auth failed"))
         if (!auth.getOrThrow().success) return Result.failure(Exception("Invalid MAC or server"))
         authenticated = true
@@ -82,7 +88,7 @@ class StalkerProvider(private val httpClient: OkHttpClient) {
     suspend fun resolvePlayUrl(provider: Provider, cmd: String, episode: Int? = null): String? {
         val serverUrl = provider.serverUrl ?: return null
         val mac = provider.userAgent ?: return null
-        if (!api.connect(serverUrl, mac)) return null
+        if (!api.connect(serverUrl, mac, identity)) return null
         return api.createLink(cmd, episode)
     }
 
@@ -93,7 +99,7 @@ class StalkerProvider(private val httpClient: OkHttpClient) {
     suspend fun getEpisodes(provider: Provider, seriesId: String, categoryId: String?): List<Pair<String, List<Channel>>> {
         val serverUrl = provider.serverUrl ?: return emptyList()
         val mac = provider.userAgent ?: return emptyList()
-        if (!api.connect(serverUrl, mac)) return emptyList()
+        if (!api.connect(serverUrl, mac, identity)) return emptyList()
         val movieId = seriesId.substringBefore(':')
         val seasons = api.getSeriesEpisodes(movieId, categoryId, mac)
             // The portal returns seasons newest-first ("Season 28" before "Season 1"). Sort by
@@ -119,3 +125,12 @@ class StalkerProvider(private val httpClient: OkHttpClient) {
         }
     }
 }
+
+/** The optional per-portal device identity stored on a Stalker config. Every field is null
+ *  for a config that never had serial/device IDs filled in, which keeps the MAC-derived
+ *  profile [StalkerApiService.generateProfile] has always built. */
+fun IptvProviderConfig.stalkerIdentity(): StalkerIdentity = StalkerIdentity(
+    serialNumber = stalkerSerialNumber,
+    deviceId = stalkerDeviceId,
+    deviceId2 = stalkerDeviceId2
+)

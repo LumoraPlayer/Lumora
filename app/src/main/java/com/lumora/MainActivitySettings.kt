@@ -6,6 +6,7 @@ import android.app.AlertDialog
 import androidx.core.content.res.ResourcesCompat
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.graphics.Typeface
 import android.view.View
@@ -23,6 +24,8 @@ import com.lumora.cache.RecentlyPlayedStore
 import com.lumora.model.Provider
 import com.lumora.model.IptvProviderConfig
 import com.lumora.data.IptvProviderStore
+import com.lumora.data.ProviderStatus
+import com.lumora.data.ProviderStatusProbe
 import com.lumora.pairing.QrPairingManager
 import com.lumora.player.PlayerManager
 import com.lumora.util.normalizeServerUrl
@@ -887,6 +890,9 @@ internal fun MainActivity.showProviderSettings() {
     val xtreamPass = dialogView.findViewById<EditText>(R.id.settingsXtreamPass)
     val stalkerUrl = dialogView.findViewById<EditText>(R.id.settingsStalkerUrl)
     val stalkerMac = dialogView.findViewById<EditText>(R.id.settingsStalkerMac)
+    val stalkerSerial = dialogView.findViewById<EditText>(R.id.settingsStalkerSerial)
+    val stalkerDeviceId = dialogView.findViewById<EditText>(R.id.settingsStalkerDeviceId)
+    val stalkerDeviceId2 = dialogView.findViewById<EditText>(R.id.settingsStalkerDeviceId2)
     val jellyfinUrl = dialogView.findViewById<EditText>(R.id.settingsJellyfinUrl)
     val jellyfinUser = dialogView.findViewById<EditText>(R.id.settingsJellyfinUser)
     val jellyfinUserLabel = dialogView.findViewById<TextView>(R.id.settingsJellyfinUserLabel)
@@ -1267,7 +1273,10 @@ internal fun MainActivity.showProviderSettings() {
                     // everywhere else (see IptvProviderConfig / loadAllConfiguredProviders).
                     IptvProviderStore.upsert(prefs, IptvProviderConfig(
                         id = IptvProviderStore.newId(), type = "stalker", name = form["name"]?.takeIf { it.isNotBlank() } ?: "QR Stalker",
-                        enabled = true, url = su, userAgent = mac
+                        enabled = true, url = su, userAgent = mac,
+                        stalkerSerialNumber = form["stalkerSerial"]?.trim()?.takeIf { it.isNotBlank() },
+                        stalkerDeviceId = form["stalkerDeviceId"]?.trim()?.takeIf { it.isNotBlank() },
+                        stalkerDeviceId2 = form["stalkerDeviceId2"]?.trim()?.takeIf { it.isNotBlank() }
                     ))
                     
                     stopQrServer()
@@ -1512,6 +1521,9 @@ internal fun MainActivity.showProviderSettings() {
     fun openIptvForm(existing: IptvProviderConfig?) {
         editingProviderId = existing?.id
         editingMediaServerId = null
+        // The form can change the address/credentials, so whatever the dot said before no
+        // longer describes the entry once this is done - ask again when the list repaints.
+        existing?.let { ProviderStatusProbe.forget(it.id) }
         addIptvProviderButton.visibility = View.GONE
         iptvListSection.visibility = View.GONE
         providerNameInput.setText(existing?.name ?: "")
@@ -1546,6 +1558,9 @@ internal fun MainActivity.showProviderSettings() {
         xtreamPass.setText(if (type == "xtream") existing?.password ?: "" else "")
         stalkerUrl.setText(if (type == "stalker") existing?.url ?: "" else "")
         stalkerMac.setText(if (type == "stalker") existing?.userAgent ?: "" else "")
+        stalkerSerial.setText(if (type == "stalker") existing?.stalkerSerialNumber ?: "" else "")
+        stalkerDeviceId.setText(if (type == "stalker") existing?.stalkerDeviceId ?: "" else "")
+        stalkerDeviceId2.setText(if (type == "stalker") existing?.stalkerDeviceId2 ?: "" else "")
         // Media-server fields are never pre-filled from an IPTV config - blanked here so the
         // form doesn't carry the last edited account's server/credentials into a new entry.
         jellyfinUrl.setText("")
@@ -1575,6 +1590,7 @@ internal fun MainActivity.showProviderSettings() {
     fun openJellyfinEditForm(existing: MediaServerConfig) {
         editingProviderId = null
         editingMediaServerId = existing.id
+        ProviderStatusProbe.forget(existing.id)
         addIptvProviderButton.visibility = View.GONE
         iptvListSection.visibility = View.GONE
         iptvFormTitle.text = getString(R.string.sett_editing_provider, existing.name)
@@ -1593,6 +1609,7 @@ internal fun MainActivity.showProviderSettings() {
     fun openShareEditForm(existing: MediaServerConfig) {
         editingProviderId = null
         editingMediaServerId = existing.id
+        ProviderStatusProbe.forget(existing.id)
         addIptvProviderButton.visibility = View.GONE
         iptvListSection.visibility = View.GONE
         iptvFormTitle.text = getString(R.string.sett_editing_provider, existing.name)
@@ -1618,6 +1635,7 @@ internal fun MainActivity.showProviderSettings() {
     fun openPlexEditForm(existing: MediaServerConfig) {
         editingProviderId = null
         editingMediaServerId = existing.id
+        ProviderStatusProbe.forget(existing.id)
         addIptvProviderButton.visibility = View.GONE
         iptvListSection.visibility = View.GONE
         iptvFormTitle.text = getString(R.string.sett_editing_plex)
@@ -1626,6 +1644,52 @@ internal fun MainActivity.showProviderSettings() {
         selectType("plex")
         iptvFormSection.visibility = View.VISIBLE
         settingsFooter.visibility = View.VISIBLE
+    }
+
+    /** Paints one state onto a row's status dot: colour plus the same state for screen
+     *  readers (the dot itself carries no text). */
+    fun applyProviderStatusDot(dot: View, status: ProviderStatus) {
+        val color = when (status) {
+            ProviderStatus.ONLINE -> R.color.success_green
+            ProviderStatus.OFFLINE -> R.color.live_red
+            ProviderStatus.CHECKING -> R.color.warning_amber
+            ProviderStatus.DISABLED -> R.color.text_tertiary
+        }
+        val label = when (status) {
+            ProviderStatus.ONLINE -> R.string.provider_status_online
+            ProviderStatus.OFFLINE -> R.string.provider_status_offline
+            ProviderStatus.CHECKING -> R.string.provider_status_checking
+            ProviderStatus.DISABLED -> R.string.provider_status_disabled
+        }
+        dot.backgroundTintList = ColorStateList.valueOf(getColor(color))
+        dot.contentDescription = getString(label)
+    }
+
+    /** Paints [row]'s dot from a fresh verdict, or starts a probe when there isn't one.
+     *  Disabled rows stay grey and are never contacted. Each row probes in its own coroutine,
+     *  so one slow provider cannot hold up the dots beside it; ProviderStatusProbe caches the
+     *  result so a list rebuild does not re-ask every server. */
+    fun bindProviderStatus(
+        row: View,
+        key: String,
+        enabled: Boolean,
+        probe: suspend (okhttp3.OkHttpClient) -> Boolean
+    ) {
+        val dot = row.findViewById<View>(R.id.rowStatusDot)
+        if (!enabled) {
+            applyProviderStatusDot(dot, ProviderStatus.DISABLED)
+            return
+        }
+        val cached = ProviderStatusProbe.cached(key)
+        if (cached != null) {
+            applyProviderStatusDot(dot, cached)
+            return
+        }
+        applyProviderStatusDot(dot, ProviderStatus.CHECKING)
+        scope.launch {
+            val status = ProviderStatusProbe.check(key, probe)
+            applyProviderStatusDot(dot, status)
+        }
     }
 
     fun renderIptvProviderList() {
@@ -1656,6 +1720,8 @@ internal fun MainActivity.showProviderSettings() {
         run {
             val row = layoutInflater.inflate(R.layout.item_iptv_provider_row, iptvProviderListContainer, false)
             row.findViewById<View>(R.id.rowEnabled).visibility = View.GONE
+            // Local files is a browse surface, not a provider with a server to be online.
+            row.findViewById<View>(R.id.rowStatusDot).visibility = View.GONE
             listOf(R.id.rowTvBox, R.id.rowMoviesBox, R.id.rowSeriesBox).forEach {
                 row.findViewById<View>(it).visibility = View.GONE
             }
@@ -1681,6 +1747,9 @@ internal fun MainActivity.showProviderSettings() {
             val row = layoutInflater.inflate(R.layout.item_iptv_provider_row, iptvProviderListContainer, false)
             val enabledBox = row.findViewById<CheckBox>(R.id.rowEnabled)
             enabledBox.isChecked = cfg.enabled
+            bindProviderStatus(row, cfg.id, cfg.enabled) { client ->
+                ProviderStatusProbe.probeIptv(cfg, client)
+            }
             // The checkbox is not clickable/focusable itself - clicking the row is what
             // toggles it, which is the only way a D-pad can reach it at all.
             row.setOnClickListener {
@@ -1688,6 +1757,12 @@ internal fun MainActivity.showProviderSettings() {
                 enabledBox.isChecked = checked
                 IptvProviderStore.setEnabled(prefs, cfg.id, checked)
                 applyProviderToggle(checked) { it.sourceProviderId == cfg.id }
+                // A disabled row must not keep the green it had while it was in use, and a
+                // re-enabled one deserves a fresh answer rather than the stale cached one.
+                ProviderStatusProbe.forget(cfg.id)
+                bindProviderStatus(row, cfg.id, checked) { client ->
+                    ProviderStatusProbe.probeIptv(cfg, client)
+                }
             }
             // Per-content-type toggles: TV / Movies / Series, one checkbox each. Persist
             // before reloading - the reload must see the new flags, and a stale cache
@@ -1742,6 +1817,9 @@ internal fun MainActivity.showProviderSettings() {
             val row = layoutInflater.inflate(R.layout.item_iptv_provider_row, iptvProviderListContainer, false)
             val enabledBox = row.findViewById<CheckBox>(R.id.rowEnabled)
             enabledBox.isChecked = server.enabled
+            bindProviderStatus(row, server.id, server.enabled) { client ->
+                ProviderStatusProbe.probeServer(server, client)
+            }
             row.setOnClickListener {
                 val checked = !enabledBox.isChecked
                 enabledBox.isChecked = checked
@@ -1750,6 +1828,10 @@ internal fun MainActivity.showProviderSettings() {
                 // items from a cache written before media servers became a list (no source id
                 // on them) are dropped too instead of lingering until the next refresh.
                 applyProviderToggle(checked) { mediaServerOwner(it, servers)?.id == server.id }
+                ProviderStatusProbe.forget(server.id)
+                bindProviderStatus(row, server.id, checked) { client ->
+                    ProviderStatusProbe.probeServer(server, client)
+                }
             }
             fun bindServerBox(box: CheckBox, checked: Boolean, write: (Boolean) -> Unit) {
                 box.isChecked = checked
@@ -2600,6 +2682,9 @@ internal fun MainActivity.showProviderSettings() {
                     liveEnabled = prevConfig?.liveEnabled ?: true,
                     moviesEnabled = prevConfig?.moviesEnabled ?: true, seriesEnabled = prevConfig?.seriesEnabled ?: true,
                     url = url, userAgent = stalkerMac.text.toString().trim(),
+                    stalkerSerialNumber = stalkerSerial.text.toString().trim().ifBlank { null },
+                    stalkerDeviceId = stalkerDeviceId.text.toString().trim().ifBlank { null },
+                    stalkerDeviceId2 = stalkerDeviceId2.text.toString().trim().ifBlank { null },
                     backup = wantBackup,
                     maxConnections = maxConnInput.text.toString().trim().toIntOrNull()?.coerceIn(0, 20) ?: 0
                 ))

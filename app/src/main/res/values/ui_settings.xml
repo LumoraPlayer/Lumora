@@ -28,6 +28,14 @@
     <!-- MainActivitySettings.kt - provider setup -->
     <string name="sett_enter_server_url_first">Enter a server URL first</string>
     <string name="sett_stalker_portal">Stalker Portal</string>
+    <!-- Stalker device-identity overrides: only needed for portals bound to one MAG box. -->
+    <string name="stalker_serial_number">Serial number</string>
+    <string name="stalker_serial_number_hint">Optional — as issued with your subscription</string>
+    <string name="stalker_device_id">Device ID 1</string>
+    <string name="stalker_device_id_hint">Optional — leave blank to derive it from the MAC</string>
+    <string name="stalker_device_id2">Device ID 2</string>
+    <string name="stalker_device_id2_hint">Optional — leave blank for the default</string>
+    <string name="stalker_device_identity_hint">Only fill these in if your provider registered a specific box. Leave them blank to generate a device profile from the MAC.</string>
     <string name="sett_type_summary">Type: %1$s</string>
     <string name="sett_editing_provider">Editing %1$s</string>
     <string name="sett_editing_jellyfin">Editing Jellyfin</string>

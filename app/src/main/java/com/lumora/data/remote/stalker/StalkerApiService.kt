@@ -20,6 +20,18 @@ import java.net.URLEncoder
 import java.security.MessageDigest
 
 /**
+ * The device identity a Stalker portal may bind a subscription to. Every field is optional:
+ * blank keeps the value [StalkerApiService.generateProfile] has always derived from the MAC.
+ * Portals that issue a serial number and device IDs for a specific box reject a profile
+ * generated from the MAC alone.
+ */
+data class StalkerIdentity(
+    val serialNumber: String? = null,
+    val deviceId: String? = null,
+    val deviceId2: String? = null
+)
+
+/**
  * Stalker Portal / Ministra API client.
  * Handles the custom auth flow (MAC-based with token handshake),
  * channel/EPG/VOD fetching for Stalker middleware providers.
@@ -93,12 +105,18 @@ class StalkerApiService(private val client: OkHttpClient) {
     )
 
     /**
-     * Generate a Stalker device profile from a MAC address.
+     * Generate a Stalker device profile from a MAC address, using [identity]'s values where
+     * the user supplied them. A missing serial number keeps the all-zero default, a missing
+     * device ID is still derived from the MAC, and a missing device ID 2 keeps the legacy
+     * constant - so an untouched config produces exactly the fingerprint it always did.
      */
-    fun generateProfile(mac: String, serialNumber: String = "000000000000"): StalkerProfile {
+    fun generateProfile(mac: String, identity: StalkerIdentity = StalkerIdentity()): StalkerProfile {
         val cleanMac = mac.replace(":", "").replace("-", "").uppercase()
-        val deviceId = cleanMac + serialNumber.take(9)
-        val deviceId2 = "0123456789ABCDEF0123456789ABCDEF"
+        val serialNumber = identity.serialNumber.orEmpty().trim().ifBlank { DEFAULT_SERIAL_NUMBER }
+        val deviceId = identity.deviceId.orEmpty().trim().ifBlank { cleanMac + serialNumber.take(9) }
+        val deviceId2 = identity.deviceId2.orEmpty().trim().ifBlank { DEFAULT_DEVICE_ID2 }
+        // Measured over the values actually sent: a supplied serial/device ID 2 would
+        // otherwise sign a different profile than the one in the request.
         val signature = md5(cleanMac + serialNumber + deviceId2)
         return StalkerProfile(
             serialNumber = serialNumber,
@@ -113,10 +131,15 @@ class StalkerApiService(private val client: OkHttpClient) {
      * Authenticate with a Stalker portal.
      * Flow: server → handshake → get profile → get token → get channels
      */
-    suspend fun authenticate(serverUrl: String, mac: String, timezone: String = "Europe/London"): Result<AuthResult> {
+    suspend fun authenticate(
+        serverUrl: String,
+        mac: String,
+        identity: StalkerIdentity = StalkerIdentity(),
+        timezone: String = "Europe/London"
+    ): Result<AuthResult> {
         return try {
             val base = serverUrl.trimEnd('/')
-            val profile = generateProfile(mac)
+            val profile = generateProfile(mac, identity)
             serverBase = base
             // Fresh session - a reused instance must not send a stale Bearer during the
             // unauthenticated handshake or carry a previous portal's cookie.
@@ -330,8 +353,8 @@ class StalkerApiService(private val client: OkHttpClient) {
 
     /** Authenticates and returns true if the portal accepted the MAC - lets a caller resolve
      *  a play URL (createLink) without the full loadContent() catalogue fetch. */
-    suspend fun connect(serverUrl: String, mac: String): Boolean =
-        authenticate(serverUrl, mac).getOrNull()?.success == true
+    suspend fun connect(serverUrl: String, mac: String, identity: StalkerIdentity = StalkerIdentity()): Boolean =
+        authenticate(serverUrl, mac, identity).getOrNull()?.success == true
 
     /** Episode list for a Stalker series. Stalker returns a series' seasons/episodes through
      *  the same get_ordered_list, filtered to the series' [movieId]; each returned row's
@@ -800,6 +823,11 @@ class StalkerApiService(private val client: OkHttpClient) {
         // ~700 each - enough to browse immediately, without the multi-minute upfront crawl a
         // full 17k-item catalogue would need over a one-page-at-a-time API.
         private const val TAG = "Stalker"
+        /** Profile values used when a config supplies no serial number / device ID 2. Kept
+         *  byte-for-byte what the app sent before these became user-editable, so existing
+         *  portals see no change. */
+        private const val DEFAULT_SERIAL_NUMBER = "000000000000"
+        private const val DEFAULT_DEVICE_ID2 = "0123456789ABCDEF0123456789ABCDEF"
         /** Minimum spacing between two requests to one portal - see [pacedRequest]. */
         private const val MIN_REQUEST_GAP_MS = 250L
         private const val MAX_ATTEMPTS = 3

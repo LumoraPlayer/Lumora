@@ -156,6 +156,9 @@ object IptvProviderStore {
         c.username?.let { put("username", it) }
         c.password?.let { put("password", it) }
         c.userAgent?.let { put("userAgent", it) }
+        c.stalkerSerialNumber?.let { put("stalkerSerialNumber", it) }
+        c.stalkerDeviceId?.let { put("stalkerDeviceId", it) }
+        c.stalkerDeviceId2?.let { put("stalkerDeviceId2", it) }
         c.discoveredBy?.let { put("discoveredBy", it) }
         if (c.maxConnections > 0) put("maxConnections", c.maxConnections)
     }
@@ -182,6 +185,9 @@ object IptvProviderStore {
             username = o.optString("username").takeIf { it.isNotBlank() },
             password = o.optString("password").takeIf { it.isNotBlank() },
             userAgent = o.optString("userAgent").takeIf { it.isNotBlank() },
+            stalkerSerialNumber = o.optString("stalkerSerialNumber").takeIf { it.isNotBlank() },
+            stalkerDeviceId = o.optString("stalkerDeviceId").takeIf { it.isNotBlank() },
+            stalkerDeviceId2 = o.optString("stalkerDeviceId2").takeIf { it.isNotBlank() },
             discoveredBy = o.optString("discoveredBy").takeIf { it.isNotBlank() },
             maxConnections = o.optInt("maxConnections", 0)
         )

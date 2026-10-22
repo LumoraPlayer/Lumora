@@ -25,6 +25,7 @@ import com.lumora.parser.XtreamClient
 import com.lumora.util.normalizeServerUrl
 import com.lumora.util.isLocalFileUrl
 import com.lumora.data.remote.stalker.StalkerProvider
+import com.lumora.data.remote.stalker.stalkerIdentity
 import com.lumora.diagnostics.SessionLog
 import com.lumora.plugin.js.JsPluginContract
 import com.lumora.plugin.js.PluginScriptManager
@@ -633,7 +634,10 @@ internal fun MainActivity.applyImportedConfiguration() {
     // live SMB session was already built from - drop every session so the next listing or
     // play reconnects with the imported values.
     step("smb sessions") { com.lumora.shares.SmbSessions.closeAll() }
-    step("provider list") { refreshIptvProviderList.invoke() }
+    step("provider list") {
+        com.lumora.data.ProviderStatusProbe.clear()
+        refreshIptvProviderList.invoke()
+    }
     // The Streaming sites pane's settings live in the scraper side's own prefs file: re-render
     // the open pane from the imported values, and point the DNS resolver - which caches its
     // built DoH client - at whatever DoH the restore left behind.
@@ -922,7 +926,7 @@ internal suspend fun MainActivity.fetchStalkerChannels(config: IptvProviderConfi
             name = config.name, type = ProviderType.M3U,
             serverUrl = config.url?.let { normalizeServerUrl(it) }, userAgent = mac
         )
-        val stalker = StalkerProvider(BaseApplication.instance.okHttpClient)
+        val stalker = StalkerProvider(BaseApplication.instance.okHttpClient, config.stalkerIdentity())
         // sourceProviderId ties each item back to this portal config, so the play step
         // can re-auth against the right one to resolve a Stalker VOD create_link.
         fun tag(channels: List<Channel>) = channels.map { it.copy(streamUserAgent = mac, sourceProviderId = config.id) }

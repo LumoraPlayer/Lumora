@@ -1009,6 +1009,63 @@
                             android:padding="@dimen/settings_gap"
                             android:textColor="@color/text_primary"
                             android:textSize="@dimen/settings_text_body" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/settings_gap"
+                            android:text="@string/stalker_device_identity_hint"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="@dimen/settings_text_caption"
+                            android:fontFamily="@font/inter_regular" />
+
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/stalker_serial_number" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
+                        <EditText
+                            android:id="@+id/settingsStalkerSerial"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="@dimen/settings_row_padding_vertical"
+                            android:layout_marginTop="@dimen/settings_gap_xs"
+                            android:background="@drawable/bg_input"
+                            android:textColorHint="@color/text_tertiary"
+                            android:hint="@string/stalker_serial_number_hint"
+                            android:importantForAutofill="no"
+                            android:inputType="text"
+                            android:padding="@dimen/settings_gap"
+                            android:textColor="@color/text_primary"
+                            android:textSize="@dimen/settings_text_body" />
+
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/stalker_device_id" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
+                        <EditText
+                            android:id="@+id/settingsStalkerDeviceId"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="@dimen/settings_row_padding_vertical"
+                            android:layout_marginTop="@dimen/settings_gap_xs"
+                            android:background="@drawable/bg_input"
+                            android:textColorHint="@color/text_tertiary"
+                            android:hint="@string/stalker_device_id_hint"
+                            android:importantForAutofill="no"
+                            android:inputType="text"
+                            android:padding="@dimen/settings_gap"
+                            android:textColor="@color/text_primary"
+                            android:textSize="@dimen/settings_text_body" />
+
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/stalker_device_id2" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
+                        <EditText
+                            android:id="@+id/settingsStalkerDeviceId2"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="@dimen/settings_row_padding_vertical"
+                            android:layout_marginTop="@dimen/settings_gap_xs"
+                            android:background="@drawable/bg_input"
+                            android:textColorHint="@color/text_tertiary"
+                            android:hint="@string/stalker_device_id2_hint"
+                            android:importantForAutofill="no"
+                            android:inputType="text"
+                            android:padding="@dimen/settings_gap"
+                            android:textColor="@color/text_primary"
+                            android:textSize="@dimen/settings_text_body" />
                     </LinearLayout>
 
                     <!-- Jellyfin / Silo fields - one group for both Jellyfin-protocol types.

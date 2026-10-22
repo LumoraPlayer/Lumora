@@ -330,6 +330,11 @@
     <string name="provider_content_tv">TV</string>
     <string name="provider_content_movies">Movies</string>
     <string name="provider_content_series">Series</string>
+    <!-- Reachability indicator beside the row's name; used as the dot's contentDescription. -->
+    <string name="provider_status_online">Online</string>
+    <string name="provider_status_offline">Offline</string>
+    <string name="provider_status_checking">Checking status</string>
+    <string name="provider_status_disabled">Disabled</string>
 
     <!-- item_plugin_row.xml -->
     <string name="run">Run</string>

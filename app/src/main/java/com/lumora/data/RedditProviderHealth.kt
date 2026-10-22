@@ -2,6 +2,7 @@
 package com.lumora.data
 
 import com.lumora.data.remote.stalker.StalkerApiService
+import com.lumora.data.remote.stalker.stalkerIdentity
 import com.lumora.model.IptvProviderConfig
 import com.lumora.model.Provider
 import com.lumora.model.ProviderType
@@ -115,7 +116,7 @@ object RedditProviderHealth {
      *  [IptvProviderConfig.userAgent]; without one the entry could never have loaded. */
     private suspend fun probeStalker(config: IptvProviderConfig, url: String, client: OkHttpClient): Boolean {
         val mac = config.userAgent?.trim().takeUnless { it.isNullOrBlank() } ?: return false
-        val auth = StalkerApiService(client).authenticate(normalizeServerUrl(url), mac).getOrNull()
+        val auth = StalkerApiService(client).authenticate(normalizeServerUrl(url), mac, config.stalkerIdentity()).getOrNull()
         val valid = auth?.success == true
         if (!valid) PluginLog.i(TAG, "stalker probe failed for ${config.name}: no authenticated session")
         return valid

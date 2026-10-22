@@ -35,15 +35,35 @@
         android:layout_weight="1"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/rowName"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="@color/text_primary"
-            android:textSize="@dimen/settings_text_body"
-            android:fontFamily="@font/inter_medium" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- Reachability dot: green when the provider answers, red when it does not,
+                 amber while the check is running and grey while the row is disabled.
+                 Purely decorative; its contentDescription carries the same state for
+                 screen readers. Set in renderIptvProviderList(). -->
+            <View
+                android:id="@+id/rowStatusDot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginEnd="@dimen/settings_gap_s"
+                android:background="@drawable/bg_status_dot"
+                android:importantForAccessibility="yes" />
+
+            <TextView
+                android:id="@+id/rowName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/settings_text_body"
+                android:fontFamily="@font/inter_medium" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/rowDetail"

@@ -28,6 +28,14 @@
     <!-- MainActivitySettings.kt - configuration du fournisseur -->
     <string name="sett_enter_server_url_first">Entrez d\'abord une URL de serveur</string>
     <string name="sett_stalker_portal">Portail Stalker</string>
+    <!-- Stalker device-identity overrides: only needed for portals bound to one MAG box. -->
+    <string name="stalker_serial_number">Numéro de série</string>
+    <string name="stalker_serial_number_hint">Facultatif — tel que fourni avec votre abonnement</string>
+    <string name="stalker_device_id">ID de l\'appareil 1</string>
+    <string name="stalker_device_id_hint">Facultatif — laissez vide pour le dériver de l\'adresse MAC</string>
+    <string name="stalker_device_id2">ID de l\'appareil 2</string>
+    <string name="stalker_device_id2_hint">Facultatif — laissez vide pour la valeur par défaut</string>
+    <string name="stalker_device_identity_hint">À remplir uniquement si votre fournisseur a enregistré un boîtier précis. Laissez vide pour générer un profil d\'appareil à partir de l\'adresse MAC.</string>
     <string name="sett_type_summary">Type : %1$s</string>
     <string name="sett_editing_provider">Modification de %1$s</string>
     <string name="sett_editing_jellyfin">Modification de Jellyfin</string>
