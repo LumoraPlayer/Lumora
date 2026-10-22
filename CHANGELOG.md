@@ -11,6 +11,9 @@
 ### Up Next
 - **A show taken off Up Next leaves Trakt's Up Next as well.** The removal used to be local only, so a show dropped from the row here was still the first thing trakt.tv and every other Trakt client offered - which read as the removal having been ignored. Trakt's own *drop* is the same idea (off Up Next, Progress and Calendars, watched history untouched), so removing a tile now drops the show there too, matched by TMDB id and only while signed in - independent of the sync toggles, because a removal is an instruction rather than a report. Restore removed shows undrops them again. A show that cannot be matched to a TMDB id, or a Trakt account that refuses the call, still comes off the row locally: the local removal lands first and never waits on the network. Watching the show again undrops it on Trakt by itself, and Trakt's settings page can always put it back.
 
+### Simkl
+- **Simkl connects again.** Simkl's original PIN sign-in has been retired for OAuth 2.0 clients, and the app still called it - so the code screen appeared, the code was typed on the phone, and no token ever came back (Simkl answered `400 unauthorized_client`, pointing at the device endpoint). Sign-in now uses the OAuth 2.0 device flow: the same short code and QR, the same place to type it, and a token pair at the end. AUTH V2 access tokens last seven days, so the refresh token is stored alongside and used automatically a day before the access token lapses - a refresh Simkl rejects (the connection was revoked on its site) signs the session out instead of retrying a dead grant. Signing out revokes the grant on Simkl's side too, and every request now carries the client id, app name and app version the API requires, plus a User-Agent.
+
 ## 5.8
 
 ### Fixes

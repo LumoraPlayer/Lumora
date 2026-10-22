@@ -4,6 +4,7 @@ package com.lumora.data.remote.simkl
 import com.lumora.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -12,20 +13,26 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Simkl API v2 client: PIN sign-in, scrobbling, watched-history sync.
+ * Simkl API v2 client: device sign-in, scrobbling, watched-history sync.
  *
  * Simkl's counterpart to [com.lumora.data.remote.trakt.TraktClient], and deliberately the
- * same shape: a TV-first sign-in (Simkl's PIN flow shows a short code the user types at
- * simkl.com/pin on a phone), transition-based scrobbling, and a watched list that can be
- * read and written. Where Trakt keys on its own ids plus imdb/tmdb, Simkl is asked with the
- * tmdb id Lumora already resolves catalogue titles through - no second resolution path.
+ * same shape: a TV-first sign-in (a short code typed at simkl.com/pin on a phone), transition-
+ * based scrobbling, and a watched list that can be read and written. Where Trakt keys on its
+ * own ids plus imdb/tmdb, Simkl is asked with the tmdb id Lumora already resolves catalogue
+ * titles through - no second resolution path.
  *
  * ## Credentials
  *
- * [CLIENT_ID] comes from BuildConfig (see app/build.gradle.kts). Simkl's PIN flow is a
+ * [CLIENT_ID] comes from BuildConfig (see app/build.gradle.kts). Simkl's device flow is a
  * public-client flow - the id travels with the app and there is no secret - so a build
  * without it is *configured off*: [isConfigured] is false and the pane says so, the same
  * contract Trakt's build-without-credentials has.
+ *
+ * ## Tokens
+ *
+ * AUTH V2 tokens are short-lived: the access token lasts seven days and the refresh token 180,
+ * with every refresh sliding that window. So the stored session is a pair, and [refresh] is
+ * routinely exercised rather than a rare repair - see [com.lumora.data.SimklStore].
  *
  * ## Scrobbling
  *
@@ -52,26 +59,31 @@ class SimklClient(private val http: OkHttpClient) {
         val year: String? = null
     )
 
-    /** One issued PIN. The user types [userCode] at [verificationUrl]; the app polls with the
-     *  same code until [expiresInSeconds] runs out. */
+    /** One issued device code. The user types [userCode] at [verificationUrl]; the app polls
+     *  with [deviceCode] until [expiresInSeconds] runs out. */
     data class PinCode(
+        val deviceCode: String,
         val userCode: String,
         val verificationUrl: String,
+        /** Where the QR should point: the verification page with the code already in it. */
+        val activateUrl: String,
         val expiresInSeconds: Int,
         val intervalSeconds: Int
-    ) {
-        /** The verification URL with the code already in it - what the QR encodes. */
-        val activateUrlWithCode: String get() = "${verificationUrl.trimEnd('/')}/$userCode"
-    }
+    )
 
-    /** One poll of the PIN endpoint. Simkl signals pending with `result: "KO"`. */
+    /** One poll of the device token endpoint. `authorization_pending` is the pending answer. */
     sealed interface PinPoll {
         data object Pending : PinPoll
+        /** The code expired, or the user declined it - either way this attempt is over. */
         data object Expired : PinPoll
-        data class Success(val accessToken: String) : PinPoll
+        data class Success(val tokens: Tokens) : PinPoll
         /** Network trouble or an undocumented shape - treated as [Pending] by the caller. */
         data object Unknown : PinPoll
     }
+
+    /** A V2 token pair. Access tokens live seven days; the refresh token is good for 180 and
+     *  every use slides that window, so an app in regular use never asks again. */
+    data class Tokens(val accessToken: String, val refreshToken: String, val expiresAtMs: Long)
 
     /** One watched entry pulled back: a film, or a show with the episodes of it that are
      *  marked watched. */
@@ -90,38 +102,112 @@ class SimklClient(private val http: OkHttpClient) {
      *  IMDb's own vote count when the response has one. */
     data class ImdbRating(val score: String, val votes: Int?)
 
-    // ── PIN sign-in ─────────────────────────────
+    // ── Device sign-in (OAuth 2.0) ───────────────
 
+    /**
+     * Starts a device sign-in: the viewer types [PinCode.userCode] at simkl.com/pin, and
+     * [pollPin] exchanges the device code for tokens once they approve it.
+     *
+     * AUTH V2, not the older `/oauth/pin` flow: apps registered with Simkl today are OAuth 2.0
+     * clients, and that endpoint answers them with `unauthorized_client` telling the caller to
+     * use `/oauth2/device`. The shape for the viewer is unchanged - a short code on the TV,
+     * entered on a phone - so only the wire format moved.
+     */
     suspend fun createPin(): PinCode? = withContext(Dispatchers.IO) {
         if (!isConfigured) return@withContext null
-        val json = postJson("$API_BASE/oauth/pin?client_id=$CLIENT_ID", JSONObject()) ?: return@withContext null
+        val (_, json) = postForm(
+            "$API_BASE/oauth2/device",
+            mapOf("client_id" to CLIENT_ID, "scope" to SCOPE)
+        ) ?: return@withContext null
+        json ?: return@withContext null
+        val deviceCode = json.optString("device_code").takeIf { it.isNotBlank() } ?: return@withContext null
         val userCode = json.optString("user_code").takeIf { it.isNotBlank() } ?: return@withContext null
+        val verificationUrl = json.optString("verification_uri").ifBlank { PIN_URL }
         PinCode(
+            deviceCode = deviceCode,
             userCode = userCode,
-            verificationUrl = json.optString("verification_url").ifBlank { PIN_URL },
+            verificationUrl = verificationUrl,
+            // The complete URI already carries the code, so the QR lands on a page with it
+            // filled in rather than making the viewer type it on the phone too.
+            activateUrl = json.optString("verification_uri_complete")
+                .ifBlank { "$verificationUrl?user_code=$userCode" },
             expiresInSeconds = json.optInt("expires_in", 900),
             intervalSeconds = json.optInt("interval", 5)
         )
     }
 
-    suspend fun pollPin(userCode: String): PinPoll = withContext(Dispatchers.IO) {
+    /**
+     * One poll of the token endpoint with the device code.
+     *
+     * `authorization_pending` is the ordinary answer while the viewer is still approving;
+     * `slow_down` means the poll came faster than the interval Simkl asked for, which is also
+     * worth another poll. A dead code, a refusal, or any other 4xx ends the attempt.
+     */
+    suspend fun pollPin(deviceCode: String): PinPoll = withContext(Dispatchers.IO) {
         if (!isConfigured) return@withContext PinPoll.Expired
-        val json = getJson("$API_BASE/oauth/pin/$userCode?client_id=$CLIENT_ID")
-            ?: return@withContext PinPoll.Unknown
-        val token = json.optString("access_token")
-        when {
-            json.optString("result").equals("OK", ignoreCase = true) && token.isNotBlank() -> PinPoll.Success(token)
-            // "KO" is the documented pending answer; a 404/blank result means the code is
-            // gone. Anything else is treated as pending so a blip mid-flow doesn't kill it.
-            json.optString("result").equals("KO", ignoreCase = true) -> PinPoll.Pending
-            json.length() == 0 -> PinPoll.Expired
-            else -> PinPoll.Pending
+        val (code, json) = postForm(
+            "$API_BASE/oauth2/token",
+            mapOf(
+                "grant_type" to DEVICE_GRANT,
+                "client_id" to CLIENT_ID,
+                "device_code" to deviceCode
+            )
+        ) ?: return@withContext PinPoll.Unknown
+        if (code == 200 && json != null) {
+            parseTokens(json)?.let { return@withContext PinPoll.Success(it) }
+        }
+        when (json?.optString("error")) {
+            "authorization_pending", "slow_down" -> PinPoll.Pending
+            "expired_token", "access_denied" -> PinPoll.Expired
+            else -> if (code in 400..499) PinPoll.Expired else PinPoll.Unknown
+        }
+    }
+
+    /**
+     * Trades the refresh token for a fresh pair - access tokens last seven days, the refresh
+     * token 180 and every use slides that window.
+     *
+     * Null means the refresh failed. [lastRefreshWasRejected] separates a dead grant (revoked
+     * in Simkl's own settings, or aged out) from a network failure worth retrying later.
+     */
+    suspend fun refresh(refreshToken: String): Tokens? = withContext(Dispatchers.IO) {
+        if (!isConfigured) return@withContext null
+        val (code, json) = postForm(
+            "$API_BASE/oauth2/token",
+            mapOf(
+                "grant_type" to "refresh_token",
+                "client_id" to CLIENT_ID,
+                "refresh_token" to refreshToken
+            )
+        ) ?: run {
+            lastRefreshWasRejected = false
+            return@withContext null
+        }
+        if (code == 200 && json != null) return@withContext parseTokens(json)
+        // 4xx means the grant itself is gone; anything else is worth another try.
+        lastRefreshWasRejected = code in 400..499
+        null
+    }
+
+    /** Whether the last [refresh] failure was Simkl rejecting the grant rather than the
+     *  network failing. Only meaningful immediately after a null return. */
+    @Volatile
+    var lastRefreshWasRejected: Boolean = false
+        private set
+
+    /** Best-effort revoke, so signing out here also drops the token on Simkl's side. */
+    suspend fun revoke(token: String) {
+        if (!isConfigured) return
+        withContext(Dispatchers.IO) {
+            runCatching {
+                postForm("$API_BASE/oauth2/revoke", mapOf("client_id" to CLIENT_ID, "token" to token))
+            }
         }
     }
 
     /** The account's display name, for the settings pane. Null when it can't be read. */
     suspend fun username(token: String): String? = withContext(Dispatchers.IO) {
-        val json = getJson("$API_BASE/users/settings", token = token) ?: return@withContext null
+        val json = getJson(api("/users/settings"), token = token) ?: return@withContext null
         val user = json.optJSONObject("user") ?: json.optJSONObject("account")
         user?.optString("name")?.takeIf { it.isNotBlank() }
             ?: user?.optString("username")?.takeIf { it.isNotBlank() }
@@ -144,7 +230,7 @@ class SimklClient(private val http: OkHttpClient) {
                 body.put("season", target.season ?: 1)
                 body.put("episode", target.episode ?: 1)
             }
-            postJson("$API_BASE/scrobble/$action", body, token = token) != null
+            postJson(api("/scrobble/$action"), body, token = token) != null
         }
 
     // ── Watched sync ────────────────────────────
@@ -182,7 +268,7 @@ class SimklClient(private val http: OkHttpClient) {
             body.put("shows", array)
         }
         val path = if (remove) "/sync/history/remove" else "/sync/history"
-        postJson("$API_BASE$path", body, token = token) != null
+        postJson(api(path), body, token = token) != null
     }
 
     /**
@@ -197,7 +283,7 @@ class SimklClient(private val http: OkHttpClient) {
      */
     suspend fun watched(token: String): List<WatchedEntry> = withContext(Dispatchers.IO) {
         val out = mutableListOf<WatchedEntry>()
-        val movies = getJson("$API_BASE/sync/all-items/movies?extended=full", token = token)
+        val movies = getJson(api("/sync/all-items/movies?extended=full"), token = token)
         val movieArray = movies?.optJSONArray("movies")
         if (movieArray != null) {
             for (i in 0 until movieArray.length()) {
@@ -215,7 +301,7 @@ class SimklClient(private val http: OkHttpClient) {
                 )
             }
         }
-        val shows = getJson("$API_BASE/sync/all-items/shows?extended=full", token = token)
+        val shows = getJson(api("/sync/all-items/shows?extended=full"), token = token)
         val showArray = shows?.optJSONArray("shows")
         if (showArray != null) {
             for (i in 0 until showArray.length()) {
@@ -285,7 +371,7 @@ class SimklClient(private val http: OkHttpClient) {
         if (!id.startsWith("tt")) return@withContext null
         ratingCache[id]?.let { return@withContext it.value }
         val type = if (isSeries) "tv" else "movies"
-        val json = getJson("$API_BASE/$type/$id?extended=full") ?: return@withContext null
+        val json = getJson(api("/$type/$id?extended=full")) ?: return@withContext null
         val parsed = parseImdbRating(json)
         ratingCache[id] = BoxedRating(parsed)
         parsed
@@ -293,12 +379,18 @@ class SimklClient(private val http: OkHttpClient) {
 
     // ── Plumbing ────────────────────────────────
 
+    /**
+     * A request URL carrying the three parameters every V2 call needs. Catalog lookups do not
+     * need a token, but they still have to say which app is asking.
+     */
+    private fun api(path: String): String =
+        "$API_BASE$path" + (if ('?' in path) "&" else "?") +
+            "client_id=$CLIENT_ID&app-name=$APP_NAME&app-version=${BuildConfig.VERSION_NAME}"
+
     private fun getJson(url: String, token: String? = null): JSONObject? {
         val request = Request.Builder()
             .url(url)
-            // Only when the build has one: an empty header is not "no header" to every
-            // gateway, and ratings are reachable without it (see imdbRating).
-            .apply { if (CLIENT_ID.isNotBlank()) header("simkl-api-key", CLIENT_ID) }
+            .header("User-Agent", USER_AGENT)
             .apply { if (token != null) header("Authorization", "Bearer $token") }
             .build()
         return runCatching {
@@ -312,7 +404,7 @@ class SimklClient(private val http: OkHttpClient) {
     private fun postJson(url: String, body: JSONObject, token: String? = null): JSONObject? {
         val request = Request.Builder()
             .url(url)
-            .apply { if (CLIENT_ID.isNotBlank()) header("simkl-api-key", CLIENT_ID) }
+            .header("User-Agent", USER_AGENT)
             .apply { if (token != null) header("Authorization", "Bearer $token") }
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .build()
@@ -325,6 +417,40 @@ class SimklClient(private val http: OkHttpClient) {
         }.getOrNull()
     }
 
+    /**
+     * A form-encoded POST, which is what both OAuth endpoints take, returning the status and
+     * whatever JSON came back. The status travels because the device flow *is* the status:
+     * a 400 with `authorization_pending` means "keep polling", not "failed".
+     */
+    private fun postForm(url: String, params: Map<String, String>): Pair<Int, JSONObject?>? {
+        val form = FormBody.Builder()
+        for ((key, value) in params) form.add(key, value)
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", USER_AGENT)
+            .post(form.build())
+            .build()
+        return runCatching {
+            http.newCall(request).execute().use { response ->
+                val text = response.body?.string()
+                val json = text?.takeIf { it.isNotBlank() }
+                    ?.let { runCatching { JSONObject(it) }.getOrNull() }
+                if (!response.isSuccessful && response.code >= 500) {
+                    android.util.Log.w("SimklClient", "POST $url -> ${response.code}")
+                }
+                response.code to json
+            }
+        }.onFailure { android.util.Log.w("SimklClient", "POST $url failed", it) }.getOrNull()
+    }
+
+    /** `/oauth2/token` answers `{access_token, refresh_token, expires_in}`. */
+    private fun parseTokens(json: JSONObject): Tokens? {
+        val access = json.optString("access_token").takeIf { it.isNotBlank() } ?: return null
+        val refresh = json.optString("refresh_token").takeIf { it.isNotBlank() } ?: return null
+        val expiresIn = json.optLong("expires_in", 0L).takeIf { it > 0 } ?: 604_800L
+        return Tokens(access, refresh, System.currentTimeMillis() + expiresIn * 1000L)
+    }
+
     companion object {
         val CLIENT_ID: String = BuildConfig.SIMKL_CLIENT_ID
         val isConfigured: Boolean get() = CLIENT_ID.isNotBlank()
@@ -332,6 +458,9 @@ class SimklClient(private val http: OkHttpClient) {
         private const val API_BASE = "https://api.simkl.com"
         private const val PIN_URL = "https://simkl.com/pin"
         private const val APP_NAME = "lumora"
+        private const val USER_AGENT = "$APP_NAME/${BuildConfig.VERSION_NAME}"
+        private const val SCOPE = "media:read media:write"
+        private const val DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
     }
 
     /** ConcurrentHashMap rejects null values, so a title Simkl has no score for (and the

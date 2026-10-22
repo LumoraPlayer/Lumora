@@ -2,6 +2,7 @@
 package com.lumora.data
 
 import android.content.SharedPreferences
+import com.lumora.data.remote.simkl.SimklClient
 
 /**
  * The stored Simkl session and its two feature toggles.
@@ -13,12 +14,17 @@ import android.content.SharedPreferences
  * watched sync reconciles the local watched store in both directions and is therefore off
  * by default.
  *
- * Simkl access tokens have no expiry - a token stays valid until it is revoked on Simkl's
- * own site - so unlike Trakt there is no refresh path and none of the expiry bookkeeping.
+ * Unlike the old AUTH V1 token - which never expired, so there was nothing to refresh - an
+ * AUTH V2 session is a pair: a seven-day access token and a 180-day refresh token whose window
+ * slides on every use. Both are stored, along with the access token's expiry, so
+ * [com.lumora.MainActivity.simklAccessToken] can refresh before a play would otherwise fail
+ * mid-report.
  */
 object SimklStore {
 
     private const val KEY_ACCESS_TOKEN = "simkl_access_token"
+    private const val KEY_REFRESH_TOKEN = "simkl_refresh_token"
+    private const val KEY_EXPIRES_AT = "simkl_expires_at"
     private const val KEY_USERNAME = "simkl_username"
     private const val KEY_SCROBBLE = "simkl_scrobble_enabled"
     private const val KEY_WATCHED_SYNC = "simkl_watched_sync_enabled"
@@ -28,11 +34,18 @@ object SimklStore {
     /** Entries are short; the ceiling bounds the pref, not the curation - same as Trakt's. */
     private const val ID_MEMO_MAX = 8_000
 
-    fun accessToken(prefs: SharedPreferences): String? =
-        prefs.getString(KEY_ACCESS_TOKEN, null)?.takeIf { it.isNotBlank() }
+    fun tokens(prefs: SharedPreferences): SimklClient.Tokens? {
+        val access = prefs.getString(KEY_ACCESS_TOKEN, null)?.takeIf { it.isNotBlank() } ?: return null
+        val refresh = prefs.getString(KEY_REFRESH_TOKEN, null)?.takeIf { it.isNotBlank() } ?: return null
+        return SimklClient.Tokens(access, refresh, prefs.getLong(KEY_EXPIRES_AT, 0L))
+    }
 
-    fun saveAccessToken(prefs: SharedPreferences, token: String) {
-        prefs.edit().putString(KEY_ACCESS_TOKEN, token).apply()
+    fun saveTokens(prefs: SharedPreferences, tokens: SimklClient.Tokens) {
+        prefs.edit()
+            .putString(KEY_ACCESS_TOKEN, tokens.accessToken)
+            .putString(KEY_REFRESH_TOKEN, tokens.refreshToken)
+            .putLong(KEY_EXPIRES_AT, tokens.expiresAtMs)
+            .apply()
     }
 
     fun username(prefs: SharedPreferences): String? =
@@ -42,13 +55,15 @@ object SimklStore {
         prefs.edit().putString(KEY_USERNAME, username.orEmpty()).apply()
     }
 
-    fun isSignedIn(prefs: SharedPreferences): Boolean = accessToken(prefs) != null
+    fun isSignedIn(prefs: SharedPreferences): Boolean = tokens(prefs) != null
 
     /** Drops the whole session; the toggles are deliberately left alone (a preference about
      *  how Simkl should behave is not part of the session - same as TraktStore.clear). */
     fun clear(prefs: SharedPreferences) {
         prefs.edit()
             .remove(KEY_ACCESS_TOKEN)
+            .remove(KEY_REFRESH_TOKEN)
+            .remove(KEY_EXPIRES_AT)
             .remove(KEY_USERNAME)
             .remove(KEY_LAST_PULL)
             .apply()

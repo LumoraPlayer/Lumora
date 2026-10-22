@@ -19,7 +19,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// ── Simkl: PIN sign-in, scrobbling, watched sync ──
+// ── Simkl: device sign-in, scrobbling, watched sync ──
 //
 // The second tracker, next to Trakt and built the same way: three separable jobs gated by two
 // independent toggles (see SimklStore) - sign-in from the Settings pane, start/pause/stop
@@ -35,11 +35,32 @@ import kotlinx.coroutines.withContext
 
 // ── Session ─────────────────────────────────────
 
-/** The stored Simkl token. Unlike Trakt there is no expiry or refresh - Simkl tokens live
- *  until revoked - so this is a plain read. Null means "no usable session". */
-internal fun MainActivity.simklAccessToken(): String? {
+/**
+ * A usable Simkl access token, refreshing first when the stored one is close to expiry.
+ *
+ * AUTH V2 access tokens last seven days, so this is a routine refresh rather than an unusual
+ * repair. A refresh Simkl *rejects* (revoked in Simkl's own settings, or the refresh token
+ * finally aged out) drops the session, because nothing it holds can ever work again; one that
+ * merely failed to reach Simkl leaves it alone to be retried on the next call. Null means "no
+ * usable session".
+ */
+internal suspend fun MainActivity.simklAccessToken(): String? {
     if (!SimklClient.isConfigured) return null
-    return SimklStore.accessToken(prefs)
+    val tokens = SimklStore.tokens(prefs) ?: return null
+    // A day's grace, same as Trakt: a token that expired mid-play would fail the stop report.
+    if (tokens.expiresAtMs - System.currentTimeMillis() > 24 * 60 * 60 * 1000L) return tokens.accessToken
+
+    val refreshed = simklClient.refresh(tokens.refreshToken)
+    if (refreshed != null) {
+        SimklStore.saveTokens(prefs, refreshed)
+        return refreshed.accessToken
+    }
+    if (simklClient.lastRefreshWasRejected) {
+        SimklStore.clear(prefs)
+        return null
+    }
+    // Network failure - the stored token may still have a day or more on it, so let the call try.
+    return tokens.accessToken
 }
 
 internal fun MainActivity.isSimklSignedIn(): Boolean =
@@ -361,12 +382,13 @@ internal fun MainActivity.simklSyncBothWays(onStatus: ((String) -> Unit)? = null
     }
 }
 
-// ── Sign-in (PIN flow) ──────────────────────────
+// ── Sign-in (device flow) ───────────────────────
 
 /**
- * Runs a full PIN sign-in, reporting progress through the callbacks so the caller owns the
- * presentation. Same shape as [performTraktSignIn]: mint a PIN, show it (text plus a QR of
- * the verification URL with the code already in it), poll at the interval Simkl asked for.
+ * Runs a full device sign-in, reporting progress through the callbacks so the caller owns the
+ * presentation. Same shape as [performTraktSignIn]: ask for a device code, show it (text plus
+ * a QR of the verification page with the code already in it), poll at the interval Simkl asked
+ * for, and store the token pair the approval returns.
  */
 internal suspend fun MainActivity.performSimklSignIn(
     onQr: (android.graphics.Bitmap?) -> Unit = {},
@@ -382,19 +404,19 @@ internal suspend fun MainActivity.performSimklSignIn(
         onStatus(getString(R.string.simkl_couldnt_start))
         return false
     }
-    onQr(runCatching { QrPairingManager.createQrBitmap(code.activateUrlWithCode) }.getOrNull())
+    onQr(runCatching { QrPairingManager.createQrBitmap(code.activateUrl) }.getOrNull())
     onCode(code.userCode)
     onStatus(getString(R.string.simkl_enter_code_at, code.verificationUrl))
 
     var intervalMs = code.intervalSeconds.coerceAtLeast(1) * 1000L
     val deadline = System.currentTimeMillis() + code.expiresInSeconds * 1000L
-    var token: String? = null
+    var tokens: SimklClient.Tokens? = null
 
-    while (System.currentTimeMillis() < deadline && token == null) {
+    while (System.currentTimeMillis() < deadline && tokens == null) {
         delay(intervalMs)
         if (!kotlin.coroutines.coroutineContext.isActive) return false
-        when (val poll = simklClient.pollPin(code.userCode)) {
-            is SimklClient.PinPoll.Success -> token = poll.accessToken
+        when (val poll = simklClient.pollPin(code.deviceCode)) {
+            is SimklClient.PinPoll.Success -> tokens = poll.tokens
             SimklClient.PinPoll.Pending, SimklClient.PinPoll.Unknown -> Unit
             SimklClient.PinPoll.Expired -> break
         }
@@ -402,14 +424,14 @@ internal suspend fun MainActivity.performSimklSignIn(
 
     onQr(null)
     onCode(null)
-    val session = token ?: run {
+    val session = tokens ?: run {
         onStatus(getString(R.string.simkl_timed_out))
         return false
     }
 
-    SimklStore.saveAccessToken(prefs, session)
+    SimklStore.saveTokens(prefs, session)
     val username = withContext(Dispatchers.IO) {
-        runCatching { simklClient.username(session) }.getOrNull()
+        runCatching { simklClient.username(session.accessToken) }.getOrNull()
     }
     SimklStore.saveUsername(prefs, username)
     onStatus(
@@ -423,12 +445,15 @@ internal suspend fun MainActivity.performSimklSignIn(
 }
 
 internal fun MainActivity.simklSignOut() {
-    // Simkl has no revoke endpoint worth calling for a PIN token; dropping the local copy is
-    // the whole of sign-out, and the token can be revoked from Simkl's own site if wanted.
+    // Revoke before dropping the local copy: AUTH V2 has a revoke endpoint, and leaving a live
+    // grant behind on Simkl's connected-apps list after signing out here is untidy at best.
+    // Best effort - the local clear is the whole of sign-out if the call never lands.
+    val token = SimklStore.tokens(prefs)?.accessToken
     SimklStore.clear(prefs)
     simklScrobbleTarget = null
     simklScrobbleForKey = null
     simklLastReportedPaused = null
+    if (token != null) scope.launch { simklClient.revoke(token) }
 }
 
 // ── Settings pane ───────────────────────────────
