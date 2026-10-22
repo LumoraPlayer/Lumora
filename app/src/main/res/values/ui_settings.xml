@@ -168,8 +168,9 @@
     <string name="trakt_signed_out">Signed out of Trakt</string>
     <string name="trakt_syncing">Syncing…</string>
     <string name="trakt_scrobble">Scrobble playback</string>
-    <string name="trakt_watched_sync">Sync watched history</string>
+    <string name="trakt_watched_sync">Sync watch history and Continue Watching</string>
     <string name="trakt_pushing">Pushing your watched history to Trakt…</string>
     <string name="trakt_synced_both">Synced · %1$d in, %2$d out</string>
     <string name="trakt_synced_both_partial">Synced · %1$d in, %2$d out · %3$d titles unmatched</string>
+    <string name="trakt_synced_resume">Synced · %1$d in, %2$d out · %3$d to resume</string>
 </resources>

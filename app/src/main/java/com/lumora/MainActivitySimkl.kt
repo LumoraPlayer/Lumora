@@ -224,6 +224,10 @@ internal fun MainActivity.pullSimklWatched(force: Boolean = false, onDone: ((Int
             var count = 0
             for (entry in entries) {
                 if (entry.isSeries) {
+                    // How Simkl spells the show is remembered, so the mark can be re-spelled
+                    // in the catalogue's own words once the catalogue has loaded - see
+                    // aliasRemoteWatchedMarks.
+                    recordRemoteSeries(entry.title, entry.year, entry.tmdbId)
                     for ((season, numbers) in entry.episodes) {
                         for (number in numbers) {
                             val keys = episodeWatchedKeys(entry.title, season, number)
@@ -243,6 +247,10 @@ internal fun MainActivity.pullSimklWatched(force: Boolean = false, onDone: ((Int
             count
         }
         SimklStore.markWatchedPulled(prefs)
+        // The catalogue may be loaded by now, in which case the marks can be spelled
+        // against it straight away; if it is not, this is a no-op and the catalogue load
+        // does it later (see classifyAndShow).
+        aliasRemoteWatchedMarks()
         if (added > 0) {
             clearUpNextMemo()
             // The catalogue may not be loaded yet on a cold start; classifyAndShow re-runs

@@ -151,10 +151,11 @@
     <string name="trakt_signed_out">Déconnecté de Trakt</string>
     <string name="trakt_syncing">Synchronisation…</string>
     <string name="trakt_scrobble">Scrobbler la lecture</string>
-    <string name="trakt_watched_sync">Synchroniser l\'historique des vus</string>
+    <string name="trakt_watched_sync">Synchroniser l\'historique et la lecture en cours</string>
     <string name="trakt_pushing">Envoi de votre historique vers Trakt…</string>
     <string name="trakt_synced_both">Synchronisé · %1$d entrants, %2$d sortants</string>
     <string name="trakt_synced_both_partial">Synchronisé · %1$d entrants, %2$d sortants · %3$d titres non associés</string>
+    <string name="trakt_synced_resume">Synchronisé · %1$d entrants, %2$d sortants · %3$d à reprendre</string>
 
     <!-- Local files (Settings > Providers, file browser) -->
     <string name="sett_local_files">Fichiers locaux</string>

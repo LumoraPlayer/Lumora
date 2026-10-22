@@ -30,6 +30,8 @@ object TraktStore {
     /** Timestamp of the last successful `/sync/watched` pull, so a cold start that already
      *  reconciled today doesn't do it again on every launch. */
     private const val KEY_LAST_PULL = "trakt_last_watched_pull"
+    /** Timestamp of the last successful `/sync/playback` pull - see [lastPlaybackPullMs]. */
+    private const val KEY_LAST_PLAYBACK_PULL = "trakt_last_playback_pull"
 
     fun tokens(prefs: SharedPreferences): TraktClient.Tokens? {
         val access = prefs.getString(KEY_ACCESS_TOKEN, null)?.takeIf { it.isNotBlank() } ?: return null
@@ -69,6 +71,7 @@ object TraktStore {
             .remove(KEY_EXPIRES_AT)
             .remove(KEY_USERNAME)
             .remove(KEY_LAST_PULL)
+            .remove(KEY_LAST_PLAYBACK_PULL)
             .apply()
     }
 
@@ -84,7 +87,6 @@ object TraktStore {
      *  cross-provider watched state, which is a bigger thing to turn on behind someone's back
      *  than a scrobble that only ever adds to a Trakt profile. */
     fun isWatchedSyncEnabled(prefs: SharedPreferences): Boolean = prefs.getBoolean(KEY_WATCHED_SYNC, false)
-
     fun setWatchedSyncEnabled(prefs: SharedPreferences, enabled: Boolean) {
         prefs.edit().putBoolean(KEY_WATCHED_SYNC, enabled).apply()
     }
@@ -128,5 +130,15 @@ object TraktStore {
 
     fun markWatchedPulled(prefs: SharedPreferences) {
         prefs.edit().putLong(KEY_LAST_PULL, System.currentTimeMillis()).apply()
+    }
+
+    /** Timestamp of the last successful `/sync/playback` pull - Trakt's own resume list, the
+     *  one that fills Continue Watching from another device. Kept apart from the watched pull's
+     *  stamp: the two lists change at different rates (a resume point is written every time
+     *  somebody stops watching something), and one being fresh must not freeze the other. */
+    fun lastPlaybackPullMs(prefs: SharedPreferences): Long = prefs.getLong(KEY_LAST_PLAYBACK_PULL, 0L)
+
+    fun markPlaybackPulled(prefs: SharedPreferences) {
+        prefs.edit().putLong(KEY_LAST_PLAYBACK_PULL, System.currentTimeMillis()).apply()
     }
 }

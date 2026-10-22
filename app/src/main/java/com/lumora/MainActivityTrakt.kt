@@ -319,6 +319,10 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
             var count = 0
             for (entry in entries) {
                 if (entry.isSeries) {
+                    // How Trakt spells the show is remembered, so the mark can be re-spelled
+                    // in the catalogue's own words once the catalogue has loaded - see
+                    // aliasRemoteWatchedMarks.
+                    recordRemoteSeries(entry.title, entry.year, entry.tmdbId)
                     for ((season, numbers) in entry.episodes) {
                         for (number in numbers) {
                             // Every alias spelling (see episodeWatchedKeys): a local copy with
@@ -341,6 +345,10 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
             count
         }
         TraktStore.markWatchedPulled(prefs)
+        // The catalogue may be loaded by now, in which case the marks can be spelled
+        // against it straight away; if it is not, this is a no-op and the catalogue load
+        // does it later (see classifyAndShow).
+        aliasRemoteWatchedMarks()
         if (added > 0) {
             // Watched state decides what "next episode" means, so the memo behind Up Next is
             // stale the moment any mark lands.
@@ -374,17 +382,17 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
  */
 internal fun MainActivity.reconcileTraktUpNextTrails() {
     if (allChannels.isEmpty()) return
-    val seriesIndex = allChannels.asSequence()
-        .filter { it.mediaType == MediaType.SERIES && it.episodeNum == null }
-        .associateBy { com.lumora.util.normalizeTitleForGrouping(cleanVodTitle(it.name)) }
-    if (seriesIndex.isEmpty()) return
+    // The same index the mark spelling uses, so both passes agree on what "the same show"
+    // means - and so a derived Series-tab card (an m3u_plus panel's show) can answer too.
+    val seriesIndex = localSeriesIndex()
+    if (seriesIndex.isEmpty) return
     val seenTitles = HashSet<String>()
     for (key in WatchedStore.allKeys(this)) {
         val parts = key.split('|')
         if (parts.size != 4 || parts[0] != "e") continue
         val normalized = parts[1]
         if (!seenTitles.add(normalized)) continue
-        val series = seriesIndex[normalized] ?: continue
+        val series = seriesIndex.find(normalized, null, null) ?: continue
         if (series.id.isBlank()) continue
         val copyKey = "trakt|${series.id}"
         if (PlaybackPositionStore.get(this, copyKey) != null) continue
@@ -517,16 +525,26 @@ internal fun MainActivity.pushExistingWatchedToTrakt(onDone: ((pushed: Int, unre
  *
  * Pulling first matters - the push subtracts what Trakt already holds, so a title that arrived in
  * the pull is one the push then correctly skips instead of echoing straight back.
+ *
+ * The resume list is pulled first of all, and separately: it is the other device's *paused*
+ * state rather than its watched state, and it is what fills Continue Watching on a second TV.
+ * Its count belongs in the same one-line summary the pane shows, so it is read before the
+ * watched pull rather than racing it.
  */
 internal fun MainActivity.traktSyncBothWays(onStatus: ((String) -> Unit)? = null) {
     if (!isTraktSignedIn() || !TraktStore.isWatchedSyncEnabled(prefs)) return
-    pullTraktWatched(force = true) { pulled ->
-        onStatus?.invoke(getString(R.string.trakt_pushing))
-        pushExistingWatchedToTrakt { pushed, unresolved ->
-            onStatus?.invoke(
-                if (unresolved > 0) getString(R.string.trakt_synced_both_partial, pulled, pushed, unresolved)
-                else getString(R.string.trakt_synced_both, pulled, pushed)
-            )
+    pullTraktPlayback(force = true) { resumed ->
+        pullTraktWatched(force = true) { pulled ->
+            onStatus?.invoke(getString(R.string.trakt_pushing))
+            pushExistingWatchedToTrakt { pushed, unresolved ->
+                onStatus?.invoke(
+                    when {
+                        unresolved > 0 -> getString(R.string.trakt_synced_both_partial, pulled, pushed, unresolved)
+                        resumed > 0 -> getString(R.string.trakt_synced_resume, pulled, pushed, resumed)
+                        else -> getString(R.string.trakt_synced_both, pulled, pushed)
+                    }
+                )
+            }
         }
     }
 }

@@ -10,6 +10,10 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.ParsePosition
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Trakt API v2 client: OAuth device flow, real-time scrobbling, and watched-history sync.
@@ -312,8 +316,22 @@ class TraktClient(private val http: OkHttpClient) {
      * it has nothing to do with the movie's or episode's ids and is not stable across
      * re-watches. [target] is the same shape a scrobble uses, so an entry can be matched
      * against a local item through [MainActivity]'s existing target resolution.
+     *
+     * [progress] is how far through the item the other device got, 0-100. Trakt states a
+     * percentage and no duration, so the local copy's own runtime is what turns it back into
+     * a position - which is why it travels as a percentage rather than as milliseconds.
+     *
+     * [pausedAtMs] is when the other device left it. It orders the row across devices, and
+     * it is what decides whether this device's own progress is newer than the remote entry.
      */
-    data class PlaybackEntry(val id: Long, val target: ScrobbleTarget)
+    data class PlaybackEntry(
+        val id: Long,
+        val target: ScrobbleTarget,
+        val title: String,
+        val year: Int?,
+        val progress: Double,
+        val pausedAtMs: Long?
+    )
 
     /**
      * The account's paused-playback list, films and episodes.
@@ -326,33 +344,7 @@ class TraktClient(private val http: OkHttpClient) {
         if (!isConfigured) return@withContext emptyList()
         val arr = getArray("$API_BASE/sync/playback?limit=$PLAYBACK_PAGE_LIMIT", accessToken)
             ?: return@withContext emptyList()
-        val out = mutableListOf<PlaybackEntry>()
-        for (i in 0 until arr.length()) {
-            val row = arr.optJSONObject(i) ?: continue
-            val id = row.optLong("id", 0L).takeIf { it > 0L } ?: continue
-            when (row.optString("type")) {
-                "movie" -> {
-                    val tmdb = row.optJSONObject("movie")?.optJSONObject("ids")?.optInt("tmdb", 0)
-                        ?.takeIf { it > 0 } ?: continue
-                    out.add(PlaybackEntry(id, ScrobbleTarget(tmdbId = tmdb, isSeries = false)))
-                }
-                "episode" -> {
-                    // The show's tmdb id, not the episode's - same rule as ScrobbleTarget.
-                    val tmdb = row.optJSONObject("show")?.optJSONObject("ids")?.optInt("tmdb", 0)
-                        ?.takeIf { it > 0 } ?: continue
-                    val ep = row.optJSONObject("episode") ?: continue
-                    val season = ep.optInt("season", -1).takeIf { it >= 0 } ?: continue
-                    val number = ep.optInt("number", -1).takeIf { it > 0 } ?: continue
-                    out.add(
-                        PlaybackEntry(
-                            id,
-                            ScrobbleTarget(tmdbId = tmdb, isSeries = true, season = season, episode = number)
-                        )
-                    )
-                }
-            }
-        }
-        out
+        parseTraktPlayback(arr)
     }
 
     /** Deletes one playback entry - what removes a title from Trakt's own Continue Watching.
@@ -607,3 +599,91 @@ class TraktClient(private val http: OkHttpClient) {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
     }
 }
+
+// ── `/sync/playback` parsing ───────────────────
+//
+// Split out of the client so the shape can be pinned by a test: the rows carry the title and
+// the percentage alongside the ids, and both are load-bearing. The title is what a remote
+// entry is matched to the local catalogue by (a TMDB id alone is not enough - most panels
+// don't stamp one), and the percentage is the whole of the resume point.
+
+/** Trakt's `/sync/playback` rows, as the app reads them. */
+internal fun parseTraktPlayback(rows: JSONArray): List<TraktClient.PlaybackEntry> {
+    val out = mutableListOf<TraktClient.PlaybackEntry>()
+    for (i in 0 until rows.length()) {
+        val row = rows.optJSONObject(i) ?: continue
+        val id = row.optLong("id", 0L).takeIf { it > 0L } ?: continue
+        val progress = row.optDouble("progress", 0.0)
+            .takeIf { !it.isNaN() }?.coerceIn(0.0, 100.0) ?: 0.0
+        val pausedAtMs = parseTraktTimestamp(row.optString("paused_at"))
+        when (row.optString("type")) {
+            "movie" -> {
+                val movie = row.optJSONObject("movie") ?: continue
+                val tmdb = movie.optJSONObject("ids")?.optInt("tmdb", 0)?.takeIf { it > 0 } ?: continue
+                out.add(
+                    TraktClient.PlaybackEntry(
+                        id = id,
+                        target = TraktClient.ScrobbleTarget(tmdbId = tmdb, isSeries = false),
+                        title = movie.optString("title"),
+                        year = movie.optInt("year", 0).takeIf { it > 0 },
+                        progress = progress,
+                        pausedAtMs = pausedAtMs
+                    )
+                )
+            }
+            "episode" -> {
+                // The show's tmdb id, not the episode's - same rule as ScrobbleTarget.
+                val show = row.optJSONObject("show") ?: continue
+                val tmdb = show.optJSONObject("ids")?.optInt("tmdb", 0)?.takeIf { it > 0 } ?: continue
+                val ep = row.optJSONObject("episode") ?: continue
+                val season = ep.optInt("season", -1).takeIf { it >= 0 } ?: continue
+                val number = ep.optInt("number", -1).takeIf { it > 0 } ?: continue
+                out.add(
+                    TraktClient.PlaybackEntry(
+                        id = id,
+                        target = TraktClient.ScrobbleTarget(
+                            tmdbId = tmdb,
+                            isSeries = true,
+                            season = season,
+                            episode = number
+                        ),
+                        title = show.optString("title"),
+                        year = show.optInt("year", 0).takeIf { it > 0 },
+                        progress = progress,
+                        pausedAtMs = pausedAtMs
+                    )
+                )
+            }
+        }
+    }
+    return out
+}
+
+/**
+ * Trakt's `paused_at` - ISO 8601 in UTC, with or without milliseconds.
+ *
+ * Null when the stamp is missing or is not a shape we can read: an unreadable stamp is a
+ * missing ordering, not a reason to throw the whole entry away - the entry still says what
+ * was being watched, which is most of what it is for.
+ */
+internal fun parseTraktTimestamp(value: String?): Long? {
+    val text = value?.trim().orEmpty()
+    if (text.isBlank()) return null
+    for (pattern in TRAKT_TIMESTAMP_PATTERNS) {
+        val format = SimpleDateFormat(pattern, Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+            isLenient = false
+        }
+        // ParsePosition rather than parse(): a lenient parse would happily accept a truncated
+        // or trailing-garbage stamp and answer with a plausible-looking wrong time.
+        val position = ParsePosition(0)
+        val parsed = runCatching { format.parse(text, position) }.getOrNull()
+        if (parsed != null && position.index == text.length) return parsed.time
+    }
+    return null
+}
+
+private val TRAKT_TIMESTAMP_PATTERNS = arrayOf(
+    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+    "yyyy-MM-dd'T'HH:mm:ss'Z'"
+)

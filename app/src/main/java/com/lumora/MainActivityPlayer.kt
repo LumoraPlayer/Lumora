@@ -2424,19 +2424,25 @@ internal fun MainActivity.maybeShowResumePrompt() {
     if (channel.mediaType == MediaType.LIVE) return
     val key = channel.id.ifBlank { channel.url }
     val saved = PlaybackPositionStore.get(this, key) ?: return
-    if (saved.isNearComplete || saved.positionMs < 5000) return
+    if (saved.isNearComplete) return
+    // A position another device left is a percentage, and the stream's own runtime is what
+    // turns it back into milliseconds - which is only known now the media is open. This is
+    // the first moment the number exists, so it is the first moment the question can be
+    // asked at all.
+    val resumeMs = saved.resumeMsFor(playerManager.duration)
+    if (resumeMs < 5000) return
 
     playerManager.pause()
     // Stored so hidePlayer()/beginStreamAttempt() can take it down with the playback it
     // belongs to - non-cancelable, an abandoned one owned the window and swallowed Back.
     resumePromptDialog = AlertDialog.Builder(this)
         .setTitle(getString(R.string.play_resume_playback_title))
-        .setMessage(getString(R.string.play_resume_message, formatTime(saved.positionMs)))
+        .setMessage(getString(R.string.play_resume_message, formatTime(resumeMs)))
         .setPositiveButton(getString(R.string.play_resume)) { _, _ ->
             // The player can have been hidden while this sat up (Back, a new stream) -
             // answering then would start invisible audio-only playback behind Home.
             if (!isPlayerVisible) return@setPositiveButton
-            playerManager.seekTo(saved.positionMs); playerManager.play()
+            playerManager.seekTo(resumeMs); playerManager.play()
         }
         .setNegativeButton(getString(R.string.play_start_over)) { _, _ ->
             if (!isPlayerVisible) return@setNegativeButton

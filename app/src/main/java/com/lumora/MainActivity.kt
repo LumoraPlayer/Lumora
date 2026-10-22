@@ -1480,6 +1480,10 @@ class MainActivity : AppCompatActivity() {
         pullTraktWatched()
         // Simkl's pull runs beside Trakt's; both no-op unless signed in with watched sync on.
         pullSimklWatched()
+        // Trakt's resume list - what another device left half-watched. This is what fills
+        // Continue Watching on a second TV; the watched pull above only knows what was
+        // *finished*, which is Up Next's business rather than this row's.
+        pullTraktPlayback()
 
         // Downloads are a mobile-only affordance - a TV box has nowhere meaningful to
         // browse a downloaded file, and it's not what "download for offline" means there.

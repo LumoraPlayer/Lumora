@@ -1401,7 +1401,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             val key = ep.id.ifBlank { ep.url }
             if (key.isBlank()) return@mapNotNull null
             PlaybackPositionStore.get(this, key)
-                ?.takeIf { !it.isNearComplete && it.positionMs > 0 }
+                ?.takeIf { it.isInProgress }
                 ?.let { ep to it }
         }.maxByOrNull { it.second.updatedAt }
         // Nothing part-watched: scan the chain in order, skipping finished
@@ -1614,7 +1614,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 val filmKey = item.id.ifBlank { item.url }
                 val filmProgress = filmKey.takeIf { it.isNotBlank() }
                     ?.let { PlaybackPositionStore.get(this@showContentDetail, it) }
-                    ?.takeIf { !it.isNearComplete && it.positionMs > 0 }
+                    ?.takeIf { it.isInProgress }
                 // A title opened from Discover that no library carries has no URL to play. A
                 // Stalker film is the exception: its stream is a cmd, not a URL, and the player
                 // resolves it via create_link, so it is playable even with a blank url. The

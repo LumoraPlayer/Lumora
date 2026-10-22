@@ -78,6 +78,9 @@ class SimklClient(private val http: OkHttpClient) {
     data class WatchedEntry(
         val title: String,
         val tmdbId: Int?,
+        /** The year Simkl states, for telling two shows of the same name apart when the
+         *  title is matched against this device's catalogue. */
+        val year: Int? = null,
         val isSeries: Boolean,
         /** season -> episode numbers. Empty for a film. */
         val episodes: Map<Int, Set<Int>> = emptyMap()
@@ -206,6 +209,7 @@ class SimklClient(private val http: OkHttpClient) {
                     WatchedEntry(
                         title = title,
                         tmdbId = movie.optJSONObject("ids")?.optInt("tmdb")?.takeIf { it > 0 },
+                        year = movie.optInt("year", 0).takeIf { it > 0 },
                         isSeries = false
                     )
                 )
@@ -240,6 +244,7 @@ class SimklClient(private val http: OkHttpClient) {
                     WatchedEntry(
                         title = title,
                         tmdbId = show.optJSONObject("ids")?.optInt("tmdb")?.takeIf { it > 0 },
+                        year = show.optInt("year", 0).takeIf { it > 0 },
                         isSeries = true,
                         episodes = seasons
                     )

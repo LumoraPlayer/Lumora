@@ -25,9 +25,42 @@ data class PlaybackPosition(
     // from any list once you've left its detail screen (only its parent series is kept
     // around), so "Continue Watching" needs enough here to resume it directly rather
     // than re-looking it up.
-    val channel: Channel? = null
+    val channel: Channel? = null,
+    // How far through the item, 0-100, for a position that is not known in milliseconds.
+    //
+    // Trakt states a percentage and no duration (its /sync/playback rows carry `progress`),
+    // and the local copy's own runtime is the only thing that can turn it back into a
+    // position - which is not known until the stream is open. So the percentage travels
+    // as a percentage and is resolved against the real duration at resume time; see
+    // resumeMsFor. Null for every position this device measured itself.
+    val progressPercent: Double? = null
 ) {
     val isNearComplete: Boolean get() = durationMs > 0 && positionMs >= durationMs * COMPLETION_THRESHOLD
+
+    /**
+     * True when the entry says "part-watched", in either currency.
+     *
+     * A percentage-only entry has no milliseconds and no duration, so it reads as neither
+     * near-complete nor empty: it is exactly the state Trakt's own resume list describes.
+     */
+    val isInProgress: Boolean
+        get() = !isNearComplete && (positionMs > 0 || (progressPercent ?: 0.0) > 0.0)
+
+    /**
+     * The position to resume from, given the stream's real runtime.
+     *
+     * A percentage is resolved against that runtime; a position measured on this device is
+     * already in milliseconds and is used as it stands. The duration is what turns one into
+     * the other, so this can only be answered once the media is open.
+     */
+    fun resumeMsFor(durationMs: Long): Long {
+        val percent = progressPercent
+        if (percent != null && percent > 0.0 && durationMs > 0L) {
+            val ms = (durationMs * percent / 100.0).toLong()
+            if (ms > 0L) return ms
+        }
+        return positionMs
+    }
 }
 
 /** Saves VOD/series watch progress to disk so playback can resume where it left off. */
@@ -52,14 +85,33 @@ object PlaybackPositionStore {
 
     fun get(context: Context, key: String): PlaybackPosition? = ensureLoaded(context)[key]
 
-    fun save(context: Context, key: String, positionMs: Long, durationMs: Long, channel: Channel? = null) {
+    fun save(
+        context: Context,
+        key: String,
+        positionMs: Long,
+        durationMs: Long,
+        channel: Channel? = null,
+        progressPercent: Double? = null,
+        updatedAt: Long = System.currentTimeMillis()
+    ) {
         // No durationMs guard: a chunked/unseekable stream whose duration ExoPlayer never
         // learns still has a real position, and dropping the entry kept it out of Continue
         // Watching entirely. durationMs = 0 reads as "unknown", never as near-complete
         // (see isNearComplete), so it stays an in-progress entry.
-        if (key.isBlank() || positionMs <= 0) return
+        //
+        // A position of zero is still worth keeping when a percentage came with it: that is
+        // what another device's resume point looks like before the local runtime is known
+        // (see PlaybackPosition.progressPercent).
+        if (key.isBlank()) return
+        if (positionMs <= 0 && (progressPercent == null || progressPercent <= 0.0)) return
         val map = ensureLoaded(context)
-        map[key] = PlaybackPosition(positionMs, durationMs, System.currentTimeMillis(), channel)
+        map[key] = PlaybackPosition(
+            positionMs = positionMs,
+            durationMs = durationMs,
+            updatedAt = updatedAt,
+            channel = channel,
+            progressPercent = progressPercent
+        )
         if (map.size > MAX_ENTRIES) {
             map.entries.minByOrNull { it.value.updatedAt }?.key?.let { map.remove(it) }
         }
@@ -100,10 +152,13 @@ object PlaybackPositionStore {
      *  recently watched first - for "Continue Watching". Entries saved before the
      *  channel snapshot existed are skipped, not crash-worthy garbage. A snapshot with
      *  neither an id nor a url is structurally broken - it can't render a tile or
-     *  resume, so it's dropped too. */
+     *  resume, so it's dropped too.
+     *
+     *  "In progress" is read in either currency (see PlaybackPosition.isInProgress): a
+     *  position measured here, or a percentage another device left behind. */
     fun getAllInProgress(context: Context): List<Channel> =
         ensureLoaded(context).entries
-            .filter { !it.value.isNearComplete && it.value.positionMs > 0 }
+            .filter { it.value.isInProgress }
             .filter { entry ->
                 val ch = entry.value.channel
                 ch != null && (ch.id.isNotBlank() || ch.url.isNotBlank())
@@ -288,7 +343,14 @@ object PlaybackPositionStore {
                         positionMs = entry.optLong("positionMs"),
                         durationMs = entry.optLong("durationMs"),
                         updatedAt = entry.optLong("updatedAt"),
-                        channel = channel
+                        channel = channel,
+                        // Absent on entries written before another device's resume points
+                        // were imported - those have a measured position and no percentage.
+                        progressPercent = if (entry.has("progressPercent")) {
+                            entry.optDouble("progressPercent").takeIf { !it.isNaN() && it > 0.0 }
+                        } else {
+                            null
+                        }
                     )
                 }
                 map
@@ -309,6 +371,7 @@ object PlaybackPositionStore {
                     put("positionMs", pos.positionMs)
                     put("durationMs", pos.durationMs)
                     put("updatedAt", pos.updatedAt)
+                    pos.progressPercent?.let { put("progressPercent", it) }
                     pos.channel?.let { ch ->
                         put("channel", JSONObject().apply {
                             put("id", ch.id)
