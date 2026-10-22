@@ -17,3 +17,6 @@ keystore.properties
 node_modules/
 package-lock.json
 package.json
+
+# Windows shell redirect artifact (reserved device name) - never commit
+nul
