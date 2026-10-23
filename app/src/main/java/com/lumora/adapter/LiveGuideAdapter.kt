@@ -121,6 +121,15 @@ class LiveGuideAdapter(
         }
     }
 
+    fun replaceAll(items: List<Channel>, commitCallback: Runnable? = null) {
+        // Same fast path as PosterGridAdapter.replaceAll: a category switch has nothing to
+        // diff (the old and new lists share almost nothing), so skip DiffUtil and hand the
+        // list straight to the adapter. remove-all + insert-all are synchronous, so the
+        // RecyclerView lays out once with the new items - no empty frame in between.
+        submitList(null)
+        submitList(items, commitCallback)
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RowViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_guide_channel_row, parent, false)
         return RowViewHolder(view)

@@ -1379,14 +1379,19 @@ internal fun MainActivity.showSeeAll(shelf: ContentShelf) {
     selectedRowId = null
     selectedCategoryIds = null
     selectedBrandChannelIds = null
-    scope.launch { applyCategoryFilter() }
+    scope.launch { applyCategoryFilter(wholesale = true) }
 }
 
 // Series/Films normally use category-based shelves; picking one
 // specific category from the sidebar swaps that tab's RecyclerView to a vertical,
 // scrollable poster grid instead - a horizontal strip isn't enough room to browse
 // a whole category in. Filtering the full catalog is real work, so it runs off-main.
-internal suspend fun MainActivity.applyCategoryFilter(focusFirstLiveChannel: Boolean = false) {
+internal suspend fun MainActivity.applyCategoryFilter(
+    focusFirstLiveChannel: Boolean = false,
+    /** True for a category pick (the list changes wholesale), false for an in-place
+     *  refresh where the diff is worth computing. Live TV uses it to skip DiffUtil. */
+    wholesale: Boolean = false
+) {
     // Claim this run. Anything that resumes from the background filter below only gets to
     // touch an adapter if no newer switch has started since - see categoryFilterGeneration.
     val generation = ++categoryFilterGeneration
@@ -1402,7 +1407,14 @@ internal suspend fun MainActivity.applyCategoryFilter(focusFirstLiveChannel: Boo
                 when {
                     isFavourites -> source.filter { it.id in favoriteIds }
                     brandIds != null && matchIds != null ->
-                        source.filter { it.id in brandIds || it.filterKey() in matchIds }
+                        source.filter {
+                            // A dynamic bucket/brand carries its whole membership in
+                            // channelIds and an empty matchIds. Testing filterKey() against
+                            // that empty set made every switch scan the entire tab (14k
+                            // channels) computing a key per non-member - the 150ms+ that
+                            // made dynamic rows feel slow. Short-circuit it.
+                            it.id in brandIds || (matchIds.isNotEmpty() && it.filterKey() in matchIds)
+                        }
                     brandIds != null -> source.filter { it.id in brandIds }
                     matchIds == null -> source
                     else -> source.filter { it.filterKey() in matchIds }
@@ -1411,23 +1423,27 @@ internal suspend fun MainActivity.applyCategoryFilter(focusFirstLiveChannel: Boo
             // A newer category switch started while this filter ran - its result is the
             // one the user is waiting for, so drop ours rather than overwrite it.
             if (generation != categoryFilterGeneration) return
-            liveAdapter.submitList(filtered) {
+            val commit = Runnable {
                 updateGuideRowWrap()
-                if (!focusFirstLiveChannel) return@submitList
-                val first = filtered.firstOrNull() ?: return@submitList
-                requestPreviewLoad(first)
-                // submitList's commit callback fires once the diff is applied, but the
-                // row's ViewHolder isn't necessarily laid out yet on this same frame - a
-                // single post() still occasionally lands before RecyclerView's own
-                // pending layout pass, so nest two: the first just waits for that layout
-                // request to be queued, the second runs after it's actually done.
-                binding.liveContent.post {
-                    binding.liveContent.post {
-                        (binding.liveContent.findViewHolderForAdapterPosition(0) as? LiveGuideAdapter.RowViewHolder)
-                            ?.requestChannelFocus()
+                if (focusFirstLiveChannel) {
+                    val first = filtered.firstOrNull()
+                    if (first != null) {
+                        requestPreviewLoad(first)
+                        // submitList's commit callback fires once the diff is applied, but the
+                        // row's ViewHolder isn't necessarily laid out yet on this same frame - a
+                        // single post() still occasionally lands before RecyclerView's own
+                        // pending layout pass, so nest two: the first just waits for that layout
+                        // request to be queued, the second runs after it's actually done.
+                        binding.liveContent.post {
+                            binding.liveContent.post {
+                                (binding.liveContent.findViewHolderForAdapterPosition(0) as? LiveGuideAdapter.RowViewHolder)
+                                    ?.requestChannelFocus()
+                            }
+                        }
                     }
                 }
             }
+            if (wholesale) liveAdapter.replaceAll(filtered, commit) else liveAdapter.submitList(filtered, commit)
             binding.liveContent.scrollToPosition(0)
         }
         1 -> {
@@ -1489,7 +1505,9 @@ internal suspend fun MainActivity.applyCategoryFilter(focusFirstLiveChannel: Boo
                 binding.seriesContent.adapter = seriesShelfAdapter
                 seriesShelfAdapter.submitList(seriesShelves)
             } else {
-                val filtered = withContext(Dispatchers.Default) { source.filter { it.filterKey() in matchIds } }
+                val filtered = withContext(Dispatchers.Default) {
+                    if (matchIds.isEmpty()) emptyList() else source.filter { it.filterKey() in matchIds }
+                }
                 // A newer category switch started while this filter ran - its result is the
                 // one the user is waiting for, so drop ours rather than overwrite it.
                 if (generation != categoryFilterGeneration) return
@@ -1544,7 +1562,9 @@ internal suspend fun MainActivity.applyCategoryFilter(focusFirstLiveChannel: Boo
                 binding.filmsContent.adapter = filmsShelfAdapter
                 filmsShelfAdapter.submitList(filmShelves)
             } else {
-                val filtered = withContext(Dispatchers.Default) { source.filter { it.filterKey() in matchIds } }
+                val filtered = withContext(Dispatchers.Default) {
+                    if (matchIds.isEmpty()) emptyList() else source.filter { it.filterKey() in matchIds }
+                }
                 // A newer category switch started while this filter ran - its result is the
                 // one the user is waiting for, so drop ours rather than overwrite it.
                 if (generation != categoryFilterGeneration) return
@@ -1622,7 +1642,7 @@ internal fun MainActivity.onCategorySelected(category: CategoryFilter) {
             // setSelected must run after the diff commits, or it highlights against the
             // pre-diff list and can notify a stale index.
             categoryAdapter.submitList(currentList) { categoryAdapter.setSelected(selectedRowId) }
-            scope.launch { applyCategoryFilter() }
+            scope.launch { applyCategoryFilter(wholesale = true) }
         } else {
             // Was collapsed -> expanding. The children were already computed by the
             // last build and cached, so splice them in the same way collapse removes
@@ -1639,13 +1659,13 @@ internal fun MainActivity.onCategorySelected(category: CategoryFilter) {
                 // setSelected must run after the diff commits, or it highlights against the
                 // pre-diff list and can notify a stale index.
                 categoryAdapter.submitList(currentList) { categoryAdapter.setSelected(selectedRowId) }
-                scope.launch { applyCategoryFilter() }
+                scope.launch { applyCategoryFilter(wholesale = true) }
             } else {
                 // No cached children (first build hasn't run, or the row postdates it) -
                 // fall back to the full rebuild rather than silently expanding to nothing.
                 scope.launch {
                     rebuildCategoriesForActiveTab()
-                    applyCategoryFilter()
+                    applyCategoryFilter(wholesale = true)
                 }
             }
         }
@@ -1655,7 +1675,7 @@ internal fun MainActivity.onCategorySelected(category: CategoryFilter) {
         // is exactly the "picking a category takes forever" complaint. setSelected()
         // already re-renders the sidebar's highlight on its own.
         categoryAdapter.setSelected(selectedRowId)
-        scope.launch { applyCategoryFilter(focusFirstLiveChannel = activeTab == 0) }
+        scope.launch { applyCategoryFilter(focusFirstLiveChannel = activeTab == 0, wholesale = true) }
     }
 }
 
@@ -2170,7 +2190,7 @@ internal fun MainActivity.onSideMenuCategoryClicked(category: CategoryFilter) {
         selectedBrandChannelIds = category.channelIds.ifEmpty { null }
         selectedCategoryIds = if (category.id == null) null else category.matchIds
         categoryAdapter.setSelected(selectedRowId)
-        applyCategoryFilter()
+        applyCategoryFilter(wholesale = true)
     }
 }
 

@@ -159,9 +159,11 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
                         }
                     }
                     // A category-grid filter whose matchIds now match no item would leave an
-                    // empty pane - fall back to the All view instead of showing nothing.
+                    // empty pane - fall back to the All view instead of showing nothing. An
+                    // empty matchIds set is a dynamic brand/bucket (membership lives in
+                    // channelIds), not a filter, so it must not clear itself here.
                     val matchIds = selectedCategoryIds
-                    if (matchIds != null) {
+                    if (matchIds != null && matchIds.isNotEmpty()) {
                         val source = when (activeTab) { 0 -> liveChannels; 1 -> seriesList; else -> filmList }
                         val empty = withContext(Dispatchers.Default) { source.none { it.filterKey() in matchIds } }
                         if (empty) selectedCategoryIds = null
@@ -323,7 +325,9 @@ internal fun MainActivity.renderLivePartial() {
             val filtered = withContext(Dispatchers.Default) {
                 when {
                     isFavourites -> source.filter { it.id in favoriteIds }
-                    brandIds != null && matchIds != null -> source.filter { it.id in brandIds || it.filterKey() in matchIds }
+                    brandIds != null && matchIds != null -> source.filter {
+                        it.id in brandIds || (matchIds.isNotEmpty() && it.filterKey() in matchIds)
+                    }
                     brandIds != null -> source.filter { it.id in brandIds }
                     matchIds == null -> source
                     else -> source.filter { it.filterKey() in matchIds }
@@ -331,8 +335,9 @@ internal fun MainActivity.renderLivePartial() {
             }
             // A category-grid filter whose matchIds now match no item (a partial merge
             // that hasn't covered the selected category yet) would leave an empty pane -
-            // fall back to the All view instead of showing nothing.
-            val empty = if (matchIds != null) {
+            // fall back to the All view instead of showing nothing. An empty matchIds set
+            // is a dynamic brand/bucket (membership lives in channelIds), not a filter.
+            val empty = if (matchIds != null && matchIds.isNotEmpty()) {
                 withContext(Dispatchers.Default) { source.none { it.filterKey() in matchIds } }
             } else false
             if (matchIds != null && empty) {
