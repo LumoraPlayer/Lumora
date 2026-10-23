@@ -693,8 +693,11 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         // so the network is only worth hitting once every CATALOG_TTL_MS - or right
         // away when the user changes a provider, which force-refreshes.
         var cached: List<Channel>? = null
+        var cachedWasLegacy = false
         if (!forceRefresh) {
-            cached = withContext(Dispatchers.IO) { ChannelCache.load(this@loadAllConfiguredProviders) }
+            val loaded = withContext(Dispatchers.IO) { ChannelCache.loadWithMeta(this@loadAllConfiguredProviders) }
+            cached = loaded?.channels
+            cachedWasLegacy = loaded?.legacyFormat == true
             if (!cached.isNullOrEmpty()) {
                 // The content-type gates apply to a cached cold start too - the cache
                 // is saved unfiltered, so types switched off since it was written would
@@ -726,7 +729,7 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 // hidden on an upgraded install: tvArchive was false catalogue-wide until
                 // something refetched. Treat that file as stale so the refresh below runs
                 // once, silently, under the content already on screen.
-                if (!isCatalogStale() && !ChannelCache.lastLoadWasLegacyFormat) return@launch
+                if (!isCatalogStale() && !cachedWasLegacy) return@launch
             }
         }
 

@@ -78,6 +78,15 @@ class XmltvDateParsingTest {
     }
 
     @Test
+    fun `a day past the month's length is rejected`() {
+        // These used to roll into the next month (Feb 31 -> Mar 3) and return a
+        // plausible-looking wrong timestamp.
+        assertEquals(0L, parse("20260231000000 +0000"))
+        assertEquals(0L, parse("20230229000000 +0000")) // 2023 is not a leap year
+        assertEquals(0L, parse("20260431000000 +0000"))
+    }
+
+    @Test
     fun `dates before the epoch parse negative`() {
         // 1969-12-31T00:00:00Z. Nothing schedules programmes here, but the era arithmetic
         // branches on the sign and a wrong branch would be silent.

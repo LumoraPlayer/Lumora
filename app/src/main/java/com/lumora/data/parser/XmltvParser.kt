@@ -46,7 +46,10 @@ object XmltvParser {
 
     data class XmltvResult(
         val channels: List<XmltvChannel>,
-        val programmes: List<XmltvProgramme>
+        val programmes: List<XmltvProgramme>,
+        /** True when the list API hit [MAX_PROGRAMMES]. The streaming path (the worker)
+         *  never accumulates a list, so it is always false there. */
+        val truncated: Boolean = false
     )
 
     /**
@@ -72,7 +75,19 @@ object XmltvParser {
     fun parse(
         inputStream: InputStream,
         keepChannelIds: Set<String>? = null,
-        keepChannelNames: Set<String>? = null
+        keepChannelNames: Set<String>? = null,
+        /** List-API cap. Ignored when [onProgramme] is supplied - the streaming path lets
+         *  the caller persist each programme instead of retaining a list. */
+        maxProgrammes: Int = MAX_PROGRAMMES,
+        /** Called for every parsed channel, including channels past [MAX_CHANNELS] (the cap
+         *  only bounds the returned metadata list). The worker maps names to app channels
+         *  here as it reads them, so a feed with more channel elements than the cap still
+         *  maps every programme. */
+        onChannel: ((XmltvChannel) -> Unit)? = null,
+        /** When non-null, programmes are handed to the sink as they are parsed and are not
+         *  accumulated in the result. This is what lets a half-million-programme feed sync
+         *  without a 50k cap or a list the size of the feed. */
+        onProgramme: ((XmltvProgramme) -> Unit)? = null
     ): XmltvResult {
         val channels = mutableListOf<XmltvChannel>()
         val programmes = mutableListOf<XmltvProgramme>()
@@ -87,7 +102,9 @@ object XmltvParser {
 
         val factory = XmlPullParserFactory.newInstance()
         val parser = factory.newPullParser()
-        parser.setInput(stream, "UTF-8")
+        // null lets the parser honour the XML declaration/BOM. Forcing "UTF-8" here turned
+        // every ISO-8859-1 feed (still common for XMLTV) into mojibake.
+        parser.setInput(stream, null)
 
         var eventType = parser.eventType
 
@@ -127,11 +144,15 @@ object XmltvParser {
                                     }
                                 }
                             }
+                            val parsedChannel = XmltvChannel(id, displayName, icon, displayNames)
                             if (channels.size < MAX_CHANNELS) {
-                                channels.add(XmltvChannel(id, displayName, icon, displayNames))
-                            } else {
-                                Log.w(TAG, "Reached max channel limit ($MAX_CHANNELS), truncating")
+                                channels.add(parsedChannel)
+                            } else if (channels.size == MAX_CHANNELS) {
+                                Log.w(TAG, "Reached max channel limit ($MAX_CHANNELS), truncating metadata")
                             }
+                            // Called even past the metadata cap: the worker's name map must
+                            // still know this channel to map its programmes.
+                            onChannel?.invoke(parsedChannel)
                             // Reached by name rather than by id: this feed's channel is one of
                             // the user's, spelled differently. Its programmes are wanted.
                             if (wantedIds != null && id !in wantedIds && keepChannelNames != null) {
@@ -263,33 +284,37 @@ object XmltvParser {
                             if (wantedIds != null && channel !in wantedIds) {
                                 // Not one of the user's channels: skip the row before it is
                                 // built, which is what keeps an enormous feed's programme list
-                                // (and the MAX_PROGRAMMES cap) confined to channels that can
+                                // (and the list API's cap) confined to channels that can
                                 // actually be watched.
-                                truncated = false
-                            } else if (programmes.size < MAX_PROGRAMMES) {
-                                programmes.add(
-                                    XmltvProgramme(
-                                        channel = channel,
-                                        title = title,
-                                        subTitle = subTitle,
-                                        description = desc,
-                                        startTimestamp = parseXmltvDate(start),
-                                        stopTimestamp = parseXmltvDate(stop),
-                                        category = category,
-                                        episodeNumber = episodeNum,
-                                        icon = icon,
-                                        date = date,
-                                        starRating = rating,
-                                        credits = credits
-                                    )
-                                )
                             } else {
-                                // Warned once per parse rather than per dropped programme - a
-                                // truncated feed can be hundreds of thousands of rows past the
-                                // cap, and one log line per row is its own kind of hang.
-                                if (!truncated) {
-                                    truncated = true
-                                    Log.w(TAG, "Reached max programme limit ($MAX_PROGRAMMES), truncating")
+                                val parsedProgramme = XmltvProgramme(
+                                    channel = channel,
+                                    title = title,
+                                    subTitle = subTitle,
+                                    description = desc,
+                                    startTimestamp = parseXmltvDate(start),
+                                    stopTimestamp = parseXmltvDate(stop),
+                                    category = category,
+                                    episodeNumber = episodeNum,
+                                    icon = icon,
+                                    date = date,
+                                    starRating = rating,
+                                    credits = credits
+                                )
+                                if (onProgramme != null) {
+                                    // Streaming path: no list, no cap. The caller persists
+                                    // each programme (in batches) as it arrives.
+                                    onProgramme.invoke(parsedProgramme)
+                                } else if (programmes.size < maxProgrammes) {
+                                    programmes.add(parsedProgramme)
+                                } else {
+                                    // Warned once per parse rather than per dropped programme - a
+                                    // truncated feed can be hundreds of thousands of rows past the
+                                    // cap, and one log line per row is its own kind of hang.
+                                    if (!truncated) {
+                                        truncated = true
+                                        Log.w(TAG, "Reached max programme limit ($maxProgrammes), truncating")
+                                    }
                                 }
                             }
                         }
@@ -299,7 +324,7 @@ object XmltvParser {
             eventType = parser.next()
         }
 
-        return XmltvResult(channels, programmes)
+        return XmltvResult(channels, programmes, truncated)
     }
 
     /**
@@ -361,7 +386,10 @@ object XmltvParser {
         val hour = if (n >= 10) s.digitsAt(8, 10) else 0
         val minute = if (n >= 12) s.digitsAt(10, 12) else 0
         val second = if (n >= 14) s.digitsAt(12, 14) else 0
-        if (month !in 1..12 || day !in 1..31 || hour > 23 || minute > 59 || second > 59) return 0L
+        if (month !in 1..12 || hour > 23 || minute > 59 || second > 59) return 0L
+        // A day past the month's length used to roll into the next month (Feb 31 -> Mar 3),
+        // which is a plausible-looking wrong timestamp rather than a rejection.
+        if (day !in 1..daysInMonth(year, month)) return 0L
 
         // Seconds the reading would be at if the wall clock were UTC; the zone suffix then
         // shifts it onto the real instant.
@@ -421,6 +449,12 @@ object XmltvParser {
         val dayOfYear = (153 * (if (month > 2) month - 3 else month + 9) + 2) / 5 + day - 1
         val dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear
         return era * 146_097 + dayOfEra - 719_468
+    }
+
+    private fun daysInMonth(year: Int, month: Int): Int = when (month) {
+        2 -> if ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0) 29 else 28
+        4, 6, 9, 11 -> 30
+        else -> 31
     }
 
     /** Digits in `[from, to)`, which the caller has already established are digits. */

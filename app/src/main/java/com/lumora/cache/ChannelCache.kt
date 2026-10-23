@@ -168,15 +168,16 @@ object ChannelCache {
         }
     }
 
-    /** True when the file just loaded was written before the archive fields existed, so
-     *  every channel came back with tvArchive=false regardless of what the panel reports.
-     *  The catalogue is still perfectly usable - it just cannot answer "does this channel
-     *  have catch-up" until a refetch, which the caller schedules off the back of this. */
-    @Volatile
-    var lastLoadWasLegacyFormat: Boolean = false
-        private set
+    /** A loaded catalogue plus the one fact about the file the caller needs: whether it was
+     *  written before the archive fields existed, so every channel came back with
+     *  tvArchive=false regardless of what the panel reports. Returned rather than exposed as
+     *  a process-wide flag - the EPG worker loads the same cache in the background, and a
+     *  shared flag let its load overwrite the UI's answer. */
+    class LoadResult(val channels: List<Channel>, val legacyFormat: Boolean)
 
-    fun load(context: Context): List<Channel>? {
+    fun load(context: Context): List<Channel>? = loadWithMeta(context)?.channels
+
+    fun loadWithMeta(context: Context): LoadResult? {
         val file = File(context.filesDir, CACHE_FILE)
         if (!file.exists()) return null
         val startedAt = System.currentTimeMillis()
@@ -192,7 +193,6 @@ object ChannelCache {
                 RandomAccessFile(file, "r").use { it.readFully(bytes) }
                 parseCache(bytes)
             }
-            lastLoadWasLegacyFormat = parsed.legacyFormat
             // Cold-start budget line: this parse and the derive passes that follow it are
             // what "instant cached start" is spent on - keep them measurable on-device
             // (adb logcat -s LumoraPerf) rather than guessed at.
@@ -202,7 +202,7 @@ object ChannelCache {
                 "cache load: ${parsed.channels.size} items in ${System.currentTimeMillis() - startedAt}ms " +
                     "(${size / 1024}KB, $mode)" + if (parsed.legacyFormat) " [legacy format]" else ""
             )
-            parsed.channels
+            LoadResult(parsed.channels, parsed.legacyFormat)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load cache: ${e.message}")
             null
@@ -540,6 +540,6 @@ object ChannelCache {
     }
 }
 
-/** Result of [ChannelCache.parseCache]; [legacyFormat] mirrors
- *  [ChannelCache.lastLoadWasLegacyFormat]. */
+/** Result of [ChannelCache.parseCache]; [legacyFormat] is surfaced through
+ *  [ChannelCache.LoadResult]. */
 internal class ParsedCache(val channels: List<Channel>, val legacyFormat: Boolean)

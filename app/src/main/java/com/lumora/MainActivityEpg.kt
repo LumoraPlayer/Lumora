@@ -13,11 +13,13 @@ import com.lumora.model.CategoryFilter
 import com.lumora.model.Channel
 import com.lumora.parser.XtreamClient
 import com.lumora.player.PlayerManager
+import com.lumora.data.local.entity.EpgGuideStateEntity
 import com.lumora.data.local.entity.EpgProgramEntity
 import com.lumora.data.local.entity.EPG_NO_PROVIDER_SCOPE
 import com.lumora.data.local.entity.EPG_SOURCE_XTREAM
 import com.lumora.data.local.entity.epgGuideKey
 import com.lumora.data.local.entity.epgGuideKeyPrefix
+import com.lumora.data.local.entity.fixtureTitleShape
 import com.lumora.data.local.entity.guideDescription
 import kotlinx.coroutines.*
 import java.util.Locale
@@ -67,7 +69,9 @@ internal fun MainActivity.epgCandidateChannels(channelId: String): List<Channel>
 internal suspend fun MainActivity.resolveCurrentProgram(channelId: String): XtreamClient.EpgProgram? {
     val nowSeconds = System.currentTimeMillis() / 1000
     val programs = resolveEpgPrograms(channelId) ?: return null
-    return programs.firstOrNull { it.isNowAiring(nowSeconds) } ?: programs.firstOrNull()
+    // Only the programme actually airing now. The old fallback to the first entry showed a
+    // future (or already-ended) programme in the player's "now" line.
+    return programs.firstOrNull { it.isNowAiring(nowSeconds) }
 }
 
 /** Next several EPG entries for a channel, used to build one row of the guide timeline.
@@ -95,13 +99,18 @@ internal suspend fun MainActivity.resolveCurrentProgram(channelId: String): Xtre
 internal suspend fun MainActivity.resolveEpgPrograms(channelId: String): List<XtreamClient.EpgProgram>? {
     if (channelId.isBlank()) return null
     val nowSeconds = System.currentTimeMillis() / 1000
-    val prefix = epgGuideKeyPrefix(channelId, epgProviderScope(channelId))
+    // Captured once, before the fetch. The write path must use the same scope: recomputing
+    // it after a provider reload could file the old provider's schedule under the new
+    // provider's key (see persistEpgPrograms).
+    val scope = epgProviderScope(channelId)
+    val prefix = epgGuideKeyPrefix(channelId, scope)
+    val end = epgKeyPrefixEnd(prefix)
     val cached = withContext(Dispatchers.IO) {
         runCatching {
             val dao = database.epgProgramDao()
-            val fetchedAt = dao.lastFetchedAt(prefix, epgKeyPrefixEnd(prefix)) ?: return@runCatching null
+            val fetchedAt = dao.lastFetchedAt(prefix, end) ?: return@runCatching null
             if (System.currentTimeMillis() - fetchedAt >= EPG_DISK_TTL_MS) return@runCatching null
-            val rows = dao.upcomingFor(prefix, epgKeyPrefixEnd(prefix), nowSeconds)
+            val rows = dao.upcomingFor(prefix, end, nowSeconds)
             // Two tests, not one: the fetch has to be recent AND what it fetched has to
             // still reach far enough ahead to fill the row (see EPG_MIN_COVERAGE_SECONDS).
             val coverage = (rows.lastOrNull()?.stopTimestamp ?: 0L) - nowSeconds
@@ -112,6 +121,16 @@ internal suspend fun MainActivity.resolveEpgPrograms(channelId: String): List<Xt
         return mergeGuideRows(cached)
     }
 
+    // A provider that answered "no guide" is remembered on disk, not just for this process.
+    // Without this every cold start re-asked every guide-less channel.
+    val noGuideAt = withContext(Dispatchers.IO) {
+        runCatching { database.epgProgramDao().noGuideCheckedAt(prefix, end) }.getOrNull()
+    }
+    if (noGuideAt != null && System.currentTimeMillis() - noGuideAt < EPG_NO_GUIDE_TTL_MS) {
+        return emptyList()
+    }
+
+    val generation = EpgListCache.generation
     val client = XtreamClient(BaseApplication.instance.okHttpClient)
     // Whether any candidate had a provider to ask, and whether any of them answered "no
     // guide" - the two facts that turn a round of failed questions into a definite answer.
@@ -126,7 +145,7 @@ internal suspend fun MainActivity.resolveEpgPrograms(channelId: String): List<Xt
             sawEmpty = true
             continue
         }
-        persistEpgPrograms(channelId, programs)
+        persistEpgPrograms(channelId, scope, programs, generation)
         return programs
     }
     // Nothing answered for this stream id or its quality variants. A panel attaches its guide to
@@ -144,13 +163,16 @@ internal suspend fun MainActivity.resolveEpgPrograms(channelId: String): List<Xt
             sawEmpty = true
             continue
         }
-        persistEpgPrograms(channelId, programs)
+        persistEpgPrograms(channelId, scope, programs, generation)
         return programs
     }
     return when {
         // A provider answered, and what it answered was "nothing here". Remembered for a
         // while, so the guide stops asking a channel that has no guide.
-        sawEmpty -> emptyList()
+        sawEmpty -> {
+            markNoGuide(channelId, scope, generation)
+            emptyList()
+        }
         // Nothing to ask: the channel belongs to no Xtream provider, so the stored guide
         // (written by the XMLTV sync) is all there will ever be for it.
         !sawProvider -> emptyList()
@@ -201,7 +223,7 @@ internal fun MainActivity.sameNameGuideCandidates(channelId: String): List<Chann
     val key = com.lumora.util.normalizeLiveChannelKey(target.name)
     if (key.isBlank()) return emptyList()
     val alreadyTried = epgCandidateChannels(channelId).map { it.id }.toHashSet()
-    val byName = com.lumora.data.sync.EpgChannelMapping.byName(liveChannels)
+    val byName = epgNameIndex()
     val ids = byName[key]?.map { it.channelId }?.toHashSet() ?: return emptyList()
     return liveChannels.filter { it.id in ids && it.id !in alreadyTried }.take(MAX_EPG_FALLBACK_CHANNELS)
 }
@@ -234,15 +256,20 @@ internal fun epgKeyPrefixEnd(prefix: String): String = prefix + "\uFFFF"
  *
  * Two sources can describe the same slot - the panel's own guide and an XMLTV feed's - and
  * they are stored under different keys (see EpgProgramEntity). One row per slot is what the
- * guide draws, so the copies are merged here: the one carrying a blurb wins, because the
- * blurb is where a provider names the event its title only alludes to ("Formula 1" against
- * "It's lights out at Marina Bay for the Singapore Grand Prix").
+ * guide draws, so the copies are merged here: the lower-priority source wins, and between
+ * equal priorities the one carrying a blurb wins, because the blurb is where a provider names
+ * the event its title only alludes to ("Formula 1" against "It's lights out at Marina Bay for
+ * the Singapore Grand Prix").
  */
 private fun mergeGuideRows(rows: List<com.lumora.data.local.entity.EpgProgramEntity>): List<XtreamClient.EpgProgram> {
     val byStart = LinkedHashMap<Long, com.lumora.data.local.entity.EpgProgramEntity>(rows.size)
     for (row in rows) {
         val existing = byStart[row.startTimestamp]
-        if (existing == null || (existing.description.isNullOrBlank() && !row.description.isNullOrBlank())) {
+        if (existing == null ||
+            row.priority < existing.priority ||
+            (row.priority == existing.priority &&
+                existing.description.isNullOrBlank() && !row.description.isNullOrBlank())
+        ) {
             byStart[row.startTimestamp] = row
         }
     }
@@ -254,8 +281,13 @@ private fun mergeGuideRows(rows: List<com.lumora.data.local.entity.EpgProgramEnt
 /** Writes a freshly fetched guide to disk under the id the guide asked for - not the
  *  provider-specific id it was fetched with, since a quality-merged channel resolves
  *  through whichever of its versions answered (see epgCandidateChannels). */
-internal fun MainActivity.persistEpgPrograms(channelId: String, programs: List<XtreamClient.EpgProgram>) {
-    val guideKey = epgGuideKey(channelId, epgProviderScope(channelId), EPG_SOURCE_XTREAM)
+internal fun MainActivity.persistEpgPrograms(
+    channelId: String,
+    scope: String,
+    programs: List<XtreamClient.EpgProgram>,
+    generation: Int
+) {
+    val guideKey = epgGuideKey(channelId, scope, EPG_SOURCE_XTREAM)
     val rows = programs.map {
         EpgProgramEntity(
             channelId = channelId,
@@ -263,13 +295,19 @@ internal fun MainActivity.persistEpgPrograms(channelId: String, programs: List<X
             startTimestamp = it.startTimestamp,
             stopTimestamp = it.stopTimestamp,
             title = it.title,
-            description = guideDescription(it.description)
+            description = guideDescription(it.description),
+            // Xtream's own guide is the highest-priority copy of the slot.
+            priority = 0,
+            titleShape = fixtureTitleShape(it.title)
         )
     }
     // A process-lifetime scope, not the Activity's: the fetch that produced this guide is
     // already paid for, and a write cancelled by onDestroy() (scope.cancel()) would throw
     // the whole fetch away - the guide would be gone again on the next launch.
     epgWriteScope.launch(Dispatchers.IO) {
+        // A provider reload clears EpgListCache and bumps its generation. Writing now would
+        // file the old provider's schedule under the new provider's key.
+        if (generation != EpgListCache.generation) return@launch
         runCatching {
             // One transaction for the replace. Each suspend DAO call commits on its own, so
             // the delete and the insert were two SQLite transactions - and a process death
@@ -277,13 +315,33 @@ internal fun MainActivity.persistEpgPrograms(channelId: String, programs: List<X
             // cannot tell from "never fetched". The XMLTV worker wraps the same pair in a
             // transaction for the same reason.
             database.withTransaction {
+                val dao = database.epgProgramDao()
                 // Replace rather than merge: a re-fetch is the provider's current truth, and
                 // leaving old rows behind would keep a superseded schedule in the guide.
                 // Only *this* copy of the channel's guide is replaced - the XMLTV feed's rows
                 // for the same channel are a different answer and must survive.
-                database.epgProgramDao().deleteForGuide(guideKey)
-                database.epgProgramDao().upsertAll(rows)
+                dao.deleteForGuide(guideKey)
+                dao.upsertAll(rows)
+                // The guide exists now, so a previous "no guide" answer must not suppress
+                // the next read.
+                dao.upsertGuideState(
+                    EpgGuideStateEntity(guideKey, System.currentTimeMillis(), hasGuide = true)
+                )
             }
+        }
+    }
+}
+
+/** Remembers a provider's "nothing here" answer across launches (see
+ *  [EPG_NO_GUIDE_TTL_MS]). */
+internal fun MainActivity.markNoGuide(channelId: String, scope: String, generation: Int) {
+    val guideKey = epgGuideKey(channelId, scope, EPG_SOURCE_XTREAM)
+    epgWriteScope.launch(Dispatchers.IO) {
+        if (generation != EpgListCache.generation) return@launch
+        runCatching {
+            database.epgProgramDao().upsertGuideState(
+                EpgGuideStateEntity(guideKey, System.currentTimeMillis(), hasGuide = false)
+            )
         }
     }
 }
@@ -291,14 +349,25 @@ internal fun MainActivity.persistEpgPrograms(channelId: String, programs: List<X
 /** The scope the guide's disk writes run on - see [persistEpgPrograms]. */
 private val epgWriteScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-/** Drops guide rows whose programmes have already finished. Once per session, off the
+/** Drops guide rows whose programmes have already finished. Once per process, off the
  *  first-paint path - without it the table only ever grows. */
+private val epgPrunedThisProcess = java.util.concurrent.atomic.AtomicBoolean(false)
+
 internal fun MainActivity.pruneStoredEpg() {
+    // An Activity recreation used to run the whole prune again (the debug startup log showed
+    // it twice). The table state is process-wide, so the guard is too.
+    if (!epgPrunedThisProcess.compareAndSet(false, true)) return
     scope.launch(Dispatchers.IO) {
         runCatching {
             val dao = database.epgProgramDao()
             val dropped = dao.pruneEndedBefore(System.currentTimeMillis() / 1000 - EPG_PRUNE_GRACE_SECONDS)
-            android.util.Log.i("LumoraPerf", "epg store: ${dao.count()} rows kept, $dropped pruned")
+            // No-guide markers are tiny, but they are still per-channel state: drop ones
+            // older than a month so a lineup that churns does not accumulate them forever.
+            val states = dao.pruneGuideStateBefore(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000)
+            android.util.Log.i(
+                "LumoraPerf",
+                "epg store: ${dao.count()} rows kept, $dropped pruned, $states guide states dropped"
+            )
         }
     }
 }

@@ -11,7 +11,7 @@ import com.lumora.data.local.dao.*
 import com.lumora.data.local.entity.*
 
 @Database(
-    version = 6,
+    version = 7,
     exportSchema = true,
     entities = [
         ProviderEntity::class,
@@ -21,7 +21,8 @@ import com.lumora.data.local.entity.*
         WatchHistoryEntity::class,
         CustomGroupEntity::class,
         CustomGroupMemberEntity::class,
-        EpgProgramEntity::class
+        EpgProgramEntity::class,
+        EpgGuideStateEntity::class
     ]
 )
 abstract class LumoraDatabase : RoomDatabase() {
@@ -118,6 +119,38 @@ abstract class LumoraDatabase : RoomDatabase() {
             }
         }
 
+        /** v7 adds the two Sports-board guide columns and the no-guide state table.
+         *
+         *  - `priority` lets the reader prefer a higher-priority source when two feeds
+         *    describe the same slot (the old merge used database order).
+         *  - `titleShape` replaces the five leading-wildcard LIKEs the Sports board ran over
+         *    the whole time window; the backfill marks existing fixture-shaped rows once and
+         *    both writers keep it current.
+         *  - `epg_guide_state` remembers a provider's "no guide here" answer across process
+         *    deaths, so guide-less channels are not re-fetched on every cold start. */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `epg_programs` ADD COLUMN `priority` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `epg_programs` ADD COLUMN `titleShape` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "UPDATE `epg_programs` SET `titleShape` = 1 WHERE " +
+                        "title LIKE '% v %' OR title LIKE '% vs %' OR title LIKE '% vs. %' " +
+                        "OR title LIKE '% at %' OR title LIKE '% @ %' OR title LIKE 'Live:%'"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_epg_programs_titleShape_stopTimestamp` " +
+                        "ON `epg_programs` (`titleShape`, `stopTimestamp`)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `epg_guide_state` (" +
+                        "`guideKey` TEXT NOT NULL, " +
+                        "`checkedAt` INTEGER NOT NULL, " +
+                        "`hasGuide` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`guideKey`))"
+                )
+            }
+        }
+
         fun getInstance(context: Context): LumoraDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -125,7 +158,7 @@ abstract class LumoraDatabase : RoomDatabase() {
                     LumoraDatabase::class.java,
                     "lumora.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .build()
                     .also { instance = it }
             }

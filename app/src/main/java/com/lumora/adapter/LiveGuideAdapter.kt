@@ -33,6 +33,11 @@ private const val NOW_NEXT_SEPARATOR = " · "
 // long before firing its network fetch means rows that never settle never cost a
 // request at all - this is what keeps scrolling through thousands of channels smooth.
 private const val LOAD_DEBOUNCE_MS = 200L
+/** How long a row waits for another row's in-flight fetch before giving up on it. The side
+ *  menu already bounds this; the guide's loop used to poll forever, and could re-claim a
+ *  failed fetch immediately because markFailed() releases the in-flight flag. */
+private const val EPG_POLL_DELAY_MS = 200L
+private const val EPG_WAIT_MAX_POLLS = 50
 
 private data class RenderBlock(
     val title: String,
@@ -372,10 +377,18 @@ class LiveGuideAdapter(
                 } else {
                     loadJob = scope.launch {
                         delay(LOAD_DEBOUNCE_MS)
-                        while (current === channel) {
+                        var waits = 0
+                        while (current === channel && waits < EPG_WAIT_MAX_POLLS) {
                             val fresh = EpgListCache.get(channel.id)
                             if (fresh != null) {
                                 renderPrograms(channel, fresh)
+                                return@launch
+                            }
+                            if (EpgListCache.isFailed(channel.id)) {
+                                // The other row's fetch failed while we waited; its backoff
+                                // is now running, so do not claim the channel and hammer the
+                                // provider immediately.
+                                renderPrograms(channel, EpgListCache.peek(channel.id))
                                 return@launch
                             }
                             if (EpgListCache.markInFlight(channel.id)) {
@@ -426,8 +439,14 @@ class LiveGuideAdapter(
                             }
                             // Another row's fetch for this same id is in flight - poll until it
                             // lands (or claim it ourselves if that fetch gets cancelled) instead
-                            // of bailing, which left this row stuck on the placeholder.
-                            delay(200)
+                            // of bailing, which left this row stuck on the placeholder. Bounded
+                            // like the side menu: a claim released without anything cached must
+                            // not keep this row polling for the rest of the session.
+                            delay(EPG_POLL_DELAY_MS)
+                            waits++
+                        }
+                        if (current === channel) {
+                            renderPrograms(channel, EpgListCache.peek(channel.id))
                         }
                     }
                 }

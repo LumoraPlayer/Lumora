@@ -1815,7 +1815,19 @@ internal fun MainActivity.showEpgSourceListDialog() {
                     .setTitle(getString(R.string.list_delete_source))
                     .setMessage(getString(R.string.list_remove_source, source.name))
                     .setPositiveButton(getString(R.string.list_delete)) { _, _ ->
-                        scope.launch { database.epgSourceDao().delete(source) }
+                        scope.launch {
+                            // Stop a sync that may still be writing this source's rows after
+                            // the delete below.
+                            com.lumora.data.sync.EpgSyncWorker.cancel(this@showEpgSourceListDialog)
+                            // The source's guide rows live under guideKey suffix
+                            // "xmltv:<sourceId>"; deleting only the source row left them
+                            // feeding the guide until they expired.
+                            val sourceKey = "xmltv:${source.id}"
+                            val dao = database.epgProgramDao()
+                            dao.deleteForSource(sourceKey)
+                            dao.deleteGuideStateForSource(sourceKey)
+                            database.epgSourceDao().delete(source)
+                        }
                         Toast.makeText(this@showEpgSourceListDialog, getString(R.string.list_epg_source_deleted), Toast.LENGTH_SHORT).show()
                     }
                     .setNegativeButton(getString(R.string.cancel), null)

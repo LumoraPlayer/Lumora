@@ -255,6 +255,11 @@ internal const val EPG_PRUNE_GRACE_SECONDS = 2 * 60 * 60L
 // the rest of the row empty. The guide grid draws about three hours, so anything covering
 // less than four is re-fetched instead.
 internal const val EPG_MIN_COVERAGE_SECONDS = 4 * 60 * 60L
+/** How long a provider's "no guide here" answer is trusted on disk. Shorter than the
+ *  positive-guide TTL: a channel that gains a schedule should start showing it within a
+ *  couple of hours, while a cold start in that window no longer re-asks every guide-less
+ *  channel. */
+internal const val EPG_NO_GUIDE_TTL_MS = 2 * 60 * 60 * 1000L
 /** Per-provider ceiling on a catalogue fetch. Deliberately far above what a healthy provider
  *  needs: this exists to stop a *dead* entry starving the providers queued behind it, not to
  *  discipline a slow one. A real portal measured here streams 67MB of live channels in 4s and
@@ -896,6 +901,21 @@ class MainActivity : AppCompatActivity() {
      *  filter can be the one that submits last and leaves the previous category's items
      *  (or nothing) on screen. A run whose generation is stale on resume drops its result. */
     internal var categoryFilterGeneration = 0
+    /** Cached [EpgChannelMapping.byName] index for the current live list. Building it
+     *  allocates a map plus a set per channel, and the guide asks for it on every channel
+     *  that needs the same-name fallback; keying it by the list instance makes a catalogue
+     *  reload invalidate it automatically. */
+    @Volatile private var epgNameIndexFor: List<Channel>? = null
+    @Volatile private var epgNameIndexCache: Map<String, Set<com.lumora.data.sync.EpgChannelMapping.GuideTarget>> = emptyMap()
+
+    internal fun epgNameIndex(): Map<String, Set<com.lumora.data.sync.EpgChannelMapping.GuideTarget>> {
+        val source = liveChannels
+        if (epgNameIndexFor === source) return epgNameIndexCache
+        val built = com.lumora.data.sync.EpgChannelMapping.byName(source)
+        epgNameIndexCache = built
+        epgNameIndexFor = source
+        return built
+    }
     internal val expandedGroupKeys = mutableSetOf<String>()
     /** Set while the search overlay is open. Receives a typed character, or null for
      *  backspace, from a real keyboard - the query field itself isn't focusable. */

@@ -24,7 +24,7 @@ interface EpgProgramDao {
      */
     @Query(
         "SELECT * FROM epg_programs WHERE guideKey >= :prefix AND guideKey < :prefixEnd " +
-            "AND stopTimestamp >= :nowSeconds ORDER BY startTimestamp ASC LIMIT :limit"
+            "AND stopTimestamp >= :nowSeconds ORDER BY startTimestamp ASC, priority ASC LIMIT :limit"
     )
     suspend fun upcomingFor(prefix: String, prefixEnd: String, nowSeconds: Long, limit: Int = 32): List<EpgProgramEntity>
 
@@ -45,7 +45,7 @@ interface EpgProgramDao {
     @Query("DELETE FROM epg_programs WHERE guideKey = :guideKey")
     suspend fun deleteForGuide(guideKey: String)
 
-    /** Drops programmes that finished before [beforeSeconds]. Run once per session so the
+    /** Drops programmes that finished before [beforeSeconds]. Run once per process so the
      *  table tracks the guide window instead of growing without limit. */
     @Query("DELETE FROM epg_programs WHERE stopTimestamp < :beforeSeconds")
     suspend fun pruneEndedBefore(beforeSeconds: Long): Int
@@ -56,25 +56,15 @@ interface EpgProgramDao {
     /**
      * Fixture-shaped guide rows in a time window: the Sports tab's candidate set.
      *
-     * The LIKE pre-filter is doing real work, not decoration. The table holds one row per
-     * programme per channel - six figures once a large XMLTV source has been mapped - and
-     * pulling all of them into Kotlin to tokenise would cost tens of MB of short-lived objects
-     * on a TV stick for the sake of the few hundred rows that actually describe a live event.
-     * Every provider feeds its fixtures the same way ("A v B", "A vs B", "A at B", or the same
-     * behind a "Live: " prefix), so this narrows the scan in SQLite and hands back something
-     * small enough to score in memory.
-     *
-     * Matched on the title alone even though the scorer also reads the description: this half
-     * exists for the channels the caller knows nothing about, and a description is far too loose
-     * a filter to open the whole catalogue with. Every sports channel's rows come through
-     * [windowRowsForChannels] anyway, descriptions included - which is where a provider guide
-     * keeps its fixtures.
+     * [EpgProgramEntity.titleShape] is computed by both writers and indexed with the stop
+     * time. The old query ran five leading-wildcard LIKEs (`% v %`, `% at %`, ...) over the
+     * whole window, which no index can narrow - on a six-figure table that was a full scan of
+     * every programme overlapping the board's window on every refresh.
      */
     @Query(
         "SELECT channelId, title, description, startTimestamp, stopTimestamp FROM epg_programs " +
             "WHERE stopTimestamp >= :fromSeconds AND startTimestamp <= :toSeconds " +
-            "AND (title LIKE '% v %' OR title LIKE '% vs %' OR title LIKE '% vs. %' " +
-            "OR title LIKE '% at %' OR title LIKE '% @ %' OR title LIKE 'Live:%') " +
+            "AND titleShape = 1 " +
             "ORDER BY startTimestamp ASC LIMIT :limit"
     )
     suspend fun eventWindowRows(fromSeconds: Long, toSeconds: Long, limit: Int): List<EpgProgramRow>
@@ -92,6 +82,33 @@ interface EpgProgramDao {
         toSeconds: Long,
         limit: Int
     ): List<EpgProgramRow>
+
+    /**
+     * Drops every copy of a source's guide. The key ends in `|sourceKey` (see
+     * [com.lumora.data.local.entity.epgGuideKey]), so a suffix match is the only way to
+     * delete a whole source at once. Used when the source is removed and by the worker's
+     * per-source replace, so a feed that stops carrying a channel does not leave its old
+     * future programmes behind.
+     */
+    @Query("DELETE FROM epg_programs WHERE guideKey LIKE '%|' || :sourceKey")
+    suspend fun deleteForSource(sourceKey: String): Int
+
+    @Query("DELETE FROM epg_guide_state WHERE guideKey LIKE '%|' || :sourceKey")
+    suspend fun deleteGuideStateForSource(sourceKey: String): Int
+
+    /** When this channel's last "provider has no guide" answer was stored, or null if there
+     *  has never been one. A recent answer suppresses the network fetch across launches. */
+    @Query(
+        "SELECT MAX(checkedAt) FROM epg_guide_state " +
+            "WHERE guideKey >= :prefix AND guideKey < :prefixEnd AND hasGuide = 0"
+    )
+    suspend fun noGuideCheckedAt(prefix: String, prefixEnd: String): Long?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertGuideState(state: com.lumora.data.local.entity.EpgGuideStateEntity)
+
+    @Query("DELETE FROM epg_guide_state WHERE checkedAt < :before")
+    suspend fun pruneGuideStateBefore(before: Long): Int
 }
 
 /** Projection of the guide columns the Sports tab scores against - see [EpgProgramDao]. */

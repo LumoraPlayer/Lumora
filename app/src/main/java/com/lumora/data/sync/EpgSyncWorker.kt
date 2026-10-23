@@ -6,13 +6,26 @@ import android.util.Log
 import androidx.room.withTransaction
 import androidx.work.*
 import com.lumora.BaseApplication
-import com.lumora.data.local.LumoraDatabase
+import com.lumora.PREF_CLASSIC_CATEGORY_LAYOUT
+import com.lumora.PREF_GROUP_CHANNELS
+import com.lumora.PREF_HIDE_ADULT
 import com.lumora.cache.ChannelCache
+import com.lumora.cache.DerivedCache
+import com.lumora.data.IptvProviderStore
+import com.lumora.data.local.LumoraDatabase
 import com.lumora.data.local.entity.EpgProgramEntity
 import com.lumora.data.local.entity.epgGuideKey
+import com.lumora.data.local.entity.fixtureTitleShape
 import com.lumora.data.local.entity.guideDescription
 import com.lumora.data.parser.XmltvParser
+import com.lumora.model.Channel
+import com.lumora.model.MediaType
+import com.lumora.util.groupLiveQualityVersions
+import com.lumora.util.isAdultCategory
 import com.lumora.util.normalizeLiveChannelKey
+import com.lumora.util.withoutBackupOnlyGroups
+import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
@@ -33,18 +46,12 @@ class EpgSyncWorker(
 
         if (sources.isEmpty()) return Result.success()
 
-        // XMLTV programme rows carry the feed's raw tvg-id, but the guide reads by app
-        // channel id (MainActivityEpg.resolveEpgPrograms → epgProgramDao().upcomingFor). Rows
-        // persisted under the raw id would be dead disk weight, and a raw id colliding with an
-        // app id would clobber rows the Xtream in-app path wrote. Load the mapping once per run
-        // (single query, no N+1 per source) and map every programme onto the app channel ids
-        // whose tvg-id matches.
+        // XMLTV programme rows carry the feed's raw tvg-id, but the guide reads by the
+        // *derived* live channel id (the quality-grouped representative). Mapping the raw
+        // cache wrote rows for VOD items and non-representative variants that the reader
+        // never asks for, and a feed matching only a variant was invisible. Load the same
+        // representative list the app derives.
         val cachedChannels = ChannelCache.load(applicationContext).orEmpty()
-        val tvgIdToChannelIds = EpgChannelMapping.byTvgId(cachedChannels)
-        // The same channels indexed by name, for the feeds that cannot reach them by id: an
-        // Xtream portal carries no tvg-id at all, so a curated XMLTV feed's ids ("espn.us") match
-        // nothing in its catalogue - the name is the only join there is.
-        val nameToChannelIds = EpgChannelMapping.byName(cachedChannels)
         // No catalogue yet (a fresh install, or a run that beat the first load) means no
         // programme in any feed can match anything. Nothing about that is the sources' fault,
         // and charging them a failure each would retire every EPG source on a device that had
@@ -53,6 +60,16 @@ class EpgSyncWorker(
             Log.w(TAG, "No catalogue cached yet; deferring EPG sync")
             return Result.retry()
         }
+        val guideChannels = liveGuideChannels(applicationContext, cachedChannels)
+        if (guideChannels.isEmpty()) {
+            Log.w(TAG, "No live channels in the cached catalogue; EPG sources cannot match any channel")
+            return Result.success()
+        }
+        val tvgIdToChannelIds = EpgChannelMapping.byTvgId(guideChannels)
+        // The same channels indexed by name, for the feeds that cannot reach them by id: an
+        // Xtream portal carries no tvg-id at all, so a curated XMLTV feed's ids ("espn.us") match
+        // nothing in its catalogue - the name is the only join there is.
+        val nameToChannelIds = EpgChannelMapping.byName(guideChannels)
         // A catalogue that exists but carries neither tvg-ids nor names this feed knows can
         // never match an XMLTV row. Retrying forever would just re-download every source against
         // a mapping that cannot fill in - succeed and leave the sources alone until a catalogue
@@ -93,7 +110,7 @@ class EpgSyncWorker(
 
                 // .use() guarantees the response body is always closed, even when the
                 // parse below throws or the body is absent.
-                val response = BaseApplication.instance.okHttpClient.newCall(request).execute()
+                val response = epgHttpClient.newCall(request).execute()
                 response.use {
                     if (!it.isSuccessful) {
                         Log.w(TAG, "HTTP ${it.code} for ${source.name}")
@@ -109,75 +126,90 @@ class EpgSyncWorker(
                         failedSources++
                         return@use
                     }
-                    // The filter is what makes a feed of the curated-guide size workable: it
-                    // drops programmes for channels this device doesn't have while the XML is
-                    // still streaming, so the parser's programme cap is spent on the user's own
-                    // channels rather than on whichever ones come first in the file.
+
+                    val sourceKey = "xmltv:${source.id}"
+                    // Raw XMLTV id -> the app channel ids whose display name it is. Filled as
+                    // the parser reads each <channel>, so the programmes that follow can be
+                    // mapped without holding the whole feed in memory.
+                    val xmltvIdToChannelIds = HashMap<String, Set<EpgChannelMapping.GuideTarget>>()
+                    var mapped = 0
+                    var skipped = 0
+                    var rows = ArrayList<EpgProgramEntity>(BATCH_SIZE)
+                    var started = false
+
+                    fun flush() {
+                        if (rows.isEmpty()) return
+                        val batch = rows
+                        rows = ArrayList(BATCH_SIZE)
+                        // One transaction per batch: the writer lock is held for seconds, not
+                        // for the whole download/parse, and memory stays bounded. The first
+                        // flush replaces the source wholesale, so channels the feed dropped do
+                        // not leave their old future programmes behind.
+                        runBlocking {
+                            db.withTransaction {
+                                if (!started) {
+                                    db.epgProgramDao().deleteForSource(sourceKey)
+                                    db.epgProgramDao().deleteGuideStateForSource(sourceKey)
+                                    started = true
+                                }
+                                db.epgProgramDao().upsertAll(batch)
+                            }
+                        }
+                    }
+
                     val result = XmltvParser.parse(
                         body.byteStream(),
                         keepChannelIds = tvgIdToChannelIds.keys,
-                        keepChannelNames = nameToChannelIds.keys
-                    )
-                    // Channels this feed carries but the catalogue has no tvg-id for, matched by
-                    // name instead: raw XMLTV id -> the app channel ids whose name it is.
-                    val xmltvIdToChannelIds = EpgChannelMapping.xmltvIdsByName(result.channels, nameToChannelIds)
-
-                    Log.d(TAG, "Parsed ${result.channels.size} channels, ${result.programmes.size} programs from ${source.name}")
-                    // Map raw tvg-ids onto app channel ids, skipping programmes with no
-                    // matching app channel. Persist mirrors MainActivityEpg.persistEpgPrograms:
-                    // replace (delete stale rows per affected app channel, then upsert) rather
-                    // than merge, so a re-fetch is the source's current truth.
-                    val rows = mutableListOf<EpgProgramEntity>()
-                    // Collected as the rows are built rather than by mapping over them
-                    // afterwards: rows runs to six figures for a large source, and
-                    // `rows.map { it.channelId }.distinct()` materialised a second list that
-                    // size purely to reach the handful of distinct ids inside it.
-                    // The key, not the channel id: each source's copy of a channel's guide is
-                    // stored under its own key, so replacing one never touches another.
-                    val touchedGuideKeys = HashSet<String>()
-                    // This source's own slot in the key, so two feeds' rows for the same
-                    // channel do not overwrite each other either.
-                    val sourceKey = "xmltv:${source.id}"
-                    var mapped = 0
-                    var skipped = 0
-                    for (programme in result.programmes) {
-                        val targets = tvgIdToChannelIds[programme.channel] ?: xmltvIdToChannelIds[programme.channel]
-                        if (targets.isNullOrEmpty()) {
-                            skipped++
-                            continue
-                        }
-                        mapped++
-                        for (target in targets) {
-                            val guideKey = epgGuideKey(target.channelId, target.providerScope, sourceKey)
-                            touchedGuideKeys.add(guideKey)
-                            rows.add(
-                                EpgProgramEntity(
-                                    channelId = target.channelId,
-                                    guideKey = guideKey,
-                                    startTimestamp = programme.startTimestamp,
-                                    stopTimestamp = programme.stopTimestamp,
-                                    title = programme.title,
-                                    description = guideDescription(programme.description)
-                                )
-                            )
-                        }
-                    }
-                    Log.d(TAG, "EPG mapping: $mapped programmes mapped, $skipped skipped (no matching app channel) for ${source.name}")
-
-                    if (rows.isNotEmpty()) {
-                        // One transaction for the whole replace. Each suspend DAO call commits
-                        // on its own, so the per-channel deletes were one SQLite transaction -
-                        // journal write plus fsync - per channel; a source covering thousands
-                        // of channels meant thousands of fsyncs, which is minutes of wall time
-                        // on the slow flash in a budget TV stick. It also makes the replace
-                        // atomic, so a sync killed midway can no longer leave channels whose
-                        // old programmes are deleted and whose new ones were never written.
-                        db.withTransaction {
-                            for (guideKey in touchedGuideKeys) {
-                                db.epgProgramDao().deleteForGuide(guideKey)
+                        keepChannelNames = nameToChannelIds.keys,
+                        maxProgrammes = Int.MAX_VALUE,
+                        onChannel = { channel ->
+                            val targets = tvgIdToChannelIds[channel.id]
+                                ?: channel.displayNames.firstNotNullOfOrNull { name ->
+                                    nameToChannelIds[normalizeLiveChannelKey(name)]
+                                }
+                                ?: channel.displayName.takeIf { it.isNotBlank() }?.let { name ->
+                                    nameToChannelIds[normalizeLiveChannelKey(name)]
+                                }
+                            if (!targets.isNullOrEmpty()) xmltvIdToChannelIds[channel.id] = targets
+                        },
+                        onProgramme = { programme ->
+                            val targets = tvgIdToChannelIds[programme.channel]
+                                ?: xmltvIdToChannelIds[programme.channel]
+                            if (targets.isNullOrEmpty() ||
+                                programme.startTimestamp <= 0L ||
+                                programme.stopTimestamp <= programme.startTimestamp
+                            ) {
+                                skipped++
+                            } else {
+                                mapped++
+                                val shape = fixtureTitleShape(programme.title)
+                                for (target in targets) {
+                                    rows.add(
+                                        EpgProgramEntity(
+                                            channelId = target.channelId,
+                                            guideKey = epgGuideKey(target.channelId, target.providerScope, sourceKey),
+                                            startTimestamp = programme.startTimestamp,
+                                            stopTimestamp = programme.stopTimestamp,
+                                            title = programme.title,
+                                            description = guideDescription(programme.description),
+                                            priority = source.priority,
+                                            titleShape = shape
+                                        )
+                                    )
+                                }
+                                if (rows.size >= BATCH_SIZE) flush()
                             }
-                            db.epgProgramDao().upsertAll(rows)
                         }
+                    )
+                    flush()
+                    Log.d(
+                        TAG,
+                        "Parsed ${result.channels.size} channels, $mapped programmes mapped, $skipped skipped " +
+                            "(no matching app channel) for ${source.name}" +
+                            if (result.truncated) " [truncated]" else ""
+                    )
+
+                    if (mapped > 0) {
                         // Only a sync that actually wrote guide rows counts as a success -
                         // lastSuccessAt is what the UI reads to decide the guide is fresh, and
                         // stamping it on a source that mapped nothing would paint a stale guide
@@ -206,6 +238,20 @@ class EpgSyncWorker(
     companion object {
         private const val UNIQUE_WORK_NAME = "epg_sync"
 
+        /** Rows written per transaction. Bounds both the heap held while a feed streams and
+         *  the time the guide's SQLite writer lock is held. */
+        private const val BATCH_SIZE = 2_000
+
+        /** The shared client's 60s read timeout aborts a large feed on a slow connection
+         *  mid-download. WorkManager's own run limit is 10 minutes, so this stays inside it
+         *  while giving a 500k-programme feed room to arrive. */
+        private val epgHttpClient: OkHttpClient by lazy {
+            BaseApplication.instance.okHttpClient.newBuilder()
+                .readTimeout(5, TimeUnit.MINUTES)
+                .callTimeout(9, TimeUnit.MINUTES)
+                .build()
+        }
+
         /** Consecutive failures tolerated before a source starts being rested (see doWork). */
         private const val MAX_CONSECUTIVE_FAILURES = 3
 
@@ -233,7 +279,15 @@ class EpgSyncWorker(
                 .build()
 
             WorkManager.getInstance(context)
-                .enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
+                // APPEND_OR_REPLACE, not REPLACE: a launch (ensureFresh) or a second source
+                // add must not cancel a sync that is already downloading; the new request
+                // runs after it instead. If the current one failed/cancelled, this replaces it.
+                .enqueueUniqueWork(UNIQUE_WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+        }
+
+        /** Stops a run that may still be writing rows for a source the user just removed. */
+        fun cancel(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_WORK_NAME)
         }
 
         /** Re-download interval. Deliberately *shorter* than the reader's window
@@ -289,4 +343,31 @@ class EpgSyncWorker(
             if (stale) enqueue(context)
         }
     }
+}
+
+/**
+ * The live channels the guide actually addresses: the app's quality-grouped representatives,
+ * not the raw catalogue. The derived snapshot is keyed by the same fingerprint the app uses
+ * when it writes `derived_live.txt`; if it is missing (first run, or a catalogue that has
+ * not been derived yet) the same grouping is recomputed here.
+ */
+private fun liveGuideChannels(context: Context, cached: List<Channel>): List<Channel> {
+    val prefs = context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+    val hideAdult = prefs.getBoolean(PREF_HIDE_ADULT, true)
+    val useClassic = prefs.getBoolean(PREF_CLASSIC_CATEGORY_LAYOUT, false)
+    val groupChannels = prefs.getBoolean(PREF_GROUP_CHANNELS, true)
+    val fingerprint = DerivedCache.catalogFingerprint(cached, "live:$hideAdult:$useClassic:$groupChannels")
+    DerivedCache.loadLive(context, fingerprint, cached)?.channels
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { return it }
+
+    val backupIds = IptvProviderStore.load(prefs).filter { it.backup }.map { it.id }.toSet()
+    val rawLive = cached.filter {
+        it.mediaType == MediaType.LIVE &&
+            !it.name.contains("##") &&
+            !(hideAdult && isAdultCategory(it.categoryName, it.group))
+    }
+    if (useClassic || !groupChannels) return rawLive.withoutBackupOnlyGroups(emptyMap(), backupIds)
+    val (grouped, versions) = groupLiveQualityVersions(rawLive, backupIds)
+    return grouped.withoutBackupOnlyGroups(versions, backupIds)
 }
