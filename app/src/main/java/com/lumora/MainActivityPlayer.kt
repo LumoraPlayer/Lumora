@@ -125,6 +125,13 @@ internal fun MainActivity.setupPlayerControls() {
     binding.btnNextChannel.setOnClickListener { navigateChannel(1) }
     binding.btnBack.setOnClickListener { hidePlayer(); restoreSearchIfPending() }
     binding.btnPlayerMenu.setOnClickListener { openSideMenu() }
+    // The browse screen's gear sits behind the player, so the player carries its own
+    // top-right settings shortcut - same destination as the side menu's Settings row.
+    binding.btnPlayerSettings.setOnClickListener {
+        closeSideMenu()
+        hidePlayer()
+        showProviderSettings()
+    }
     binding.btnCloseSideMenu.setOnClickListener { closeSideMenu() }
     // TV remotes open the side menu with DPAD_LEFT, so the hamburger is phone-only.
     if (isTv) binding.btnPlayerMenu.visibility = View.GONE
