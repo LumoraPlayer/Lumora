@@ -125,19 +125,25 @@
                  wrap_content inside the group - no weight - so the first tab (Live TV)
                  sits directly against the icon, and the scroller (0dp + weight=1) takes
                  exactly the remaining width: all tabs at full size on TV, a scrolling
-                 window on a portrait phone. clipChildren false so the tabs' focus scale
-                 isn't sliced by the group's bounds. -->
-            <!-- height is wrap_content, NOT match_parent: in a wrap_content horizontal
+                 window on a portrait phone.
+                 height is wrap_content, NOT match_parent: in a wrap_content horizontal
                  LinearLayout a match_parent child's own height doesn't count toward the row's
                  height, so once the row gained a second, fixed-height child (the clock) the
                  row sized itself to that child and the group was remeasured down to it -
                  collapsing every tab to ~21dp, with the labels measured to zero height and
-                 only the selection indicator left drawing. -->
+                 only the selection indicator left drawing.
+                 clipChildren TRUE, and this is the view that does the clipping: a ScrollView
+                 never clips its own content - it draws the child through a translate, past
+                 its own edge - so with the group left unclipped the strip's overflow (the
+                 Settings/Refresh pair, which is wider than the space the clock leaves)
+                 painted straight over the clock and off the right edge of the screen. The
+                 scroller's own 4dp vertical padding and the row's 6dp bottom padding leave
+                 the 1.06x focus scale room to bleed without being sliced. -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:clipChildren="false"
+                android:clipChildren="true"
                 android:clipToPadding="false"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
@@ -205,7 +211,7 @@
             android:background="@android:color/transparent"
             android:clipChildren="false"
             android:clipToPadding="false"
-            android:paddingHorizontal="10dp"
+            android:paddingHorizontal="@dimen/chrome_row_padding_h"
             android:paddingBottom="6dp">
 
             <LinearLayout
@@ -213,7 +219,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="@dimen/tab_live_start_gap"
-                android:layout_marginEnd="3dp"
+                android:layout_marginEnd="@dimen/chrome_pill_gap"
                 android:background="@drawable/bg_tab_item"
                 android:clickable="true"
                 android:focusable="true"
@@ -297,7 +303,7 @@
                 android:id="@+id/tabSports"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="3dp"
+                android:layout_marginHorizontal="@dimen/chrome_pill_gap"
                 android:background="@drawable/bg_tab_item"
                 android:clickable="true"
                 android:focusable="true"
@@ -350,7 +356,7 @@
                 android:id="@+id/tabSeries"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="3dp"
+                android:layout_marginHorizontal="@dimen/chrome_pill_gap"
                 android:background="@drawable/bg_tab_item"
                 android:clickable="true"
                 android:focusable="true"
@@ -403,7 +409,7 @@
                 android:id="@+id/tabFilms"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="3dp"
+                android:layout_marginHorizontal="@dimen/chrome_pill_gap"
                 android:background="@drawable/bg_tab_item"
                 android:clickable="true"
                 android:focusable="true"
@@ -456,7 +462,7 @@
                 android:id="@+id/tabHome"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="3dp"
+                android:layout_marginHorizontal="@dimen/chrome_pill_gap"
                 android:background="@drawable/bg_tab_item"
                 android:clickable="true"
                 android:focusable="true"
@@ -509,7 +515,7 @@
                 android:id="@+id/tabDiscover"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="3dp"
+                android:layout_marginHorizontal="@dimen/chrome_pill_gap"
                 android:background="@drawable/bg_tab_item"
                 android:clickable="true"
                 android:focusable="true"
@@ -569,7 +575,7 @@
                 android:id="@+id/btnSearch"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="3dp"
+                android:layout_marginHorizontal="@dimen/chrome_pill_gap"
                 android:background="@drawable/bg_tab_item"
                 android:clickable="true"
                 android:focusable="true"
@@ -621,7 +627,7 @@
                 android:id="@+id/tabDownloads"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="3dp"
+                android:layout_marginStart="@dimen/chrome_pill_gap"
                 android:background="@drawable/bg_tab_item"
                 android:clickable="true"
                 android:focusable="true"

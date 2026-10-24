@@ -832,7 +832,14 @@ internal fun MainActivity.showProviderSettings() {
         binding.btnRefresh
     )
     val browseChromeVisibility = browseChromeViews.map { it.visibility }
-    if (tabBarWasVisible) browseChromeViews.forEach { it.visibility = View.INVISIBLE }
+    if (tabBarWasVisible) browseChromeViews.forEach {
+        // INVISIBLE, not GONE: the pills keep their place so the row doesn't reflow under the
+        // user while the tree is up. A view that was already GONE (the Downloads tab on TV)
+        // has to STAY GONE, though - INVISIBLE still takes up room in the row's layout, so
+        // switching a GONE tab to INVISIBLE handed the Settings button a pill's width and
+        // pushed it off the end of the row, where nothing could see or reach it.
+        if (it.visibility == View.VISIBLE) it.visibility = View.INVISIBLE
+    }
     val settingsButtonDescription = binding.btnSettings.contentDescription
     val settingsButtonIcon = binding.btnSettings.findViewById<ImageView>(R.id.btnSettingsIcon)
     val settingsButtonNextFocusLeftId = binding.btnSettings.nextFocusLeftId

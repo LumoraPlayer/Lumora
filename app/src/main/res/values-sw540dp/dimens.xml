@@ -76,8 +76,13 @@
          the 660dp pop-out cap is gone, which left every card and input running ~700dp wide -
          a button whose label sits in the middle of half a metre of background. This is the
          only lever that narrows them: the panes are LinearLayouts, which ignore maxWidth.
-         Overrides the content pane's uniform 24dp padding on the end edge only. -->
-    <dimen name="settings_content_inset">200dp</dimen>
+         Overrides the content pane's uniform 24dp padding on the end edge only.
+         40dp, not 200dp: 200dp was doing far more than holding a reading measure. On a 1080p
+         panel it left a ~500dp column down the middle of the screen with a quarter of the
+         width as dead space on the right, and it squeezed every provider row so hard that the
+         name and URL were crushed under the row's own buttons. A margin this size still keeps
+         lines off the bezel while letting the settings screen look like a TV screen. -->
+    <dimen name="settings_content_inset">40dp</dimen>
 
     <!-- Vertical padding on settings card rows, which are wrap_content so their height is
          whatever the label needs plus this - see values/dimens.xml. -->
@@ -122,15 +127,28 @@
          cluster - the tabs must still fit next to the search/settings/refresh buttons
          without the last tab clipping or the scroller scrolling on a 1080p panel. -->
     <dimen name="tab_text">16sp</dimen>
-    <!-- Same one-step-under-the-tabs relationship as the phone tier, at TV viewing distance. -->
-    <dimen name="toolbar_clock_text">14sp</dimen>
+    <!-- The clock sits one step under the tab labels, as on the phone tier - but at the phone's
+         11sp rather than the 14sp this tier used to give it. The chrome row has to carry six
+         tabs, Search, the settings/refresh pair and the clock on ONE line at 960dp, and the
+         clock is the one item there that can give way without anything pointing at it: it is
+         a time, not a control, and it is the only one of the four that no other element
+         refers to. -->
+    <dimen name="toolbar_clock_text">11sp</dimen>
     <!-- Six tabs fitted the 960dp row at 18dp; the seventh (Catch Up) put it ~150dp
          over, which is what pushed Search off the end and - before the scroller clipped
-         its own overflow - straight under the Settings/Refresh cluster. -->
-    <dimen name="tab_padding_horizontal">10dp</dimen>
+         its own overflow - straight under the Settings/Refresh cluster.
+         8dp now, with the row trimmed around it: the chrome row carries six tabs, Search,
+         the settings/refresh pair and the clock on one line, and at 10dp the pair ran under
+         the clock. The scroller clips its overflow at the group's edge, so what does not fit
+         is now cut off cleanly instead of painting over the clock - but "cut off cleanly"
+         still means the settings gear is out of reach, so the row is trimmed to fit rather
+         than trimmed to scroll. -->
+    <dimen name="tab_padding_horizontal">8dp</dimen>
     <dimen name="tab_padding_vertical">13dp</dimen>
-    <!-- Nudges the Live TV tab a tiny bit right, away from the brand mark, at TV scale. -->
-    <dimen name="tab_live_start_gap">6dp</dimen>
+    <!-- No gap at all before the Live TV tab: the brand mark sits at the row's edge and the
+         tab's own 8dp padding is the space between them. The 6dp this used to add was room
+         the one-line row cannot spare. -->
+    <dimen name="tab_live_start_gap">0dp</dimen>
     <dimen name="poster_title_text">14sp</dimen>
     <!-- See the base bucket: TV is where the 8sp floor hurt most, so it sits only two steps
          under the ceiling here. -->
@@ -200,15 +218,37 @@
          change, recalibrate this to the tab item's rendered height. -->
     <!-- TV tier: tight edge for the icon-only settings/refresh pair - 18dp tab padding
          around a 20dp icon rendered the measured 56dp-wide empty capsules. 10dp hugs the
-         icon while staying a reachable remote target inside the 51dp-tall band. -->
-    <dimen name="chrome_button_padding_h">10dp</dimen>
+         icon while staying a reachable remote target inside the 51dp-tall band.
+         6dp now: the chrome row has to carry six tabs, Search, the pair AND the clock on
+         one line at 960dp, and every dp here is a dp the buttons lose. The icon itself is
+         still 20dp, so the target barely changes. -->
+    <dimen name="chrome_button_padding_h">6dp</dimen>
     <!-- Keep the brand inside the TV toolbar's safe inset; unlike the phone tier it is not
          pulled toward the screen bezel. -->
     <dimen name="toolbar_brand_translate_x">0dp</dimen>
     <!-- The toolbar's top padding supplies the TV overscan-safe inset. -->
     <dimen name="toolbar_brand_translate_y">0dp</dimen>
-    <dimen name="toolbar_padding_horizontal">28dp</dimen>
+    <!-- 24dp rather than 28dp: the chrome row has to carry six tabs, Search, the
+         settings/refresh pair and the clock on one line at 960dp, and every dp here is a dp
+         the buttons lose. -->
+    <dimen name="toolbar_padding_horizontal">24dp</dimen>
     <dimen name="toolbar_padding_top">16dp</dimen>
+    <!-- The brand mark: 36dp rather than 40dp, for the same reason as the row's horizontal
+         padding - it is a mark, not a label, and it reads the same two dp smaller. -->
+    <dimen name="toolbar_brand_size">36dp</dimen>
+    <!-- The gap between the last tab and the settings/refresh pair. 12dp rather than the
+         base tier's 20dp: the pair sits at the end of the same one-line row, and the gap
+         only has to separate the two groups, not set them in different rooms. -->
+    <dimen name="chrome_cluster_gap">12dp</dimen>
+    <!-- The gap between two chrome pills, and the chrome row's own end padding: 2dp and
+         6dp, both squeezed for the same one-line reason - the row carries six tabs, Search,
+         the settings/refresh pair and the clock at 960dp. 6dp of end padding still covers a
+         focused pill's 1.06x scale at the row's edges. -->
+    <dimen name="chrome_pill_gap">2dp</dimen>
+    <dimen name="chrome_row_padding_h">6dp</dimen>
+    <!-- The icon-to-label gap inside a tab pill. 5dp rather than the base tier's 8dp, for the
+         same one-line reason - the icon and its label stay a pair, they just sit closer. -->
+    <dimen name="tab_label_gap">5dp</dimen>
     <dimen name="settings_outer_padding_horizontal">28dp</dimen>
     <dimen name="settings_outer_padding_vertical">16dp</dimen>
     <dimen name="player_controls_safe_horizontal_inset">28dp</dimen>

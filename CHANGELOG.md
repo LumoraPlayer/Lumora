@@ -14,6 +14,13 @@
 ### Simkl
 - **Simkl connects again.** Simkl's original PIN sign-in has been retired for OAuth 2.0 clients, and the app still called it - so the code screen appeared, the code was typed on the phone, and no token ever came back (Simkl answered `400 unauthorized_client`, pointing at the device endpoint). Sign-in now uses the OAuth 2.0 device flow: the same short code and QR, the same place to type it, and a token pair at the end. AUTH V2 access tokens last seven days, so the refresh token is stored alongside and used automatically a day before the access token lapses - a refresh Simkl rejects (the connection was revoked on its site) signs the session out instead of retrying a dead grant. Signing out revokes the grant on Simkl's side too, and every request now carries the client id, app name and app version the API requires, plus a User-Agent.
 
+### Toolbar
+- **The settings gear is not printed on top of the clock any more.** The tab strip is a scroll view, and a scroll view does not clip its own content - it draws the child through a translate, past its own edge - so when the row grew past the space the clock leaves, the settings gear and the refresh button were painted straight over the time and off the right-hand side of the screen, where the gear could not even be tapped (the clock was in front of it). The overflow is clipped at the strip's edge now, so nothing can reach the clock, and the row is trimmed to fit as well: on a 1080p set the six tabs, Search, the settings/refresh pair and the clock all sit on one line again, with the clock reading as the second step under the tab labels. A set with the width to spare (a 4K panel) keeps the roomier spacing the chrome had before.
+- **Settings can be closed from the toolbar again.** The close button *is* the toolbar's settings gear, and opening Settings hid the pills around it - but a pill that was already hidden (the Downloads tab is phone-only) was switched to INVISIBLE, which still takes up room in the row's layout, so the close button was handed a whole pill's width and pushed off the end of the screen, where nobody could see it. A hidden pill now stays hidden.
+
+### Settings
+- **The settings screen uses the TV's width again.** The content column carried a 200dp inset, which on a 1080p panel left a ~500dp-wide phone-shaped strip down the middle of the screen and a quarter of the width as dead space on the right - and every provider row squeezed into it, so a provider's name and URL were crushed to a few characters under the row's own buttons. The inset is 40dp now, still enough to keep text off the bezel: the panes fill the panel, and a provider's name and full URL read on one line again.
+
 ## 5.8
 
 ### Fixes

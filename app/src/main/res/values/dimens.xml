@@ -253,6 +253,16 @@
          as compact icon buttons - the tab-band height and focus ring carry the tab
          language instead. -->
     <dimen name="chrome_button_padding_h">10dp</dimen>
+    <!-- The gap between two chrome pills (the tabs, Search). The pills carry their own
+         padding, so this is only the space between them - a dimen because the TV tier
+         squeezes it (the chrome row has to carry six tabs, Search, the settings/refresh pair
+         and the clock on one line at 960dp) while a wide set keeps the roomier gap. -->
+    <dimen name="chrome_pill_gap">3dp</dimen>
+    <!-- The chrome row's own horizontal padding, at the two ends of the tab strip. It is
+         what a focused pill's 1.06x scale bleeds into at the row's edges, so it cannot go
+         below the scale's overhang - hence a dimen, tightened on the TV tier for the same
+         one-line reason as chrome_pill_gap. -->
+    <dimen name="chrome_row_padding_h">10dp</dimen>
 
     <!-- Minimum width one poster column may occupy; the grid fits as many as will go (then
          clamps to poster_grid_max_span). Portrait phones use a smaller value so a narrow

@@ -25,4 +25,28 @@
     <dimen name="settings_text_subtitle">14sp</dimen>
     <dimen name="settings_text_section">16sp</dimen>
     <dimen name="settings_text_title">19sp</dimen>
+
+    <!-- Chrome row: the roomier metrics. The sw540dp bucket has to squeeze the tabs, the
+         clock and the settings/refresh pair onto ONE line on a 960dp-wide panel, and that
+         squeeze costs the pills their air. A set this wide has ~300dp to spare, so it keeps
+         the spacing the chrome had before the squeeze - the clock reads as the second step
+         under the tab labels again, the pills keep their 10dp edges, and the brand mark stays
+         full size. -->
+    <dimen name="toolbar_clock_text">14sp</dimen>
+    <dimen name="tab_padding_horizontal">10dp</dimen>
+    <dimen name="tab_label_gap">8dp</dimen>
+    <dimen name="tab_live_start_gap">6dp</dimen>
+    <dimen name="chrome_button_padding_h">10dp</dimen>
+    <dimen name="chrome_cluster_gap">20dp</dimen>
+    <dimen name="chrome_pill_gap">3dp</dimen>
+    <dimen name="chrome_row_padding_h">10dp</dimen>
+    <dimen name="toolbar_padding_horizontal">28dp</dimen>
+    <dimen name="toolbar_brand_size">40dp</dimen>
+
+    <!-- Settings content inset, unchanged from before the sw540dp squeeze. The 200dp inset
+         was only ever crushing the layout on a ~960dp panel, where it left a ~500dp strip of
+         settings down the middle of the screen; on a panel this wide the column is roomy
+         either way, and a small inset here would leave cards and input fields running the
+         best part of two metres of background. -->
+    <dimen name="settings_content_inset">200dp</dimen>
 </resources>
