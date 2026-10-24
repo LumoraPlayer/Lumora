@@ -3,6 +3,7 @@ package com.lumora.adapter
 
 import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
+import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -26,6 +27,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 private const val FILLER_MINUTES = 90
 private const val NOW_NEXT_SEPARATOR = " · "
@@ -98,6 +103,21 @@ class LiveGuideAdapter(
     private val attachedHolders = mutableSetOf<RowViewHolder>()
     private var headerScrollView: HorizontalScrollView? = null
     private var broadcasting = false
+    /** The list this adapter is attached to, so an already-bound row's details panel can be
+     *  opened in place - a notifyItemChanged() rebind pulls D-pad focus back to the channel
+     *  column, which is the wrong place to leave a viewer who just selected a programme. */
+    private var recyclerView: RecyclerView? = null
+
+    /** The listing whose details are expanded under its row. One at a time, and keyed by
+     *  channel + start time rather than by position: the list rebinds, scrolls and recycles
+     *  rows freely, and the open listing has to survive all three. */
+    private var infoChannelId: String? = null
+    private var infoProgramStart: Long = 0L
+
+    /** Clock formats for the inline details panel. SimpleDateFormat is not thread-safe; both
+     *  are only ever touched on the main thread, where the adapter lives. */
+    private val infoClockFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val infoDayClockFormat = SimpleDateFormat("EEE d MMM HH:mm", Locale.getDefault())
 
     fun attachHeader(header: HorizontalScrollView) {
         headerScrollView = header
@@ -131,6 +151,10 @@ class LiveGuideAdapter(
         // diff (the old and new lists share almost nothing), so skip DiffUtil and hand the
         // list straight to the adapter. remove-all + insert-all are synchronous, so the
         // RecyclerView lays out once with the new items - no empty frame in between.
+        // A details panel belongs to the list it was opened from, not to whatever category
+        // replaces it.
+        infoChannelId = null
+        infoProgramStart = 0L
         submitList(null)
         submitList(items, commitCallback)
     }
@@ -138,6 +162,16 @@ class LiveGuideAdapter(
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RowViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_guide_channel_row, parent, false)
         return RowViewHolder(view)
+    }
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        this.recyclerView = recyclerView
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView)
+        if (this.recyclerView === recyclerView) this.recyclerView = null
     }
 
     override fun onBindViewHolder(holder: RowViewHolder, position: Int) {
@@ -195,6 +229,57 @@ class LiveGuideAdapter(
         }
     }
 
+    /** Opens (or closes) the details panel under [channel]'s row for [program].
+     *
+     *  One row at a time: opening a listing collapses whichever row was open, so the guide
+     *  reads as one entry with its blurb rather than growing a wall of text. The panel lives
+     *  inside the row, directly under the timeline, so selecting a programme never leaves the
+     *  guide for a dialog or another screen. */
+    private fun toggleProgramInfo(channel: Channel, program: XtreamClient.EpgProgram) {
+        val previousChannelId = infoChannelId
+        val wasOpen = previousChannelId == channel.id && infoProgramStart == program.startTimestamp
+        if (wasOpen) {
+            infoChannelId = null
+            infoProgramStart = 0L
+        } else {
+            infoChannelId = channel.id
+            infoProgramStart = program.startTimestamp
+        }
+        if (previousChannelId != null && previousChannelId != channel.id) {
+            updateProgramInfoPanel(previousChannelId)
+        }
+        updateProgramInfoPanel(channel.id)
+    }
+
+    /** Opens/closes the panel on the row already on screen. Rows that are not attached will
+     *  pick the state up through renderProgramInfo() when they are bound again. */
+    private fun updateProgramInfoPanel(channelId: String) {
+        val position = currentList.indexOfFirst { it.id == channelId }
+        if (position < 0) return
+        val holder = recyclerView?.findViewHolderForAdapterPosition(position) as? RowViewHolder ?: return
+        holder.renderProgramInfo(holder.channel ?: return)
+    }
+
+    /** Clock times for the details panel's meta line. A listing that crosses into another
+     *  day carries the day too - "23:30 – 01:00" alone reads as this morning otherwise. */
+    private fun infoTimeRange(startSeconds: Long, stopSeconds: Long, nowMs: Long): String {
+        val startMs = startSeconds * 1000L
+        val stopMs = stopSeconds * 1000L
+        val format = if (isSameLocalDay(startMs, nowMs) && isSameLocalDay(stopMs, nowMs)) {
+            infoClockFormat
+        } else {
+            infoDayClockFormat
+        }
+        return "${format.format(Date(startMs))} – ${format.format(Date(stopMs))}"
+    }
+
+    private fun isSameLocalDay(firstMs: Long, secondMs: Long): Boolean {
+        val first = Calendar.getInstance().apply { timeInMillis = firstMs }
+        val second = Calendar.getInstance().apply { timeInMillis = secondMs }
+        return first.get(Calendar.YEAR) == second.get(Calendar.YEAR) &&
+            first.get(Calendar.DAY_OF_YEAR) == second.get(Calendar.DAY_OF_YEAR)
+    }
+
     inner class RowViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val channelInfo: LinearLayout = itemView.findViewById(R.id.guideChannelInfo)
         private val numberText: TextView = itemView.findViewById(R.id.guideChannelNumber)
@@ -205,6 +290,10 @@ class LiveGuideAdapter(
         private val favStar: TextView = itemView.findViewById(R.id.guideChannelFav)
         val scrollView: HorizontalScrollView = itemView.findViewById(R.id.guideProgramScroll)
         private val programRow: LinearLayout = itemView.findViewById(R.id.guideProgramRow)
+        private val programInfoPanel: LinearLayout = itemView.findViewById(R.id.guideProgramInfo)
+        private val programInfoTitle: TextView = itemView.findViewById(R.id.guideProgramInfoTitle)
+        private val programInfoMeta: TextView = itemView.findViewById(R.id.guideProgramInfoMeta)
+        private val programInfoDescription: TextView = itemView.findViewById(R.id.guideProgramInfoDescription)
         private val density = itemView.resources.displayMetrics.density
 
         /** The avatar circle behind [initialText]. One drawable for the life of the holder,
@@ -239,6 +328,14 @@ class LiveGuideAdapter(
                 updateNowLine()
             }
             favStar.setOnClickListener { current?.let { onChannelFavClick?.invoke(it) } }
+            // The now line is a touch target for the listing it names. It stays non-focusable
+            // so guideChannelInfo remains the row's one D-pad stop; a remote reads the same
+            // listing through the block that is airing now.
+            nowText.setOnClickListener {
+                val channel = current ?: return@setOnClickListener
+                val program = programForNowLine() ?: return@setOnClickListener
+                toggleProgramInfo(channel, program)
+            }
             // The star remains a tap target and favourite indicator, but is not a second
             // remote stop. LEFT returns directly to the selected category (or rail expand
             // affordance) instead of requiring LEFT through every channel's star first.
@@ -286,6 +383,9 @@ class LiveGuideAdapter(
             lastPrograms = null
             nowText.text = ""
             nowText.visibility = View.GONE
+            // Same recycling rule for the inline details: until this bind's guide arrives
+            // (or if this row is not the one holding the open listing), the panel is closed.
+            programInfoPanel.visibility = View.GONE
             // guideChannelInfo's focus_scale stateListAnimator (scaleX/scaleY/translationZ)
             // can be interrupted mid-transition by fast RecyclerView recycling (this view
             // getting rebound to a different channel before its unfocus animation finishes),
@@ -532,6 +632,7 @@ class LiveGuideAdapter(
             // is exactly what keeps a recycled row's line from going stale.
             lastPrograms = programs
             updateNowLine()
+            renderProgramInfo(channel)
         }
 
         /**
@@ -581,6 +682,7 @@ class LiveGuideAdapter(
             }
             currentBlockIndex = currentIndex
             updateNowLine()
+            current?.let { renderProgramInfo(it) }
         }
 
         /** Fills guideChannelNow from the row's already-fetched EPG. Unfocused rows show
@@ -617,6 +719,79 @@ class LiveGuideAdapter(
             nowText.visibility = if (nowText.text.isNullOrEmpty()) View.GONE else View.VISIBLE
         }
 
+        /** The listing the now line names: the one airing right now, or the next one when the
+         *  guide has a gap - the same choice updateNowLine() makes for an unfocused row. */
+        private fun programForNowLine(): XtreamClient.EpgProgram? {
+            val programs = lastPrograms ?: return null
+            val nowSeconds = System.currentTimeMillis() / 1000
+            return programs.firstOrNull { nowSeconds in it.startTimestamp until it.stopTimestamp }
+                ?: programs.firstOrNull { it.startTimestamp > nowSeconds }
+        }
+
+        /**
+         * Draws (or closes) this row's inline details panel.
+         *
+         * The panel is part of the row itself - directly under the timeline, full width - so
+         * reading what a programme is about never leaves the guide. It is filled from
+         * [lastPrograms], the guide already rendered into the row, so opening a listing costs
+         * no request and cannot show different data from the blocks above it.
+         */
+        internal fun renderProgramInfo(channel: Channel) {
+            if (infoChannelId != channel.id || infoProgramStart <= 0L) {
+                programInfoPanel.visibility = View.GONE
+                return
+            }
+            val program = lastPrograms?.firstOrNull { it.startTimestamp == infoProgramStart }
+            if (program == null) {
+                // The refreshed guide no longer carries this slot (it ended and was pruned):
+                // close the panel rather than leave the row expanded around nothing.
+                if (infoChannelId == channel.id) {
+                    infoChannelId = null
+                    infoProgramStart = 0L
+                }
+                programInfoPanel.visibility = View.GONE
+                return
+            }
+            val context = itemView.context
+            val nowMs = System.currentTimeMillis()
+            val nowSeconds = nowMs / 1000
+            val isFuture = program.startTimestamp > nowSeconds
+            val status = when {
+                nowSeconds in program.startTimestamp until program.stopTimestamp ->
+                    context.getString(R.string.list_program_on_now)
+                // Localised and plural-aware ("In 2 hours"), not a minutes count the reader
+                // has to divide by sixty.
+                isFuture -> DateUtils.getRelativeTimeSpanString(
+                    program.startTimestamp * 1000L,
+                    nowMs,
+                    DateUtils.MINUTE_IN_MILLIS
+                ).toString()
+                else -> context.getString(R.string.list_program_ended)
+            }
+            val minutes = ((program.stopTimestamp - program.startTimestamp) / 60L).coerceAtLeast(1L)
+            val meta = mutableListOf(
+                infoTimeRange(program.startTimestamp, program.stopTimestamp, nowMs),
+                context.getString(R.string.list_program_duration, minutes),
+                status
+            )
+            // The long-press reminder is otherwise undiscoverable; the panel is where a
+            // listing is being read, so it is where the gesture belongs.
+            if (isFuture) {
+                meta += context.getString(
+                    if (isReminderSet("${channel.id}:${program.startTimestamp}")) {
+                        R.string.list_program_reminder_set
+                    } else {
+                        R.string.list_program_reminder_hint
+                    }
+                )
+            }
+            programInfoTitle.text = program.title.ifBlank { context.getString(R.string.list_program_info) }
+            programInfoMeta.text = meta.joinToString(NOW_NEXT_SEPARATOR)
+            programInfoDescription.text = program.description?.trim()?.takeIf { it.isNotEmpty() }
+                ?: context.getString(R.string.list_program_no_description)
+            programInfoPanel.visibility = View.VISIBLE
+        }
+
         private fun makeBlock(): TextView {
             val context = itemView.context
             return TextView(context).apply {
@@ -644,7 +819,14 @@ class LiveGuideAdapter(
                 // the block's current programme at fire time, which is the same thing the
                 // captured values used to be.
                 tag = BlockState()
-                setOnClickListener { current?.let(onChannelClick) }
+                // A block with a programme opens its details in the row itself; the no-guide
+                // filler has nothing to describe and stays a plain channel press.
+                setOnClickListener { view ->
+                    val channel = current ?: return@setOnClickListener
+                    val program = (view.tag as? BlockState)?.program
+                    if (program != null) toggleProgramInfo(channel, program)
+                    else onChannelClick(channel)
+                }
                 // D-pad RIGHT off the channel column moves focus into these program blocks -
                 // without this, the preview pane only ever updated while focus sat on the
                 // channel name itself and otherwise went stale/blank while browsing the guide.

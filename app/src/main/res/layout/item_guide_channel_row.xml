@@ -10,139 +10,198 @@
     android:layout_marginBottom="3dp"
     android:clipChildren="false"
     android:clipToPadding="false"
-    android:orientation="horizontal">
+    android:orientation="vertical">
 
+    <!-- The guide row proper. The details panel below is a sibling so the row keeps its
+         compact height when it is closed; open, it reads as the selected listing's blurb
+         inside the list rather than as a dialog over it. -->
     <LinearLayout
-        android:id="@+id/guideChannelInfo"
-        android:layout_width="@dimen/guide_channel_column_width"
-        android:layout_height="match_parent"
-        android:layout_marginEnd="10dp"
-        android:background="@drawable/bg_channel_row"
-        android:clickable="true"
-        android:focusable="true"
-        android:gravity="center_vertical"
-        android:minHeight="@dimen/guide_row_min_height"
-        android:orientation="horizontal"
-        android:paddingStart="2dp"
-        android:paddingEnd="6dp"
-        android:paddingVertical="4dp"
-        android:stateListAnimator="@animator/focus_scale">
+        android:id="@+id/guideRowMain"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:orientation="horizontal">
 
-        <!-- Favourite indicator stays tappable but is not a separate D-pad stop: long-press
-             on the channel row also toggles it, so LEFT can return directly to categories. -->
-        <TextView
-            android:id="@+id/guideChannelFav"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="2dp"
-            android:background="@drawable/bg_toolbar_button"
-            android:clickable="true"
-            android:focusable="false"
-            android:fontFamily="@font/inter_medium"
-            android:gravity="center"
-            android:paddingHorizontal="4dp"
-            android:paddingVertical="1dp"
-            android:stateListAnimator="@animator/focus_scale_flat"
-            android:text="☆"
-            android:textColor="@color/text_secondary"
-            android:textSize="@dimen/guide_channel_number_text" />
-
-        <!-- Hidden (not just blank) by the adapter when the channel has no number: at
-             wrap_content with a minWidth it still reserved its column on every row, so a
-             catalog with no tvg-chno at all indented every logo by a strip of empty space
-             that looked like padding. -->
-        <TextView
-            android:id="@+id/guideChannelNumber"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="4dp"
-            android:fontFamily="@font/inter_medium"
-            android:gravity="center"
-            android:textColor="@color/text_tertiary"
-            android:textSize="@dimen/guide_channel_number_text" />
-
-        <FrameLayout
-            android:layout_width="@dimen/guide_channel_logo_size"
-            android:layout_height="@dimen/guide_channel_logo_size"
-            android:background="@drawable/shape_logo_box">
-
-            <TextView
-                android:id="@+id/guideChannelInitial"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:textColor="@color/text_primary"
-                android:textSize="@dimen/guide_channel_initial_text"
-                android:textStyle="bold" />
-
-            <ImageView
-                android:id="@+id/guideChannelLogo"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:padding="3dp"
-                android:scaleType="fitCenter"
-                android:visibility="gone" />
-        </FrameLayout>
-
-        <!-- Name + one "now playing" line, stacked, so the channel column reads the same
-             TiviMate way: number/logo, channel name, then what's airing. The now line is
-             filled from the already-fetched EPG by LiveGuideAdapter (rows without EPG keep
-             it empty/gone). It must stay non-focusable/non-clickable - guideChannelInfo
-             remains the D-pad target. Sized to guide_channel_number_text (the guide's small
-             secondary token) so name+now+padding still fit inside guide_row_min_height:
-             the row never grows taller than it was with just the name. -->
         <LinearLayout
-            android:id="@+id/guideChannelTextCol"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:id="@+id/guideChannelInfo"
+            android:layout_width="@dimen/guide_channel_column_width"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="10dp"
+            android:background="@drawable/bg_channel_row"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:minHeight="@dimen/guide_row_min_height"
+            android:orientation="horizontal"
+            android:paddingStart="2dp"
+            android:paddingEnd="6dp"
+            android:paddingVertical="4dp"
+            android:stateListAnimator="@animator/focus_scale">
 
+            <!-- Favourite indicator stays tappable but is not a separate D-pad stop: long-press
+                 on the channel row also toggles it, so LEFT can return directly to categories. -->
             <TextView
-                android:id="@+id/guideChannelName"
-                android:layout_width="match_parent"
+                android:id="@+id/guideChannelFav"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
+                android:layout_marginEnd="2dp"
+                android:background="@drawable/bg_toolbar_button"
+                android:clickable="true"
+                android:focusable="false"
                 android:fontFamily="@font/inter_medium"
-                android:maxLines="1"
-                android:textColor="@color/text_primary"
-                android:textSize="@dimen/guide_channel_name_text" />
-
-            <TextView
-                android:id="@+id/guideChannelNow"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:includeFontPadding="false"
-                android:maxLines="1"
+                android:gravity="center"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="1dp"
+                android:stateListAnimator="@animator/focus_scale_flat"
+                android:text="☆"
                 android:textColor="@color/text_secondary"
                 android:textSize="@dimen/guide_channel_number_text" />
+
+            <!-- Hidden (not just blank) by the adapter when the channel has no number: at
+                 wrap_content with a minWidth it still reserved its column on every row, so a
+                 catalog with no tvg-chno at all indented every logo by a strip of empty space
+                 that looked like padding. -->
+            <TextView
+                android:id="@+id/guideChannelNumber"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
+                android:fontFamily="@font/inter_medium"
+                android:gravity="center"
+                android:textColor="@color/text_tertiary"
+                android:textSize="@dimen/guide_channel_number_text" />
+
+            <FrameLayout
+                android:layout_width="@dimen/guide_channel_logo_size"
+                android:layout_height="@dimen/guide_channel_logo_size"
+                android:background="@drawable/shape_logo_box">
+
+                <TextView
+                    android:id="@+id/guideChannelInitial"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/guide_channel_initial_text"
+                    android:textStyle="bold" />
+
+                <ImageView
+                    android:id="@+id/guideChannelLogo"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:padding="3dp"
+                    android:scaleType="fitCenter"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <!-- Name + one "now playing" line, stacked, so the channel column reads the same
+                 TiviMate way: number/logo, channel name, then what's airing. The now line is
+                 filled from the already-fetched EPG by LiveGuideAdapter (rows without EPG keep
+                 it empty/gone). It stays non-focusable, so guideChannelInfo remains the row's
+                 one D-pad stop; a touch tap on the line opens that programme's details. Sized
+                 to guide_channel_number_text (the guide's small secondary token) so
+                 name+now+padding still fit inside guide_row_min_height: the row never grows
+                 taller than it was with just the name. -->
+            <LinearLayout
+                android:id="@+id/guideChannelTextCol"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/guideChannelName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="@font/inter_medium"
+                    android:maxLines="1"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/guide_channel_name_text" />
+
+                <TextView
+                    android:id="@+id/guideChannelNow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/guide_channel_number_text" />
+            </LinearLayout>
         </LinearLayout>
+
+        <!-- This wrapper must keep clipChildren at its default (true): a scrolled
+             HorizontalScrollView's content is only clipped to its viewport by its *parent's*
+             clipChildren, and the row above disables that for focus-scale overflow.
+             Without this layer, horizontally-scrolled program blocks draw straight over the
+             channel-name column to the left. -->
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+
+            <HorizontalScrollView
+                android:id="@+id/guideProgramScroll"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:overScrollMode="never"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/guideProgramRow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+        </FrameLayout>
     </LinearLayout>
 
-    <!-- This wrapper must keep clipChildren at its default (true): a scrolled
-         HorizontalScrollView's content is only clipped to its viewport by its *parent's*
-         clipChildren, and the row root above disables that for focus-scale overflow.
-         Without this layer, horizontally-scrolled program blocks draw straight over the
-         channel-name column to the left. -->
-    <FrameLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1">
+    <!-- The selected listing's details, expanded under its own row. Not focusable: the
+         row keeps one focus path (channel column -> programme blocks), and the panel is
+         read as text rather than navigated. -->
+    <LinearLayout
+        android:id="@+id/guideProgramInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:background="@drawable/bg_guide_program_info"
+        android:orientation="vertical"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:visibility="gone">
 
-        <HorizontalScrollView
-            android:id="@+id/guideProgramScroll"
+        <TextView
+            android:id="@+id/guideProgramInfoTitle"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:overScrollMode="never"
-            android:scrollbars="none">
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="@font/inter_medium"
+            android:maxLines="2"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/guide_program_info_title_text" />
 
-            <LinearLayout
-                android:id="@+id/guideProgramRow"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:orientation="horizontal" />
-        </HorizontalScrollView>
-    </FrameLayout>
+        <TextView
+            android:id="@+id/guideProgramInfoMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="@color/text_secondary"
+            android:textSize="@dimen/guide_program_info_meta_text" />
+
+        <TextView
+            android:id="@+id/guideProgramInfoDescription"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:lineSpacingExtra="2dp"
+            android:maxLines="4"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/guide_program_info_desc_text" />
+    </LinearLayout>
 </LinearLayout>

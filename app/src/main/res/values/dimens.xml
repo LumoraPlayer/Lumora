@@ -67,6 +67,9 @@
     <dimen name="guide_channel_number_text">8sp</dimen>
     <dimen name="guide_channel_initial_text">9sp</dimen>
     <dimen name="guide_program_text">11sp</dimen>
+    <dimen name="guide_program_info_title_text">12sp</dimen>
+    <dimen name="guide_program_info_meta_text">9sp</dimen>
+    <dimen name="guide_program_info_desc_text">10sp</dimen>
     <dimen name="guide_channel_logo_size">26dp</dimen>
     <!-- Floor only - the row is wrap_content and normally taller than this on its own. -->
     <dimen name="guide_row_min_height">34dp</dimen>

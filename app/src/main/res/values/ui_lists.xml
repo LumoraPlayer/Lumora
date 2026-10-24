@@ -29,6 +29,15 @@
     <string name="list_next_program">Next: %1$s</string>
     <string name="list_no_programme_info">No programme info</string>
 
+    <!-- Programme details panel: the inline row that opens under a selected guide block -->
+    <string name="list_program_info">Programme info</string>
+    <string name="list_program_on_now">On now</string>
+    <string name="list_program_ended">Ended</string>
+    <string name="list_program_duration">%1$d min</string>
+    <string name="list_program_no_description">No description available for this programme.</string>
+    <string name="list_program_reminder_hint">Hold OK to set a reminder</string>
+    <string name="list_program_reminder_set">Reminder set · Hold OK to cancel</string>
+
     <!-- Detail screen (MainActivityLists.kt) -->
     <string name="list_version">Version %1$d</string>
     <string name="list_resume">Resume</string>
