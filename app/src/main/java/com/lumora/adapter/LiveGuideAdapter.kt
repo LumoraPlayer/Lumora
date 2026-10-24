@@ -554,7 +554,18 @@ class LiveGuideAdapter(
         }
 
         private fun renderPrograms(channel: Channel, programs: List<XtreamClient.EpgProgram>?, pending: Boolean = false) {
-            val blocks: List<RenderBlock> = if (programs.isNullOrEmpty()) {
+            // One clock read for the whole row, not one per block: the filter below and every
+            // block's own judgment have to agree on the same instant.
+            val nowSeconds = System.currentTimeMillis() / 1000
+            // A guide that was fetched earlier - or a provider that returns the whole day -
+            // carries listings that have already finished. A row's blocks are laid out back to
+            // back from its left edge, with the airing one truncated so every row starts flush
+            // at "now", so a finished listing has no place in that timeline: laid out like any
+            // other it took the front of the row and pushed the programme airing now off the
+            // right-hand edge, which read as if the old programme were what is on. (An
+            // overnight MLB game, 01:00-05:00, in front of a 13:00 Premier League listing.)
+            val live = programs?.filter { it.stopTimestamp > nowSeconds }
+            val blocks: List<RenderBlock> = if (live.isNullOrEmpty()) {
                 // No EPG data for this channel - a single filler block keeps the row
                 // clickable and visually aligned with rows that do have data. Repeating
                 // the channel's own name here just reads as duplicated text right next
@@ -563,8 +574,7 @@ class LiveGuideAdapter(
                 // 200ms before data lands reads as the guide glitching.
                 listOf(RenderBlock(if (pending) "" else itemView.context.getString(R.string.list_no_programme_info), (FILLER_MINUTES * MINUTE_WIDTH_DP * density).toInt(), false, null))
             } else {
-                val nowSeconds = System.currentTimeMillis() / 1000
-                programs.map { program ->
+                live.map { program ->
                     val isCurrent = nowSeconds in program.startTimestamp until program.stopTimestamp
                     // The currently-airing block is truncated to its remaining time so every
                     // row's timeline starts flush at "now", keeping columns aligned without
@@ -578,10 +588,6 @@ class LiveGuideAdapter(
             // Reuse existing block Views where possible instead of tearing every child
             // down and rebuilding on every rebind - this was the main source of GC
             // churn/jank scrolling through a large guide.
-            //
-            // One clock read for the whole row, not one per block: every block is judging
-            // itself against the same instant anyway, and this ran inside the loop.
-            val nowSeconds = System.currentTimeMillis() / 1000
             for (i in blocks.indices) {
                 val (title, widthPx, isCurrent, program) = blocks[i]
                 val block = programRow.getChildAt(i) as? TextView ?: makeBlock().also { programRow.addView(it) }
@@ -627,10 +633,10 @@ class LiveGuideAdapter(
             // the programme changes (see refreshNowState).
             currentBlockIndex = blocks.indexOfFirst { it.isCurrent }
             // Store and render the now/next line from the same data that built the blocks,
-            // so it tracks the timeline highlight. Runs on both the synchronous bind path
-            // and the async loadJob path (callers guard with `current === channel`), which
-            // is exactly what keeps a recycled row's line from going stale.
-            lastPrograms = programs
+            // so it tracks the timeline highlight, and store the FILTERED list: refreshNowState
+            // and the details panel both index this list as if it were the block list, and the
+            // blocks are laid out from the live listings only.
+            lastPrograms = live
             updateNowLine()
             renderProgramInfo(channel)
         }
