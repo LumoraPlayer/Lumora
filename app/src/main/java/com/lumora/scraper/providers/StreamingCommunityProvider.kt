@@ -329,7 +329,14 @@ class StreamingCommunityProvider(private val _language: String? = null) : Provid
 
     private fun getTitlesFromInertiaJson(json: JSONObject): List<StreamingCommunityService.Show> {
         val gson = Gson()
-        val showListType: Type = object : TypeToken<List<StreamingCommunityService.Show>>() {}.type
+        // Built, not an anonymous `TypeToken<List<Show>>() {}`: R8 rewrites those subclasses'
+        // generic signature in release builds, and the constructor's IllegalStateException was
+        // caught by this provider's callers as an empty catalogue. `getParameterized` carries
+        // the type argument in the token object itself.
+        val showListType: Type = TypeToken.getParameterized(
+            List::class.java,
+            StreamingCommunityService.Show::class.java
+        ).type
         val props = json.optJSONObject("props") ?: return listOf()
 
         if (props.has("titles") && props.optJSONArray("titles") != null) {

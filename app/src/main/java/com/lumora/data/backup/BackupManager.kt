@@ -257,7 +257,18 @@ internal val BACKED_UP_SCRAPER_SETTINGS: Map<String, SettingType> = mapOf(
  *  Separate from the pretty-printing serializer the file itself uses - this one produces
  *  embedded text and exists only for the set <-> array mapping. */
 private val settingJson = Gson()
-private val jsonElementListType = object : TypeToken<List<JsonElement>>() {}.type
+
+/** The JSON type of the array [SettingType.STRING_SET] values travel as.
+ *
+ *  Built with [TypeToken.getParameterized], not an anonymous `TypeToken<List<JsonElement>>() {}`.
+ *  R8 rewrites the generic superclass signature of those anonymous subclasses in release builds
+ *  (down to the raw `TypeToken`, even with the class kept - see the backup keep rule), so Gson's
+ *  constructor threw "TypeToken must be created with a type argument" from this file's static
+ *  initialiser. Every top-level function here, backup export included, then died with
+ *  ExceptionInInitializerError. `getParameterized` holds the type in the token object instead of
+ *  a class-file attribute, so the shrinker has no signature to rewrite. */
+private val jsonElementListType =
+    TypeToken.getParameterized(List::class.java, JsonElement::class.java).type
 
 /** Encodes a raw pref value into the string form the backup carries. */
 internal fun encodeSetting(type: SettingType, value: Any): BackupManager.SettingBackup = when (type) {

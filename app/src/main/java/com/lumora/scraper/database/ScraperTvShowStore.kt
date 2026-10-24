@@ -38,6 +38,12 @@ internal class ScraperTvShowStore(
     private val gson = Gson()
     private val lock = ReentrantLock()
 
+    /** Built rather than written as an anonymous `TypeToken<List<TvShow>>() {}`: R8 rewrites
+     *  that subclass's generic signature in release builds (the same failure that crashes
+     *  backup export), and this cache's runCatching would swallow the exception and leave the
+     *  A-Z catalogue silently empty. `getParameterized` keeps the type in the object. */
+    private val tvShowListType = TypeToken.getParameterized(List::class.java, TvShow::class.java).type
+
     /** Insertion-ordered so [getAll] preserves the catalogue's own A-Z ordering. */
     private var shows: LinkedHashMap<String, TvShow>? = null
 
@@ -47,8 +53,7 @@ internal class ScraperTvShowStore(
         shows ?: run {
             val parsed = runCatching {
                 if (!file.exists()) return@runCatching emptyList<TvShow>()
-                val type = object : TypeToken<List<TvShow>>() {}.type
-                gson.fromJson<List<TvShow>>(file.readText(), type) ?: emptyList()
+                gson.fromJson<List<TvShow>>(file.readText(), tvShowListType) ?: emptyList()
             }.getOrElse {
                 Log.w(TAG, "Could not read ${file.name}, starting empty", it)
                 emptyList()

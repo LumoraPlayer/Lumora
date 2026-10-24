@@ -354,3 +354,38 @@ val verifyLumoraIdentity by tasks.registering {
 
 tasks.named("preBuild") { dependsOn(verifyLumoraIdentity) }
 tasks.named("check") { dependsOn(verifyLumoraIdentity) }
+
+// Release-build guard for Gson's TypeToken. An anonymous `TypeToken<List<...>>() {}` depends on
+// the class file's generic superclass signature, and R8 rewrites that signature in release builds
+// (even under `-keep`), so Gson's constructor throws "TypeToken must be created with a type
+// argument" on device while debug builds and the unit tests pass. The backup settings token took
+// every export down with an ExceptionInInitializerError that way. TypeToken.getParameterized(...)
+// carries the type in the token object instead, so production sources must use it and this check
+// fails the build if an anonymous subclass comes back.
+val verifyNoAnonymousTypeToken by tasks.registering {
+    group = "verification"
+    description = "Fails if production code uses an anonymous Gson TypeToken subclass."
+
+    val sources = fileTree("src/main") { include("**/*.kt") }
+    inputs.files(sources)
+
+    doLast {
+        val anonymousTypeToken = Regex("""object\s*:\s*(?:com\.google\.gson\.reflect\.)?TypeToken\s*<""")
+        val offenders = sources.files.filter { source ->
+            anonymousTypeToken.containsMatchIn(source.readText())
+        }
+        if (offenders.isNotEmpty()) {
+            throw GradleException(
+                buildString {
+                    appendLine("Anonymous Gson TypeToken subclasses are not release-safe:")
+                    offenders.forEach { appendLine("  - ${it.relativeTo(rootDir)}") }
+                    appendLine("Use TypeToken.getParameterized(rawType, typeArguments...) instead:")
+                    appendLine("R8 rewrites the subclass's generic signature and Gson then throws at runtime.")
+                }
+            )
+        }
+    }
+}
+
+tasks.named("preBuild") { dependsOn(verifyNoAnonymousTypeToken) }
+tasks.named("check") { dependsOn(verifyNoAnonymousTypeToken) }
