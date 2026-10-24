@@ -90,6 +90,23 @@ object SportsChannelMatcher {
     private const val WINDOW_BEFORE_SECONDS = 90 * 60L
     private const val WINDOW_AFTER_SECONDS = 4 * 60 * 60L
 
+    /**
+     * How wide a listing's window has to be around kick-off before a blurb counts as the
+     * broadcast of that fixture.
+     *
+     * The blurb tier is the weak one: it exists because an Xtream short EPG writes "SPFL 26/27"
+     * as the title and "Motherwell play host to Celtic" underneath, and that listing *is* the
+     * match. A studio show's blurb names the fixture just as well from the other side of it -
+     * "Xtra Time" on TNT Sports 2 after a 12:30 kick-off, "Premier League Weekend" before one -
+     * and the board then offered those channels as places to watch a game they were not showing.
+     * So the blurb only counts when the listing is on air *through* the kick-off: it may start
+     * up to half an hour late (providers are sloppy) but it has to still be running a quarter of
+     * an hour in, which a build-up that ends on the whistle and a wrap-up that starts after the
+     * match both fail.
+     */
+    private const val BLURB_START_GRACE_SECONDS = 30 * 60L
+    private const val BLURB_END_GRACE_SECONDS = 15 * 60L
+
     /** One fixture, and the channels the guide says are showing it. */
     data class FixtureChannels(
         val fixture: SportsFixture,
@@ -175,6 +192,27 @@ object SportsChannelMatcher {
     )
 
     /**
+     * Sports the board has no chip for, so they cannot be in [SPORT_WORDS] - but a listing can
+     * still be about one, and a football fixture is not carried by it.
+     *
+     * This is the half of the guard that stops a competition word crossing sports on a channel
+     * the enum never named: "UCI Mountain Bike Enduro World Championships" put Sheffield United
+     * v Derby County on TNT Sports 4, because the fixture's league ("Championship") and the
+     * race's title ("Championships") met under the competition tier's prefix tolerance and
+     * nothing told the guard the listing was cycling. Names, not codes, wherever both are used.
+     */
+    private val OFF_BOARD_SPORT_WORDS = setOf(
+        "cycling", "cyclisme", "radsport", "ciclismo", "ciclisme", "kolarstwo", "велоспорт",
+        "bike", "mtb", "bmx", "uci", "motocross", "speedway", "supercross",
+        "athletics", "athletisme", "leichtathletik", "atletismo", "swimming", "natation",
+        "schwimmen", "natacion", "gymnastics", "ginnastica", "turnen", "gimnasia",
+        "netball", "badminton", "squash", "bowls", "curling",
+        "skiing", "ski", "snowboard", "biathlon", "skating", "equestrian", "dressage",
+        "rowing", "sailing", "triathlon", "marathon", "climbing", "surfing", "skateboarding",
+        "wrestling", "judo", "taekwondo", "karate", "fencing", "archery"
+    )
+
+    /**
      * Nicknames and abbreviations a guide is likely to use where the feed spells the club out -
      * "Spurs" for Tottenham, "Wolves" for Wolverhampton. Each entry adds the spelled-out form to
      * the team's token set, so a title using either spelling matches.
@@ -187,6 +225,24 @@ object SportsChannelMatcher {
         "boro" to "middlesbrough", "pompey" to "portsmouth", "forest" to "nottingham",
         "villa" to "aston", "palace" to "crystal", "argyle" to "plymouth"
     )
+
+    /**
+     * "News" in each language a channel name is likely to carry it.
+     *
+     * A news channel reports on every fixture of the day and airs none of them, so a bulletin
+     * naming a game is evidence of the game existing, not of where to watch it. Left in, the
+     * board credited "Sky Sports News" to fixtures it had merely read out, and the player's
+     * Versions list then offered it as another broadcast of the match.
+     */
+    private val NEWS_WORDS = setOf(
+        "news", "noticias", "nachrichten", "nouvelles", "actualites", "notizie", "nieuws",
+        "nyheter", "nyheder", "uutiset", "wiadomosci", "novosti", "новости", "أخبار",
+        "समाचार", "خبریں", "ニュース", "뉴스", "新闻", "新聞"
+    )
+
+    /** True when a channel reports on sport rather than showing it - "Sky Sports News". */
+    internal fun isNewsChannel(name: String): Boolean =
+        normalise(name).any { it in NEWS_WORDS }
 
     /**
      * Scores every fixture against the day's guide rows.
@@ -242,9 +298,15 @@ object SportsChannelMatcher {
         // channels) for the handful that share a token.
         val channelTokensById = HashMap<String, Set<String>>(channelNames.size)
         val channelIndex = HashMap<String, MutableList<String>>()
+        // Excluded outright: a news channel names every fixture and airs none of them.
+        val newsChannelIds = HashSet<String>()
         for ((channelId, name) in channelNames) {
             val tokens = normalise(name)
             channelTokensById[channelId] = tokens
+            if (isNewsChannel(name)) {
+                newsChannelIds.add(channelId)
+                continue
+            }
             for (token in tokens) {
                 channelIndex.getOrPut(token) { mutableListOf() }.add(channelId)
             }
@@ -269,9 +331,21 @@ object SportsChannelMatcher {
             val competitionTokens = competitionTokens(fixture)
             // The row side of every window test below is Unix seconds.
             val kickoffSeconds = fixture.kickoff / 1000
+            // The guide's own team names, used as negative evidence: a title that reads as a
+            // fixture ("Championship: Sheffield United v Rotherham", "Live: Spurs at Chelsea")
+            // and does not name both of *our* sides is that other game's coverage, so it can
+            // never be ours - however well the competition or one of the names fits. Without
+            // this the competition tier gave our fixture every channel showing any game of the
+            // league, which is the same complaint as a wrong channel from a different angle.
+            fun namesAnotherFixture(rowIndex: Int): Boolean =
+                looksLikeLiveEvent(rows[rowIndex].title) &&
+                    !(hits(homeTokens, rowTokens[rowIndex]) && hits(awayTokens, rowTokens[rowIndex]))
             val best = HashMap<String, ChannelShowing>()
             for (i in candidates) {
                 val row = rows[i]
+                // A bulletin on a news channel names the fixture without showing it.
+                if (row.channelId in newsChannelIds) continue
+                if (namesAnotherFixture(i)) continue
                 val titleTokens = rowTokens[i]
                 // Two chances per row. A title that names both sides is the strongest evidence
                 // there is, and is scored as such. Failing that, the listing's own description
@@ -306,6 +380,14 @@ object SportsChannelMatcher {
                     if (crossesSports(fixture.sport, blurb)) continue
                     if (isWomensTitle(blurb) && !isWomensTeam(fixture)) continue
                     if (isCompetitionShow(row.title)) continue
+                    // ...and it has to be the broadcast, not a programme about it: on air through
+                    // the kick-off (see BLURB_START_GRACE_SECONDS). A show on after the match
+                    // names the fixture in its blurb as readily as the coverage does.
+                    if (row.startTimestamp > kickoffSeconds + BLURB_START_GRACE_SECONDS ||
+                        row.stopTimestamp <= kickoffSeconds + BLURB_END_GRACE_SECONDS
+                    ) {
+                        continue
+                    }
                 }
                 var score = if (fromDescription) SCORE_TEAMS_FROM_DESCRIPTION else SCORE_BOTH_TEAMS
                 if (covers) score += BONUS_AIRING_AT_KICKOFF
@@ -337,6 +419,10 @@ object SportsChannelMatcher {
             if (competitionTokens.isNotEmpty()) {
                 for (i in competitionCandidates(competitionIndex, competitionTokens)) {
                     val row = rows[i]
+                    // A news bulletin names every competition of the day and airs none of them.
+                    if (row.channelId in newsChannelIds) continue
+                    // ...and a title naming another game of the same competition is that game.
+                    if (namesAnotherFixture(i)) continue
                     if (row.startTimestamp > kickoffSeconds + WINDOW_AFTER_SECONDS ||
                         row.stopTimestamp < kickoffSeconds - WINDOW_BEFORE_SECONDS
                     ) {
@@ -377,6 +463,7 @@ object SportsChannelMatcher {
                 channelIndex[token]?.let { channelCandidates.addAll(it) }
             }
             for (channelId in channelCandidates) {
+                if (channelId in newsChannelIds) continue
                 val tokens = channelTokensById[channelId] ?: continue
                 // A channel named after another sport is not this fixture's channel, however
                 // much its name looks like a team's.
@@ -401,9 +488,21 @@ object SportsChannelMatcher {
                 }
             }
 
+            // A broadcaster first, an event channel last. A channel named after the fixture
+            // ("NEXT ASTON VILLA MANCHESTER CITY ... PPV 12", "AU STAN 04 Aston Villa v ...")
+            // is a slot that exists for this one game; a channel with a name of its own ("Sky
+            // Sports Main Event", "TNT Sports 2") is the broadcaster, and that is the one
+            // somebody picking a channel expects to see at the top - and the one the player's
+            // automatic failover tries first. Ties fall back to the match score.
+            fun namesTheFixture(channelId: String): Boolean {
+                val tokens = channelTokensById[channelId].orEmpty()
+                return hits(homeTokens, tokens) || hits(awayTokens, tokens)
+            }
             out[fixture.id] = FixtureChannels(
                 fixture = fixture,
-                channels = best.values.sortedByDescending { it.score }
+                channels = best.values.sortedWith(
+                    compareBy({ namesTheFixture(it.channelId) }, { -it.score })
+                )
             )
         }
         return out
@@ -437,23 +536,22 @@ object SportsChannelMatcher {
      * all day ("Retro C'Ship SF 19", "PL Greatest Games"). A word like "relive" or a club like
      * "Liverpool" does not claim a live broadcast - the match is on whole words only.
      *
-     * A listing for a *later* day is not an event either: the board is today's, and a game's
-     * own start time is the one thing about it that is not a guess - "Live NBA" tonight at 01:00
-     * sat under "On now" beside the games of this morning, its clock time alone saying which
-     * of the two it was.
+     * A listing has to be ON AIR, not merely still to come. "Live" in a title is the guide
+     * saying the broadcast is live, not that it has already started: "Live US F1 GP" at 22:30
+     * was a live event at 13:14 by this filter, and the board's ON NOW section showed tonight's
+     * qualifying as if it were on beside the afternoon's football. The listing's own start time
+     * is the one thing about it that is not a guess, so the row is an event only once it has
+     * started; a listing for a later day falls out with it, without needing a day check.
      */
     fun liveEvents(
         rows: List<EpgProgramRow>,
         nowSeconds: Long,
         sportsChannelIds: Set<String> = emptySet(),
         limit: Int = 60
-    ): List<EpgProgramRow> {
-        // The end of the local day, in seconds: a listing that starts after it belongs to
-        // tomorrow's board.
-        val dayEndSeconds = SportsTime.plusDays(SportsTime.localDayStart(nowSeconds * 1000), 1) / 1000
-        return rows.filter { row ->
-            row.stopTimestamp >= nowSeconds &&
-                row.startTimestamp < dayEndSeconds &&
+    ): List<EpgProgramRow> =
+        rows.filter { row ->
+            row.startTimestamp <= nowSeconds &&
+                row.stopTimestamp > nowSeconds &&
                 mentionsLive(row.title, row.description) && (
                     looksLikeLiveEvent(row.title) ||
                         (row.channelId in sportsChannelIds && looksLikeSportsProgramme(row.title))
@@ -461,7 +559,6 @@ object SportsChannelMatcher {
         }
             .sortedWith(compareBy({ it.startTimestamp }, { it.title }))
             .take(limit)
-    }
 
     /**
      * True when the listing says it is live - "Live: Formula 1 Qualifying", "Australian Racing
@@ -650,6 +747,9 @@ object SportsChannelMatcher {
         for ((word, otherSport) in SPORT_WORDS) {
             if (word in tokens && otherSport != sport) return true
         }
+        // Sports the board has no chip for still rule a listing out - a cycling race is not a
+        // football match, and no fixture here can ever be one of these.
+        if (tokens.any { it in OFF_BOARD_SPORT_WORDS }) return true
         return false
     }
 

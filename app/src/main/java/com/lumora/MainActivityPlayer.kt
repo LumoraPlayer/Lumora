@@ -592,6 +592,11 @@ internal fun MainActivity.setupPlayerControls() {
                 } else if (vodChannel != null && tryNextVodVersion()) {
                     // Another copy of this exact title (another provider's, or another quality)
                     // is the next thing to try - the same failover live has always had.
+                } else if (tryNextGameBroadcast()) {
+                    // Live game with no working variant of its own left: another channel
+                    // carrying the same game is the next best thing, and it is what the
+                    // sports board's chooser offered as the other broadcasts. Automatic, so a
+                    // dead TNT Sports feed lands on Sky Sports instead of on an error screen.
                 } else if (liveChannel != null && liveRetryAttempt < LIVE_RETRY_DELAYS_MS.size) {
                     // No other version to fail over to (a single-source channel), so retry
                     // the exact same URL - HTTP 509 and similar provider-side throttles are
@@ -1350,6 +1355,28 @@ internal fun MainActivity.tryNextQualityVersion(message: String? = null): Boolea
         ?: return false
     liveVersionSwitchAttempt++
     switchToVersionIndex(nextIndex, message ?: getString(R.string.play_switching_alt_quality))
+    return true
+}
+
+/**
+ * Hands playback to another channel carrying the same live game - the sports board's other
+ * broadcasts - once the channel that failed has no working quality variant left.
+ *
+ * The Versions picker has always offered these by hand (see showLiveVersionPicker); this is
+ * the same switch made without the viewer having to notice the stream died. The failed
+ * channel is marked dead first, which is also what bounds the walk: each broadcast is tried
+ * once, and a game whose every source is broken ends on the error screen having flicked
+ * through them rather than bouncing between the same two. The dead marks persist across
+ * launches (see saveDeadStreams), so a broken PPV slot is not recommended again either.
+ */
+internal fun MainActivity.tryNextGameBroadcast(): Boolean {
+    val playing = nowPlayingChannel ?: return false
+    if (playing.mediaType != MediaType.LIVE) return false
+    val others = liveGameOtherChannels
+    if (others.isEmpty()) return false
+    markStreamDead(playing)
+    val target = others.firstOrNull { it.id != playing.id && !isStreamDead(it) } ?: return false
+    switchToGameBroadcast(target)
     return true
 }
 

@@ -391,6 +391,11 @@ object GuideEvents {
         limit: Int = 60
     ): List<Event> =
         SportsChannelMatcher.liveEvents(rows, nowSeconds, sportsChannelIds, limit = limit)
+            // A news channel reports on the day's sport rather than airing it: a "Live" bulletin
+            // naming a fixture is not that fixture on the board.
+            .filter { row ->
+                channelHints[row.channelId]?.let { !SportsChannelMatcher.isNewsChannel(it.name) } != false
+            }
             .filter { (it.channelId to it.startTimestamp) !in covered }
             .map { row ->
                 val hint = channelHints[row.channelId]

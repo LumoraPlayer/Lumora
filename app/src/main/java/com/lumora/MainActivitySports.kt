@@ -1006,6 +1006,11 @@ internal fun MainActivity.onSportsEventClick(event: SportsListItem.Event) {
  */
 internal fun MainActivity.showSportsChannelChooser(event: SportsListItem.Event, playable: List<Channel>) {
     val density = resources.displayMetrics.density
+    // A source that just failed is not a recommendation. Keep the working ones and drop the
+    // dead (they are marked for an hour, see markStreamDead) - unless every broadcast is dead,
+    // where showing the list as it is beats an empty dialog.
+    val alive = playable.filterNot { isStreamDead(it) }
+    val choices = if (alive.isEmpty()) playable else alive
     val detailById = event.matches.associateBy { it.channelId }
     val container = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -1013,7 +1018,7 @@ internal fun MainActivity.showSportsChannelChooser(event: SportsListItem.Event, 
         clipToPadding = false
         setPadding(0, (6 * density).toInt(), 0, (6 * density).toInt())
     }
-    for (channel in playable) {
+    for (channel in choices) {
         val detail = detailById[channel.id]
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1049,9 +1054,10 @@ internal fun MainActivity.showSportsChannelChooser(event: SportsListItem.Event, 
         row.setOnClickListener {
             sportsChannelDialog?.dismiss()
             // The rest of the matched channels ride along with the pick: the player's own
-            // Versions picker offers them as other broadcasts of the same game (see
-            // MainActivity.playItem).
-            playItem(channel, playable.filter { it.id != channel.id })
+            // Versions picker offers them as other broadcasts of the same game, and the
+            // automatic failover walks them in this order when the pick itself dies (see
+            // MainActivity.playItem / tryNextGameBroadcast).
+            playItem(channel, choices.filter { it.id != channel.id })
         }
         container.addView(row)
     }

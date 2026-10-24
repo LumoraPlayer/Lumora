@@ -403,4 +403,165 @@ class SportsChannelMatcherTest {
         )
         assertEquals(listOf("Live Tennis"), events.map { it.title })
     }
+
+    @Test
+    fun `a listing later today is not on now`() {
+        // Off a real board: "Live US F1 GP" at 22:30 sat under ON NOW at 13:14, beside the
+        // afternoon's football, because the filter only asked whether the listing had ended -
+        // not whether it had started. "Live" in the title is the guide saying the broadcast is
+        // live, not that it is on the air yet.
+        val now = 1_800_000_000L
+        val events = SportsChannelMatcher.liveEvents(
+            listOf(
+                row(
+                    "skysportsmainevent.uk", "Live US F1 GP",
+                    start = (now + 9 * 3600) * 1000, stop = (now + 12 * 3600) * 1000
+                ),
+                row(
+                    "skysportsfootball.uk", "LALIGA",
+                    start = (now - 1200) * 1000, stop = (now + 3600) * 1000,
+                    description = "Live from the Bernabéu."
+                )
+            ),
+            now,
+            setOf("skysportsmainevent.uk", "skysportsfootball.uk")
+        )
+        assertEquals(listOf("LALIGA"), events.map { it.title })
+    }
+
+    @Test
+    fun `a broadcaster sorts above a channel named after the fixture`() {
+        // Off a real board: the chooser led with "NEXT ASTON VILLA MANCHESTER CITY ... PPV 12"
+        // (a slot that exists for one game) while the broadcaster sat below it. A channel's own
+        // name is what separates the two, and broadcasters are what people look for.
+        val fixture = fixture(
+            "Aston Villa", "Manchester City", league = "Premier League", sport = Sport.FOOTBALL
+        )
+        val result = SportsChannelMatcher.match(
+            listOf(fixture),
+            listOf(
+                row("ppv12", "Aston Villa v Manchester City"),
+                row("skysportsmainevent.uk", "Aston Villa v Manchester City")
+            ),
+            mapOf(
+                "ppv12" to "NEXT ASTON VILLA MANCHESTER CITY 8K PPV 12",
+                "skysportsmainevent.uk" to "SKY SPORTS MAIN EVENT"
+            )
+        )
+        assertEquals(
+            listOf("skysportsmainevent.uk", "ppv12"),
+            result.getValue(fixture.id).channels.map { it.channelId }
+        )
+    }
+
+    @Test
+    fun `a show's blurb is not the broadcast when it airs after the match`() {
+        // Off a real board: TNT Sports 2 was offered for Aston Villa v Manchester City on the
+        // strength of "Xtra Time" - a wrap-up show two hours after kick-off whose blurb names
+        // the fixture. The blurb tier only counts when the listing is on air through kick-off.
+        val fixture = fixture(
+            "Aston Villa", "Manchester City", league = "Premier League", sport = Sport.FOOTBALL
+        )
+        val kickoffSeconds = 1_800_000_000L
+        val result = SportsChannelMatcher.match(
+            listOf(fixture),
+            listOf(
+                row(
+                    "tntsports2.uk", "Xtra Time",
+                    start = (kickoffSeconds + 2 * 3600) * 1000,
+                    stop = (kickoffSeconds + 3 * 3600) * 1000,
+                    description = "Aston Villa v Manchester City reaction."
+                ),
+                // The same blurb on the listing that actually airs the match does count.
+                row(
+                    "tntsports1.uk", "Premier League",
+                    start = (kickoffSeconds - 600) * 1000,
+                    stop = (kickoffSeconds + 7200) * 1000,
+                    description = "Aston Villa v Manchester City, live."
+                )
+            ),
+            mapOf("tntsports2.uk" to "TNT SPORTS 2", "tntsports1.uk" to "TNT SPORTS 1")
+        )
+        assertEquals(
+            listOf("tntsports1.uk"),
+            result.getValue(fixture.id).channels.map { it.channelId }
+        )
+    }
+
+    @Test
+    fun `a title naming another game of the same competition is not this fixture's channel`() {
+        // The guide names the two sides of a different match of the same competition, which is
+        // what the competition tier would otherwise credit: "Championship" fits, and so does
+        // one of our names, but the listing is covering Rotherham's game, not Derby's.
+        val fixture = fixture(
+            "Sheffield United", "Derby County", league = "Championship", sport = Sport.FOOTBALL
+        )
+        val result = SportsChannelMatcher.match(
+            listOf(fixture),
+            listOf(
+                row("skysportsfootball.uk", "Championship: Sheffield United v Rotherham United"),
+                row("skysportsplus.uk", "EFL Championship")
+            ),
+            mapOf(
+                "skysportsfootball.uk" to "SKY SPORTS FOOTBALL",
+                "skysportsplus.uk" to "SKY SPORTS+"
+            )
+        )
+        assertEquals(
+            listOf("skysportsplus.uk"),
+            result.getValue(fixture.id).channels.map { it.channelId }
+        )
+    }
+
+    @Test
+    fun `another sport's championship is not this fixture's competition`() {
+        // Off a real board: TNT Sports 4 was offered for Sheffield United v Derby County on the
+        // strength of "UCI Mountain Bike Enduro World Championships" - the fixture's league
+        // ("Championship") met the race's title ("Championships") under the competition tier's
+        // prefix tolerance, and nothing told the guard the listing was cycling.
+        val fixture = fixture(
+            "Sheffield United", "Derby County", league = "Championship", sport = Sport.FOOTBALL
+        )
+        val result = SportsChannelMatcher.match(
+            listOf(fixture),
+            listOf(
+                row(
+                    "tntsports4.uk", "UCI Mountain Bike Enduro World Championships",
+                    start = (1_800_000_000L - 600) * 1000,
+                    stop = (1_800_000_000L + 7200) * 1000
+                ),
+                row(
+                    "skysportsplus.uk", "EFL Championship",
+                    start = (1_800_000_000L - 600) * 1000,
+                    stop = (1_800_000_000L + 7200) * 1000
+                )
+            ),
+            mapOf("tntsports4.uk" to "TNT SPORTS 4", "skysportsplus.uk" to "SKY SPORTS+")
+        )
+        assertEquals(
+            listOf("skysportsplus.uk"),
+            result.getValue(fixture.id).channels.map { it.channelId }
+        )
+    }
+
+    @Test
+    fun `a news channel is never offered as a broadcast`() {
+        // "Sky Sports News" reads out every fixture of the day and airs none of them; left in,
+        // it appeared in the player's Versions list as another broadcast of the match.
+        val fixture = fixture(
+            "Aston Villa", "Manchester City", league = "Premier League", sport = Sport.FOOTBALL
+        )
+        val result = SportsChannelMatcher.match(
+            listOf(fixture),
+            listOf(
+                row("skysportsnews.uk", "Premier League"),
+                row("skysportspl.uk", "Aston Villa v Manchester City")
+            ),
+            mapOf("skysportsnews.uk" to "SKY SPORTS NEWS", "skysportspl.uk" to "SKY SPORTS PREMIER LEAGUE")
+        )
+        assertEquals(
+            listOf("skysportspl.uk"),
+            result.getValue(fixture.id).channels.map { it.channelId }
+        )
+    }
 }
