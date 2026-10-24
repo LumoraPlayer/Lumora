@@ -30,6 +30,12 @@ class StremioProtocolTest {
         enabled = true,
     )
 
+    /** A syntactically valid http(s) URL of exactly [length] characters, for cap tests. */
+    private fun urlOfLength(length: Int): String {
+        val prefix = "https://cdn.example/stream?"
+        return prefix + "x".repeat(length - prefix.length)
+    }
+
     @Test
     fun `parses a manifest with string resources`() {
         val manifest = """
@@ -181,6 +187,52 @@ class StremioProtocolTest {
         assertEquals("0123456789abcdef0123456789abcdef01234567", streams[1].infoHash)
         assertTrue(streams[1].playable)
         assertNull(streams[1].url)
+    }
+
+    @Test
+    fun `keeps direct stream urls longer than the old 2 kb limit`() {
+        // AIOStreams/TorBox answered with URLs of 906-3443 characters; the old 2048-character
+        // cap cut the tail off, and the CDN returned its "link not recognised" slate instead of
+        // the episode.
+        val reported = urlOfLength(3443)
+
+        val streams = StremioProtocol.parseStreams("""{"streams":[{"url":"$reported"}]}""")
+
+        assertEquals(1, streams.size)
+        assertEquals(reported, streams[0].url)
+    }
+
+    @Test
+    fun `drops urls over the cap instead of truncating them`() {
+        val oversized = urlOfLength(StremioProtocol.MAX_URL + 1)
+
+        // A direct-only stream cannot play once its URL is unusable, so it leaves the queue
+        // rather than reaching the server as a shortened link.
+        assertTrue(StremioProtocol.parseStreams("""{"streams":[{"url":"$oversized"}]}""").isEmpty())
+
+        // A stream that also carries an infoHash stays usable as a torrent: the bad url is
+        // dropped, not the whole candidate.
+        val torrent = StremioProtocol.parseStreams(
+            """{"streams":[{"url":"$oversized","infoHash":"0123456789abcdef0123456789abcdef01234567"}]}"""
+        )
+        assertEquals(1, torrent.size)
+        assertNull(torrent[0].url)
+        assertEquals("0123456789abcdef0123456789abcdef01234567", torrent[0].infoHash)
+    }
+
+    @Test
+    fun `caps subtitle urls without shortening them`() {
+        val long = urlOfLength(3443)
+        val kept = StremioProtocol.parseStreams(
+            """{"streams":[{"url":"https://cdn.example/video.mkv","subtitles":[{"url":"$long","lang":"en"}]}]}"""
+        )
+        assertEquals(long, kept.single().subtitles.single().url)
+
+        val oversized = urlOfLength(StremioProtocol.MAX_URL + 1)
+        val dropped = StremioProtocol.parseStreams(
+            """{"streams":[{"url":"https://cdn.example/video.mkv","subtitles":[{"url":"$oversized","lang":"en"}]}]}"""
+        )
+        assertTrue(dropped.single().subtitles.isEmpty())
     }
 
     @Test

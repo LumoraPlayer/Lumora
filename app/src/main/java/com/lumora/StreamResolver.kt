@@ -209,7 +209,7 @@ internal class StreamResolver(
             // single-source path can land here - the search path arms nothing until it plays.
             if (onlySource != null && !dialog.isShowing) return
             playbackStarted = true
-            prefs.edit().putString(KEY_LAST_GOOD, source.key()).apply()
+            prefs.edit().putString(KEY_LAST_GOOD, source.lastGoodKey()).apply()
             dialog.dismiss()
 
             val resolved = item.copy(
@@ -625,16 +625,31 @@ internal sealed class FoundSource {
     }
 }
 
-/** Stable key for the last-good-source memory. */
+/** Stable identity for this candidate within the find it came from - the picker's "playing"
+ *  marker and the set of what has already been tried. An addon's direct URL is the exact
+ *  stream, so two results that share a release title stay two choices. */
 internal fun FoundSource.key(): String = when (this) {
     is FoundSource.FromPlugin -> "plugin:${plugin.id}:${result.title}"
     is FoundSource.FromSite -> "site:${source.providerName} · ${source.server.name}"
-    is FoundSource.FromStremio -> "stremio:${addon.id}:${stream.title ?: stream.name ?: stream.identity()}"
+    is FoundSource.FromStremio -> "stremio:${addon.id}:${stream.identity()}"
 }
 
 /**
- * Collapses direct-play sources to one entry each - the main list's unit is the site, not its
- * mirrors, and an addon or plugin is one entry too.
+ * The key the last-good-source memory uses. A Stremio direct URL is signed and changes between
+ * finds, so the release title is the stable part there; [key] stays exact so the picker and the
+ * tried set do not confuse two streams that share a title.
+ */
+internal fun FoundSource.lastGoodKey(): String = when (this) {
+    is FoundSource.FromStremio ->
+        "stremio:${addon.id}:${stream.title ?: stream.name ?: stream.identity()}"
+    else -> key()
+}
+
+/**
+ * Collapses the direct-play sources that share one place in the main Versions list: a site's
+ * mirror hosts are one entry, and a plugin is one entry. A Stremio addon's direct streams are
+ * not collapsed here - an addon that answered with several gets its own submenu (see
+ * [findStremioDirectGroups]), and a lone one is a single entry either way.
  */
 internal fun FoundSource.familyKey(): String = when (this) {
     is FoundSource.FromSite -> "site:${source.providerName}"
@@ -666,16 +681,63 @@ internal val FoundSource.isTorrent: Boolean
  * different player), so listing them all would bury the choice under mirror names. [key] stays
  * the identity for "this is what's playing"; this is only what gets listed. Torrents are not
  * here at all - they get their own submenu, since an indexer answers with dozens of releases
- * and each one is a real choice (see [findTorrentChoices]).
+ * and each one is a real choice (see [findTorrentChoices]). An addon that answered with more
+ * than one direct stream is not here either: those are releases too, and get their own submenu
+ * (see [findStremioDirectGroups]).
  *
  * Empty when what's playing did not come from a find, or came from one run for something else.
  */
 internal fun MainActivity.findSourceChoices(playing: Channel): List<FoundSource> {
     if (lastFindSourcesFor != playing.id || lastFindSources.isEmpty()) return emptyList()
+    val ranked = rankedFindSources()
+    // An addon with a submenu of its own is listed by that one entry, not once per stream.
+    val groupedAddons = stremioDirectGroups(ranked).mapTo(mutableSetOf()) { it.addon.id }
     val seen = mutableSetOf<String>()
-    return rankedFindSources()
+    return ranked
         .filter { !it.isTorrent }
+        .filter { it !is FoundSource.FromStremio || it.addon.id !in groupedAddons }
         .filter { seen.add(it.familyKey()) }
+}
+
+/**
+ * One addon's direct-URL streams from the last find, best first - a Versions submenu.
+ *
+ * A direct URL from an aggregator is a release, not a mirror: its [StremioStream.title] carries
+ * the quality, size, seeders, cache state and indexer that tell it apart from the forty others
+ * the same addon answered with. Collapsing those to one entry per addon left no way to choose
+ * a different one, so an addon that answered with more than one gets a submenu, the way the
+ * torrent results do.
+ */
+internal data class StremioDirectGroup(
+    val addon: StremioAddon,
+    val sources: List<FoundSource.FromStremio>,
+)
+
+/**
+ * Groups direct-URL Stremio streams by addon, in the order [sources] already carries - pass
+ * the ranked list (see [ranking]). Addons with one direct stream are left out: that stream is
+ * already one entry in the main list, and a submenu for a single row would be pure indirection.
+ * InfoHash streams are torrents and belong to [findTorrentChoices], not here.
+ */
+internal fun stremioDirectGroups(sources: List<FoundSource>): List<StremioDirectGroup> {
+    val byAddon = LinkedHashMap<String, MutableList<FoundSource.FromStremio>>()
+    for (source in sources) {
+        if (source !is FoundSource.FromStremio || source.stream.url == null) continue
+        byAddon.getOrPut(source.addon.id) { mutableListOf() }.add(source)
+    }
+    return byAddon.values
+        .filter { it.size > 1 }
+        .map { StremioDirectGroup(it.first().addon, it) }
+}
+
+/**
+ * The addon submenus the last Find & Play turned up for [playing], best first.
+ *
+ * Empty when what's playing did not come from a find, or came from one run for something else.
+ */
+internal fun MainActivity.findStremioDirectGroups(playing: Channel): List<StremioDirectGroup> {
+    if (lastFindSourcesFor != playing.id || lastFindSources.isEmpty()) return emptyList()
+    return stremioDirectGroups(rankedFindSources())
 }
 
 /**
@@ -793,7 +855,7 @@ internal fun MainActivity.canFindStream(item: Channel): Boolean =
  */
 internal fun ranking(lastGood: String?, preferDub: Boolean): Comparator<FoundSource> =
     compareByDescending<FoundSource> { it.webStart }
-        .thenByDescending { it.key() == lastGood }
+        .thenByDescending { it.lastGoodKey() == lastGood }
         .thenByDescending {
             preferDub && (it as? FoundSource.FromPlugin)?.result?.audio == "dub"
         }

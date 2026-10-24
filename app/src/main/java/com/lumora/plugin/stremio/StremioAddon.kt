@@ -96,9 +96,12 @@ object StremioProtocol {
     const val MAX_STREAMS = 100
     private const val MAX_SUBTITLES = 10
     private const val MAX_HEADERS = 8
-    /** URLs come from an untrusted server too - a 1 MB "url" is a broken manifest, not a link,
-     *  and nothing downstream needs one longer than a browser would accept. */
-    private const val MAX_URL = 2048
+    /** URLs come from an untrusted server too - a 1 MB "url" is a broken manifest, not a link.
+     *  The cap is a sanity bound, not a browser limit: signed CDN URLs from addons and debrid
+     *  aggregators routinely run past the old 2048, and cutting one produced a URL the server
+     *  answered with an error slate instead of the stream. Over-limit URLs are dropped, never
+     *  shortened - see [parseStreams]. */
+    internal const val MAX_URL = 16 * 1024
 
     private const val MAX_TEXT = JsPluginContract.MAX_TEXT_LENGTH
 
@@ -153,9 +156,9 @@ object StremioProtocol {
 
     /**
      * Parses a `/stream/{type}/{id}.json` answer. Streams that cannot play in-app are dropped:
-     * no url and no infoHash (externalUrl/ytId-only), a non-http(s) url, or a malformed hash.
-     * Also deduped by [StremioStream.identity], because aggregators routinely list the same
-     * release twice under different labels.
+     * no url and no infoHash (externalUrl/ytId-only), a non-http(s) url, a url over [MAX_URL],
+     * or a malformed hash. Also deduped by [StremioStream.identity], because aggregators
+     * routinely list the same release twice under different labels.
      */
     fun parseStreams(body: String): List<StremioStream> {
         val json = runCatching { JsonParser.parseString(body) }.getOrNull()
@@ -166,7 +169,7 @@ object StremioProtocol {
             if (out.size >= MAX_STREAMS) break
             val obj = element.takeIf { it.isJsonObject }?.asJsonObject ?: continue
             val url = obj.string("url")
-                ?.take(MAX_URL)
+                ?.takeIf { it.length <= MAX_URL }
                 ?.takeIf { it.startsWith("http://") || it.startsWith("https://") }
             val infoHash = obj.string("infoHash")?.trim()?.takeIf { INFO_HASH_REGEX.matches(it) }
             if (url == null && infoHash == null) continue
@@ -189,7 +192,7 @@ object StremioProtocol {
         for (element in array) {
             if (out.size >= MAX_SUBTITLES) break
             val obj = element.takeIf { it.isJsonObject }?.asJsonObject ?: continue
-            val url = obj.string("url")?.take(MAX_URL)
+            val url = obj.string("url")?.takeIf { it.length <= MAX_URL }
                 ?.takeIf { it.startsWith("http://") || it.startsWith("https://") } ?: continue
             val lang = obj.string("lang")?.take(MAX_TEXT)?.trim()?.takeIf { it.isNotBlank() }
             out.add(PluginSubtitle(url = url, label = lang, language = lang))

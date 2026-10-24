@@ -9,6 +9,10 @@
 ### Discover
 - **Scraper catalogues load on release builds again.** The A-Z index for AniWorld/SerienStream and the StreamingCommunity title parser used the same anonymous `TypeToken` form. Their constructors threw the same exception, the surrounding "start empty" handling swallowed it, and those catalogues came back empty in release builds only. Both use `TypeToken.getParameterized` now.
 
+### Stremio
+- **Long addon stream URLs are no longer cut short.** `parseStreams` capped every direct URL with `take(2048)`, so a signed CDN link from an aggregator (AIOStreams/TorBox answered with URLs of 3-4 KB) reached the server truncated, and the server answered with its "Link not recognised" error slate. That slate is itself playable video, so Find & Play treated the attempt as a success and stayed on it instead of trying the next source. The sanity cap is 16 KB now, and a URL over it is dropped rather than shortened so the queue moves on; subtitle URLs follow the same rule.
+- **An addon's direct streams are no longer one entry in Versions.** Find & Play still picks one automatically, but the Versions list collapsed a Stremio addon's direct URLs to a single entry per addon - so an aggregator such as AIOStreams, with 40-50 cached results for an episode, left no way to choose a different release. An addon that answers with more than one direct stream now gets its own submenu in Versions, listing every stream by the addon's own line (release name, size, seeders, cache state, indexer) and marking the one playing. Two streams that share a release title are distinct choices again, while the last-good-source memory still keys on the title, so a re-signed URL remains the same remembered source.
+
 ## 6.0
 
 ### Live TV guide

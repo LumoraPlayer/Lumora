@@ -1737,7 +1737,7 @@ private fun MainActivity.versionLabelFor(source: FoundSource): String {
         ).joinToString("  ·  ")
         is FoundSource.FromStremio -> listOfNotNull(
             source.addon.name,
-            StreamQuality.label(source.stream.title, source.stream.name) ?: source.title,
+            stremioStreamLabel(source).takeIf { it != source.addon.name },
         ).joinToString("  ·  ")
     }
     val transport = torrentTransportLabel(source)
@@ -1748,6 +1748,30 @@ private fun MainActivity.versionLabelFor(source: FoundSource): String {
     } else {
         named
     }
+}
+
+/**
+ * One Stremio stream's own line: the addon's title text is the release metadata (quality, size,
+ * seeders, cache state, indexer), and for an aggregator it is the only thing that tells two of
+ * its results apart. The quality label alone reads the same across a whole release list.
+ */
+private fun MainActivity.stremioStreamLabel(source: FoundSource.FromStremio): String {
+    source.stream.title?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+    return listOfNotNull(
+        source.stream.name?.trim()?.takeIf { it.isNotBlank() },
+        StreamQuality.label(source.stream.title, source.stream.name),
+    ).joinToString("  ·  ").ifBlank { source.addon.name }
+}
+
+/**
+ * The Versions entry that opens one addon's direct streams - the addon's name and how many it
+ * answered with. Marked when one of them is playing, like the Torrent entry, so the main list
+ * still answers "where is this stream from" without being opened.
+ */
+private fun MainActivity.stremioMenuLabel(group: StremioDirectGroup): String {
+    val base = group.addon.name + " (" + group.sources.size + ")"
+    val playingHere = group.sources.any { it.key() == playingFoundSourceKey }
+    return if (playingHere) base + "  ·  " + getString(R.string.play_source_now) else base
 }
 
 /**
@@ -1783,25 +1807,39 @@ internal fun MainActivity.showFilmVersionPicker(playing: Channel) {
     // next to the library's copies: both answer "which stream do I want", and the search has
     // already proved these reachable. See findSourceChoices.
     val sources = findSourceChoices(playing)
+    // One submenu per addon that answered with more than one direct stream: an aggregator's
+    // results are releases to choose between, not interchangeable mirrors. See
+    // findStremioDirectGroups.
+    val stremioGroups = findStremioDirectGroups(playing)
     // Every release the search found, behind one "Torrent" entry - see findTorrentChoices. The
     // indexer answers with dozens and each is a real choice, which would swamp this list.
     val torrents = findTorrentChoices(playing)
-    if (versions.isEmpty() && sources.isEmpty() && torrents.isEmpty() && !canFind) {
+    if (versions.isEmpty() && sources.isEmpty() && stremioGroups.isEmpty() && torrents.isEmpty() && !canFind) {
         Toast.makeText(this, getString(R.string.play_no_other_versions_title), Toast.LENGTH_SHORT).show()
         return
     }
     val labels = (versions.mapIndexed { index, version -> versionChipLabel(version, index) } +
         sources.map { versionLabelFor(it) } +
+        stremioGroups.map { stremioMenuLabel(it) } +
         listOfNotNull(torrentMenuLabel(torrents).takeIf { torrents.isNotEmpty() }) +
         listOfNotNull(getString(R.string.play_find_and_play).takeIf { canFind })).toTypedArray()
     val currentVersionIndex = versions.indexOfFirst { it.id == playing.id }
     val currentSourceIndex = sources.indexOfFirst { it.key() == playingFoundSourceKey }
-    val torrentMenuIndex = versions.size + sources.size
-    // The radio sits on wherever the playing stream came from - a found site when that's what
-    // resolved, the Torrent entry when a release did, the library copy otherwise - so opening
-    // this list answers "what am I watching, and out of what?" in one look.
+    val currentStremioIndex = stremioGroups.indexOfFirst { addonGroup ->
+        addonGroup.sources.any { it.key() == playingFoundSourceKey }
+    }
+    val sourceStart = versions.size
+    val sourceEnd = sourceStart + sources.size
+    val stremioStart = sourceEnd
+    val stremioEnd = stremioStart + stremioGroups.size
+    val torrentMenuIndex = stremioEnd
+    // The radio sits on wherever the playing stream came from - a found site or addon release
+    // when that's what resolved, the Torrent entry when a torrent did, the library copy
+    // otherwise - so opening this list answers "what am I watching, and out of what?" in one
+    // look.
     val currentIndex = when {
-        currentSourceIndex >= 0 -> versions.size + currentSourceIndex
+        currentSourceIndex >= 0 -> sourceStart + currentSourceIndex
+        currentStremioIndex >= 0 -> stremioStart + currentStremioIndex
         playingFoundSource()?.isTorrent == true -> torrentMenuIndex
         else -> currentVersionIndex
     }
@@ -1813,12 +1851,12 @@ internal fun MainActivity.showFilmVersionPicker(playing: Channel) {
         .setSingleChoiceItems(labels, currentIndex) { dialog, which ->
             dialog.dismiss()
             when {
-                which < versions.size -> if (which != currentVersionIndex) {
+                which < sourceStart -> if (which != currentVersionIndex) {
                     suppressVodQualityWatchForCurrentTitle()
                     showPlayerFor(versions[which], resumeFromMs = resumeMs)
                 }
-                which < torrentMenuIndex -> {
-                    val pick = sources[which - versions.size]
+                which < sourceEnd -> {
+                    val pick = sources[which - sourceStart]
                     // Re-opening the one already playing would stop and restart the stream for
                     // nothing; the radio already says it is the current one.
                     if (pick.key() != playingFoundSourceKey) {
@@ -1827,6 +1865,10 @@ internal fun MainActivity.showFilmVersionPicker(playing: Channel) {
                         suppressVodQualityWatchForCurrentTitle()
                         playFoundSource(lastFindItem ?: playing, pick, lastFindSeason, lastFindEpisode)
                     }
+                }
+                which < stremioEnd -> {
+                    val addonGroup = stremioGroups[which - stremioStart]
+                    showStremioDirectPicker(playing, addonGroup)
                 }
                 which == torrentMenuIndex && torrents.isNotEmpty() -> showTorrentPicker(playing, torrents)
                 else -> showFindStreamDialog(
@@ -1859,6 +1901,26 @@ internal fun MainActivity.showTorrentPicker(playing: Channel, torrents: List<Fou
         .setSingleChoiceItems(torrents.map { versionLabelFor(it) }.toTypedArray(), currentIndex) { dialog, which ->
             dialog.dismiss()
             val pick = torrents[which]
+            if (pick.key() == playingFoundSourceKey) return@setSingleChoiceItems
+            suppressVodQualityWatchForCurrentTitle()
+            playFoundSource(lastFindItem ?: playing, pick, lastFindSeason, lastFindEpisode)
+        }
+        .setNegativeButton(getString(R.string.cancel), null)
+        .show()
+}
+
+/**
+ * The direct streams behind one addon's Versions entry, one line each: the addon's own title
+ * text, which is where an aggregator prints the release name, size, seeders, cache state and
+ * indexer. Picking one plays it exactly as the automatic walk would have.
+ */
+internal fun MainActivity.showStremioDirectPicker(playing: Channel, group: StremioDirectGroup) {
+    val currentIndex = group.sources.indexOfFirst { it.key() == playingFoundSourceKey }
+    AlertDialog.Builder(this)
+        .setTitle(getString(R.string.play_stremio_version_title, group.addon.name))
+        .setSingleChoiceItems(group.sources.map { stremioStreamLabel(it) }.toTypedArray(), currentIndex) { dialog, which ->
+            dialog.dismiss()
+            val pick = group.sources[which]
             if (pick.key() == playingFoundSourceKey) return@setSingleChoiceItems
             suppressVodQualityWatchForCurrentTitle()
             playFoundSource(lastFindItem ?: playing, pick, lastFindSeason, lastFindEpisode)
@@ -1902,21 +1964,34 @@ internal fun MainActivity.showSeriesVersionPicker(playing: Channel) {
     // never leaks its sites in here. Fewer torrent sites carry one specific episode than carry
     // a film, so this list is often a single entry.
     val sources = findSourceChoices(playing)
+    // One submenu per addon that answered with more than one direct stream: an aggregator's
+    // answer is a release list, and each entry is a real choice - see findStremioDirectGroups.
+    val stremioGroups = findStremioDirectGroups(playing)
     // Every torrent release the search found for this episode, behind one "Torrent" entry.
     val torrents = findTorrentChoices(playing)
-    if (versions.isEmpty() && sources.isEmpty() && torrents.isEmpty() && !canFind) {
+    if (versions.isEmpty() && sources.isEmpty() && stremioGroups.isEmpty() && torrents.isEmpty() && !canFind) {
         Toast.makeText(this, getString(R.string.play_no_other_versions_series), Toast.LENGTH_SHORT).show()
         return
     }
     val labels = (versions.mapIndexed { index, version -> versionChipLabel(version, index) } +
         sources.map { versionLabelFor(it) } +
+        stremioGroups.map { stremioMenuLabel(it) } +
         listOfNotNull(torrentMenuLabel(torrents).takeIf { torrents.isNotEmpty() }) +
         listOfNotNull(getString(R.string.play_find_and_play).takeIf { canFind })).toTypedArray()
     val currentVersionIndex = versions.indexOfFirst { it.id == series.id }
     val currentSourceIndex = sources.indexOfFirst { it.key() == playingFoundSourceKey }
-    val torrentMenuIndex = versions.size + sources.size
+    val currentStremioIndex = stremioGroups.indexOfFirst { addonGroup ->
+        addonGroup.sources.any { it.key() == playingFoundSourceKey }
+    }
+    val sourceStart = versions.size
+    val sourceEnd = sourceStart + sources.size
+    val stremioStart = sourceEnd
+    val stremioEnd = stremioStart + stremioGroups.size
+    val torrentMenuIndex = stremioEnd
+    val findMenuIndex = torrentMenuIndex + (if (torrents.isNotEmpty()) 1 else 0)
     val currentIndex = when {
-        currentSourceIndex >= 0 -> versions.size + currentSourceIndex
+        currentSourceIndex >= 0 -> sourceStart + currentSourceIndex
+        currentStremioIndex >= 0 -> stremioStart + currentStremioIndex
         playingFoundSource()?.isTorrent == true -> torrentMenuIndex
         else -> currentVersionIndex
     }
@@ -1935,7 +2010,7 @@ internal fun MainActivity.showSeriesVersionPicker(playing: Channel) {
             dialog.dismiss()
             // Find & Play searches for the episode that is actually playing, rather than
             // asking again which one - it's already on screen.
-            if (which >= torrentMenuIndex + (if (torrents.isNotEmpty()) 1 else 0)) {
+            if (which >= findMenuIndex) {
                 showFindStreamDialog(series, seasonNum, episodeNum)
                 return@setSingleChoiceItems
             }
@@ -1943,8 +2018,12 @@ internal fun MainActivity.showSeriesVersionPicker(playing: Channel) {
                 showTorrentPicker(playing, torrents)
                 return@setSingleChoiceItems
             }
-            if (which >= versions.size) {
-                val pick = sources[which - versions.size]
+            if (which in stremioStart until stremioEnd) {
+                showStremioDirectPicker(playing, stremioGroups[which - stremioStart])
+                return@setSingleChoiceItems
+            }
+            if (which in sourceStart until sourceEnd) {
+                val pick = sources[which - sourceStart]
                 if (pick.key() != playingFoundSourceKey) {
                     suppressVodQualityWatchForCurrentTitle()
                     // The search was run for this very episode, so its own season/episode is

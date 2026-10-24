@@ -60,6 +60,11 @@
          title of that list. The releases live one level down because an indexer answers with
          dozens and each is a real choice (quality, seeders, indexer). -->
     <string name="play_torrent_version_title">Torrent</string>
+    <!-- The title of the Versions submenu listing one Stremio addon's direct streams. The
+         addon answers with a release list, and each direct URL is a real choice (quality, size,
+         seeders, indexer) - the same reason torrents get their own list. %1$s is the addon's
+         name. -->
+    <string name="play_stremio_version_title">Streams · %1$s</string>
     <!-- Marks the Versions entry whose stream is the one playing now - the site or release the
          last Find & Play resolved, listed next to the library's own copies of the title. -->
     <string name="play_source_now">playing now</string>
