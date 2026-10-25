@@ -1863,6 +1863,7 @@ internal fun MainActivity.openSideMenu() {
     if (upNextActive) binding.upNextOverlay.visibility = View.GONE
     // The menu stays put until the user dismisses it - no auto-hide countdown.
     mainHandler.removeCallbacks(hideControlsRunnable)
+    closePlayerEpgDetails()
     binding.controlsOverlay.visibility = View.GONE
     // Slide in from the left edge. translationX starts a full panel-width off-screen
     // (width is 0 while GONE, so the shared dimen keeps the code and layout in sync),

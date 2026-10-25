@@ -346,6 +346,13 @@ internal fun MainActivity.setupPlayerControls() {
     // Hand-off to another video app - the answer for audio this device has no decoder for.
     setupExternalPlayerButton(binding.btnExternalPlayer)
     relinkPlayerButtonRowFocus()
+    // The EPG rail's four-card width is measured from its viewport. Orientation changes,
+    // insets or a re-laid-out bar can all change that width without rebuilding the cards.
+    binding.playerEpgScroll.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+        if (right - left != oldRight - oldLeft && binding.playerEpgRail.childCount > 0) {
+            sizePlayerEpgCards()
+        }
+    }
 
     // Diagnostics
     binding.btnDiagnostics.setOnClickListener {
@@ -913,17 +920,15 @@ internal fun MainActivity.showPlayerFor(
     }
 
     if (channel.mediaType == MediaType.LIVE && channel.id.isNotBlank()) {
-        scope.launch {
-            val program = runCatching { resolveCurrentProgram(channel.id) }.getOrNull()
-            if (nowPlayingChannel?.id != channel.id || program == null) return@launch
-            val description = program.description?.trim()?.takeIf { it.isNotEmpty() }
-            binding.playerSubtitle.text = if (description != null) {
-                "${program.title}\n$description"
-            } else {
-                "${program.title}  ·  ${formatEpgTimeRange(program.startTimestamp, program.stopTimestamp)}"
-            }
-            binding.playerSubtitle.visibility = View.VISIBLE
-        }
+        // The guide itself is not a one-line subtitle any more: resolveEpgPrograms fills the
+        // controls bar's now/next rail with the channel's listings, so what is on and what is
+        // next can both be read (and scrolled) without leaving the video.
+        loadPlayerEpg(channel)
+    } else {
+        // A VOD session has no channel guide; a rail left over from the last live channel
+        // must not survive into it.
+        clearPlayerEpg()
+        binding.playerSubtitle.visibility = View.GONE
     }
 
     // Live channels may have multiple quality versions; start at the best
@@ -1632,14 +1637,41 @@ internal fun MainActivity.updateVersionsButtonVisibility() {
 }
 
 internal fun MainActivity.relinkPlayerButtonRowFocus() {
-    val row = binding.playerTrackButtons
-    val visible = (0 until row.childCount)
-        .map { row.getChildAt(it) }
-        .filter { it.visibility == View.VISIBLE && it.isFocusable && it.id != View.NO_ID }
-    visible.forEachIndexed { index, view ->
-        view.nextFocusLeftId = visible.getOrNull(index - 1)?.id ?: View.NO_ID
-        view.nextFocusRightId = visible.getOrNull(index + 1)?.id ?: View.NO_ID
+    // The options are two rows now (a 2x7 grid under/next to the transport), so left/right
+    // has to stop at each row's own ends instead of walking straight into the next row.
+    val rows = (0 until binding.playerTrackButtons.childCount)
+        .mapNotNull { binding.playerTrackButtons.getChildAt(it) as? ViewGroup }
+        .map { row ->
+            (0 until row.childCount)
+                .map { row.getChildAt(it) }
+                .filter { it.visibility == View.VISIBLE && it.isFocusable && it.id != View.NO_ID }
+        }
+    rows.forEachIndexed { rowIndex, visible ->
+        val lastRow = rowIndex == rows.lastIndex
+        visible.forEachIndexed { index, view ->
+            view.nextFocusLeftId = visible.getOrNull(index - 1)?.id ?: View.NO_ID
+            view.nextFocusRightId = visible.getOrNull(index + 1)?.id ?: View.NO_ID
+            // Only the bottom row has the seek bar directly beneath it. The top row leaves
+            // DOWN implicit so focus search can walk into the second row.
+            view.nextFocusDownId = if (lastRow) binding.seekBar.id else View.NO_ID
+            // UP from the lower row returns to the matching option above. The top row's UP
+            // is the EPG rail (or the normal upward search when no guide is on screen), set
+            // by relinkPlayerEpgFocus - do not clear it here, which would undo that link
+            // every time the bar was revealed.
+            if (rowIndex > 0) {
+                val above = rows.getOrNull(rowIndex - 1).orEmpty()
+                view.nextFocusUpId = above.getOrNull(index)?.id
+                    ?: above.firstOrNull()?.id
+                    ?: View.NO_ID
+            }
+        }
     }
+    // The transport and the first option share the row physically: RIGHT off Next Channel
+    // walks into the grid, and LEFT off the first option comes back. Without the bridge,
+    // RIGHT at the transport's end ran off to the still-focusable screen behind the player.
+    val first = rows.firstOrNull()?.firstOrNull()
+    first?.nextFocusLeftId = binding.btnNextChannel.id
+    binding.btnNextChannel.nextFocusRightId = first?.id ?: View.NO_ID
 }
 
 /** Lets the user manually pick a specific version of whatever's playing - the auto-picked
@@ -2662,6 +2694,7 @@ internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
     val wasPlaying = nowPlayingChannel?.takeIf { it.mediaType == MediaType.LIVE }
     isPlayerVisible = false
     nowPlayingChannel = null
+    clearPlayerEpg()
     binding.playerLayout.visibility = View.GONE
     binding.mainContent.visibility = View.VISIBLE
     binding.playerLayout.keepScreenOn = false

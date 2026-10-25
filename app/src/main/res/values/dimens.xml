@@ -70,6 +70,13 @@
     <dimen name="guide_program_info_title_text">12sp</dimen>
     <dimen name="guide_program_info_meta_text">9sp</dimen>
     <dimen name="guide_program_info_desc_text">10sp</dimen>
+    <!-- The player's now/next EPG rail (item_player_epg_card.xml). Two text lines per card
+         and a short strip, so the bottom bar can stay compact on a phone. -->
+    <dimen name="player_epg_card_width">180dp</dimen>
+    <dimen name="player_epg_card_height">40dp</dimen>
+    <dimen name="player_epg_card_gap">8dp</dimen>
+    <dimen name="player_epg_time_text">9sp</dimen>
+    <dimen name="player_epg_title_text">11sp</dimen>
     <dimen name="guide_channel_logo_size">26dp</dimen>
     <!-- Floor only - the row is wrap_content and normally taller than this on its own. -->
     <dimen name="guide_row_min_height">34dp</dimen>

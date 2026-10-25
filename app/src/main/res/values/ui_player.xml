@@ -123,4 +123,7 @@
     <string name="play_last_episode">Last episode</string>
     <string name="play_first">First</string>
     <string name="play_last">Last</string>
+    <!-- Player EPG rail: what's on now and next for the live channel, in the controls bar
+         (see MainActivityEpg.renderPlayerEpg). Scrolls right through the channel's guide. -->
+    <string name="player_epg_next">Next</string>
 </resources>

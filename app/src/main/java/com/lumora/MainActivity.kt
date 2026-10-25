@@ -54,6 +54,7 @@ import com.lumora.databinding.ActivityMainBinding
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
 import com.lumora.model.MediaType
+import com.lumora.parser.XtreamClient
 import com.lumora.model.IptvProviderConfig
 import com.lumora.pairing.QrPairingManager
 import com.lumora.plugin.DiscoveredProvider
@@ -926,6 +927,21 @@ class MainActivity : AppCompatActivity() {
      *  catalog/filters it was derived from. */
     internal var categoryChildrenCache: Map<String, List<CategoryFilter>> = emptyMap()
     internal var nowPlayingChannel: Channel? = null
+    // ── Player EPG rail (MainActivityEpg) ──────────
+    /** The channel whose guide the player's now/next rail is showing. Distinct from
+     *  [nowPlayingChannel] so a fetch that lands after a channel change can be dropped: the
+     *  request is per-channel and the player can move on while it is in flight. */
+    internal var playerEpgChannelId: String? = null
+    /** The channel's listings, current first, already filtered of finished programmes. */
+    internal var playerEpgPrograms: List<XtreamClient.EpgProgram> = emptyList()
+    /** Start timestamp of the listing whose details panel is open, or 0 while it is closed. */
+    internal var playerEpgDetailsStart: Long = 0L
+    /** When [playerEpgPrograms] was last answered (including an empty answer), so reopening
+     *  the controls does not re-ask the provider on every key press. */
+    internal var playerEpgLoadedAt: Long = 0L
+    /** When the rail was last drawn, for the once-a-minute clock refresh. */
+    internal var playerEpgRenderedAt: Long = 0L
+    internal var playerEpgJob: Job? = null
     /**
      * What the last Find & Play turned up for the item that is playing, and the exact item /
      * season / episode it was run for.
@@ -1345,6 +1361,7 @@ class MainActivity : AppCompatActivity() {
             if (playerManager.isPlaying) {
                 updateProgress()
                 checkUpNextTrigger()
+                tickPlayerEpgClock()
                 mainHandler.postDelayed(this, 1000)
             }
             // Runs even on the tick where playback just stopped (a pause press mid-segment
@@ -2177,6 +2194,16 @@ class MainActivity : AppCompatActivity() {
         // stop the episode the card is offering to continue from.
         else if (isPlayerVisible && upNextActive) { dismissUpNext() }
         else if (isPlayerVisible && isPlayerSideMenuOpen()) { closeSideMenu() }
+        // The player's guide is a reading state on top of playback: Back closes the details
+        // panel, then takes the bar down, before the next press leaves the player entirely.
+        else if (isPlayerVisible && binding.playerEpgDetails.visibility == View.VISIBLE) {
+            closePlayerEpgDetails()
+            showControls()
+        }
+        else if (isPlayerVisible && binding.controlsOverlay.visibility == View.VISIBLE &&
+            binding.playerEpgRail.hasFocus()) {
+            hideControls(force = true)
+        }
         // The grid unwinds as one level: Back closes it and lands on the guide with the
         // selected pane's channel in the preview - not straight out of the player shell.
         else if (isMultiviewVisible) { exitMultiview() }

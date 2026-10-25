@@ -105,6 +105,13 @@
     <dimen name="guide_program_info_title_text">15sp</dimen>
     <dimen name="guide_program_info_meta_text">12sp</dimen>
     <dimen name="guide_program_info_desc_text">14sp</dimen>
+    <!-- Player EPG rail: the TV step. Two lines (slot/status, title) at a size readable from
+         the sofa without turning the controls bar into a second guide. -->
+    <dimen name="player_epg_card_width">220dp</dimen>
+    <dimen name="player_epg_card_height">46dp</dimen>
+    <dimen name="player_epg_card_gap">12dp</dimen>
+    <dimen name="player_epg_time_text">10sp</dimen>
+    <dimen name="player_epg_title_text">13sp</dimen>
     <!-- Logo box and row height sized off the 13sp channel name rather than held at a fixed
          box: a 13sp line is ~18dp, so 30dp of logo plus the row's 4dp padding either side is
          all the height the content needs. The old 36dp/58dp pair was set when the type was

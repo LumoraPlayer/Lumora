@@ -11,8 +11,10 @@ import com.lumora.adapter.LiveGuideAdapter
 import com.lumora.cache.EpgListCache
 import com.lumora.model.CategoryFilter
 import com.lumora.model.Channel
+import com.lumora.model.MediaType
 import com.lumora.parser.XtreamClient
 import com.lumora.player.PlayerManager
+import com.lumora.reminder.ReminderScheduler
 import com.lumora.data.local.entity.EpgGuideStateEntity
 import com.lumora.data.local.entity.EpgProgramEntity
 import com.lumora.data.local.entity.EPG_NO_PROVIDER_SCOPE
@@ -779,6 +781,505 @@ internal fun MainActivity.formatEpgTimeRange(startSeconds: Long, stopSeconds: Lo
     return "${fmt.format(java.util.Date(startSeconds * 1000))} – ${fmt.format(java.util.Date(stopSeconds * 1000))}"
 }
 
+// ── Player EPG rail ("On now & next") ──────────
+//
+// The controls bar already carried the programme airing right now in one truncated line
+// (playerSubtitle). That answers "what is this?" but not the question a live viewer actually
+// asks next - "what's on after this?". The rail under the channel name is that answer: a
+// horizontal timeline of the channel's next listings, filled from the same stored guide the
+// Live TV rows use, with the airing programme marked and OK opening the listing's details.
+// It is deliberately capped: a panel can hold a day of listings, but 24 cards is already
+// several screens of scrolling, and the list refills from the guide as it runs out.
+
+/** How many listings the rail carries at once. */
+private const val PLAYER_EPG_MAX_PROGRAMS = 24
+
+/** How long a fetched answer is trusted before reopening the controls asks again. */
+private const val PLAYER_EPG_RELOAD_MS = 15 * 60 * 1000L
+
+/** The rail advances its own now/next/progress labels once a minute, like the guide's clock. */
+private const val PLAYER_EPG_CLOCK_MS = 60_000L
+
+/** Refill the rail when the listings it holds stop reaching this far ahead. */
+private const val PLAYER_EPG_LOW_COVERAGE_SECONDS = 60 * 60L
+
+private const val PLAYER_EPG_META_SEPARATOR = " · "
+
+/**
+ * The channel's listings cut down to a clean, non-overlapping run starting at what is airing
+ * now (or the next listing when nothing is).
+ *
+ * A panel's table is not a tidy schedule: the same slot can appear twice with different start
+ * times (an "07:00 - 12:00" and a "07:05 - 12:00" for the same hall), and a later entry can
+ * start before the previous one ends. Laid out as cards in start order, those overlaps put a
+ * listing that began two hours ago behind the "Next" label. Picking the airing block that
+ * started first and then walking forward from its end keeps every card in the future (or on
+ * air) and in order. Genuine gaps are preserved - only entries that start before the previous
+ * one has finished are skipped, because there is no slot on the timeline for them.
+ */
+internal fun playerEpgTimeline(
+    programs: List<XtreamClient.EpgProgram>,
+    nowSeconds: Long
+): List<XtreamClient.EpgProgram> {
+    val upcoming = programs
+        .filter { it.stopTimestamp > it.startTimestamp && it.stopTimestamp > nowSeconds }
+        .sortedBy { it.startTimestamp }
+        .distinctBy { it.startTimestamp }
+    if (upcoming.isEmpty()) return emptyList()
+    val out = ArrayList<XtreamClient.EpgProgram>(upcoming.size)
+    // The first entry that is airing is the block to start from. Any other entry whose slot
+    // overlaps it is a copy or a bad row, not a second programme running at once.
+    val current = upcoming.firstOrNull { it.startTimestamp <= nowSeconds }
+    var cursor = if (current != null) {
+        out += current
+        current.stopTimestamp
+    } else {
+        nowSeconds
+    }
+    for (program in upcoming) {
+        if (program.startTimestamp < cursor) continue
+        out += program
+        cursor = program.stopTimestamp
+    }
+    return out
+}
+
+/**
+ * Loads the playing channel's guide into the rail. Disk-first through [resolveEpgPrograms],
+ * so a channel whose guide was already painted in the Live TV grid opens with no request at
+ * all; a channel with none pays one fetch and then keeps it for the session's rail.
+ *
+ * [force] skips the trust window but never interrupts a fetch already in flight. The guard
+ * on [nowPlayingChannel] matters more than it looks: the fetch outlives a quick surf to the
+ * next channel, and without it the departing channel's schedule could paint over the new one.
+ */
+internal fun MainActivity.loadPlayerEpg(channel: Channel, force: Boolean = false) {
+    if (channel.mediaType != MediaType.LIVE || channel.id.isBlank()) {
+        clearPlayerEpg()
+        return
+    }
+    val now = System.currentTimeMillis()
+    val sameChannel = playerEpgChannelId == channel.id
+    if (!sameChannel) {
+        // A new channel: drop the previous timeline before its answer can land. Everything
+        // that can still be showing belongs to the channel the viewer just left.
+        playerEpgJob?.cancel()
+        playerEpgJob = null
+        playerEpgChannelId = channel.id
+        playerEpgPrograms = emptyList()
+        playerEpgDetailsStart = 0L
+        playerEpgLoadedAt = 0L
+        playerEpgRenderedAt = 0L
+        binding.playerEpgRail.removeAllViews()
+        binding.playerEpgDetails.visibility = View.GONE
+        binding.playerEpgSection.visibility = View.GONE
+        relinkPlayerEpgFocus()
+    } else if (playerEpgJob?.isActive == true ||
+        (!force && now - playerEpgLoadedAt < PLAYER_EPG_RELOAD_MS)
+    ) {
+        return
+    }
+    playerEpgJob?.cancel()
+    playerEpgJob = scope.launch {
+        // Cancellation must not be mistaken for a failed fetch: runCatching would swallow
+        // the CancellationException and let a torn-down Activity carry on drawing.
+        val programs = try {
+            resolveEpgPrograms(channel.id)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        if (nowPlayingChannel?.id != channel.id || !isPlayerVisible) return@launch
+        // Any answer - including "no guide" - is worth remembering for the trust window,
+        // otherwise every re-open of the bar re-reads the database for a channel that has
+        // nothing to show.
+        playerEpgLoadedAt = System.currentTimeMillis()
+        if (programs == null) {
+            // The provider could not be asked. Keep whatever is already painted rather than
+            // blanking a good guide over one failed request; hide only when there is none.
+            if (playerEpgPrograms.isEmpty()) {
+                binding.playerEpgSection.visibility = View.GONE
+                relinkPlayerEpgFocus()
+            }
+            return@launch
+        }
+        playerEpgPrograms = playerEpgTimeline(
+            programs,
+            System.currentTimeMillis() / 1000
+        )
+        renderPlayerEpg()
+    }
+}
+
+/** Takes the rail down and forgets its guide. Used when playback ends or moves to VOD. */
+internal fun MainActivity.clearPlayerEpg() {
+    playerEpgJob?.cancel()
+    playerEpgJob = null
+    playerEpgChannelId = null
+    playerEpgPrograms = emptyList()
+    playerEpgDetailsStart = 0L
+    playerEpgLoadedAt = 0L
+    playerEpgRenderedAt = 0L
+    if (binding.playerEpgRail.hasFocus()) binding.btnPlayPause.requestFocus()
+    binding.playerEpgRail.removeAllViews()
+    binding.playerEpgDetails.visibility = View.GONE
+    binding.playerEpgSection.visibility = View.GONE
+    relinkPlayerEpgFocus()
+}
+
+/**
+ * Draws the rail from [playerEpgPrograms].
+ *
+ * One card per listing, airing programme selected, the following one marked "Next". Cards are
+ * normal focusable views, not a RecyclerView: the list is capped at 24 and rebuilt at most
+ * once a minute, so a recycler would add lifecycle bugs (focus lost on submitList, rows
+ * recycled under a D-pad walk) for no measurable gain.
+ */
+internal fun MainActivity.renderPlayerEpg() {
+    val channel = nowPlayingChannel ?: return
+    if (!isPlayerVisible || channel.mediaType != MediaType.LIVE || channel.id != playerEpgChannelId) {
+        binding.playerEpgSection.visibility = View.GONE
+        relinkPlayerEpgFocus()
+        return
+    }
+    val nowMs = System.currentTimeMillis()
+    val nowSeconds = nowMs / 1000
+    val programs = playerEpgTimeline(playerEpgPrograms, nowSeconds)
+        .take(PLAYER_EPG_MAX_PROGRAMS)
+    if (programs.isEmpty()) {
+        if (binding.playerEpgRail.hasFocus()) binding.btnPlayPause.requestFocus()
+        closePlayerEpgDetails()
+        binding.playerEpgRail.removeAllViews()
+        binding.playerEpgSection.visibility = View.GONE
+        relinkPlayerEpgFocus()
+        return
+    }
+
+    val rail = binding.playerEpgRail
+    val focusedStart = (currentFocus?.takeIf { it.parent === rail }?.tag as? Long)
+    val hadRailFocus = rail.hasFocus()
+    // The rebuild drops every view on the rail. A pending auto-hide must not be allowed to
+    // fire in the gap before focus is restored, and must not fight the restore either.
+    if (hadRailFocus) mainHandler.removeCallbacks(hideControlsRunnable)
+    rail.removeAllViews()
+
+    val inflater = android.view.LayoutInflater.from(this)
+    val nowIndex = programs.indexOfFirst { nowSeconds in it.startTimestamp until it.stopTimestamp }
+    val nextIndex = if (nowIndex >= 0) nowIndex + 1 else 0
+    programs.forEachIndexed { index, program ->
+        val isNow = index == nowIndex
+        val isNext = index == nextIndex && !isNow
+        val card = inflater.inflate(R.layout.item_player_epg_card, rail, false) as LinearLayout
+        // Focus links are per card and the cards are built in code, so each needs its own id
+        // before relinkPlayerEpgFocus() can wire LEFT/RIGHT between them.
+        card.id = View.generateViewId()
+        card.isSelected = isNow
+        card.tag = program.startTimestamp
+        card.nextFocusDownId = R.id.btnPlayPause
+        card.nextFocusUpId = View.NO_ID
+
+        val range = formatEpgTimeRange(program.startTimestamp, program.stopTimestamp)
+        val timeView = card.findViewById<TextView>(R.id.epgCardTime)
+        val titleView = card.findViewById<TextView>(R.id.epgCardTitle)
+        val label = when {
+            isNow -> getString(R.string.list_program_on_now)
+            isNext -> getString(R.string.player_epg_next)
+            else -> null
+        }
+        timeView.text = if (label != null) "$label$PLAYER_EPG_META_SEPARATOR$range" else range
+        timeView.setTextColor(
+            androidx.core.content.ContextCompat.getColor(
+                this,
+                if (isNow) R.color.primary_light else R.color.text_tertiary
+            )
+        )
+        titleView.text = program.title.ifBlank { getString(R.string.list_program_info) }
+        card.contentDescription = listOfNotNull(label, range, program.title)
+            .joinToString(", ")
+
+        card.setOnClickListener { togglePlayerEpgDetails(program.startTimestamp) }
+        card.setOnLongClickListener {
+            val future = program.startTimestamp > System.currentTimeMillis() / 1000
+            if (future) {
+                togglePlayerEpgReminder(program)
+                true
+            } else {
+                false
+            }
+        }
+        card.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                // Reading the guide is not idling: hold the bar open while the D-pad is on
+                // it. Moving off (or closing the details) restarts the ordinary countdown.
+                mainHandler.removeCallbacks(hideControlsRunnable)
+                if (playerEpgDetailsStart > 0L && playerEpgDetailsStart != program.startTimestamp) {
+                    playerEpgDetailsStart = program.startTimestamp
+                    renderPlayerEpgDetails()
+                }
+            } else {
+                // Posted so a move from card to card is judged after the new card has focus -
+                // the old view's loss can otherwise arrive first and schedule a hide for a
+                // rail the viewer is still walking.
+                mainHandler.post {
+                    if (isPlayerVisible && binding.controlsOverlay.visibility == View.VISIBLE &&
+                        !isPlayerEpgEngaged()
+                    ) {
+                        mainHandler.removeCallbacks(hideControlsRunnable)
+                        mainHandler.postDelayed(hideControlsRunnable, 4000)
+                    }
+                }
+            }
+        }
+        // LEFT is performed by the Activity (focusOverlayNeighbour); RIGHT falls through to
+        // the framework, so the last card has to swallow it itself or focus escapes to the
+        // still-focusable browse screen behind the player.
+        card.setOnKeyListener { _, keyCode, event ->
+            event.action == android.view.KeyEvent.ACTION_DOWN &&
+                keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT &&
+                index == programs.lastIndex
+        }
+        rail.addView(card)
+    }
+
+    // A details panel whose listing has scrolled out of the guide (ended, or a refilled
+    // window) has nothing left to describe - close it rather than leave an empty box open.
+    if (playerEpgDetailsStart > 0L && programs.none { it.startTimestamp == playerEpgDetailsStart }) {
+        playerEpgDetailsStart = 0L
+    }
+    renderPlayerEpgDetails()
+    binding.playerEpgSection.visibility = View.VISIBLE
+    relinkPlayerEpgFocus()
+    playerEpgRenderedAt = nowMs
+    // The rail is exactly four cards wide - not "four and a sliver of the fifth". The
+    // viewport isn't measured until the section is visible, so size after this pass; the
+    // layout listener in setupPlayerControls redoes it when the bar's width changes.
+    binding.playerEpgScroll.post { sizePlayerEpgCards() }
+
+    if (hadRailFocus) {
+        val target = (0 until rail.childCount)
+            .map { rail.getChildAt(it) }
+            .firstOrNull { (it.tag as? Long) == focusedStart }
+            ?: rail.getChildAt(0)
+        target?.post {
+            if (isPlayerVisible && binding.controlsOverlay.visibility == View.VISIBLE) {
+                target.requestFocus()
+            }
+        }
+    }
+}
+
+/** How many listings are visible in the rail at once. */
+private const val PLAYER_EPG_VISIBLE_CARDS = 4
+
+/**
+ * Sizes the rail's cards to exactly [PLAYER_EPG_VISIBLE_CARDS] across the viewport.
+ *
+ * A fixed card width leaves a sliver of the next card showing at the right edge on most
+ * screens - the "four and a bit" look - and makes the gap between cards depend on the
+ * panel's width. Dividing the measured viewport by four (minus the gaps) means four cards
+ * fill the strip exactly, the fifth starts at its right edge, and the D-pad's focus scale
+ * has the declared gap to grow into instead of overlapping its neighbour.
+ *
+ * The last of the four carries the division's leftover pixels in its trailing margin, so
+ * rounding cannot leak a few pixels of the fifth card back in.
+ */
+internal fun MainActivity.sizePlayerEpgCards() {
+    val rail = binding.playerEpgRail
+    if (rail.childCount == 0) return
+    val scroll = binding.playerEpgScroll
+    val viewport = scroll.width - scroll.paddingLeft - scroll.paddingRight
+    if (viewport <= 0) return
+    val gap = resources.getDimensionPixelSize(R.dimen.player_epg_card_gap)
+    val width = ((viewport - gap * PLAYER_EPG_VISIBLE_CARDS) / PLAYER_EPG_VISIBLE_CARDS)
+        .coerceAtLeast(1)
+    // Spread the division's sub-pixel remainder across all four gaps rather than dumping it
+    // on the last one: the padding between cards then stays equal to the eye, and the fifth
+    // still starts exactly at the viewport's right edge.
+    val leftover = (viewport - (width + gap) * PLAYER_EPG_VISIBLE_CARDS).coerceAtLeast(0)
+    val extraPerGap = leftover / PLAYER_EPG_VISIBLE_CARDS
+    val extraRemainder = leftover % PLAYER_EPG_VISIBLE_CARDS
+    for (index in 0 until rail.childCount) {
+        val card = rail.getChildAt(index)
+        val lp = card.layoutParams as? ViewGroup.MarginLayoutParams ?: continue
+        val marginEnd = gap + extraPerGap + if (index < extraRemainder) 1 else 0
+        if (lp.width != width || lp.marginEnd != marginEnd) {
+            lp.width = width
+            lp.marginEnd = marginEnd
+            card.layoutParams = lp
+        }
+    }
+}
+
+/** Wires LEFT/RIGHT across the rail's cards, and UP from the transport back to the guide. */
+internal fun MainActivity.relinkPlayerEpgFocus() {
+    val rail = binding.playerEpgRail
+    val cards = (0 until rail.childCount)
+        .map { rail.getChildAt(it) }
+        .filter { it.visibility == View.VISIBLE }
+    cards.forEachIndexed { index, card ->
+        card.nextFocusLeftId = cards.getOrNull(index - 1)?.id ?: View.NO_ID
+        card.nextFocusRightId = cards.getOrNull(index + 1)?.id ?: View.NO_ID
+    }
+    val target = cards.firstOrNull { it.isSelected } ?: cards.firstOrNull()
+    val targetId = if (binding.playerEpgSection.visibility == View.VISIBLE) {
+        target?.id ?: View.NO_ID
+    } else {
+        View.NO_ID
+    }
+    // The whole transport row leads into the guide: whichever button the viewer opened the
+    // bar on, UP is "what am I watching and what's next". DOWN keeps the old chain to the
+    // seek bar, so nothing that was reachable before is lost. The top option row shares this
+    // row physically, so UP from it does the same. The lower option row's UP belongs to the
+    // row above (see relinkPlayerButtonRowFocus), not to the guide.
+    listOf(
+        binding.btnPrevChannel,
+        binding.btnRewind,
+        binding.btnPlayPause,
+        binding.btnFastForward,
+        binding.btnNextChannel
+    ).forEach { it.nextFocusUpId = targetId }
+    val optionRow = binding.playerTrackButtons.getChildAt(0) as? ViewGroup
+    if (optionRow != null) {
+        (0 until optionRow.childCount)
+            .map { optionRow.getChildAt(it) }
+            .forEach { it.nextFocusUpId = targetId }
+    }
+}
+
+/** Whether the viewer is deliberately reading the rail - so the auto-hide must stand down. */
+internal fun MainActivity.isPlayerEpgEngaged(): Boolean =
+    binding.playerEpgSection.visibility == View.VISIBLE &&
+        (binding.playerEpgDetails.visibility == View.VISIBLE || binding.playerEpgRail.hasFocus())
+
+/** Opens or closes the details panel for the listing starting at [startTimestamp]. */
+internal fun MainActivity.togglePlayerEpgDetails(startTimestamp: Long) {
+    if (startTimestamp <= 0L) return
+    val closing = playerEpgDetailsStart == startTimestamp
+    playerEpgDetailsStart = if (closing) 0L else startTimestamp
+    renderPlayerEpgDetails()
+    if (closing && !binding.playerEpgRail.hasFocus()) {
+        // A touch press does not necessarily move focus onto the card, so there may be no
+        // focus event to restart the countdown after the panel closes.
+        mainHandler.removeCallbacks(hideControlsRunnable)
+        mainHandler.postDelayed(hideControlsRunnable, 4000)
+    } else {
+        mainHandler.removeCallbacks(hideControlsRunnable)
+    }
+}
+
+/** Closes the details panel without touching focus or the auto-hide timer. */
+internal fun MainActivity.closePlayerEpgDetails() {
+    playerEpgDetailsStart = 0L
+    binding.playerEpgDetails.visibility = View.GONE
+}
+
+/**
+ * Draws the selected listing's details - title, slot, duration, status and description -
+ * under the rail. Filled from the rail's own guide, so opening it costs no request and cannot
+ * disagree with the cards above; a future listing also advertises the long-press reminder.
+ */
+internal fun MainActivity.renderPlayerEpgDetails() {
+    val start = playerEpgDetailsStart
+    if (start <= 0L) {
+        binding.playerEpgDetails.visibility = View.GONE
+        return
+    }
+    val program = playerEpgPrograms.firstOrNull { it.startTimestamp == start }
+    val nowMs = System.currentTimeMillis()
+    val nowSeconds = nowMs / 1000
+    if (program == null || program.stopTimestamp <= nowSeconds) {
+        // The slot ended while its details were open: no listing left to describe.
+        playerEpgDetailsStart = 0L
+        binding.playerEpgDetails.visibility = View.GONE
+        return
+    }
+    val future = program.startTimestamp > nowSeconds
+    val status = if (future) {
+        android.text.format.DateUtils.getRelativeTimeSpanString(
+            program.startTimestamp * 1000L,
+            nowMs,
+            android.text.format.DateUtils.MINUTE_IN_MILLIS
+        ).toString()
+    } else {
+        getString(R.string.list_program_on_now)
+    }
+    val minutes = ((program.stopTimestamp - program.startTimestamp) / 60L).coerceAtLeast(1L)
+    val meta = mutableListOf(
+        formatEpgTimeRange(program.startTimestamp, program.stopTimestamp),
+        getString(R.string.list_program_duration, minutes),
+        status
+    )
+    if (future) {
+        val key = "${playerEpgChannelId.orEmpty()}:${program.startTimestamp}"
+        meta += getString(
+            if (ReminderScheduler.isScheduled(this, key)) {
+                R.string.list_program_reminder_set
+            } else {
+                R.string.list_program_reminder_hint
+            }
+        )
+    }
+    binding.playerEpgDetailsTitle.text =
+        program.title.ifBlank { getString(R.string.list_program_info) }
+    binding.playerEpgDetailsMeta.text = meta.joinToString(PLAYER_EPG_META_SEPARATOR)
+    binding.playerEpgDetailsDescription.text = program.description?.trim()?.takeIf { it.isNotEmpty() }
+        ?: getString(R.string.list_program_no_description)
+    binding.playerEpgDetails.visibility = View.VISIBLE
+}
+
+/** Long-press a future card to arm/disarm the same 5-minute reminder the guide offers. */
+internal fun MainActivity.togglePlayerEpgReminder(program: XtreamClient.EpgProgram) {
+    val channel = nowPlayingChannel ?: return
+    if (channel.mediaType != MediaType.LIVE || program.startTimestamp <= System.currentTimeMillis() / 1000) return
+    val reminder = com.lumora.cache.ProgramReminder(
+        channelId = channel.id,
+        channelName = channel.name,
+        programTitle = program.title,
+        startTimestamp = program.startTimestamp
+    )
+    if (ReminderScheduler.isScheduled(this, reminder.key)) {
+        ReminderScheduler.cancel(this, reminder)
+        Toast.makeText(this, getString(R.string.plug_reminder_cancelled), Toast.LENGTH_SHORT).show()
+    } else {
+        val scheduled = ReminderScheduler.schedule(this, reminder)
+        Toast.makeText(
+            this,
+            if (scheduled) {
+                getString(R.string.plug_reminder_set_for, program.title)
+            } else {
+                getString(R.string.plug_program_starts_too_soon)
+            },
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+    // Show the listing whose reminder just changed, so the panel's hint reflects the press.
+    playerEpgDetailsStart = program.startTimestamp
+    renderPlayerEpgDetails()
+    mainHandler.removeCallbacks(hideControlsRunnable)
+}
+
+/**
+ * The rail's once-a-minute clock: advances now/next/progress in place of a rebind, closes
+ * details for a listing that just ended, and refills the guide before its last card runs out.
+ * Cheap when nothing changed - it returns until a minute has passed since the last draw.
+ */
+internal fun MainActivity.tickPlayerEpgClock() {
+    if (!isPlayerVisible || nowPlayingChannel?.mediaType != MediaType.LIVE) return
+    if (binding.playerEpgSection.visibility != View.VISIBLE) return
+    val nowMs = System.currentTimeMillis()
+    if (nowMs - playerEpgRenderedAt < PLAYER_EPG_CLOCK_MS) return
+    renderPlayerEpg()
+    val nowSeconds = nowMs / 1000
+    val lastStop = playerEpgPrograms.lastOrNull()?.stopTimestamp ?: 0L
+    if (playerEpgPrograms.isNotEmpty() && lastStop - nowSeconds < PLAYER_EPG_LOW_COVERAGE_SECONDS) {
+        val playing = nowPlayingChannel ?: return
+        // Not forced: the ordinary trust window still applies to the refill, so a guide that
+        // keeps coming back short cannot turn the clock into a request loop.
+        loadPlayerEpg(playing)
+    }
+}
+
 internal fun MainActivity.navigateChannel(dir: Int) {
     val episodeQueue = currentEpisodeQueue
     if (currentEpisodeQueueIndex >= 0 && episodeQueue.isNotEmpty()) {
@@ -816,6 +1317,14 @@ internal fun MainActivity.showControls(takeFocus: Boolean = true) {
     // onKeyDown active (the bar's keys dead) and parked the countdown.
     if (upNextActive) dismissUpNext()
     binding.controlsOverlay.visibility = View.VISIBLE
+    // Keep the rail's guide in step with the clock while it is being looked at. This is a
+    // cheap no-op inside the trust window (see loadPlayerEpg); a bar left closed for a while
+    // on a live channel re-reads the stored guide once, off the first frame.
+    nowPlayingChannel?.takeIf { it.mediaType == MediaType.LIVE }?.let { loadPlayerEpg(it) }
+    // The rail may have sat hidden through an ad break or a pause, so bring its now/next
+    // labels up to the current minute before the bar paints - the once-a-minute clock only
+    // runs while playback is actually progressing.
+    tickPlayerEpgClock()
     // Cheap re-link (~10 children) each reveal, so the row is never navigated with a chain
     // left stale by a button that changed visibility since setup.
     relinkPlayerButtonRowFocus()
@@ -831,7 +1340,12 @@ internal fun MainActivity.showControls(takeFocus: Boolean = true) {
     mainHandler.postDelayed(hideControlsRunnable, 4000)
 }
 
-internal fun MainActivity.hideControls() {
+/** [force] is for an explicit dismissal (Back, a tap on the video). The ordinary auto-hide
+ *  timer is not allowed to take the bar down while the viewer is reading the EPG rail or a
+ *  programme's details - those are deliberate states, not idling. */
+internal fun MainActivity.hideControls(force: Boolean = false) {
+    if (!force && isPlayerEpgEngaged()) return
+    closePlayerEpgDetails()
     binding.controlsOverlay.visibility = View.GONE
     // Bar gone - Up Next can come back, and its countdown resumes where it paused
     // (removeCallbacks first so a resume can never double-schedule the tick).
@@ -843,5 +1357,10 @@ internal fun MainActivity.hideControls() {
 }
 
 internal fun MainActivity.toggleControls() {
-    if (binding.controlsOverlay.visibility == View.VISIBLE) hideControls() else showControls()
+    // An explicit toggle always wins, even with the rail/details holding the bar open.
+    if (binding.controlsOverlay.visibility == View.VISIBLE) {
+        hideControls(force = true)
+    } else {
+        showControls()
+    }
 }
