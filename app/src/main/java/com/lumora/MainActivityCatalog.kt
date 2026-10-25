@@ -19,7 +19,11 @@ import com.lumora.util.groupDuplicateSeries
 import com.lumora.util.groupLiveQualityVersions
 import com.lumora.util.withoutBackupOnlyGroups
 import com.lumora.util.isNonEnglishTitle
+import com.lumora.util.isVisibleForLocality
+import com.lumora.util.localityFallbacks
+import com.lumora.util.localityKey
 import com.lumora.util.withResolvedYear
+import com.lumora.diagnostics.SessionLog
 import kotlinx.coroutines.*
 import java.util.Locale
 
@@ -374,11 +378,15 @@ internal fun MainActivity.deriveLiveHalf(list: List<Channel>) {
     val hideAdult = prefs.getBoolean(PREF_HIDE_ADULT, true)
     val useClassic = prefs.getBoolean(PREF_CLASSIC_CATEGORY_LAYOUT, false)
     val groupChannels = prefs.getBoolean(PREF_GROUP_CHANNELS, true)
+    val localities = selectedLocalities()
+    val showUntagged = prefs.getBoolean(PREF_LOCALITY_SHOW_UNTAGGED, true)
     val backupIds = backupSourceIds()
 
     // Same catalogue, same prefs, same answer - restore last time's grouping instead of
     // re-running it (see DerivedCache).
-    val fingerprint = liveDerivedFingerprint(list, hideAdult, useClassic, groupChannels)
+    val fingerprint = liveDerivedFingerprint(
+        list, hideAdult, useClassic, groupChannels, localities, showUntagged
+    )
     DerivedCache.loadLive(this, fingerprint, list)?.let { snapshot ->
         liveChannels = snapshot.channels
         liveVersions = snapshot.versions
@@ -386,10 +394,23 @@ internal fun MainActivity.deriveLiveHalf(list: List<Channel>) {
         return
     }
 
+    // Locality filtering happens here, in the same pass as the adult/sentinel drops, so every
+    // consumer (category rows, grid, Search, EPG, Catch-up, Multiview, Sports) agrees by
+    // construction. Untagged traffic is skipped entirely when nothing is selected.
+    val fallbacks = if (localities.isEmpty()) emptyMap() else localityFallbacks(list)
     val rawLive = list.filter { ch ->
         ch.mediaType == MediaType.LIVE &&
             !ch.name.contains("##") &&
-            !(hideAdult && isAdultCategory(ch.categoryName, ch.group))
+            !(hideAdult && isAdultCategory(ch.categoryName, ch.group)) &&
+            isVisibleForLocality(ch, localities, showUntagged, fallbacks)
+    }
+    if (localities.isNotEmpty()) {
+        SessionLog.event(
+            "Locality",
+            "filter=${localities.sorted().joinToString(",")} untagged=$showUntagged " +
+                "in=${list.count { it.mediaType == MediaType.LIVE }} out=${rawLive.size} " +
+                "fallbacks=${fallbacks.size}"
+        )
     }
     if (useClassic || !groupChannels) {
         // Classic: no quality version merging — show every channel as-is from the provider.
@@ -401,19 +422,46 @@ internal fun MainActivity.deriveLiveHalf(list: List<Channel>) {
         liveChannels = grouped.withoutBackupOnlyGroups(vers, backupIds)
         liveVersions = vers
     }
-    perf("deriveLiveHalf", startedAt, "${list.size} in / ${liveChannels.size} live out")
+    perf(
+        "deriveLiveHalf", startedAt,
+        "${list.size} in / ${liveChannels.size} live out" +
+            if (localities.isEmpty()) "" else " (localities=${localities.sorted().joinToString(",")})"
+    )
     DerivedCache.saveLive(this, fingerprint, DerivedCache.LiveSnapshot(liveChannels, liveVersions))
 }
 
-/** Cache key for the live derive: the catalogue itself, plus every pref that changes what
- *  the pass produces. Anything not listed here (categorize, pinned/hidden, favourites)
- *  feeds the category rows, which are still built fresh on every load. */
+/**
+ * Cache key for the live derive: the catalogue itself, plus every pref that changes what
+ * the pass produces. Anything not listed here (categorize, pinned/hidden, favourites)
+ * feeds the category rows, which are still built fresh on every load.
+ *
+ * [localities] is sorted before hashing. It arrives from `getStringSet`, i.e. a HashSet whose
+ * iteration order is not stable between launches - hashing it raw would miss the derived cache
+ * on every start even when nothing changed.
+ */
 internal fun MainActivity.liveDerivedFingerprint(
     list: List<Channel>,
     hideAdult: Boolean,
     useClassic: Boolean,
-    groupChannels: Boolean
-): String = DerivedCache.catalogFingerprint(list, "live:$hideAdult:$useClassic:$groupChannels")
+    groupChannels: Boolean,
+    localities: Set<String>,
+    showUntagged: Boolean
+): String {
+    val selectionKey = localityKey(localities)
+    return DerivedCache.catalogFingerprint(
+        list,
+        "live:$hideAdult:$useClassic:$groupChannels:$selectionKey:$showUntagged"
+    )
+}
+
+/** The locality selection: an empty set means All. Always a copy - `getStringSet` hands back a
+ *  set owned by SharedPreferences, and mutating it corrupts the stored value. */
+internal fun MainActivity.selectedLocalities(): Set<String> =
+    prefs.getStringSet(PREF_LOCALITY_FILTER, emptySet())?.toSet() ?: emptySet()
+
+internal fun MainActivity.setSelectedLocalities(codes: Set<String>) {
+    prefs.edit().putStringSet(PREF_LOCALITY_FILTER, codes).apply()
+}
 
 /** Cache key for the films/series derive - see [liveDerivedFingerprint]. */
 internal fun MainActivity.vodDerivedFingerprint(

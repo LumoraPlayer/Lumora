@@ -60,6 +60,9 @@ class BackupSettingsTest {
     fun `the settings allowlist carries preferences but no credentials or state`() {
         // Preference keys the backup must carry.
         assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["hide_adult_categories"])
+        // The Live TV locality filter: a selection the user made and would not want to redo.
+        assertEquals(SettingType.STRING_SET, BACKED_UP_SETTINGS["locality_filter"])
+        assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["locality_show_untagged"])
         assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["simple_mode"])
         assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["ui_language"])
         assertEquals(SettingType.INT, BACKED_UP_SETTINGS["subtitle_text_size"])

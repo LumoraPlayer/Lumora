@@ -111,6 +111,11 @@
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/filters" />
                 </LinearLayout>
 
+                <LinearLayout android:id="@+id/navRegions" style="@style/Widget.Lumora.SettingsNavRow" android:tag="regions" android:background="@drawable/nav_rail_item_glass">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_locality" android:tint="@color/nav_icon_tint" />
+                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/sett_locality_title" />
+                </LinearLayout>
+
                 <LinearLayout android:id="@+id/navPrivacy" style="@style/Widget.Lumora.SettingsNavRow" android:tag="4" android:background="@drawable/nav_rail_item_glass">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_privacy" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/privacy" />
@@ -1535,6 +1540,38 @@
                     android:textSize="@dimen/settings_text_body"
                     android:fontFamily="@font/inter_medium" />
 
+                <!-- Shortcut to the Regions pane (its own rail section). Shows the current
+                     selection at a glance; the actual picker is a full pane because a
+                     TV remote cannot drive a 50-item multi-choice dialog. -->
+                <LinearLayout
+                    android:id="@+id/settingsLocalityFilter"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/settings_gap"
+                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                    android:background="@drawable/card_surface_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:stateListAnimator="@animator/focus_scale_flat">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/sett_locality_title"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/settings_text_body"
+                        android:fontFamily="@font/inter_medium" />
+                    <TextView
+                        android:id="@+id/settingsLocalityValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/sett_locality_all"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/settings_text_caption"
+                        android:fontFamily="@font/inter_regular" />
+                </LinearLayout>
+
                 <!-- Lives here, not under Privacy: it filters the catalogue exactly like the
                      non-English toggle above it. The parental PIN that gates unchecking it
                      stays under Privacy, which is where the PIN itself is managed. -->
@@ -1601,6 +1638,73 @@
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
                     android:fontFamily="@font/inter_medium" />
+            </LinearLayout>
+
+            <!-- Pane: Regions. The Live TV locality picker. A real pane rather than a
+                 multi-choice dialog: the list is 50+ rows and a TV remote has to walk it.
+                 Rows are added in code (buildLocalityPane) from LocalityCatalog, with the
+                 countries and the groupings kept in separate sections - a grouping is a
+                 bucket of its own and is never folded into a country. -->
+            <LinearLayout
+                android:id="@+id/paneRegions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="@dimen/settings_gap_l" android:text="@string/sett_locality_title" style="@style/TextAppearance.Lumora.SettingsTitle" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/settings_gap"
+                    android:text="@string/sett_locality_hint"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/settings_text_body" />
+
+                <LinearLayout
+                    android:id="@+id/settingsRegionsList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <CheckBox
+                    android:id="@+id/settingsLocalityShowUntagged"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/settings_gap"
+                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                    android:background="@drawable/card_surface_background"
+                    android:checked="true"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:text="@string/sett_locality_show_untagged"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/settings_text_body"
+                    android:fontFamily="@font/inter_medium" />
+
+                <LinearLayout
+                    android:id="@+id/settingsRegionsDetect"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/settings_gap"
+                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                    android:background="@drawable/card_surface_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:stateListAnimator="@animator/focus_scale_flat">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/sett_locality_detect"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/settings_text_body"
+                        android:fontFamily="@font/inter_medium" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- Pane: Privacy -->
@@ -2449,6 +2553,23 @@
                     android:gravity="center"
                     android:stateListAnimator="@animator/focus_scale_flat">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/diag_share" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
+                </LinearLayout>
+
+                <!-- The local counterpart to the QR row: writes the combined crash reports and
+                     session log to this device's Download folder, for TVs and phones without a
+                     browser on the same network. -->
+                <LinearLayout
+                    android:id="@+id/diagSaveRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/settings_gap_s"
+                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                    android:background="@drawable/card_surface_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:stateListAnimator="@animator/focus_scale_flat">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/diag_save_device" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
                 <LinearLayout

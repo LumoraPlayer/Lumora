@@ -2,7 +2,11 @@
 package com.lumora
 
 import android.app.AlertDialog
+import android.content.ContentValues
 import android.graphics.Bitmap
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -15,6 +19,13 @@ import com.lumora.diagnostics.CrashReporter
 import com.lumora.diagnostics.DiagnosticsShareServer
 import com.lumora.diagnostics.SessionLog
 import com.lumora.pairing.QrPairingManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 // ── Diagnostics: crash reports + session log, shared to a phone by QR ──
 //
@@ -33,6 +44,7 @@ internal fun MainActivity.wireDiagnosticsPane(dialogView: View) {
     val crashCheck = dialogView.findViewById<CheckBox>(R.id.diagCrashCheck)
     val logCheck = dialogView.findViewById<CheckBox>(R.id.diagLogCheck)
     val qrRow = dialogView.findViewById<View>(R.id.diagQrRow)
+    val saveRow = dialogView.findViewById<View>(R.id.diagSaveRow)
     val clearRow = dialogView.findViewById<View>(R.id.diagClearRow)
 
     // Assigned without firing the listener - same reason as wireTraktPane: setChecked() fires
@@ -58,7 +70,7 @@ internal fun MainActivity.wireDiagnosticsPane(dialogView: View) {
         }
         // D-pad chain over the rows that exist (same reasoning as the other panes: the
         // settings tree is one FrameLayout of overlapping panes).
-        val rows = listOf(crashCheck, logCheck, qrRow, clearRow)
+        val rows = listOf(crashCheck, logCheck, qrRow, saveRow, clearRow)
         for ((i, row) in rows.withIndex()) {
             row.nextFocusUpId = rows.getOrNull(i - 1)?.id ?: View.NO_ID
             row.nextFocusDownId = rows.getOrNull(i + 1)?.id ?: View.NO_ID
@@ -67,6 +79,7 @@ internal fun MainActivity.wireDiagnosticsPane(dialogView: View) {
     render()
 
     qrRow.setOnClickListener { showDiagnosticsQrDialog() }
+    saveRow.setOnClickListener { saveDiagnosticsToDevice() }
     clearRow.setOnClickListener {
         CrashReporter.clear(this)
         SessionLog.clear(this)
@@ -144,4 +157,127 @@ internal fun MainActivity.showDiagnosticsQrDialog() {
         if (diagnosticsShareServer === server) diagnosticsShareServer = null
     }
     dialog.show()
+}
+
+/**
+ * Writes the same evidence the QR page serves into one plain-text file on the device.
+ *
+ * The QR flow needs a phone on the same Wi-Fi; this is the local path for a TV that has no
+ * browser nearby, and for anyone who just wants the log in a file manager. On Android 10+
+ * the file goes through MediaStore into Download/Lumora so no storage permission is needed;
+ * older releases fall back to the app's external files directory. The report contains the
+ * crash reports and the session log, both already redacted by their writers.
+ */
+internal fun MainActivity.saveDiagnosticsToDevice() {
+    val hasAnything = CrashReporter.list(this).isNotEmpty() || SessionLog.logFile(this).length() > 0
+    if (!hasAnything) {
+        Toast.makeText(this, getString(R.string.diag_nothing), Toast.LENGTH_SHORT).show()
+        return
+    }
+    scope.launch {
+        val path = withContext(Dispatchers.IO) {
+            runCatching {
+                val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                val name = "Lumora-diagnostics-$stamp.txt"
+                writeDiagnosticsFile(this@saveDiagnosticsToDevice, name, diagnosticsReportText(this@saveDiagnosticsToDevice))
+            }.getOrNull()
+        }
+        if (path == null) {
+            Toast.makeText(this@saveDiagnosticsToDevice, getString(R.string.diag_save_failed), Toast.LENGTH_LONG).show()
+            return@launch
+        }
+        AlertDialog.Builder(this@saveDiagnosticsToDevice)
+            .setTitle(getString(R.string.diag_saved_title))
+            .setMessage(getString(R.string.diag_saved_message, path))
+            .setPositiveButton(getString(R.string.play_ok), null)
+            .show()
+    }
+}
+
+/** The combined report: device/build header, every saved crash report, then the session log. */
+private fun diagnosticsReportText(context: MainActivity): String {
+    val reports = CrashReporter.list(context)
+    val logFile = SessionLog.logFile(context)
+    val logKb = (logFile.length() + 1023) / 1024
+    val logText = runCatching { logFile.readText(Charsets.UTF_8) }.getOrElse { "(could not read session log)" }
+    return buildString {
+        appendLine("Lumora diagnostics")
+        appendLine("==================")
+        appendLine("Exported: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date())}")
+        appendLine("App: ${diagnosticsAppVersion(context)}")
+        appendLine("Package: ${context.packageName}")
+        appendLine("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+        appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
+        appendLine("ABI: ${Build.SUPPORTED_ABIS.joinToString(", ")}")
+        appendLine("Crash reports: ${reports.size}")
+        appendLine("Session log: $logKb KB")
+        appendLine()
+        appendLine("Crash reports")
+        appendLine("=============")
+        if (reports.isEmpty()) {
+            appendLine("No crash reports saved.")
+        } else {
+            reports.forEachIndexed { index, file ->
+                if (index > 0) appendLine()
+                appendLine("--- ${CrashReporter.displayName(file)} (${file.name}) ---")
+                appendLine(runCatching { file.readText(Charsets.UTF_8) }.getOrElse { "(could not read ${file.name})" })
+            }
+        }
+        appendLine()
+        appendLine("Session log")
+        appendLine("===========")
+        appendLine(logText.ifBlank { "(empty)" })
+    }
+}
+
+private fun diagnosticsAppVersion(context: MainActivity): String {
+    val info = runCatching { context.packageManager.getPackageInfo(context.packageName, 0) }.getOrNull()
+        ?: return "unknown"
+    val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        info.longVersionCode
+    } else {
+        @Suppress("DEPRECATION")
+        info.versionCode.toLong()
+    }
+    return "${info.versionName ?: "unknown"} (versionCode $code)"
+}
+
+/**
+ * Writes [body] under Download/Lumora through MediaStore on API 29+, or the app's own external
+ * Download directory on older releases (public Downloads would need a runtime permission
+ * there). Returns the path to show the user, or null when both routes failed.
+ */
+private fun writeDiagnosticsFile(context: MainActivity, name: String, body: String): String? {
+    val bytes = body.toByteArray(Charsets.UTF_8)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val resolver = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Lumora")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = runCatching {
+            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        }.getOrNull() ?: return writeDiagnosticsToAppStorage(context, name, bytes)
+        val wrote = runCatching {
+            resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("no output stream")
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        }.isSuccess
+        if (wrote) return "${Environment.DIRECTORY_DOWNLOADS}/Lumora/$name"
+        runCatching { resolver.delete(uri, null, null) }
+    }
+    return writeDiagnosticsToAppStorage(context, name, bytes)
+}
+
+private fun writeDiagnosticsToAppStorage(context: MainActivity, name: String, bytes: ByteArray): String? {
+    val base = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+    val dir = File(base, "Lumora").apply { mkdirs() }
+    val file = File(dir, name)
+    return runCatching {
+        file.writeBytes(bytes)
+        file.absolutePath
+    }.getOrNull()
 }

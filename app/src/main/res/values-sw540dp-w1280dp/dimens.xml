@@ -14,7 +14,7 @@
     <dimen name="poster_image_height">88dp</dimen>
     <dimen name="shelf_poster_width">104dp</dimen>
     <dimen name="shelf_poster_image_height">137dp</dimen>
-    <dimen name="search_poster_image_height">77dp</dimen>
+    <dimen name="search_poster_image_height">93dp</dimen>
 
     <!-- Settings text: the sw540dp bucket (720p/1080p sets) already steps these up from the
          phone base; a 4K set sits further from the sofa than either, so it gets the largest

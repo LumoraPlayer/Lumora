@@ -5,15 +5,15 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="8dp"
-    android:background="@drawable/bg_grid_card"
     android:clickable="true"
     android:focusable="true"
-    android:padding="8dp"
+    android:foreground="@drawable/bg_poster_focus_ring"
     android:stateListAnimator="@animator/focus_scale">
 
-    <!-- Rounded image frame: the bitmap itself is square, so without the rounded
-         outline clip the photo paints sharp corners over the rounded card. The
-         badge, scrim and title live inside the frame so they round with it. -->
+    <!-- Artwork fills the whole tile: the old inset card chrome left an 8dp frame of
+         surface colour around every poster. The rounded frame is still the image's
+         clip/placeholder; the focus ring is drawn over the picture by the root's
+         foreground. -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="@dimen/poster_image_height"

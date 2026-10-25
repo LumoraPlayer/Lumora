@@ -277,6 +277,21 @@
     <string name="username_if_quick_connect_off">Username (if Quick Connect is off)</string>
     <string name="playback_settings">Playback settings</string>
     <string name="hide_non_english">Hide non-English movies/series</string>
+    <string name="sett_locality_title">Regions</string>
+    <string name="sett_locality_all">All regions</string>
+    <string name="sett_locality_countries">Countries</string>
+    <string name="sett_locality_groupings">Groupings</string>
+    <string name="sett_locality_show_untagged">Show channels with no region tag</string>
+    <string name="sett_locality_hint">Filters the Live tab. Choose one or more regions; nothing selected means all regions.</string>
+    <string name="sett_locality_detect">Detect from device</string>
+    <string name="sett_locality_detected">Device region: %1$s</string>
+    <string name="sett_locality_detect_failed">Couldn\'t detect a region from this device</string>
+    <string name="sett_locality_apply">Apply</string>
+    <string name="sett_locality_grouping_label">%1$s (grouping)</string>
+    <string name="sett_locality_none_title">No channels for this region</string>
+    <string name="sett_locality_empty">No channels match %1$s in your providers.</string>
+    <string name="sett_locality_change">Change regions</string>
+    <string name="sett_locality_hidden_hint">%1$d channel(s) are tagged %2$s and are hidden.</string>
     <string name="hide_adult_categories">Hide adult categories</string>
     <!-- Collapsed category rail: the pill that brings it back, and the one-shot hint shown
          at the moment of collapse so the way back is never something to hunt for. -->
@@ -507,13 +522,17 @@
 
     <!-- Diagnostics (MainActivityDiagnostics / CrashReporter / SessionLog / DiagnosticsShareServer) -->
     <string name="diagnostics">Diagnostics</string>
-    <string name="diag_caption">Saved on this device only, never uploaded. Reproduce the issue, then scan the QR with your phone to download the session log and crash reports.</string>
+    <string name="diag_caption">Saved on this device only, never uploaded. Reproduce the issue, then save the log here or scan the QR with your phone to download it.</string>
     <string name="diag_status">%1$d crash reports \u00b7 session log %2$d KB</string>
     <string name="diag_save_crashes">Save crash reports</string>
     <string name="diag_record_log">Record session log</string>
+    <string name="diag_save_device">Save diagnostics to this device</string>
     <string name="diag_share">Download to phone (QR)</string>
     <string name="diag_clear">Clear diagnostics</string>
     <string name="diag_cleared">Diagnostics cleared</string>
+    <string name="diag_saved_title">Diagnostics saved</string>
+    <string name="diag_saved_message">Saved to:\n%1$s</string>
+    <string name="diag_save_failed">Couldn\'t save diagnostics</string>
     <string name="diag_qr_title">Download to phone</string>
     <string name="diag_qr_hint">Scan with your phone camera - the phone must be on the same Wi-Fi. The page lists the session log and every crash report.</string>
     <string name="diag_share_failed">Couldn\'t start sharing - check the Wi-Fi connection</string>

@@ -15,6 +15,8 @@ import com.lumora.PREF_EXTERNAL_PLAYER_PACKAGE
 import com.lumora.PREF_GROUP_CHANNELS
 import com.lumora.PREF_HIDE_ADULT
 import com.lumora.PREF_HIDE_NON_ENGLISH
+import com.lumora.PREF_LOCALITY_FILTER
+import com.lumora.PREF_LOCALITY_SHOW_UNTAGGED
 import com.lumora.PREF_LIVE_PREVIEW
 import com.lumora.PREF_MULTIVIEW_ENABLED
 import com.lumora.PREF_MULTIVIEW_PANES
@@ -204,6 +206,8 @@ internal val BACKED_UP_SETTINGS: Map<String, SettingType> = mapOf(
     PREF_SUBTITLE_LANGUAGE to SettingType.STRING,
     // Filters
     PREF_HIDE_NON_ENGLISH to SettingType.BOOLEAN,
+    PREF_LOCALITY_FILTER to SettingType.STRING_SET,
+    PREF_LOCALITY_SHOW_UNTAGGED to SettingType.BOOLEAN,
     PREF_HIDE_ADULT to SettingType.BOOLEAN,
     PREF_CATEGORIZE_LIVE to SettingType.BOOLEAN,
     PREF_CATEGORIZE_VOD to SettingType.BOOLEAN,

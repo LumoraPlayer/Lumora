@@ -726,8 +726,9 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
         // so whichever section pane (e.g. EPG) was showing before has to be hidden here too,
         // or it stays visible underneath this page.
         listOf(
-            R.id.paneProviders, R.id.panePlayback, R.id.paneFilters, R.id.panePrivacy,
-            R.id.paneBackup, R.id.paneEpg, R.id.paneDownloads, R.id.paneGeneral, R.id.paneAbout
+            R.id.paneProviders, R.id.panePlayback, R.id.paneFilters, R.id.paneRegions,
+            R.id.panePrivacy, R.id.paneBackup, R.id.paneEpg, R.id.paneDownloads,
+            R.id.paneGeneral, R.id.paneAbout
         ).forEach { dialogView.findViewById<View>(it)?.visibility = View.GONE }
         listPane.visibility = View.GONE
         detailPane.visibility = View.VISIBLE

@@ -4,7 +4,9 @@ package com.lumora.util
 import com.lumora.model.CategoryFilter
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import java.text.Normalizer
 import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -661,6 +663,135 @@ fun cleanVodCategoryLabel(raw: String): String = vodCategoryLabelMemo.memoize(ra
         if (tag in VOD_LEADING_TAGS) s = s.substring(m.range.last + 1).trimStart() else break
     }
     WHITESPACE_REGEX.replace(s, " ").trim().ifBlank { raw.trim() }
+}
+
+// ── Locality (region) detection for Live TV ──────────────────────────────────
+//
+// The Live tab's locality filter needs to know which bucket a channel belongs to. The only
+// signal the providers actually give is the text they already ship: the category name (Xtream
+// `category_name` / M3U `group-title`) and, sometimes, the channel name ("UK: BBC ONE").
+// Nothing is added to Channel and nothing is added to the cache format - both fields are
+// already persisted, so this works on an existing catalogue without a provider refresh.
+//
+// Everything below is deliberately conservative. The providers this was built against show
+// exactly why a two-letter-code regex is wrong: `HR| HORSE RACING` carries sky racing, not
+// Croatia; `TS| TENNIS LIVE` carries tennis, not a country; `AR| NEWS ▶ الاخبار` carries Al
+// Jazeera - Arabic, not Argentina. A token is only trusted when it is in LocalityCatalog's
+// alias table, and the handful of genuinely ambiguous codes are resolved from the content
+// beside them before the table is consulted.
+
+/** Bounded memo: the raw category/channel string is the key (few hundred categories, a few
+ *  thousand prefixed channel names), so a catalogue derive pays one scan per distinct string. */
+private val localityMemo = ConcurrentHashMap<String, String>(2048)
+private const val LOCALITY_MEMO_MAX = 20_000
+
+/** Arabic script anywhere is the signal that a bare `AR` means Arabic-language content. */
+private val ARABIC_SCRIPT_REGEX = Regex("""\p{IsArabic}""")
+
+/** Arabic-language channel brands that appear without Arabic script in the name. */
+private val ARABIC_MARKER_REGEX = Regex(
+    """(?i)\b(?:AL\s*JAZEERA|MBC|ROTANA|AL\s*ARABIYA|DUBAI|ABU\s*DHABI|QURAN|ARABIC)\b"""
+)
+
+private val RACING_REGEX = Regex("""(?i)\b(?:RACING|HORSE|HORSES|GALLOP)\b""")
+private val LATAM_REGEX = Regex("""(?i)\b(?:LATINO|LATAM|LATIN\s+AMERICA)\b""")
+private val BRASIL_REGEX = Regex("""(?i)\b(?:BRASIL|BRAZIL)\b""")
+
+/** `TAG|` / `TAG:` - the separator is what makes a two-letter code trustworthy. */
+private val LEADING_SEGMENT_REGEX = Regex("""^\s*([\p{L}\p{Nd}+/]+(?:-[\p{L}\p{Nd}+]+)*)\s*[|:]""")
+
+/** No separator: the leading word. */
+private val LEADING_WORD_REGEX = Regex("""^\s*([\p{L}\p{Nd}+/]+(?:-[\p{L}\p{Nd}+]+)*)""")
+
+/**
+ * The locality a Live category belongs to, falling back to the channel name when the category
+ * carries no signal (a `SVIP SPORTS` bucket can still hold `US: ESPN`).
+ *
+ * Null means "untagged": either the panel gave nothing usable, or it tagged the row as a brand,
+ * league, language or quality tier. Untagged is a state of its own and is controlled by
+ * `PREF_LOCALITY_SHOW_UNTAGGED`, never by a locality selection.
+ */
+fun localityOf(categoryName: String?, channelName: String?): String? {
+    localityOfCategory(categoryName)?.let { return it }
+    return localityOfCategory(channelName)
+}
+
+private fun localityOfCategory(raw: String?): String? {
+    val text = raw?.takeIf { it.isNotBlank() } ?: return null
+    localityMemo[text]?.let { return it.ifEmpty { null } }
+    val resolved = resolveLocality(text) ?: ""
+    if (localityMemo.size >= LOCALITY_MEMO_MAX) localityMemo.clear()
+    localityMemo[text] = resolved
+    return resolved.ifEmpty { null }
+}
+
+private fun resolveLocality(raw: String): String? {
+    val text = normalizeLocalityText(deSuperscript(raw))
+    if (text.isEmpty()) return null
+
+    // 1. The whole string is a name ("Portugal", "South Africa", "Arabic", "United Kingdom").
+    if (text in LocalityCatalog.aliases) return resolveToken(text, "", separated = true)
+
+    // 2. Peel leading wrapper segments ("EU|ES NOTICIAS" -> "ES NOTICIAS"), then resolve the
+    //    first real token. Wrappers only peel while something follows them.
+    var rest = text
+    var guard = 0
+    while (guard++ < 4) {
+        val segment = LEADING_SEGMENT_REGEX.find(rest)
+        val word = LEADING_WORD_REGEX.find(rest)
+        val token = (segment?.groupValues?.get(1) ?: word?.groupValues?.get(1)) ?: return null
+        val separated = segment != null
+        val after = if (segment != null) {
+            rest.substring(segment.range.last + 1).trimStart()
+        } else {
+            rest.substring(word!!.range.last + 1).trimStart()
+        }
+        if (token in LocalityCatalog.wrappers && after.isNotEmpty()) {
+            rest = after
+            continue
+        }
+        return resolveToken(token, after, separated)
+    }
+    return null
+}
+
+/**
+ * Resolves one already-normalised token. Ambiguity is settled from [rest] *before* the alias
+ * table is consulted, so the denylist cannot swallow a code that the content proves is real.
+ */
+private fun resolveToken(token: String, rest: String, separated: Boolean): String? {
+    when (token) {
+        // Arabic or Argentina - decided by the content, never by the bare code.
+        "AR" -> return if (ARABIC_SCRIPT_REGEX.containsMatchIn(rest) ||
+            ARABIC_MARKER_REGEX.containsMatchIn(rest)
+        ) LocalityCatalog.ARABIC else null
+        // Croatia or Horse Racing - decided by the content.
+        "HR" -> return if (RACING_REGEX.containsMatchIn(rest)) null else "HR"
+        // Spain or Latin America.
+        "ES" -> return if (LATAM_REGEX.containsMatchIn(rest)) LocalityCatalog.LATAM else "ES"
+        // Portugal or Brazil.
+        "PT" -> return if (BRASIL_REGEX.containsMatchIn(rest)) "BR" else "PT"
+        // A language tag, never a locality.
+        "EN" -> return null
+        "AFRICA" -> return null
+    }
+    if (token in LocalityCatalog.nonLocality) return null
+    val code = LocalityCatalog.aliases[token] ?: return null
+    // "NO EVENTS", "IN THE NEWS", "IT SPORTS": a two-letter word that is also a code is only
+    // trusted when the panel separated it. Full names and 3+ letter codes are unambiguous.
+    if (!separated && token.length <= 2 && token in LocalityCatalog.ambiguousCodes) return null
+    return code
+}
+
+/** Uppercases, folds diacritics and collapses whitespace, so "Türkiye" matches "TURKIYE". */
+private fun normalizeLocalityText(s: String): String {
+    val decomposed = Normalizer.normalize(s, Normalizer.Form.NFD)
+    val sb = StringBuilder(decomposed.length)
+    for (c in decomposed) {
+        if (Character.getType(c) == Character.NON_SPACING_MARK.toInt()) continue
+        sb.append(c)
+    }
+    return WHITESPACE_REGEX.replace(sb.toString(), " ").trim().uppercase(Locale.ROOT)
 }
 
 /** Same as [normalizeLiveChannelName] but additionally singular-stems each word, for use as a dedup/grouping key (never for display - see [lightStem]). */

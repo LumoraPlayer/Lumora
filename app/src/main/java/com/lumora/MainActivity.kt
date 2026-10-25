@@ -229,6 +229,17 @@ internal const val PREF_DISABLE_VOD = "disable_vod"
 internal const val PREF_CATEGORIZE_LIVE = "categorize_live"
 internal const val PREF_CATEGORIZE_VOD = "categorize_vod"
 internal const val PREF_GROUP_CHANNELS = "group_channels"
+
+/**
+ * Live TV locality filter: a `StringSet` of `LocalityCatalog` codes; an empty set means
+ * "All regions". Multi-select on purpose - a 12-provider catalogue is naturally multi-country.
+ *
+ * [PREF_LOCALITY_SHOW_UNTAGGED] controls rows the panels did not tag with any locality
+ * (brands, league channels, world feeds). Default true, so a filter never silently removes
+ * content the provider never labelled.
+ */
+internal const val PREF_LOCALITY_FILTER = "locality_filter"
+internal const val PREF_LOCALITY_SHOW_UNTAGGED = "locality_show_untagged"
 /** The screen the app opens on: live | home | series | films. Live TV is the default. */
 internal const val PREF_START_SCREEN = "start_screen"
 internal const val START_SCREEN_LIVE = "live"

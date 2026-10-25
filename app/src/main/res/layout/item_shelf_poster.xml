@@ -5,15 +5,13 @@
     android:layout_width="@dimen/shelf_poster_width"
     android:layout_height="wrap_content"
     android:layout_marginEnd="14dp"
-    android:background="@drawable/bg_grid_card"
     android:clickable="true"
     android:focusable="true"
-    android:padding="8dp"
+    android:foreground="@drawable/bg_poster_focus_ring"
     android:stateListAnimator="@animator/focus_scale">
 
-    <!-- Rounded image frame: the bitmap itself is square, so without the rounded
-         outline clip the photo paints sharp corners over the rounded card. The
-         scrim and title live inside the frame so their bottom corners round with it. -->
+    <!-- The artwork is the card now: no inset surface frame around it. The rounded frame
+         still clips the bitmap and the focus ring is drawn over the picture. -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="@dimen/shelf_poster_image_height"

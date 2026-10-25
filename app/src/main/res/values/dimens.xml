@@ -122,22 +122,17 @@
     <dimen name="poster_title_text_min">9sp</dimen>
     <dimen name="poster_title_outline_width">0.7dp</dimen>
     <dimen name="poster_badge_text">8sp</dimen>
-    <dimen name="poster_image_height">110dp</dimen>
-    <!-- Horizontal shelf rows (Home/Series/Films). These were hardcoded in
-         item_shelf_poster.xml, so unlike the grid they never scaled by device class - a TV
-         got the same 108dp card as a phone and fitted six of them across the row. Artwork
-         is 2:3, so the image height is (width - 16dp of card padding) x 1.5. -->
+    <dimen name="poster_image_height">126dp</dimen>
+    <!-- Horizontal shelf rows (Home/Series/Films). Artwork is 2:3 and now fills the card:
+         the image is the full 86dp card width, and its height is the old 110dp image plus
+         the 16dp that used to be card padding, so the tile keeps its previous outer size. -->
     <dimen name="shelf_poster_width">86dp</dimen>
-    <dimen name="shelf_poster_image_height">110dp</dimen>
+    <dimen name="shelf_poster_image_height">126dp</dimen>
     <!-- Cast row on the detail screen and the person page behind it. The photo is a square
-         face shot; the cell width just has to hold it plus its padding, and the photo stops
-         a comfortable margin short of the card's edge - the focused cell draws its white
-         3dp stroke on that edge, and a photo filling the card left the highlight sitting
-         flush against the picture instead of around it. Sizes are half the pre-2026-10
-         values in each dimension (a quarter of the area): the row is a compact strip of
-         faces under the poster, not a second poster shelf. The person page's own portrait
-         is 2:3, the shape TMDB profile shots are taken in. -->
-    <dimen name="cast_photo_size">36dp</dimen>
+         face shot and now fills the cell width; the card chrome and inset were removed, so
+         the face is the tile and the focus ring is drawn over it. The person page's own
+         portrait is 2:3, the shape TMDB profile shots are taken in. -->
+    <dimen name="cast_photo_size">48dp</dimen>
     <dimen name="cast_cell_width">48dp</dimen>
     <dimen name="cast_name_text">8sp</dimen>
     <dimen name="cast_role_text">7sp</dimen>
@@ -293,9 +288,9 @@
     <!-- Gutter between the keyboard column and the results column. Was a 12dp literal. -->
     <dimen name="search_column_gap">12dp</dimen>
     <!-- Shorter than poster_image_height: a search column is much narrower than a Films/Series
-         grid column, and the card's height doesn't follow its width, so the full-size value
-         stretched the artwork well past the 2:3 it's cropped to. -->
-    <dimen name="search_poster_image_height">96dp</dimen>
+         grid column, and the card's height doesn't follow its width. 112dp is the old 96dp
+         artwork plus the 16dp card frame the image now fills. -->
+    <dimen name="search_poster_image_height">112dp</dimen>
     <!-- Vertical gap between the search status line, recents strip, filter chips and the
          results grid, and horizontal gap between the filter chips. -->
     <dimen name="search_row_gap">8dp</dimen>

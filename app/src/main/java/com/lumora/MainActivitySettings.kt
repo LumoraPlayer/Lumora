@@ -23,6 +23,7 @@ import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.RecentlyPlayedStore
 import com.lumora.model.Provider
 import com.lumora.model.IptvProviderConfig
+import com.lumora.model.MediaType
 import com.lumora.data.IptvProviderStore
 import com.lumora.data.ProviderStatus
 import com.lumora.data.ProviderStatusProbe
@@ -30,6 +31,10 @@ import com.lumora.pairing.QrPairingManager
 import com.lumora.player.PlayerManager
 import com.lumora.util.normalizeServerUrl
 import com.lumora.util.isLocalFileUrl
+import com.lumora.util.Locality
+import com.lumora.util.LocalityCatalog
+import com.lumora.util.isVisibleForLocality
+import com.lumora.util.localityFallbacks
 import com.lumora.util.localFileDisplayName
 import com.lumora.data.local.entity.EpgSourceEntity
 import com.lumora.data.backup.BackupManager
@@ -2153,6 +2158,122 @@ internal fun MainActivity.showProviderSettings() {
         if (allChannels.isNotEmpty()) scope.launch { classifyAndShow() }
     }
 
+    // ── Regions pane (Live TV locality picker) ──────────────────────────────
+    // A real pane, not a dialog: the list is 50+ rows and a TV remote has to walk it.
+    // Countries and groupings are separate sections so a grouping can never read as a
+    // country. Changes persist as they are made; the derived catalogue is refreshed when
+    // Settings closes (classifyAndShow deliberately defers while the overlay is up).
+    var localitySelectionChanged = false
+    val localityRow = dialogView.findViewById<View>(R.id.settingsLocalityFilter)
+    val localityValue = dialogView.findViewById<TextView>(R.id.settingsLocalityValue)
+
+    fun refreshLocalitySummary() {
+        val codes = selectedLocalities()
+        localityValue.text = if (codes.isEmpty()) {
+            getString(R.string.sett_locality_all)
+        } else {
+            LocalityCatalog.labelForCodes(codes).ifEmpty { getString(R.string.sett_locality_all) }
+        }
+    }
+    refreshLocalitySummary()
+
+    val regionsList = dialogView.findViewById<LinearLayout>(R.id.settingsRegionsList)
+    var syncingLocalityChecks = false
+    val localityBoxes = LinkedHashMap<String, CheckBox>()
+
+    fun addLocalityHeader(text: String) {
+        val header = layoutInflater.inflate(R.layout.item_locality_header, regionsList, false) as TextView
+        header.text = text
+        regionsList.addView(header)
+    }
+    fun addLocalityCheck(label: String): CheckBox {
+        val box = layoutInflater.inflate(R.layout.item_locality_check, regionsList, false) as CheckBox
+        box.text = label
+        regionsList.addView(box)
+        return box
+    }
+
+    val allLocalityBox = addLocalityCheck(getString(R.string.sett_locality_all))
+
+    fun syncLocalityChecks() {
+        syncingLocalityChecks = true
+        val codes = selectedLocalities()
+        allLocalityBox.isChecked = codes.isEmpty()
+        for ((code, box) in localityBoxes) box.isChecked = code in codes
+        syncingLocalityChecks = false
+    }
+
+    addLocalityHeader(getString(R.string.sett_locality_countries))
+    for (locality in LocalityCatalog.countries) {
+        val box = addLocalityCheck(locality.label)
+        localityBoxes[locality.code] = box
+        box.setOnCheckedChangeListener { _, isChecked ->
+            if (syncingLocalityChecks) return@setOnCheckedChangeListener
+            val next = selectedLocalities().toMutableSet()
+            if (isChecked) next.add(locality.code) else next.remove(locality.code)
+            setSelectedLocalities(next)
+            localitySelectionChanged = true
+            refreshLocalitySummary()
+            syncLocalityChecks()
+        }
+    }
+    addLocalityHeader(getString(R.string.sett_locality_groupings))
+    for (locality in LocalityCatalog.groupings) {
+        val box = addLocalityCheck(getString(R.string.sett_locality_grouping_label, locality.label))
+        localityBoxes[locality.code] = box
+        box.setOnCheckedChangeListener { _, isChecked ->
+            if (syncingLocalityChecks) return@setOnCheckedChangeListener
+            val next = selectedLocalities().toMutableSet()
+            if (isChecked) next.add(locality.code) else next.remove(locality.code)
+            setSelectedLocalities(next)
+            localitySelectionChanged = true
+            refreshLocalitySummary()
+            syncLocalityChecks()
+        }
+    }
+
+    allLocalityBox.setOnCheckedChangeListener { _, isChecked ->
+        if (syncingLocalityChecks) return@setOnCheckedChangeListener
+        // Unchecking "All" with nothing else selected would mean the same thing (empty =
+        // All), so it snaps back rather than leaving an ambiguous state on screen.
+        if (isChecked) {
+            setSelectedLocalities(emptySet())
+            localitySelectionChanged = true
+            refreshLocalitySummary()
+        }
+        syncLocalityChecks()
+    }
+    syncLocalityChecks()
+
+    // The Filters row is a shortcut to this pane, not a second picker.
+    localityRow.setOnClickListener {
+        dialogView.findViewById<View>(R.id.navRegions)?.performClick()
+    }
+
+    dialogView.findViewById<View>(R.id.settingsRegionsDetect).setOnClickListener {
+        val detected = localityFromDeviceLocale()
+        if (detected == null) {
+            Toast.makeText(this, R.string.sett_locality_detect_failed, Toast.LENGTH_SHORT).show()
+            return@setOnClickListener
+        }
+        setSelectedLocalities(setOf(detected.code))
+        localitySelectionChanged = true
+        refreshLocalitySummary()
+        syncLocalityChecks()
+        Toast.makeText(
+            this,
+            getString(R.string.sett_locality_detected, detected.label),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    val showUntaggedRow = dialogView.findViewById<CheckBox>(R.id.settingsLocalityShowUntagged)
+    showUntaggedRow.isChecked = prefs.getBoolean(PREF_LOCALITY_SHOW_UNTAGGED, true)
+    showUntaggedRow.setOnCheckedChangeListener { _, checked ->
+        prefs.edit().putBoolean(PREF_LOCALITY_SHOW_UNTAGGED, checked).apply()
+        localitySelectionChanged = true
+    }
+
     val hideAdult = dialogView.findViewById<CheckBox>(R.id.settingsHideAdult)
     val parentalPinRow = dialogView.findViewById<View>(R.id.settingsParentalPin)
     val parentalPinLabel = dialogView.findViewById<TextView>(R.id.settingsParentalPinLabel)
@@ -2374,7 +2495,10 @@ internal fun MainActivity.showProviderSettings() {
         R.id.navDiagnostics to R.id.paneDiagnostics,
         // Appended for the same index-stability reason as Trakt/Sites above - the rail shows
         // it beside EPG Sources, but selectSection addresses sections by list index.
-        R.id.navSports to R.id.paneSports
+        R.id.navSports to R.id.paneSports,
+        // Regions is appended for the same reason: the rail shows it under Filters, but
+        // inserting it there would renumber every section below it.
+        R.id.navRegions to R.id.paneRegions
     ).map { (navId, paneId) -> dialogView.findViewById<View>(navId) to dialogView.findViewById<View>(paneId) }
     wireTraktPane(dialogView)
     wireDebridPane(dialogView)
@@ -2614,7 +2738,14 @@ internal fun MainActivity.showProviderSettings() {
         } else {
             binding.emptyState.visibility = View.GONE
             updateTopChromeVisibility()
-            if (showingHome) selectHome() else if (showingDiscover) selectDiscover() else if (showingDownloads) selectDownloads() else if (showingSports) selectSports() else selectTab(activeTab)
+            if (localitySelectionChanged) {
+                // Settings is an overlay, so classifyAndShow() deliberately deferred while it
+                // was up. A region change is a catalogue change, not a chrome change: it needs
+                // a full re-derive, not just a re-render of the lists built from the old one.
+                localitySelectionChanged = false
+                warnIfSelectionHidesEverything(selectedLocalities())
+                scope.launch { classifyAndShow() }
+            } else if (showingHome) selectHome() else if (showingDiscover) selectDiscover() else if (showingDownloads) selectDownloads() else if (showingSports) selectSports() else selectTab(activeTab)
         }
     }
     activeSettingsOverlay = dialog
@@ -2920,4 +3051,33 @@ internal fun MainActivity.showLegalNotice() {
         .setMessage(R.string.legal_notice)
         .setPositiveButton(getString(R.string.close), null)
         .show()
+}
+
+/** The device's own region, when the locale names one the catalog knows. */
+private fun localityFromDeviceLocale(): Locality? {
+    val country = Locale.getDefault().country.orEmpty().uppercase(Locale.ROOT)
+    if (country.isEmpty()) return null
+    return LocalityCatalog.byCode(country)
+        ?: LocalityCatalog.aliases[country]?.let { LocalityCatalog.byCode(it) }
+}
+
+/**
+ * Zero-result guard: a selection that matches nothing in this catalogue would otherwise leave the
+ * Live tab blank with no explanation. Evaluated against `allChannels` rather than the derived
+ * list because Settings is an overlay - `classifyAndShow()` deliberately defers while one is up,
+ * so the derived list is still the pre-change one when the user closes Settings.
+ */
+private fun MainActivity.warnIfSelectionHidesEverything(codes: Set<String>) {
+    if (codes.isEmpty()) return
+    val live = allChannels.filter { it.mediaType == MediaType.LIVE && !it.name.contains("##") }
+    if (live.isEmpty()) return
+    val showUntagged = prefs.getBoolean(PREF_LOCALITY_SHOW_UNTAGGED, true)
+    val fallbacks = localityFallbacks(allChannels)
+    if (live.none { isVisibleForLocality(it, codes, showUntagged, fallbacks) }) {
+        Toast.makeText(
+            this,
+            getString(R.string.sett_locality_empty, LocalityCatalog.labelForCodes(codes)),
+            Toast.LENGTH_LONG
+        ).show()
+    }
 }
