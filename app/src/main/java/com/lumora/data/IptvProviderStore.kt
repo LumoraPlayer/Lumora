@@ -161,6 +161,7 @@ object IptvProviderStore {
         c.stalkerDeviceId2?.let { put("stalkerDeviceId2", it) }
         c.discoveredBy?.let { put("discoveredBy", it) }
         if (c.maxConnections > 0) put("maxConnections", c.maxConnections)
+        c.catalogueBytes?.let { put("catalogueBytes", it) }
     }
 
     private fun fromJson(o: JSONObject): IptvProviderConfig? {
@@ -189,7 +190,8 @@ object IptvProviderStore {
             stalkerDeviceId = o.optString("stalkerDeviceId").takeIf { it.isNotBlank() },
             stalkerDeviceId2 = o.optString("stalkerDeviceId2").takeIf { it.isNotBlank() },
             discoveredBy = o.optString("discoveredBy").takeIf { it.isNotBlank() },
-            maxConnections = o.optInt("maxConnections", 0)
+            maxConnections = o.optInt("maxConnections", 0),
+            catalogueBytes = o.optLong("catalogueBytes", 0L).takeIf { it > 0 }
         )
     }
 }

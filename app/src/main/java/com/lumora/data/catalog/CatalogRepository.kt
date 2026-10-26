@@ -375,9 +375,16 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
     /** Drops every stored row that does not belong to an enabled source. Run on each load so
      *  a provider disabled/removed while a fetch was in flight cannot leave its VOD rows
      *  behind (the VOD read side has no per-query provider gate). */
+    /** Drops rows left behind by providers that are disabled or no longer configured.
+     *
+     *  An empty keep-list deletes nothing, deliberately. It is not the same instruction as
+     *  "nothing is enabled right now": the last provider being switched off mid-load, a
+     *  prefs read that momentarily comes back empty, or a fresh install with no sources yet
+     *  would all wipe every row - and with them a catalogue the user then has to download
+     *  again in full. Removal deletes explicitly ([deleteProvider]); pruning only ever drops
+     *  rows that name a source we positively know is gone. */
     suspend fun pruneProviders(keepProviderIds: Collection<String>) = withContext(Dispatchers.IO) {
-        if (keepProviderIds.isEmpty()) dao.clear()
-        else dao.deleteProvidersNotIn(keepProviderIds.toList())
+        if (keepProviderIds.isNotEmpty()) dao.deleteProvidersNotIn(keepProviderIds.toList())
     }
 
     /** Drops one provider's whole stored catalogue (provider removed, or switched off). */

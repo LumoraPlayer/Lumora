@@ -45,7 +45,11 @@ object M3uParser {
     private val LIVE_TVG_TYPES = setOf("live", "channel", "tv channel")
 
     /** Parse an M3U playlist from a URL using the provided OkHttp client. */
-    suspend fun parseFromUrl(url: String, client: OkHttpClient): ParseResult =
+    suspend fun parseFromUrl(
+        url: String,
+        client: OkHttpClient,
+        onProgress: ((bytes: Long, total: Long?) -> Unit)? = null
+    ): ParseResult =
         withContext(Dispatchers.IO) {
             val request = Request.Builder().url(normalizeServerUrl(url))
                 .header("User-Agent", "VLC/3.0.18 LibVLC/3.0.18")
@@ -61,8 +65,25 @@ object M3uParser {
                 response.close()
                 throw Exception("Empty response body")
             }
-            val reader = BufferedReader(InputStreamReader(body.byteStream(), Charsets.UTF_8))
-            reader.use { parse(it) }
+            // A playlist can be hundreds of megabytes, and the only honest progress signal
+            // is the bytes coming off the socket: count them and let the caller narrate.
+            val total = body.contentLength().takeIf { it > 0 }
+            val counting = CountingInputStream(body.byteStream())
+            val reader = BufferedReader(InputStreamReader(counting, Charsets.UTF_8))
+            var reported = 0L
+            reader.use { buffered ->
+                val result = parse(buffered, onLine = {
+                    if (onProgress != null) {
+                        val read = counting.count
+                        if (read - reported >= M3U_PROGRESS_STEP_BYTES) {
+                            reported = read
+                            onProgress(read, total)
+                        }
+                    }
+                })
+                onProgress?.invoke(counting.count, total)
+                result
+            }
         }
 
     /** Parse M3U content from a string. [baseDir] resolves relative stream entries
@@ -72,11 +93,18 @@ object M3uParser {
     fun parse(content: String, baseDir: File? = null): ParseResult =
         parse(content.lineSequence().iterator(), baseDir)
 
-    /** Parse M3U content from a BufferedReader (streaming). */
-    fun parse(reader: BufferedReader, baseDir: File? = null): ParseResult {
+    /** Parse M3U content from a BufferedReader (streaming).
+     *
+     *  [onLine] is polled as the reader advances, so a caller streaming a huge playlist can
+     *  report how many bytes have come off the socket without the parser knowing anything
+     *  about HTTP. Called roughly once per line. */
+    fun parse(reader: BufferedReader, baseDir: File? = null, onLine: (() -> Unit)? = null): ParseResult {
         return parse(object : Iterator<String> {
             private var nextLine: String? = reader.readLine()
-            override fun hasNext(): Boolean = nextLine != null
+            override fun hasNext(): Boolean {
+                onLine?.invoke()
+                return nextLine != null
+            }
             override fun next(): String {
                 val current = nextLine ?: throw NoSuchElementException()
                 nextLine = reader.readLine()
@@ -369,4 +397,18 @@ object M3uParser {
         }
         return -1
     }
+}
+
+/** How much of a playlist has to be read before progress is reported again. */
+private const val M3U_PROGRESS_STEP_BYTES = 512L * 1024
+
+/** Counts the bytes actually pulled off the socket so a huge playlist can be narrated. */
+private class CountingInputStream(input: java.io.InputStream) : java.io.FilterInputStream(input) {
+    var count: Long = 0L
+        private set
+
+    override fun read(): Int = super.read().also { if (it >= 0) count++ }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int =
+        super.read(b, off, len).also { if (it > 0) count += it }
 }

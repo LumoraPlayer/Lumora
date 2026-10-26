@@ -799,7 +799,6 @@
                 android:textColor="@color/primary_light"
                 android:textSize="@dimen/text_title_s" />
         </LinearLayout>
-
         <!-- Empty state / QR prompt when no channels -->
         <LinearLayout
             android:id="@+id/emptyState"
@@ -3961,5 +3960,43 @@
             android:textAllCaps="false"
             android:textColor="@color/text_primary"
             android:textSize="@dimen/settings_text_body" />
+    </LinearLayout>
+
+    <!-- Catalog ingest banner. Deliberately NOT the status row: that one only owns the
+         content slot when nothing else does, which is exactly not the case when a provider
+         is added over a catalogue already on screen - and that is when the size and the
+         progress matter most. Floating over the panes keeps the narration visible either
+         way. Never focusable: it must not take the D-pad off whatever the user is on. -->
+    <LinearLayout
+        android:id="@+id/ingestBanner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="36dp"
+        android:background="@drawable/bg_ingest_banner"
+        android:elevation="12dp"
+        android:focusable="false"
+        android:orientation="vertical"
+        android:paddingHorizontal="28dp"
+        android:paddingVertical="18dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/ingestText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxWidth="820dp"
+            android:textColor="@color/primary_light"
+            android:textSize="@dimen/text_title_s" />
+
+        <ProgressBar
+            android:id="@+id/ingestProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:layout_marginTop="12dp"
+            android:indeterminate="false"
+            android:max="100"
+            android:progressTint="@color/primary_light" />
     </LinearLayout>
 </FrameLayout>

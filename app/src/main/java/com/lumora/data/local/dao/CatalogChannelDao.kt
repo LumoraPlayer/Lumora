@@ -62,11 +62,9 @@ interface CatalogChannelDao {
     )
     fun deleteStaleRowsBlocking(providerId: String, mediaType: String, syncToken: Long): Int
 
-    @Query("DELETE FROM catalog_channels")
-    suspend fun clear(): Int
-
     /** Rows left behind by providers that are disabled or no longer configured - including
-     *  a fetch that finished after its provider was removed/toggled off. */
+     *  a fetch that finished after its provider was removed/toggled off. There is no
+     *  "delete everything" query on purpose: see CatalogRepository.pruneProviders. */
     @Query("DELETE FROM catalog_channels WHERE providerId != '' AND providerId NOT IN (:providerIds)")
     suspend fun deleteProvidersNotIn(providerIds: List<String>): Int
 

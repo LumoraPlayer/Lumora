@@ -551,6 +551,17 @@ internal fun MainActivity.applyProviderToggle(
             }
         }
         allChannels = allChannels.filterNot(belongsToProvider)
+        // Switching a provider off only drops local rows - the panel does not revoke the
+        // stream - so anything already on screen has to be taken down explicitly. Without
+        // this the channel the user was watching carried on playing from a source Settings
+        // says is off, and so did the Live preview and every Multiview pane.
+        currentVersionGroup.getOrNull(currentVersionIndex)?.let { playing ->
+            if (belongsToProvider(playing)) hidePlayer(restorePreview = false)
+        }
+        previewTargetChannel?.let { if (belongsToProvider(it)) releaseLivePreview() }
+        for (i in multiviewPanes.indices.reversed()) {
+            if (belongsToProvider(multiviewPanes[i].channel)) closeMultiviewPane(i)
+        }
         classifyAndShow()
     }
 }
@@ -752,9 +763,10 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 // the same message on entry. Only drop the status when content was already on
                 // screen before this paint (a warm re-load).
                 if (hadContentOnScreen) setStatus("", visible = false)
-                // Maintenance after the paint, not before it - see pruneOnce().
-                pruneOnce()
                 if (!isCatalogStale()) {
+                    // Nothing to fetch, so this is the moment to enforce the storage
+                    // invariant - after the paint, never before it (see pruneOnce()).
+                    pruneOnce()
                     // Anime/plugin entries are not stored in the catalogue database - their
                     // plugin rebuilds them - so a warm start still has to fetch that half.
                     if (enabledAnimePlugin() != null) {
@@ -784,8 +796,8 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                     uiPainted = true
                     paintedFromStore = true
                     classifyAndShow()
-                    pruneOnce()
                     if (!isCatalogStale()) {
+                        pruneOnce()
                         if (enabledAnimePlugin() != null) {
                             val anime = withContext(Dispatchers.IO) {
                                 withTimeoutOrNull(PROVIDER_FETCH_TIMEOUT_MS) { fetchAnimeChannels() }
@@ -801,10 +813,6 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 }
             }
         }
-
-        // Reached by a force refresh (nothing painted from the store, so nothing has run it
-        // yet) and by a stale cold start (already done after the paint - a no-op here).
-        pruneOnce()
 
         val combined = mutableListOf<Channel>()
         val errors = mutableListOf<String>()
@@ -822,6 +830,10 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 visible = true
             )
         }
+        // Fresh narration for this load: the previous one's sizes belong to the previous
+        // fetch, and a provider that answers nothing must not leave its row behind.
+        catalogIngest.clear()
+        catalogIngestPaintedAt = 0L
         val animeDeferred: Deferred<List<Channel>>? = if (enabledAnimePlugin() != null) {
             // fetchAnimeChannels does synchronous OkHttp calls, and this loader coroutine
             // runs on Main - the Dispatchers.IO hop mirrors the sequential version below.
@@ -879,13 +891,21 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         }
         val fetchResults = enabledConfigs.map { config ->
             async {
+                // Fetch threads report bytes/rows here; the map and the status row are
+                // main-thread state (see MainActivityIngest.kt).
+                publishCatalogConnecting(config.id, config.name)
+                val onProgress: (String, Int, Long, Long?) -> Unit = { phase, rows, bytes, total ->
+                    scope.launch {
+                        publishCatalogIngest(config.id, config.name, phase, rows, bytes, total)
+                    }
+                }
                 val result = withTimeoutOrNull(PROVIDER_FETCH_TIMEOUT_MS) {
                     when (config.type) {
-                        "xtream" -> fetchXtreamChannels(config) { expiryText = it }
+                        "xtream" -> fetchXtreamChannels(config, { expiryText = it }, onProgress)
                         "stalker" -> fetchStalkerChannels(config) { live ->
                             showPartial(config.id, live)
                         }
-                        else -> fetchM3uChannels(config)
+                        else -> fetchM3uChannels(config, onProgress)
                     }
                 } ?: FetchResult.Failure("timed out")
                 if (result is FetchResult.Success) {
@@ -1006,7 +1026,7 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
             val fallback = filterResidentCatalog(
                 (combined + storedLive).distinctBy { CatalogMapping.uidOf(it) }
             )
-            runCatching { pruneCatalogue() }
+            pruneOnce()
             allChannels = fallback
             filmsSeriesDeriveJob?.cancel()
             // classifyAndShow() has to run even when nothing above changed allChannels -
@@ -1015,6 +1035,8 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
             // with nothing ever painted past the toolbar: uiPainted stays false and no later
             // event re-triggers a render.
             classifyAndShow(preserveUi = shouldPreserveUiOnLoad())
+            runCatching { persistCatalogueSizes() }
+            resetCatalogIngest()
             setStatus("", visible = false)
             if (errors.isNotEmpty()) {
                 Toast.makeText(this@loadAllConfiguredProviders, errors.joinToString(" · "), Toast.LENGTH_LONG).show()
@@ -1022,9 +1044,12 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
             return@launch
         }
 
-        // Again after the fetches: one may have completed after its provider was toggled
+        // After the fetches: one may have completed after its provider was toggled
         // off/removed (or one of its types switched off) while the load was in flight.
-        runCatching { pruneCatalogue() }
+        // This is also where the prune happens for a load that fetched - a prune of a
+        // 240k-row catalogue takes seconds on a TV stick, and doing it before the fetch
+        // only delayed the refresh by that much.
+        pruneOnce()
 
         // Ranks are written with the backup flag at ingest; only a change in the backup set
         // needs a database pass, and then only over the providers that moved.
@@ -1044,6 +1069,10 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         allChannels = combined
         filmsSeriesDeriveJob?.cancel()
         classifyAndShow(preserveUi = shouldPreserveUiOnLoad())
+        // Pull the ingest narration down before the summary takes the row - and record what
+        // each provider actually downloaded, so Settings can state the size from now on.
+        val measuredSizes = runCatching { persistCatalogueSizes() }.getOrDefault(emptyList())
+        resetCatalogIngest()
         // Only a load where at least one source answered resets the TTL. Looking at
         // `combined` alone was wrong twice: a VOD-only panel has an empty live half and so
         // refetched its whole catalogue every launch, while a total failure re-added the
@@ -1064,7 +1093,8 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         } else {
             val summary = getString(R.string.plug_item_count, combined.size) +
                 (expiryText?.let { "  ·  $it" } ?: "") +
-                (errors.takeIf { it.isNotEmpty() }?.let { "  ·  ⚠ " + it.joinToString(", ") } ?: "")
+                (errors.takeIf { it.isNotEmpty() }?.let { "  ·  ⚠ " + it.joinToString(", ") } ?: "") +
+                (measuredSizes.maxOrNull()?.let { catalogueSizeNote(it) }?.let { "  ·  ⚠ $it" } ?: "")
             setStatus(summary, visible = true)
             // A refresh over existing content can't use the status row (suppressed while a
             // pane owns the slot), so the outcome would otherwise be silent - and a failed
@@ -1075,6 +1105,33 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
             if (errors.isEmpty()) mainHandler.postDelayed({ setStatus("", visible = false) }, 4000)
         }
     }
+}
+
+/**
+ * Records how many bytes each provider's catalogue actually cost this load.
+ *
+ * The size is measured while streaming (see XtreamClient/M3uParser), so Settings can state
+ * it - and flag a playlist past [CATALOGUE_TOO_LARGE_BYTES] - without fetching it again.
+ * Only a meaningful change is written: a panel's size drifts a few percent between refreshes
+ * and the prefs file does not need a write for that.
+ */
+internal fun MainActivity.persistCatalogueSizes(): List<Long> {
+    val measured = catalogIngest.values
+        .filter { it.totalBytes > 0 }
+        .associate { it.providerId to it.totalBytes }
+    if (measured.isEmpty()) return emptyList()
+    val configs = IptvProviderStore.load(prefs)
+    var changed = false
+    val updated = configs.map { config ->
+        val bytes = measured[config.id] ?: return@map config
+        val previous = config.catalogueBytes
+        val moved = previous == null || kotlin.math.abs(previous - bytes) * 20 >= previous
+        if (!moved) return@map config
+        changed = true
+        config.copy(catalogueBytes = bytes)
+    }
+    if (changed) IptvProviderStore.save(prefs, updated)
+    return measured.values.toList()
 }
 
 /** [onLive] fires with the live channels alone as soon as they land, before VOD/series are
@@ -1150,13 +1207,19 @@ internal fun MainActivity.fetchAnimeChannels(): List<Channel> {
 
 // ── M3U / Xtream channel fetch ─────────────────
 
-internal suspend fun MainActivity.fetchM3uChannels(config: IptvProviderConfig): FetchResult {
+internal suspend fun MainActivity.fetchM3uChannels(
+    config: IptvProviderConfig,
+    /** Ingest narration: the playlist is one download, so the phase is always "playlist". */
+    onProgress: ((phase: String, rows: Int, bytes: Long, total: Long?) -> Unit)? = null
+): FetchResult {
     val raw = config.url?.trim() ?: return FetchResult.Failure("no URL")
     if (raw.isBlank()) return FetchResult.Failure("no URL")
     return try {
         val result = withContext(Dispatchers.IO) {
             if (isLocalFileUrl(raw)) parseLocalPlaylist(raw)
-            else M3uParser.parseFromUrl(raw, BaseApplication.instance.okHttpClient)
+            else M3uParser.parseFromUrl(raw, BaseApplication.instance.okHttpClient) { bytes, total ->
+                onProgress?.invoke("playlist", 0, bytes, total)
+            }
         }
         // Content-type gates: an M3U file lists live and VOD in one parse - drop the
         // types this provider has switched off, per mediaType.
@@ -1205,7 +1268,13 @@ private fun MainActivity.parseLocalPlaylist(raw: String): M3uParser.ParseResult 
     file.inputStream().bufferedReader(Charsets.UTF_8).use { return M3uParser.parse(it, file.parentFile) }
 }
 
-internal suspend fun MainActivity.fetchXtreamChannels(config: IptvProviderConfig, onExpiry: (String?) -> Unit): FetchResult {
+internal suspend fun MainActivity.fetchXtreamChannels(
+    config: IptvProviderConfig,
+    onExpiry: (String?) -> Unit,
+    /** Ingest narration: phase ("live"/"films"/"series"), rows written, bytes read, and the
+     *  phase's stated size when the panel sends a Content-Length. */
+    onProgress: ((phase: String, rows: Int, bytes: Long, total: Long?) -> Unit)? = null
+): FetchResult {
     return try {
         val xtreamProvider = Provider(
             name = config.name, type = ProviderType.XTREAM,
@@ -1268,16 +1337,27 @@ internal suspend fun MainActivity.fetchXtreamChannels(config: IptvProviderConfig
             ): Boolean {
                 val writer = runCatching { repository.writer(config.id, type, isBackup) }.getOrNull()
                 runCatching { writer?.begin() }
+                val phase = when (type) {
+                    MediaType.LIVE -> "live"
+                    MediaType.MOVIE -> "films"
+                    else -> "series"
+                }
                 val delivered = client.streamBulkList(
                     xtreamProvider, action, type,
-                    transform = { withCategory(it, names, uncatId) }
-                ) { channel ->
-                    into?.add(channel)
-                    // Let a database error abort the stream: the writer keeps the rows
-                    // already written (updates of existing copies), and the rows this
-                    // ingest never reached remain the old ones.
-                    writer?.add(channel)
-                }
+                    transform = { withCategory(it, names, uncatId) },
+                    onItem = { channel ->
+                        into?.add(channel)
+                        // Let a database error abort the stream: the writer keeps the rows
+                        // already written (updates of existing copies), and the rows this
+                        // ingest never reached remain the old ones.
+                        writer?.add(channel)
+                    },
+                    onProgress = { bytes, total ->
+                        // Rows come from the writer, so the count is what has actually landed
+                        // in the catalogue database rather than what has been parsed.
+                        onProgress?.invoke(phase, writer?.count ?: 0, bytes, total)
+                    }
+                )
                 if (delivered == null) runCatching { writer?.abort() } else runCatching { writer?.finish() }
                 return delivered != null
             }

@@ -1818,9 +1818,22 @@ internal fun MainActivity.showProviderSettings() {
             // Backup sources stay enabled (they still serve failover streams), so the
             // row needs its own mark - otherwise a hidden-but-on provider reads exactly
             // like a normal one and the wife test fails at the settings screen itself.
-            val detail = getString(R.string.sett_provider_row_detail, typeLabel, sourceLabel)
-            row.findViewById<TextView>(R.id.rowDetail).text =
-                if (cfg.backup) "$detail · ${getString(R.string.sett_provider_backup_badge)}" else detail
+            //
+            // The size the last ingest actually downloaded is shown next to it, and a
+            // playlist past CATALOGUE_TOO_LARGE_BYTES is flagged: only the provider can
+            // shrink that, and the next load would otherwise grind through it silently.
+            // The badges come before the URL: the row is one ellipsized line, and what the
+            // user has to know (how big, and whether to ask the provider to trim it) would
+            // otherwise be the part that gets cut off.
+            val badges = buildList {
+                if (cfg.backup) add(getString(R.string.sett_provider_backup_badge))
+                cfg.catalogueBytes?.let { bytes ->
+                    add(formatCatalogueSize(bytes))
+                    if (bytes >= CATALOGUE_TOO_LARGE_BYTES) add(getString(R.string.sett_provider_very_large))
+                }
+            }
+            val detail = (listOf(typeLabel) + badges + listOf(sourceLabel)).joinToString(" · ")
+            row.findViewById<TextView>(R.id.rowDetail).text = detail
             row.findViewById<View>(R.id.rowEditButton).setOnClickListener { openIptvForm(cfg) }
             row.findViewById<View>(R.id.rowRemoveButton).setOnClickListener {
                 AlertDialog.Builder(this)

@@ -1299,6 +1299,11 @@ class MainActivity : AppCompatActivity() {
      *  Consumed once by the cached cold-start path (see loadAllConfiguredProviders) and
      *  dropped whenever a load does not take it - a force refresh reads nothing anyway. */
     internal var catalogLivePreload: Deferred<List<Channel>>? = null
+    /** Per-provider ingest progress shown in the status row while a catalogue streams in
+     *  (see MainActivityIngest.kt). Touched on the main thread only. */
+    internal val catalogIngest = LinkedHashMap<String, CatalogIngestState>()
+    /** Throttle for [publishCatalogIngest]'s status repaints. */
+    internal var catalogIngestPaintedAt = 0L
 
     companion object {
         internal const val REQUEST_EXPORT_BACKUP = 2001

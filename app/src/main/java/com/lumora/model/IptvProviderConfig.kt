@@ -46,5 +46,9 @@ data class IptvProviderConfig(
     // How many simultaneous streams this subscription allows (0 = unknown). Set by the
     // user in the provider form; multiview reads it to size the pane grid and to warn
     // when the same account is about to carry more panes than it will admit.
-    val maxConnections: Int = 0
+    val maxConnections: Int = 0,
+    // Bytes the last successful catalogue download actually pulled from this provider
+    // (null = never measured). Written after a load so Settings can state a provider's size
+    // - and flag a playlist past CATALOGUE_TOO_LARGE_BYTES - without refetching it first.
+    val catalogueBytes: Long? = null
 )

@@ -15,9 +15,13 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import java.io.InputStreamReader
 import java.net.URLEncoder
 
 private const val TAG = "XtreamClient"
+
+/** How much a bulk list has to advance before it reports progress again. */
+private const val PROGRESS_STEP_BYTES = 512L * 1024
 
 /**
  * Minimal Xtream Codes API client using OkHttp.
@@ -453,7 +457,8 @@ class XtreamClient(private val client: OkHttpClient) {
         action: String,
         mediaType: MediaType,
         transform: (Channel) -> Channel = { it },
-        onItem: (Channel) -> Unit
+        onItem: (Channel) -> Unit,
+        onProgress: ((bytes: Long, total: Long?) -> Unit)? = null
     ): Int? {
         val key = when (action) {
             "get_live_streams" -> "live_streams"
@@ -465,7 +470,9 @@ class XtreamClient(private val client: OkHttpClient) {
             "get_series" -> { map, _ -> seriesFromMap(map)?.let(transform) }
             else -> { map, first -> streamFromMap(map, first, mediaType, provider)?.let(transform) }
         }
-        return streamBulkArrayInto(buildApiUrl(provider, "action=$action"), key, readItem, onItem)
+        return streamBulkArrayInto(
+            buildApiUrl(provider, "action=$action"), key, readItem, onItem, onProgress
+        )
     }
 
     /** The HTTP/JSON half of [streamBulkList]: one request, streamed item by item. */
@@ -473,7 +480,8 @@ class XtreamClient(private val client: OkHttpClient) {
         url: String,
         key: String,
         readItem: (Map<String, String?>, String?) -> T?,
-        onItem: (T) -> Unit
+        onItem: (T) -> Unit,
+        onProgress: ((bytes: Long, total: Long?) -> Unit)? = null
     ): Int? {
         return try {
             val request = Request.Builder().url(url)
@@ -487,16 +495,31 @@ class XtreamClient(private val client: OkHttpClient) {
                     return null
                 }
                 val body = response.body ?: return null
+                // The panel states the list's size when it sends a Content-Length; a chunked
+                // response has none, and then the bar stays indeterminate while the byte and
+                // row counters still move.
+                val total = body.contentLength().takeIf { it > 0 }
+                val charset = body.contentType()?.charset(Charsets.UTF_8) ?: Charsets.UTF_8
+                val counting = CountingInputStream(body.byteStream())
                 var count = 0
-                body.charStream().use { stream ->
+                var reported = 0L
+                InputStreamReader(counting, charset).use { stream ->
                     JsonReader(stream).use { reader ->
                         reader.isLenient = true
                         readBulkArrayInto(reader, key, readItem) { item ->
                             onItem(item)
                             count++
+                            if (onProgress != null) {
+                                val read = counting.count
+                                if (read - reported >= PROGRESS_STEP_BYTES) {
+                                    reported = read
+                                    onProgress(read, total)
+                                }
+                            }
                         }
                     }
                 }
+                onProgress?.invoke(counting.count, total)
                 count
             }
         } catch (e: OutOfMemoryError) {
@@ -508,6 +531,17 @@ class XtreamClient(private val client: OkHttpClient) {
             Log.w(TAG, "Network error fetching $url: ${e.message}")
             null
         }
+    }
+
+    /** Counts the bytes actually pulled off the socket so the loader can narrate an ingest. */
+    private class CountingInputStream(input: java.io.InputStream) : java.io.FilterInputStream(input) {
+        var count: Long = 0L
+            private set
+
+        override fun read(): Int = super.read().also { if (it >= 0) count++ }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int =
+            super.read(b, off, len).also { if (it > 0) count += it }
     }
 
     /**
