@@ -685,8 +685,17 @@ fun cleanVodCategoryLabel(raw: String): String = vodCategoryLabelMemo.memoize(ra
 private val localityMemo = ConcurrentHashMap<String, String>(2048)
 private const val LOCALITY_MEMO_MAX = 20_000
 
-/** Arabic script anywhere is the signal that a bare `AR` means Arabic-language content. */
-private val ARABIC_SCRIPT_REGEX = Regex("""\p{IsArabic}""")
+/** Arabic script anywhere is the signal that a bare `AR` means Arabic-language content.
+ *
+ *  Spelled as explicit code-point ranges rather than `\p{IsArabic}`: Android 7.1's regex
+ *  engine (ICU-backed, API 25 - the Fire OS 6 sticks are on it) throws
+ *  `PatternSyntaxException: U_ILLEGAL_ARGUMENT_ERROR` for the `Is` script form, and because
+ *  this is a top-level `val` the failure surfaced as an `ExceptionInInitializerError` that
+ *  killed the app on the first live derive. These ranges are the Arabic block, its
+ *  supplement and Extended-A, and the presentation forms - the same characters the script
+ *  property matches. */
+private val ARABIC_SCRIPT_REGEX =
+    Regex("[\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF]")
 
 /** Arabic-language channel brands that appear without Arabic script in the name. */
 private val ARABIC_MARKER_REGEX = Regex(
