@@ -15,6 +15,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.*
+import com.lumora.anime.AnimeCatalogClient
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.model.Provider
@@ -426,6 +427,37 @@ internal fun MainActivity.pluginChannelId(plugin: PluginScript, token: String, e
 internal fun MainActivity.enabledAnimePlugin(): PluginScript? =
     pluginScriptManager.getDiscoveredScripts()
         .firstOrNull { it.enabled && it.supportsStreamSearch && it.contentTypes.contains("anime") }
+
+/**
+ * Re-reads the plugin-supplied half of the catalogue after a plugin is switched on or off,
+ * without contacting a single provider.
+ *
+ * Only the anime catalogue is stored as channels; every other stream_search plugin resolves
+ * streams on demand and contributes nothing here. A failed refetch keeps the entries already
+ * on screen rather than blanking the row, and switching the plugin off drops them.
+ */
+internal fun MainActivity.refreshPluginContent() {
+    scope.launch {
+        fun isPluginChannel(channel: Channel) =
+            channel.id.startsWith(AnimeCatalogClient.ID_PREFIX)
+        val pluginOn = enabledAnimePlugin() != null
+        val fetched = if (pluginOn) {
+            withContext(Dispatchers.IO) {
+                withTimeoutOrNull(PROVIDER_FETCH_TIMEOUT_MS) { fetchAnimeChannels() } ?: emptyList()
+            }
+        } else {
+            emptyList()
+        }
+        val kept = if (pluginOn && fetched.isEmpty()) {
+            allChannels.filter(::isPluginChannel)
+        } else {
+            emptyList()
+        }
+        allChannels = allChannels.filterNot(::isPluginChannel) + fetched + kept
+        localSeriesIndexCache = null
+        classifyAndShow(preserveUi = true)
+    }
+}
 
 internal fun MainActivity.enabledStreamSearchPlugin(item: Channel? = null): PluginScript? {
     val candidates = pluginScriptManager.getDiscoveredScripts().filter { it.enabled && it.supportsStreamSearch }
@@ -1063,7 +1095,9 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
                     // added provider shows up immediately instead of only after reopening.
                     refreshIptvProviderList.invoke()
                     try {
-                        loadAllConfiguredProviders(forceRefresh = true)
+                        // Only the provider that was just added is fetched. A full load here
+                        // re-downloaded every other panel's catalogue for one new entry.
+                        loadAllConfiguredProviders(forceRefresh = true, only = setOf(added.id))
                     } catch (_: Exception) {
                         // A malformed candidate (blank URL, missing credentials) can crash
                         // the provider load. The upsert already succeeded; don't let the
@@ -1352,7 +1386,11 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
                     renderPluginDetail()
                     renderPluginList()
                     refreshPluginNavRows?.invoke()
-                    if (plugin.supportsStreamSearch) loadAllConfiguredProviders(forceRefresh = true)
+                    // A stream_search plugin contributes no provider catalogue - the anime
+                    // one supplies its own list, and the rest resolve streams on demand. A
+                    // full provider load here re-downloaded every IPTV panel for a switch
+                    // that touched none of them (see refreshPluginContent).
+                    if (plugin.supportsStreamSearch) refreshPluginContent()
                 }
                 detailEnabledRow.setOnClickListener {
                     // Only the OFF -> ON transition needs the disclaimer - switching one off
