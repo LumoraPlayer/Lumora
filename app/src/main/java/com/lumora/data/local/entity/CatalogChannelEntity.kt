@@ -39,7 +39,12 @@ import androidx.room.PrimaryKey
         Index("mediaType", "categoryId"),
         Index("mediaType", "filterKey"),
         Index("mediaType", "filterKey", "dateSort"),
-        Index("mediaType", "syncToken")
+        Index("mediaType", "syncToken"),
+        // Keyset pages over the resident live list (`liveScanPage`) and the ordered
+        // category pages: without this the planner sorts the whole live set per page.
+        Index("mediaType", "orderIndex", "uid"),
+        // Favourites, Continue Watching and the own-library rows page by source id.
+        Index("mediaType", "sourceId")
     ]
 )
 data class CatalogChannelEntity(

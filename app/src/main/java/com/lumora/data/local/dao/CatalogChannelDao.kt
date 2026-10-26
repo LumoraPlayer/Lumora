@@ -65,6 +65,11 @@ interface CatalogChannelDao {
     @Query("DELETE FROM catalog_channels")
     suspend fun clear(): Int
 
+    /** Rows left behind by providers that are disabled or no longer configured - including
+     *  a fetch that finished after its provider was removed/toggled off. */
+    @Query("DELETE FROM catalog_channels WHERE providerId != '' AND providerId NOT IN (:providerIds)")
+    suspend fun deleteProvidersNotIn(providerIds: List<String>): Int
+
     @Query("SELECT COUNT(*) FROM catalog_channels")
     suspend fun count(): Int
 
@@ -78,8 +83,16 @@ interface CatalogChannelDao {
     suspend fun byUid(uid: String): CatalogChannelEntity?
 
     /** Two rows are enough to tell the caller the id is ambiguous across providers. */
-    @Query("SELECT * FROM catalog_channels WHERE mediaType = :mediaType AND sourceId = :sourceId LIMIT 2")
-    suspend fun bySourceId(mediaType: String, sourceId: String): List<CatalogChannelEntity>
+    @Query(
+        "SELECT * FROM catalog_channels WHERE mediaType = :mediaType AND sourceId = :sourceId " +
+            "AND (:providerId IS NULL OR providerId = :providerId) " +
+            "ORDER BY orderIndex ASC LIMIT 2"
+    )
+    suspend fun bySourceId(
+        mediaType: String,
+        sourceId: String,
+        providerId: String?
+    ): List<CatalogChannelEntity>
 
     @Query(
         "SELECT * FROM catalog_channels WHERE mediaType = :mediaType " +
@@ -217,6 +230,20 @@ interface CatalogChannelDao {
     ): Int
 
     @Query(
+        "SELECT DISTINCT groupId FROM catalog_channels " +
+            "WHERE mediaType = :mediaType AND groupId IS NOT NULL AND rank > 0 " +
+            "AND filterKey IN (:filterKeys) " +
+            "AND (:englishOnly = 0 OR isEnglish = 1) " +
+            "AND (:hideAdult = 0 OR isAdult = 0)"
+    )
+    suspend fun vodGroupsInKeys(
+        mediaType: String,
+        filterKeys: List<String>,
+        englishOnly: Boolean,
+        hideAdult: Boolean
+    ): List<String>
+
+    @Query(
         "SELECT filterKey, MAX(categoryName) AS categoryName, COUNT(DISTINCT groupId) AS count " +
             "FROM catalog_channels " +
             "WHERE mediaType = :mediaType AND groupId IS NOT NULL AND rank > 0 AND filterKey IS NOT NULL " +
@@ -268,6 +295,22 @@ interface CatalogChannelDao {
         englishOnly: Boolean,
         hideAdult: Boolean
     ): Int
+
+    /** Distinct title groups behind a source-id set. Used to count pages when the id set
+     *  is too large for one statement: summing per-chunk counts would count a title that
+     *  appears in two chunks twice. */
+    @Query(
+        "SELECT DISTINCT groupId FROM catalog_channels " +
+            "WHERE mediaType = :mediaType AND groupId IS NOT NULL AND rank > 0 AND sourceId IN (:sourceIds) " +
+            "AND (:englishOnly = 0 OR isEnglish = 1) " +
+            "AND (:hideAdult = 0 OR isAdult = 0)"
+    )
+    suspend fun vodGroupsBySourceIds(
+        mediaType: String,
+        sourceIds: List<String>,
+        englishOnly: Boolean,
+        hideAdult: Boolean
+    ): List<String>
 
     @Query(
         "SELECT * FROM catalog_channels WHERE mediaType = :mediaType AND groupId IN (:groups) " +

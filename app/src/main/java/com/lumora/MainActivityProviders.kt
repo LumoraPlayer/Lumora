@@ -18,6 +18,7 @@ import com.lumora.data.IptvProviderStore
 import com.lumora.data.MediaServerStore
 import com.lumora.data.RedditProviderHealth
 import com.lumora.data.ScannerStreamFailureWatch
+import com.lumora.data.catalog.CatalogMapping
 import com.lumora.data.catalog.CatalogRepository
 import com.lumora.anime.AnimeCatalogClient
 import com.lumora.parser.M3uParser
@@ -656,6 +657,29 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
     val previousLoad = providerLoadJob
     providerLoadJob = scope.launch {
         previousLoad?.cancelAndJoin()
+        // Enforce the storage invariant: only enabled sources own catalogue rows, and a type
+        // switched off for its provider owns none either. The VOD read side does not filter
+        // by provider/type, so this is what stops rows written by a fetch that overlapped a
+        // toggle/removal from outliving it. Global VOD-off is deliberately not applied here:
+        // the stored per-provider flags stay as the user set them, and buildVodContent()
+        // already serves nothing while VOD is globally disabled.
+        suspend fun pruneCatalogue() {
+            val configs = IptvProviderStore.load(prefs).filter { it.enabled }
+            val servers = mediaServers().filter { it.enabled && it.producesCatalog && !it.isShare }
+            val repo = CatalogRepository.get(this@loadAllConfiguredProviders)
+            repo.pruneProviders(configs.map { it.id } + servers.map { it.id })
+            for (config in configs) {
+                if (!config.liveEnabled) repo.deleteProviderType(config.id, MediaType.LIVE)
+                if (!config.moviesEnabled) repo.deleteProviderType(config.id, MediaType.MOVIE)
+                if (!config.seriesEnabled) repo.deleteProviderType(config.id, MediaType.SERIES)
+            }
+            for (server in servers) {
+                if (!server.liveEnabled) repo.deleteProviderType(server.id, MediaType.LIVE)
+                if (!server.moviesEnabled) repo.deleteProviderType(server.id, MediaType.MOVIE)
+                if (!server.seriesEnabled) repo.deleteProviderType(server.id, MediaType.SERIES)
+            }
+        }
+        runCatching { pruneCatalogue() }
         filmsSeriesDeriveJob?.cancel()
         // The cached catalog is authoritative until it goes stale: re-fetching every
         // launch means several seconds of "Loading..." and, on a large catalog, real
@@ -664,7 +688,6 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         // away when the user changes a provider, which force-refreshes.
         // The catalogue is in Room now: live is read back from it, films/series come from
         // buildVodContent(). There is no text cache to consult.
-        var cached: List<Channel>? = null
         if (!forceRefresh) {
             val loaded = withContext(Dispatchers.IO) {
                 runCatching {
@@ -676,8 +699,8 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 runCatching { File(filesDir, "channels_cache_v2.txt").delete() }
                 runCatching { File(filesDir, "channels_cache.txt").delete() }
             }
-            cached = loaded.ifEmpty { null }
-            if (!cached.isNullOrEmpty()) {
+            var cached = loaded
+            if (cached.isNotEmpty()) {
                 // The content-type gates apply to a cold start too - types switched off
                 // without a row delete (older data) must not resurrect here.
                 cached = filterResidentCatalog(
@@ -750,6 +773,10 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         var expiryText: String? = null
 
         val enabledConfigs = IptvProviderStore.load(prefs).filter { it.enabled }
+        // The global VOD switch makes every non-Xtream fetch drop films/series; do not let
+        // that empty half delete the stored VOD (see replaceProvider's skipTypes).
+        val globalVodOffTypes =
+            if (isVodDisabled()) setOf(MediaType.MOVIE, MediaType.SERIES) else emptySet()
         if (!uiPainted && enabledConfigs.isNotEmpty()) {
             setStatus(
                 if (enabledConfigs.size == 1) getString(R.string.plug_connecting_to, enabledConfigs.first().name)
@@ -794,18 +821,17 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 } ?: FetchResult.Failure("${server.name}: timed out")
             }
         }
-        // Providers whose channels were merged into allChannels before their fetch finished
-        // (Stalker's live half lands first, then VOD/series). If that second half then fails
-        // or times out, the final replace below must not wipe the live channels that are
-        // already on screen - they're seeded into `combined` from the partial merge instead.
-        val partialMergedIds = mutableSetOf<String>()
+        // True once at least one source actually answered successfully. A refresh where every
+        // provider failed must not stamp the catalogue TTL (that would leave the app on stale
+        // data for the whole window) and must fall back to what is already stored - even when
+        // VOD rows exist and `combined` (the live half) is empty.
+        var catalogRefreshSucceeded = false
         val fetchResults = enabledConfigs.map { config ->
             async {
                 val result = withTimeoutOrNull(PROVIDER_FETCH_TIMEOUT_MS) {
                     when (config.type) {
                         "xtream" -> fetchXtreamChannels(config) { expiryText = it }
                         "stalker" -> fetchStalkerChannels(config) { live ->
-                            partialMergedIds += config.id
                             mergeProviderPartial(config.id, live)
                             renderLivePartial()
                         }
@@ -813,7 +839,7 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                     }
                 } ?: FetchResult.Failure("timed out")
                 if (result is FetchResult.Success) {
-                    partialMergedIds += config.id
+                    catalogRefreshSucceeded = true
                     mergeProviderPartial(config.id, result.channels)
                     renderLivePartial()
                     // Xtream streams its VOD straight into the catalogue database during
@@ -834,7 +860,8 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                             }
                             repository.replaceProvider(
                                 config.id, toStore,
-                                backup = IptvProviderStore.load(prefs).firstOrNull { it.id == config.id }?.backup == true
+                                backup = IptvProviderStore.load(prefs).firstOrNull { it.id == config.id }?.backup == true,
+                                skipTypes = globalVodOffTypes
                             )
                         }
                     }
@@ -860,8 +887,20 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                     // failed) instead of letting the final replace wipe it off screen.
                     // Skipped when the provider was toggled off mid-load.
                     if (config.id in enabledProviderIds) {
-                        combined += allChannels.filter {
+                        val live = allChannels.filter {
                             it.sourceProviderId == config.id && it.mediaType == MediaType.LIVE
+                        }
+                        combined += live
+                        // Persist the partial list too: Stalker merges its live half before
+                        // fetching VOD/series, so a VOD failure used to leave that half only
+                        // in RAM and lose it on the next start.
+                        if (live.isNotEmpty()) {
+                            val backup = IptvProviderStore.load(prefs)
+                                .firstOrNull { it.id == config.id }?.backup == true
+                            runCatching {
+                                CatalogRepository.get(this@loadAllConfiguredProviders)
+                                    .replaceProviderType(config.id, MediaType.LIVE, live, backup)
+                            }
                         }
                     }
                     errors += "${config.name}: ${result.message}"
@@ -883,9 +922,13 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
             }
             when (val result = deferred.await()) {
                 is FetchResult.Success -> {
+                    catalogRefreshSucceeded = true
                     runCatching {
                         CatalogRepository.get(this@loadAllConfiguredProviders)
-                            .replaceProvider(server.id, result.channels)
+                            .replaceProvider(
+                                server.id, result.channels,
+                                skipTypes = globalVodOffTypes
+                            )
                     }
                     combined += result.channels.filter { it.mediaType == MediaType.LIVE }
                 }
@@ -894,37 +937,29 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         }
         val animeChannels = animeDeferred?.await()
         if (!animeChannels.isNullOrEmpty()) {
+            catalogRefreshSucceeded = true
             combined += animeChannels
         }
 
-        // A refresh that produced nothing must not wipe the cached catalog off disk or off the
-        // screen: keep the previously-cached allChannels, surface the errors, and don't stamp
-        // the TTL (a stamp here would leave the app on stale data for the whole TTL window).
-        // Covers both the stale-cache refresh and a forceRefresh (e.g. a VOD-toggle reload)
-        // whose fetches all failed - forceRefresh never loads `cached` up front, so fall back
-        // to reading the disk cache here.
+        // Nothing answered: keep what is already on screen/on disk, surface the errors, and
+        // do not stamp the TTL (that would leave the app on stale data for the whole window).
         //
-        // A saved provider may be VOD-only (no live channels at all): `combined` is empty
-        // then, but the catalogue database is not. The empty check has to ask both.
-        val catalogCount = withContext(Dispatchers.IO) {
-            runCatching {
-                CatalogRepository.get(this@loadAllConfiguredProviders).count()
-            }.getOrDefault(0)
-        }
-        if (combined.isEmpty() && catalogCount == 0) {
-            // The disk fallback has to pass the same gates the cached cold start above does -
-            // the cache is saved unfiltered, so without them a total-failure refresh
-            // resurrected providers the user had switched off and VOD types they had gated.
-            val storedLive = cached ?: withContext(Dispatchers.IO) {
+        // `combined` is not enough on its own here: it only carries the live half, and a
+        // VOD-only panel has no live channels at all. It does carry the live half a Stalker
+        // portal merged before its VOD/series fetch failed, which is fresher than the stored
+        // list, so prefer it and fall back to the database for everything else.
+        if (!catalogRefreshSucceeded) {
+            val storedLive = withContext(Dispatchers.IO) {
                 runCatching {
                     CatalogRepository.get(this@loadAllConfiguredProviders).live()
                 }.getOrDefault(emptyList())
             }
-            val fallback = filterResidentCatalog(storedLive)
-            if (fallback.isNotEmpty()) {
-                allChannels = fallback
-                filmsSeriesDeriveJob?.cancel()
-            }
+            val fallback = filterResidentCatalog(
+                (combined + storedLive).distinctBy { CatalogMapping.uidOf(it) }
+            )
+            runCatching { pruneCatalogue() }
+            allChannels = fallback
+            filmsSeriesDeriveJob?.cancel()
             // classifyAndShow() has to run even when nothing above changed allChannels -
             // its own hasContent check also asks hasProviderlessSource(), and skipping this
             // call left a plugin-only setup (no IPTV/Jellyfin channels, empty/no disk cache)
@@ -937,6 +972,10 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
             }
             return@launch
         }
+
+        // Again after the fetches: one may have completed after its provider was toggled
+        // off/removed (or one of its types switched off) while the load was in flight.
+        runCatching { pruneCatalogue() }
 
         // Ranks are written with the backup flag at ingest; only a change in the backup set
         // needs a database pass, and then only over the providers that moved.
@@ -956,9 +995,11 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         allChannels = combined
         filmsSeriesDeriveJob?.cancel()
         classifyAndShow(preserveUi = shouldPreserveUiOnLoad())
-        // Only a load that actually produced a catalog resets the TTL - stamping it on a
-        // total failure would leave the app sitting on an empty catalog for 12 hours.
-        if (combined.isNotEmpty()) {
+        // Only a load where at least one source answered resets the TTL. Looking at
+        // `combined` alone was wrong twice: a VOD-only panel has an empty live half and so
+        // refetched its whole catalogue every launch, while a total failure re-added the
+        // cached live list to `combined` and stamped the TTL anyway.
+        if (catalogRefreshSucceeded) {
             prefs.edit().putLong(PREF_CATALOG_REFRESHED_AT, System.currentTimeMillis()).apply()
         }
 

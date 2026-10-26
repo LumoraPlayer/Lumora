@@ -48,6 +48,8 @@ internal fun MainActivity.formatSubscriptionStatus(expDateSeconds: Long?, isTria
  */
 internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
     val snapshot = allChannels
+    // A new catalogue invalidates the memoised show index the tracker passes build.
+    localSeriesIndexCache = null
     // Live stays resident (the guide, sports matcher and multiview scan it); films and
     // series are read back from the catalogue database as capped shelves.
     withContext(Dispatchers.Default) { deriveLiveHalf(snapshot) }
@@ -73,6 +75,7 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
     // for it, and the trail reconciliation underneath reads those marks. Run the other way
     // round and a show whose two spellings disagree gets no trail on the one load that could
     // have given it one - see aliasRemoteWatchedMarks.
+    localSeriesIndexCache = null
     withContext(Dispatchers.Default) {
         aliasRemoteWatchedMarks()
         reconcileTraktUpNextTrails()
@@ -516,7 +519,16 @@ internal fun MainActivity.shelvesFromCategoryRows(rows: List<CategoryFilter>, li
                 row.matchIds.flatMap { byFilterKey[it].orEmpty() }.sortedBy { orderInList[it.id] ?: 0 }
         }
         if (items.isEmpty()) continue
-        val shelf = ContentShelf(title = row.name, items = items, pinned = row.pinned, categoryId = row.id)
+        val shelf = ContentShelf(
+            title = row.name,
+            items = items,
+            pinned = row.pinned,
+            categoryId = row.id,
+            // Carried through so "See all" keeps paging the database after a shelf refresh,
+            // instead of falling back to the preview items this rebuild holds.
+            matchIds = row.matchIds,
+            channelIds = row.channelIds
+        )
         // Non-null: rows with a null id were skipped at the top of the loop.
         val key = row.id
         val existing = merged[key]

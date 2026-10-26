@@ -175,6 +175,9 @@ internal fun MainActivity.findLocalSeriesFor(title: String, year: Int?, tmdbId: 
  * catalogue per title.
  */
 internal fun MainActivity.localSeriesIndex(): LocalSeriesIndex {
+    // The catalogue load clears this; a Trakt pull asks once per resume entry, and every
+    // answer would otherwise be a full database walk of the series half.
+    localSeriesIndexCache?.let { return it }
     val byTmdbId = HashMap<String, Channel>()
     val byTitle = HashMap<String, Channel>()
     fun add(ch: Channel) {
@@ -186,9 +189,12 @@ internal fun MainActivity.localSeriesIndex(): LocalSeriesIndex {
     }
     kotlinx.coroutines.runBlocking {
         com.lumora.data.catalog.CatalogRepository.get(this@localSeriesIndex)
-            .forEachVodTitle { ch -> if (ch.mediaType == MediaType.SERIES) add(ch) }
+            .forEachSeriesTitle { ch -> add(ch) }
     }
-    return LocalSeriesIndex(byTmdbId, byTitle)
+    // Anime/plugin entries are not stored in the catalogue database; include the resident
+    // half so Trakt/Simkl matching still finds them.
+    for (ch in inMemoryVodChannels()) add(ch)
+    return LocalSeriesIndex(byTmdbId, byTitle).also { localSeriesIndexCache = it }
 }
 
 /** True for a copy this device could actually put on screen. */

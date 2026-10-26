@@ -6,7 +6,7 @@ import com.lumora.cache.FavoritesStore
 import com.lumora.data.IptvProviderStore
 import com.lumora.data.catalog.CatalogMapping
 import com.lumora.data.catalog.CatalogRepository
-import com.lumora.data.local.LumoraDatabase
+import com.lumora.data.local.CatalogDatabase
 import com.lumora.data.local.dao.CatalogChannelDao
 import com.lumora.model.CategoryFilter
 import com.lumora.model.Channel
@@ -226,8 +226,7 @@ private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType): VodTab 
     val hideAdult = vodHideAdult()
     val categorize = prefs.getBoolean(PREF_CATEGORIZE_VOD, true)
     val anime = inMemoryVodChannels()
-    val key = repo.vodVersionKey(type)
-    val rows = buildVodRows(tab, type, englishOnly, hideAdult, categorize, anime, key)
+    val rows = buildVodRows(tab, type, englishOnly, hideAdult, categorize, anime)
     val catalogShelves = buildVodShelves(rows.rows, type, englishOnly, hideAdult, anime)
 
     val newest = repo.vodPage(type, null, englishOnly, hideAdult, 0, VOD_SHELF_PREVIEW)
@@ -287,10 +286,21 @@ internal suspend fun MainActivity.buildVodRows(
     englishOnly: Boolean,
     hideAdult: Boolean,
     categorize: Boolean,
-    anime: List<Channel>,
-    key: String
+    anime: List<Channel>
 ): VodRows {
-    val dao = LumoraDatabase.getInstance(this).catalogChannelDao()
+    val repo = CatalogRepository.get(this)
+    // The rows are built from a DB-backed list, so the fingerprint cannot hash the list
+    // itself. The stored-catalogue key covers ingest, and the filter flags and anime entries
+    // have to be folded in explicitly - otherwise toggling "hide non-English"/"hide adult"
+    // (or a new anime catalogue with the same sections) restored the previous rows and their
+    // counts from DerivedCache while the grids were already filtered.
+    val catalogKey = buildString {
+        append(repo.vodVersionKey(type))
+        append("|en=").append(englishOnly)
+        append("|adult=").append(hideAdult)
+        append("|anime=").append(anime.map { it.id to it.name }.hashCode())
+    }
+    val dao = CatalogDatabase.getInstance(this).catalogChannelDao()
     val list = DbChannelList(dao, type, englishOnly, hideAdult, anime)
     val result = withContext(Dispatchers.Default) {
         buildCategoryRows(
@@ -304,7 +314,7 @@ internal suspend fun MainActivity.buildVodRows(
             useClassicLayout = false,
             favoriteChannelIds = emptySet(),
             categorize = categorize,
-            catalogKey = key
+            catalogKey = catalogKey
         )
     }
     // The row builder keeps every member id on a bucket/provider row. A genre bucket can
@@ -337,6 +347,14 @@ private suspend fun MainActivity.buildVodShelves(
         val id = row.id ?: return@mapNotNull null
         if (row.count <= 0) return@mapNotNull null
         if (id in UTILITY_ROW_IDS) return@mapNotNull null
+        // Own-library rows stay in the sidebar but never get a poster shelf - their titles
+        // already appear in Newest and the genre shelves, and a whole shelf of one provider
+        // read as clutter. `refresh*ShelvesIfShowing` (shelvesFromCategoryRows) has always
+        // skipped them; this pass has to agree, or the shelf appears and disappears depending
+        // on whether a playback refreshed the poster last.
+        if (id == JELLYFIN_CATEGORY_ID || id == SILO_CATEGORY_ID || id == PLEX_CATEGORY_ID) {
+            return@mapNotNull null
+        }
         async(Dispatchers.IO) {
             val items: List<Channel> = when {
                 id == NEWEST_CATEGORY_ID ->
@@ -415,7 +433,12 @@ internal suspend fun MainActivity.vodGridCount(    type: MediaType,
 internal fun MainActivity.ensureVodResident(item: Channel) {
     when (item.mediaType) {
         MediaType.MOVIE -> if (filmList.none { it.id == item.id }) filmList = filmList + item
-        MediaType.SERIES -> if (seriesList.none { it.id == item.id }) seriesList = seriesList + item
+        // Episodes are detail rows, not series cards: adding one to seriesList pollutes the
+        // list the Home/Continue resolvers treat as shows, and its parent card is resolved
+        // separately.
+        MediaType.SERIES -> if (item.episodeNum == null && seriesList.none { it.id == item.id }) {
+            seriesList = seriesList + item
+        }
         MediaType.LIVE -> Unit
     }
 }

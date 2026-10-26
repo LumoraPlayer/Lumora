@@ -10,8 +10,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.lumora.data.local.dao.*
 import com.lumora.data.local.entity.*
 
+/** The user-data database: provider configs, recordings, guide and watch history.
+ *
+ *  The catalogue lives in its own file ([CatalogDatabase]) so this one stays small enough to
+ *  fit Android Auto Backup's 25 MB quota, and so the catalogue's stream URLs (which carry
+ *  panel credentials) never leave the device in a backup - see `backup_rules.xml`. */
 @Database(
-    version = 9,
+    version = 10,
     exportSchema = true,
     entities = [
         ProviderEntity::class,
@@ -22,8 +27,7 @@ import com.lumora.data.local.entity.*
         CustomGroupEntity::class,
         CustomGroupMemberEntity::class,
         EpgProgramEntity::class,
-        EpgGuideStateEntity::class,
-        CatalogChannelEntity::class
+        EpgGuideStateEntity::class
     ]
 )
 abstract class LumoraDatabase : RoomDatabase() {
@@ -33,7 +37,6 @@ abstract class LumoraDatabase : RoomDatabase() {
     abstract fun watchHistoryDao(): WatchHistoryDao
     abstract fun customGroupDao(): CustomGroupDao
     abstract fun epgProgramDao(): EpgProgramDao
-    abstract fun catalogChannelDao(): CatalogChannelDao
 
     companion object {
         @Volatile private var instance: LumoraDatabase? = null
@@ -207,6 +210,21 @@ abstract class LumoraDatabase : RoomDatabase() {
             }
         }
 
+        /** v10 moves the catalogue out of this database and into its own file.
+         *
+         *  The catalogue is large, rebuildable, and every row can carry a panel stream URL
+         *  (with the account's username/password in it) plus request headers. Keeping it in
+         *  `lumora.db` put all of that into Auto Backup/device transfer and could push the
+         *  whole database past Auto Backup's 25 MB per-app quota, silently backing up
+         *  nothing. [CatalogDatabase] is excluded from both backup paths; the catalogue is
+         *  refetched into it on the next provider load. This database keeps the user data
+         *  that is worth backing up and stays small. */
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `catalog_channels`")
+            }
+        }
+
         fun getInstance(context: Context): LumoraDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -214,7 +232,7 @@ abstract class LumoraDatabase : RoomDatabase() {
                     LumoraDatabase::class.java,
                     "lumora.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     .build()
                     .also { instance = it }
             }

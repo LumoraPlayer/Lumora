@@ -2,7 +2,7 @@
 package com.lumora.data.catalog
 
 import android.content.Context
-import com.lumora.data.local.LumoraDatabase
+import com.lumora.data.local.CatalogDatabase
 import com.lumora.data.local.dao.CatalogCategoryCount
 import com.lumora.data.local.dao.CatalogLeafRow
 import com.lumora.data.local.entity.CatalogChannelEntity
@@ -18,7 +18,7 @@ import kotlinx.coroutines.withContext
  * real work (header/DRM decoding included) and the callers are UI coroutines. Pages are
  * capped by the caller; nothing here ever returns the whole VOD catalogue.
  */
-class CatalogRepository private constructor(private val db: LumoraDatabase) {
+class CatalogRepository private constructor(private val db: CatalogDatabase) {
 
     private val dao get() = db.catalogChannelDao()
 
@@ -77,10 +77,14 @@ class CatalogRepository private constructor(private val db: LumoraDatabase) {
     }
 
     /** First of the at-most-two rows for a bare provider id, in provider order. */
-    suspend fun bySourceId(mediaType: MediaType, sourceId: String): Channel? =
-        withContext(Dispatchers.IO) {
-            dao.bySourceId(mediaType.name, sourceId).firstOrNull()?.let(CatalogMapping::toChannel)
-        }
+    suspend fun bySourceId(
+        mediaType: MediaType,
+        sourceId: String,
+        providerId: String? = null
+    ): Channel? = withContext(Dispatchers.IO) {
+        dao.bySourceId(mediaType.name, sourceId, providerId)
+            .firstOrNull()?.let(CatalogMapping::toChannel)
+    }
 
     suspend fun categories(mediaType: MediaType): List<CatalogCategoryCount> =
         withContext(Dispatchers.IO) { dao.categoryCounts(mediaType.name) }
@@ -148,9 +152,13 @@ class CatalogRepository private constructor(private val db: LumoraDatabase) {
         hideAdult: Boolean
     ): Int = withContext(Dispatchers.IO) {
         if (filterKeys != null && filterKeys.size > SQL_VARIABLE_CHUNK) {
-            return@withContext filterKeys.chunked(SQL_VARIABLE_CHUNK).sumOf { chunk ->
-                dao.vodCardCountInKeys(mediaType.name, chunk, englishOnly, hideAdult)
+            // A title can be filed under categories from two chunks, so distinct groups are
+            // unioned rather than adding the per-chunk counts (which would count it twice).
+            val groups = HashSet<String>()
+            for (chunk in filterKeys.chunked(SQL_VARIABLE_CHUNK)) {
+                groups += dao.vodGroupsInKeys(mediaType.name, chunk, englishOnly, hideAdult)
             }
+            return@withContext groups.size
         }
         if (filterKeys == null) {
             dao.vodCardCount(mediaType.name, englishOnly, hideAdult)
@@ -206,8 +214,13 @@ class CatalogRepository private constructor(private val db: LumoraDatabase) {
         limit: Int
     ): List<Channel> = withContext(Dispatchers.IO) {
         if (sourceIds.isEmpty()) return@withContext emptyList()
+        if (sourceIds.size > SQL_VARIABLE_CHUNK) {
+            return@withContext chunkedVodPageBySourceIds(
+                mediaType, sourceIds, englishOnly, hideAdult, offset, limit
+            )
+        }
         dao.vodPageBySourceIds(
-            mediaType.name, sourceIds.take(SQL_VARIABLE_CHUNK), englishOnly, hideAdult, limit, offset
+            mediaType.name, sourceIds.toList(), englishOnly, hideAdult, limit, offset
         ).map(CatalogMapping::toChannel)
     }
 
@@ -218,9 +231,51 @@ class CatalogRepository private constructor(private val db: LumoraDatabase) {
         hideAdult: Boolean
     ): Int = withContext(Dispatchers.IO) {
         if (sourceIds.isEmpty()) return@withContext 0
-        dao.vodCardCountBySourceIds(
-            mediaType.name, sourceIds.take(SQL_VARIABLE_CHUNK), englishOnly, hideAdult
-        )
+        if (sourceIds.size <= SQL_VARIABLE_CHUNK) {
+            return@withContext dao.vodCardCountBySourceIds(
+                mediaType.name, sourceIds.toList(), englishOnly, hideAdult
+            )
+        }
+        // A title can appear under ids from two chunks; summing the per-chunk counts would
+        // count it twice, so union the distinct groups instead.
+        val groups = HashSet<String>()
+        for (chunk in sourceIds.chunked(SQL_VARIABLE_CHUNK)) {
+            groups += dao.vodGroupsBySourceIds(mediaType.name, chunk, englishOnly, hideAdult)
+        }
+        groups.size
+    }
+
+    /** Same merge as [chunkedVodPage], for an id set (an own-library row can have more
+     *  titles than one SQLite statement accepts). */
+    private suspend fun chunkedVodPageBySourceIds(
+        mediaType: MediaType,
+        sourceIds: Collection<String>,
+        englishOnly: Boolean,
+        hideAdult: Boolean,
+        offset: Int,
+        limit: Int
+    ): List<Channel> {
+        val fetch = (offset + limit).coerceAtMost(20_000)
+        val byGroup = LinkedHashMap<String, com.lumora.data.local.entity.CatalogChannelEntity>()
+        for (chunk in sourceIds.chunked(SQL_VARIABLE_CHUNK)) {
+            for (row in dao.vodPageBySourceIds(
+                mediaType.name, chunk, englishOnly, hideAdult, fetch, 0
+            )) {
+                val key = row.groupId ?: row.uid
+                val previous = byGroup[key]
+                if (previous == null || row.rank > previous.rank) byGroup[key] = row
+            }
+        }
+        return byGroup.values
+            .sortedWith(
+                compareByDescending<com.lumora.data.local.entity.CatalogChannelEntity> { it.dateSort }
+                    .thenByDescending { it.yearSort }
+                    .thenBy { it.name.lowercase() }
+                    .thenBy { it.groupId ?: it.uid }
+            )
+            .drop(offset)
+            .take(limit)
+            .map(CatalogMapping::toChannel)
     }
 
     /** Cheap fingerprint for the row-builder cache. */
@@ -235,20 +290,29 @@ class CatalogRepository private constructor(private val db: LumoraDatabase) {
      * only thing that grows.
      */
     suspend fun forEachVodTitle(consumer: (Channel) -> Unit) = withContext(Dispatchers.IO) {
-        for (type in listOf(MediaType.MOVIE, MediaType.SERIES)) {
-            var after = ""
-            while (true) {
-                val page = dao.vodScanPage(
-                    type.name, englishOnly = false, hideAdult = false,
-                    afterGroupId = after, limit = 1000
-                )
-                if (page.isEmpty()) break
-                for (row in page) {
-                    consumer(CatalogMapping.toChannel(row))
-                    row.groupId?.let { after = it }
-                }
-                if (page.size < 1000) break
+        forEachTitle(MediaType.MOVIE, consumer)
+        forEachTitle(MediaType.SERIES, consumer)
+    }
+
+    /** Series-only walk. The Trakt/Simkl indexes only need shows, and walking the (usually
+     *  much larger) movie half once per pull was pure waste. */
+    suspend fun forEachSeriesTitle(consumer: (Channel) -> Unit) = withContext(Dispatchers.IO) {
+        forEachTitle(MediaType.SERIES, consumer)
+    }
+
+    private suspend fun forEachTitle(mediaType: MediaType, consumer: (Channel) -> Unit) {
+        var after = ""
+        while (true) {
+            val page = dao.vodScanPage(
+                mediaType.name, englishOnly = false, hideAdult = false,
+                afterGroupId = after, limit = 1000
+            )
+            if (page.isEmpty()) break
+            for (row in page) {
+                consumer(CatalogMapping.toChannel(row))
+                row.groupId?.let { after = it }
             }
+            if (page.size < 1000) break
         }
     }
 
@@ -308,6 +372,14 @@ class CatalogRepository private constructor(private val db: LumoraDatabase) {
         if (removed.isNotEmpty()) dao.restoreBackupProviders(removed)
     }
 
+    /** Drops every stored row that does not belong to an enabled source. Run on each load so
+     *  a provider disabled/removed while a fetch was in flight cannot leave its VOD rows
+     *  behind (the VOD read side has no per-query provider gate). */
+    suspend fun pruneProviders(keepProviderIds: Collection<String>) = withContext(Dispatchers.IO) {
+        if (keepProviderIds.isEmpty()) dao.clear()
+        else dao.deleteProvidersNotIn(keepProviderIds.toList())
+    }
+
     /** Drops one provider's whole stored catalogue (provider removed, or switched off). */
     suspend fun deleteProvider(providerId: String) = withContext(Dispatchers.IO) {
         dao.deleteForProvider(providerId)
@@ -323,15 +395,37 @@ class CatalogRepository private constructor(private val db: LumoraDatabase) {
     fun writer(providerId: String, mediaType: MediaType, backup: Boolean = false): CatalogBatchWriter =
         CatalogBatchWriter(dao, providerId, mediaType, backup)
 
-    /** Replaces a provider's whole stored catalogue from an already-materialised list (the
-     *  M3U / Jellyfin / Plex / Stalker fetches still build one). Types with no items are
-     *  cleared too, so a provider that stopped carrying films does not keep the old rows. */
-    suspend fun replaceProvider(
+    /** Replaces one provider's catalogue of one type. The Stalker fetch uses this to persist
+     *  the live half as soon as it lands, before the slower VOD/series half can fail. */
+    suspend fun replaceProviderType(
         providerId: String,
+        mediaType: MediaType,
         channels: Collection<Channel>,
         backup: Boolean = false
     ) = withContext(Dispatchers.IO) {
+        val writer = writer(providerId, mediaType, backup)
+        writer.begin()
+        writer.addAll(channels)
+        writer.finish()
+    }
+
+    /** Replaces a provider's whole stored catalogue from an already-materialised list (the
+     *  M3U / Jellyfin / Plex / Stalker fetches still build one). Types with no items are
+     *  cleared too, so a provider that stopped carrying films does not keep the old rows.
+     *
+     *  [skipTypes] exists for the global VOD switch: that switch makes the fetches omit
+     *  films/series, but it is a display preference, not "this provider dropped its VOD" -
+     *  rewriting the empty half would delete a perfectly good catalogue and force a full
+     *  re-download when VOD is turned back on. Per-provider type switches are different and
+     *  are pruned explicitly by the loader. */
+    suspend fun replaceProvider(
+        providerId: String,
+        channels: Collection<Channel>,
+        backup: Boolean = false,
+        skipTypes: Set<MediaType> = emptySet()
+    ) = withContext(Dispatchers.IO) {
         for (type in MediaType.values()) {
+            if (type in skipTypes) continue
             val writer = writer(providerId, type, backup)
             writer.begin()
             writer.addAll(channels.filter { it.mediaType == type })
@@ -345,12 +439,12 @@ class CatalogRepository private constructor(private val db: LumoraDatabase) {
         fun get(context: Context): CatalogRepository =
             instance ?: synchronized(this) {
                 instance ?: CatalogRepository(
-                    LumoraDatabase.getInstance(context.applicationContext)
+                    CatalogDatabase.getInstance(context.applicationContext)
                 ).also { instance = it }
             }
 
         /** Test seam: a repository over an explicit database. */
-        internal fun forDatabase(db: LumoraDatabase): CatalogRepository = CatalogRepository(db)
+        internal fun forDatabase(db: CatalogDatabase): CatalogRepository = CatalogRepository(db)
     }
 }
 

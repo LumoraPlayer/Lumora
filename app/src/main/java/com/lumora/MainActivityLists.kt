@@ -1002,11 +1002,11 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // Before this, every duplicate but the representative was dropped at grouping time -
     // if the copy that won the card had a thin or broken episode list, the other
     // provider's was unreachable.
-    val seriesGroup = if (isSeries) versionGroup ?: versionGroupContaining(seriesVersions, item.id) else null
-    if (seriesGroup != null && seriesGroup.size > 1) {
+    fun renderSeriesVersionChips(group: List<Channel>) {
+        if (group.size <= 1) return
         versionsScroll.visibility = View.VISIBLE
-        val openedIsInGroup = seriesGroup.any { it.id == item.id }
-        seriesGroup.forEachIndexed { index, version ->
+        val openedIsInGroup = group.any { it.id == item.id }
+        group.forEachIndexed { index, version ->
             val chip = inflateVersionChip(versionsRow, versionChipLabel(version, index))
             chip.isSelected = if (openedIsInGroup) version.id == item.id else index == 0
             chip.nextFocusUpId = playButton.id
@@ -1016,7 +1016,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 onDown = { selectedSeasonChip?.takeIf { it.isShown }?.requestFocus() ?: false }
             )
             chip.setOnClickListener {
-                if (version.id != item.id) showContentDetail(version, seriesGroup)
+                if (version.id != item.id) showContentDetail(version, group)
             }
             versionsRow.addView(chip)
         }
@@ -1025,6 +1025,27 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             if (firstChip != null && firstChip.id != View.NO_ID) {
                 playButton.nextFocusDownId = firstChip.id
             }
+        }
+    }
+    val seriesGroup = if (isSeries) versionGroup ?: versionGroupContaining(seriesVersions, item.id) else null
+    if (seriesGroup != null && seriesGroup.size > 1) {
+        renderSeriesVersionChips(seriesGroup)
+    } else if (isSeries && seriesGroup == null && item.id.isNotBlank()) {
+        // A series opened from Discover has no resident version map (the database queries
+        // there return one representative per duplicate group). Ask the catalogue for the
+        // group so the chips and provider switching are still there, and keep the answer
+        // resident for the screen's lifetime.
+        scope.launch {
+            val group = withContext(Dispatchers.IO) {
+                com.lumora.data.catalog.CatalogRepository.get(this@showContentDetail)
+                    .vodVersions(item)
+            }
+            if (group.size <= 1 || !isContentDetailVisible || detailReturnItemId != item.id) {
+                return@launch
+            }
+            seriesVersions = seriesVersions + (group.first().id to group)
+            versionsRow.removeAllViews()
+            renderSeriesVersionChips(group)
         }
     }
 

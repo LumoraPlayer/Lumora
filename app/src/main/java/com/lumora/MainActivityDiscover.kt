@@ -559,7 +559,7 @@ internal suspend fun MainActivity.findCatalogMatches(item: Channel): List<Channe
     } else {
         com.lumora.data.catalog.CatalogRepository.get(this)
             .vodByTitleProbe(item.mediaType, probe, 200)
-    }
+    } + inMemoryVodChannels().filter { it.mediaType == item.mediaType }
     val scored = mutableListOf<Pair<Int, Channel>>()
     for (candidate in candidates) {
         if (candidate.mediaType != item.mediaType) continue
@@ -1263,7 +1263,14 @@ internal fun MainActivity.buildUpNextSeriesTiles(): List<Channel> {
     val liveTrails = if (off.isEmpty()) trails
         else trails.filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
     val pending = liveTrails
-        .mapNotNull { it.categoryId?.takeIf { id -> id !in upNextTiles && id !in upNextFetching } }
+        .mapNotNull { trail ->
+            val id = trail.categoryId?.takeIf { it !in upNextTiles && it !in upNextFetching }
+                ?: return@mapNotNull null
+            // The series id is only unique inside one provider, so carry the trail's owner
+            // through to the database lookup below.
+            id to trail.sourceProviderId
+        }
+        .distinctBy { it.first }
         .take(MAX_UP_NEXT_SERIES)
     if (pending.isNotEmpty()) fetchUpNextSeries(pending)
     // Trail order = most recently completed first; present the memoized tiles in that
@@ -1279,18 +1286,26 @@ internal fun MainActivity.buildUpNextSeriesTiles(): List<Channel> {
  *  Only a *resolved* "no next episode" (fully watched / genuinely empty seasons) is
  *  memoized as no-tile; catalog misses and network failures stay unresolved so the next
  *  Home rebuild retries them. */
-internal fun MainActivity.fetchUpNextSeries(seriesIds: List<String>) {
+internal fun MainActivity.fetchUpNextSeries(seriesIds: List<Pair<String, String?>>) {
     val epoch = upNextEpoch
-    upNextFetching.addAll(seriesIds)
+    upNextFetching.addAll(seriesIds.map { it.first })
     scope.launch {
         val resolved = HashMap<String, Channel?>()
         val queues = HashMap<String, List<Channel>>()
-        for (seriesId in seriesIds) {
+        for ((seriesId, providerId) in seriesIds) {
             if (epoch != upNextEpoch) break
+            // The Home tiles only carry a bounded preview of the series list now, so a
+            // completed show that is not on screen still has to resolve from the catalogue
+            // database rather than being skipped until the user visits its category.
             val series = allChannels.firstOrNull {
                 it.mediaType == MediaType.SERIES && it.id == seriesId
             } ?: seriesList.firstOrNull {
                 it.mediaType == MediaType.SERIES && it.id == seriesId
+            } ?: withContext(Dispatchers.IO) {
+                runCatching {
+                    com.lumora.data.catalog.CatalogRepository.get(this@fetchUpNextSeries)
+                        .bySourceId(MediaType.SERIES, seriesId, providerId)
+                }.getOrNull()
             } ?: continue // not in catalog yet - leave unresolved, retry next build
             val seasons = withContext(Dispatchers.IO) {
                 runCatching { loadSeriesContent(series).second }.getOrNull()
@@ -1316,7 +1331,7 @@ internal fun MainActivity.fetchUpNextSeries(seriesIds: List<String>) {
         val foundAny = resolved.values.any { it != null }
         upNextTiles.putAll(resolved)
         upNextQueues.putAll(queues)
-        seriesIds.forEach { upNextFetching.remove(it) }
+        seriesIds.forEach { upNextFetching.remove(it.first) }
         if (!foundAny) return@launch
         // Whichever screen asked for the tiles gets the rebuild. The Series tab needs both
         // halves: the poster shelf and the sidebar row, since Up Next carries a count.

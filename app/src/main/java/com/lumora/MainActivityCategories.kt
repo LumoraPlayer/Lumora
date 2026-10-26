@@ -33,7 +33,6 @@ import com.lumora.util.groupCategories
 import com.lumora.util.normalizeLiveChannelKey
 import com.lumora.util.groupSeriesFilmCategories
 import com.lumora.util.CategoryGroup
-import com.lumora.util.newestByDate
 import com.lumora.util.cleanVodCategoryLabel
 import com.lumora.util.isAdultCategory
 import com.lumora.util.groupLiveQualityVersions
@@ -308,9 +307,13 @@ internal fun MainActivity.refreshSeriesShelvesIfShowing() {
     if (showingHome || activeTab != 1) return
     if (binding.seriesContent.visibility != View.VISIBLE) return
     val favoriteSeries = seriesList.filter { it.id in FavoritesStore.getFavoriteSeriesIds(this) }
-    val newestSeries = newestByDate(seriesList)
+    // The Newest shelf is built from the database by buildVodContent(); `seriesList` is only
+    // the bounded preview set now, so recomputing newest from it would silently shrink the
+    // shelf to whatever happened to be resident. Keep the DB-built shelf and only rebuild the
+    // lead, which is the part playback actually changes.
+    val newestShelf = seriesShelves.firstOrNull { it.categoryId == NEWEST_CATEGORY_ID }
     val shelves = shelvesFromCategoryRows(cachedSeriesCategoryRows, seriesList)
-        .let { s -> (if (newestSeries.isEmpty()) s else listOf(ContentShelf(getString(R.string.category_newest), newestSeries, categoryId = NEWEST_CATEGORY_ID)) + s) }
+        .let { s -> (if (newestShelf == null) s else listOf(newestShelf) + s) }
         .let { s ->
             val lead = seriesPosterLeadShelfItems(favoriteSeries)
             if (lead.isEmpty()) s
@@ -327,9 +330,10 @@ internal fun MainActivity.refreshSeriesShelvesIfShowing() {
 internal fun MainActivity.refreshFilmShelvesIfShowing() {
     if (showingHome || activeTab != 2) return
     if (binding.filmsContent.visibility != View.VISIBLE) return
-    val newestFilms = newestByDate(filmList)
+    // See refreshSeriesShelvesIfShowing: Newest comes from the database, not this bounded list.
+    val newestShelf = filmShelves.firstOrNull { it.categoryId == NEWEST_CATEGORY_ID }
     val shelves = shelvesFromCategoryRows(cachedFilmCategoryRows, filmList)
-        .let { s -> if (newestFilms.isEmpty()) s else listOf(ContentShelf(getString(R.string.category_newest), newestFilms, categoryId = NEWEST_CATEGORY_ID)) + s }
+        .let { s -> if (newestShelf == null) s else listOf(newestShelf) + s }
         .let { s ->
             val lead = movieContinueItems()
             if (lead.isEmpty()) s
@@ -563,9 +567,9 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
     val useClassicLayout = tab == 0 && prefs.getBoolean(PREF_CLASSIC_CATEGORY_LAYOUT, false)
     val categorize = if (tab == 0) prefs.getBoolean(PREF_CATEGORIZE_LIVE, true) else prefs.getBoolean(PREF_CATEGORIZE_VOD, true)
     // Synthetic Films/Series sidebar rows are computed on the same Default thread as the
-    // category pipeline: newestByDate sorts the whole tab list, and seriesContinueItems()/
-    // seriesUpNextItems() read the position store and scan the catalogue for parent series.
-    // All three prepend ABOVE Jellyfin, so the sidebar leads
+    // category pipeline: Newest pages the catalogue database, and seriesContinueItems()/
+    // seriesUpNextItems() read the position store and scan the bounded series set for parent
+    // cards. All three prepend ABOVE Jellyfin, so the sidebar leads
     // Up Next > Continue Watching > Newest > Jellyfin > the real categories.
     val synthetic = withContext(Dispatchers.Default) {
         val rows = if (tab == 0) {
@@ -592,10 +596,9 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
                 MainActivity.CategoryBuildResult(cachedRows, cachedChildren)
             } else {
                 val type = if (tab == 1) com.lumora.model.MediaType.SERIES else com.lumora.model.MediaType.MOVIE
-                val repo = com.lumora.data.catalog.CatalogRepository.get(this@buildCategoriesForActiveTab)
                 val built = buildVodRows(
                     tab, type, vodEnglishOnly(), vodHideAdult(), categorize,
-                    inMemoryVodChannels(), repo.vodVersionKey(type)
+                    inMemoryVodChannels()
                 )
                 MainActivity.CategoryBuildResult(built.rows, built.children)
             }

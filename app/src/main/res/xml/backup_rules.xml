@@ -33,4 +33,13 @@
          on first load anyway, and pins the restore to whatever the providers looked like then. -->
     <exclude domain="file" path="channels_cache.txt" />
     <exclude domain="file" path="channels_cache_v2.txt" />
+    <!-- The catalogue database. It is rebuildable, can be hundreds of MB (Auto Backup's
+         per-app quota is 25 MB, so including it can silently stop every other file from
+         being backed up), and its stream URLs/headers carry the same panel credentials that
+         iptv_prefs.xml is excluded for. It lives in its own file precisely so the user-data
+         database can stay backed up; see CatalogDatabase. -->
+    <exclude domain="database" path="lumora_catalog.db" />
+    <exclude domain="database" path="lumora_catalog.db-wal" />
+    <exclude domain="database" path="lumora_catalog.db-shm" />
+    <exclude domain="database" path="lumora_catalog.db-journal" />
 </full-backup-content>

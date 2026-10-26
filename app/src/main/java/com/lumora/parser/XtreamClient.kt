@@ -581,13 +581,20 @@ class XtreamClient(private val client: OkHttpClient) {
         fun drainArray() {
             reader.beginArray()
             while (reader.hasNext()) {
-                try {
-                    readItemWithObject(reader, readItem)?.let(emit)
+                // Only a malformed *item* is recoverable: the mapping/read failure is caught
+                // here and the reader resyncs. An exception from [emit] is the caller's own
+                // work (the catalogue writer's database insert) and must propagate - swallowing
+                // it here would let a failed ingest reach finish() and delete the old rows as
+                // if every item had been written.
+                val item = try {
+                    readItemWithObject(reader, readItem)
                 } catch (_: Exception) {
                     // One malformed item must not lose the tens of thousands after it -
                     // resync past whatever structure the failed read left open.
                     runCatching { reader.skipValue() }
+                    null
                 }
+                if (item != null) emit(item)
             }
             reader.endArray()
         }

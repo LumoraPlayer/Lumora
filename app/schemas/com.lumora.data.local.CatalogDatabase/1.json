@@ -1,0 +1,505 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "f873e5e04e2d5722441d1d38a3ca75a4",
+    "entities": [
+      {
+        "tableName": "catalog_channels",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`uid` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `providerId` TEXT NOT NULL, `name` TEXT NOT NULL, `url` TEXT NOT NULL, `logoUrl` TEXT, `posterUrl` TEXT, `backdropUrl` TEXT, `group` TEXT, `tvgId` TEXT, `tvgName` TEXT, `tvgChno` TEXT, `mediaType` TEXT NOT NULL, `categoryId` TEXT, `categoryName` TEXT, `description` TEXT, `episodeNum` INTEGER, `season` INTEGER, `year` TEXT, `rating` TEXT, `imdbRating` TEXT, `releaseDate` TEXT, `isJellyfin` INTEGER NOT NULL, `isPlex` INTEGER NOT NULL, `streamUserAgent` TEXT, `streamHeaders` TEXT, `avOffsetMs` INTEGER NOT NULL, `stalkerCmd` TEXT, `pluginToken` TEXT, `pluginId` TEXT, `tvArchive` INTEGER NOT NULL, `tvArchiveDays` INTEGER NOT NULL, `tmdbId` TEXT, `trailerKey` TEXT, `drmType` TEXT, `drmKeys` TEXT, `drmLicenseUrl` TEXT, `drmSchemeData` TEXT, `manifestType` TEXT, `manifestHeaders` TEXT, `drmLicenseHeaders` TEXT, `drmPostData` TEXT, `drmLicenseResponse` TEXT, `groupId` TEXT, `filterKey` TEXT, `isEnglish` INTEGER NOT NULL, `isAdult` INTEGER NOT NULL, `qualityScore` INTEGER NOT NULL, `hasPoster` INTEGER NOT NULL, `orderIndex` INTEGER NOT NULL, `yearSort` INTEGER NOT NULL, `dateSort` INTEGER NOT NULL, `syncToken` INTEGER NOT NULL, `baseRank` INTEGER NOT NULL, `rank` INTEGER NOT NULL, PRIMARY KEY(`uid`))",
+        "fields": [
+          {
+            "fieldPath": "uid",
+            "columnName": "uid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerId",
+            "columnName": "providerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "logoUrl",
+            "columnName": "logoUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "posterUrl",
+            "columnName": "posterUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "backdropUrl",
+            "columnName": "backdropUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "group",
+            "columnName": "group",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "tvgId",
+            "columnName": "tvgId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "tvgName",
+            "columnName": "tvgName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "tvgChno",
+            "columnName": "tvgChno",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "mediaType",
+            "columnName": "mediaType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "categoryId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "categoryName",
+            "columnName": "categoryName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "episodeNum",
+            "columnName": "episodeNum",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "season",
+            "columnName": "season",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "year",
+            "columnName": "year",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "rating",
+            "columnName": "rating",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "imdbRating",
+            "columnName": "imdbRating",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "releaseDate",
+            "columnName": "releaseDate",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isJellyfin",
+            "columnName": "isJellyfin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isPlex",
+            "columnName": "isPlex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "streamUserAgent",
+            "columnName": "streamUserAgent",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "streamHeaders",
+            "columnName": "streamHeaders",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "avOffsetMs",
+            "columnName": "avOffsetMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stalkerCmd",
+            "columnName": "stalkerCmd",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pluginToken",
+            "columnName": "pluginToken",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pluginId",
+            "columnName": "pluginId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "tvArchive",
+            "columnName": "tvArchive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tvArchiveDays",
+            "columnName": "tvArchiveDays",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tmdbId",
+            "columnName": "tmdbId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "trailerKey",
+            "columnName": "trailerKey",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmType",
+            "columnName": "drmType",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmKeys",
+            "columnName": "drmKeys",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmLicenseUrl",
+            "columnName": "drmLicenseUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmSchemeData",
+            "columnName": "drmSchemeData",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "manifestType",
+            "columnName": "manifestType",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "manifestHeaders",
+            "columnName": "manifestHeaders",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmLicenseHeaders",
+            "columnName": "drmLicenseHeaders",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmPostData",
+            "columnName": "drmPostData",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmLicenseResponse",
+            "columnName": "drmLicenseResponse",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "groupId",
+            "columnName": "groupId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "filterKey",
+            "columnName": "filterKey",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isEnglish",
+            "columnName": "isEnglish",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAdult",
+            "columnName": "isAdult",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "qualityScore",
+            "columnName": "qualityScore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasPoster",
+            "columnName": "hasPoster",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "orderIndex",
+            "columnName": "orderIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "yearSort",
+            "columnName": "yearSort",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateSort",
+            "columnName": "dateSort",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncToken",
+            "columnName": "syncToken",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseRank",
+            "columnName": "baseRank",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rank",
+            "columnName": "rank",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "uid"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_catalog_channels_providerId",
+            "unique": false,
+            "columnNames": [
+              "providerId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_providerId` ON `${TABLE_NAME}` (`providerId`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType",
+            "unique": false,
+            "columnNames": [
+              "mediaType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType` ON `${TABLE_NAME}` (`mediaType`)"
+          },
+          {
+            "name": "index_catalog_channels_categoryId",
+            "unique": false,
+            "columnNames": [
+              "categoryId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_categoryId` ON `${TABLE_NAME}` (`categoryId`)"
+          },
+          {
+            "name": "index_catalog_channels_groupId",
+            "unique": false,
+            "columnNames": [
+              "groupId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_groupId` ON `${TABLE_NAME}` (`groupId`)"
+          },
+          {
+            "name": "index_catalog_channels_filterKey",
+            "unique": false,
+            "columnNames": [
+              "filterKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_filterKey` ON `${TABLE_NAME}` (`filterKey`)"
+          },
+          {
+            "name": "index_catalog_channels_name",
+            "unique": false,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_name` ON `${TABLE_NAME}` (`name`)"
+          },
+          {
+            "name": "index_catalog_channels_tmdbId",
+            "unique": false,
+            "columnNames": [
+              "tmdbId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_tmdbId` ON `${TABLE_NAME}` (`tmdbId`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_providerId",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "providerId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_providerId` ON `${TABLE_NAME}` (`mediaType`, `providerId`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_groupId_rank",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "groupId",
+              "rank"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_groupId_rank` ON `${TABLE_NAME}` (`mediaType`, `groupId`, `rank`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_categoryId",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "categoryId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_categoryId` ON `${TABLE_NAME}` (`mediaType`, `categoryId`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_filterKey",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "filterKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_filterKey` ON `${TABLE_NAME}` (`mediaType`, `filterKey`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_filterKey_dateSort",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "filterKey",
+              "dateSort"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_filterKey_dateSort` ON `${TABLE_NAME}` (`mediaType`, `filterKey`, `dateSort`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_syncToken",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "syncToken"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_syncToken` ON `${TABLE_NAME}` (`mediaType`, `syncToken`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_orderIndex_uid",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "orderIndex",
+              "uid"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_orderIndex_uid` ON `${TABLE_NAME}` (`mediaType`, `orderIndex`, `uid`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_sourceId",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "sourceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_sourceId` ON `${TABLE_NAME}` (`mediaType`, `sourceId`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f873e5e04e2d5722441d1d38a3ca75a4')"
+    ]
+  }
+}

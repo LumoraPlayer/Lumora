@@ -1285,6 +1285,10 @@ class MainActivity : AppCompatActivity() {
     /** The last DB-built Films/Series content, keyed by the stored catalogue + the prefs
      *  that shape its shelves. See buildVodContent(). */
     internal var vodContentCache: VodContentCache? = null
+    /** Memoised catalogue -> show index for Trakt/Simkl matching. Building it walks the
+     *  stored series once; rebuilding per resume entry made a pull do one full database
+     *  pass per title. Cleared whenever classifyAndShow() installs a new catalogue. */
+    @Volatile internal var localSeriesIndexCache: LocalSeriesIndex? = null
     /** The in-flight surgical live re-render launched by renderLivePartial(), if any -
      *  coalesces the near-simultaneous provider-completion re-renders into one pass. */
     internal var liveRenderJob: Job? = null

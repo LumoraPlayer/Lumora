@@ -651,6 +651,14 @@ internal fun MainActivity.buildWatchedTitleIndex(): Map<String, WatchedTitle> {
                 }
             }
     }
+    // Anime/plugin entries are in-memory only (the catalogue database never sees them).
+    for (channel in inMemoryVodChannels()) {
+        when (channel.mediaType) {
+            MediaType.MOVIE -> put("m", channel.name, channel.year)
+            MediaType.SERIES -> if (channel.episodeNum == null) put("e", channel.name, channel.year)
+            MediaType.LIVE -> Unit
+        }
+    }
     for (item in com.lumora.cache.PlaybackPositionStore.getAllInProgress(this)) {
         when (item.mediaType) {
             MediaType.MOVIE -> put("m", item.name, item.year)
