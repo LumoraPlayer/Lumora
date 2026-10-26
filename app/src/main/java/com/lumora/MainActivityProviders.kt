@@ -679,8 +679,25 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 if (!server.seriesEnabled) repo.deleteProviderType(server.id, MediaType.SERIES)
             }
         }
-        runCatching { pruneCatalogue() }
+        // Enforcing the storage invariant is maintenance, not data the first frame needs:
+        // it runs at most once per load, and on a cold start it is deferred until the stored
+        // catalogue has painted (the in-memory gates filter rows for disabled/removed
+        // providers anyway), so its deletes no longer sit between the user and the screen.
+        var pruned = false
+        suspend fun pruneOnce() {
+            if (pruned) return
+            pruned = true
+            val startedAt = System.currentTimeMillis()
+            runCatching { pruneCatalogue() }
+            perf("catalog prune", startedAt)
+        }
         filmsSeriesDeriveJob?.cancel()
+        // True once the screen has been painted from the stored catalogue: the fetch that
+        // follows is a background refresh, not the first paint (see showPartial below).
+        var paintedFromStore = false
+        // A force refresh reads nothing from the store - drop the preload rather than
+        // holding a list the fetch is about to replace.
+        if (forceRefresh) catalogLivePreload = null
         // The cached catalog is authoritative until it goes stale: re-fetching every
         // launch means several seconds of "Loading..." and, on a large catalog, real
         // work for a result that is almost always identical. Providers change rarely,
@@ -689,11 +706,19 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         // The catalogue is in Room now: live is read back from it, films/series come from
         // buildVodContent(). There is no text cache to consult.
         if (!forceRefresh) {
+            val readStartedAt = System.currentTimeMillis()
+            // The read was started at the top of onCreate and has been running during
+            // start-up; waiting on it here normally costs nothing. Only a load that finds
+            // no preload (a warm re-load, a second call in the same session) queries now.
+            val preload = catalogLivePreload
+            catalogLivePreload = null
             val loaded = withContext(Dispatchers.IO) {
                 runCatching {
-                    CatalogRepository.get(this@loadAllConfiguredProviders).live()
+                    preload?.await()
+                        ?: CatalogRepository.get(this@loadAllConfiguredProviders).live()
                 }.getOrDefault(emptyList())
             }
+            perf("catalog live read", readStartedAt, "${loaded.size} rows")
             // One-time cleanup of the pre-Room cache files; they are never read again.
             withContext(Dispatchers.IO) {
                 runCatching { File(filesDir, "channels_cache_v2.txt").delete() }
@@ -703,17 +728,22 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
             if (cached.isNotEmpty()) {
                 // The content-type gates apply to a cold start too - types switched off
                 // without a row delete (older data) must not resurrect here.
+                val filterStartedAt = System.currentTimeMillis()
                 cached = filterResidentCatalog(
                     cached,
                     typeGates = IptvProviderStore.load(prefs),
                     serverGates = mediaServers()
                 )
+                perf("catalog filter", filterStartedAt, "${cached.size} kept")
                 // Paint the stored live list immediately (films/series in background),
                 // then only hit the network when the catalogue is stale.
                 val hadContentOnScreen = uiPainted // content already rendered before this paint?
+                val paintStartedAt = System.currentTimeMillis()
                 allChannels = cached
                 classifyAndShowLiveFirst()
                 uiPainted = true
+                paintedFromStore = true
+                perf("catalog paint(live-first)", paintStartedAt)
                 deriveFilmsSeries()
                 // On a cold start the initial tab render runs through selectTab (reached from
                 // classifyAndShowLiveFirst above), which clears the status itself once content
@@ -722,6 +752,8 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 // the same message on entry. Only drop the status when content was already on
                 // screen before this paint (a warm re-load).
                 if (hadContentOnScreen) setStatus("", visible = false)
+                // Maintenance after the paint, not before it - see pruneOnce().
+                pruneOnce()
                 if (!isCatalogStale()) {
                     // Anime/plugin entries are not stored in the catalogue database - their
                     // plugin rebuilds them - so a warm start still has to fetch that half.
@@ -750,7 +782,9 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 if (hasStoredVod) {
                     allChannels = emptyList()
                     uiPainted = true
+                    paintedFromStore = true
                     classifyAndShow()
+                    pruneOnce()
                     if (!isCatalogStale()) {
                         if (enabledAnimePlugin() != null) {
                             val anime = withContext(Dispatchers.IO) {
@@ -767,6 +801,10 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 }
             }
         }
+
+        // Reached by a force refresh (nothing painted from the store, so nothing has run it
+        // yet) and by a stale cold start (already done after the paint - a no-op here).
+        pruneOnce()
 
         val combined = mutableListOf<Channel>()
         val errors = mutableListOf<String>()
@@ -826,22 +864,33 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         // data for the whole window) and must fall back to what is already stored - even when
         // VOD rows exist and `combined` (the live half) is empty.
         var catalogRefreshSucceeded = false
+        // A stale catalogue was already painted from the store a moment ago, so this fetch
+        // is a background refresh: re-rendering for each provider as it answers fired a full
+        // live derive + category rebuild per provider, several seconds of work each, under
+        // whatever the user was already doing. Wait for the whole refresh and swap once
+        // ("refresh when ready"). The merge itself still happens - it is a filter and a
+        // concat, and it is what the failure path reads back when a provider's other half
+        // dies. A cold start with nothing stored keeps the progressive paint: there the
+        // partial is all the user has.
+        fun showPartial(configId: String?, channels: List<Channel>) {
+            mergeProviderPartial(configId, channels)
+            if (paintedFromStore) return
+            renderLivePartial()
+        }
         val fetchResults = enabledConfigs.map { config ->
             async {
                 val result = withTimeoutOrNull(PROVIDER_FETCH_TIMEOUT_MS) {
                     when (config.type) {
                         "xtream" -> fetchXtreamChannels(config) { expiryText = it }
                         "stalker" -> fetchStalkerChannels(config) { live ->
-                            mergeProviderPartial(config.id, live)
-                            renderLivePartial()
+                            showPartial(config.id, live)
                         }
                         else -> fetchM3uChannels(config)
                     }
                 } ?: FetchResult.Failure("timed out")
                 if (result is FetchResult.Success) {
                     catalogRefreshSucceeded = true
-                    mergeProviderPartial(config.id, result.channels)
-                    renderLivePartial()
+                    showPartial(config.id, result.channels)
                     // Xtream streams its VOD straight into the catalogue database during
                     // the fetch; the other providers hand back a list, which is persisted
                     // here before the in-memory copy is dropped.

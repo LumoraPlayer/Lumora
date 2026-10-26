@@ -314,7 +314,10 @@ internal suspend fun MainActivity.buildVodRows(
             useClassicLayout = false,
             favoriteChannelIds = emptySet(),
             categorize = categorize,
-            catalogKey = catalogKey
+            catalogKey = catalogKey,
+            // Rows built before the anime catalogue arrives lack its rows; the two variants
+            // are separate cache slots so neither evicts the other (see buildCategoryRows).
+            pluginVariant = anime.isNotEmpty()
         )
     }
     // The row builder keeps every member id on a bucket/provider row. A genre bucket can

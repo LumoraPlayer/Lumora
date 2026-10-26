@@ -70,6 +70,7 @@ import com.lumora.player.PlayerTrackController
 import com.lumora.util.isTvDevice
 import com.lumora.util.groupDuplicateSeries
 import com.lumora.data.local.LumoraDatabase
+import com.lumora.data.catalog.CatalogRepository
 import com.lumora.data.sync.EpgSyncWorker
 import com.lumora.data.backup.BackupManager
 import com.lumora.data.remote.jellyfin.JellyfinProvider
@@ -1292,6 +1293,12 @@ class MainActivity : AppCompatActivity() {
     /** The in-flight surgical live re-render launched by renderLivePartial(), if any -
      *  coalesces the near-simultaneous provider-completion re-renders into one pass. */
     internal var liveRenderJob: Job? = null
+    /** The catalogue's live half, read from Room starting at the top of onCreate so the
+     *  query and Channel mapping overlap with layout inflation and the rest of the
+     *  synchronous start-up instead of adding to the "Loading..." the user stares at.
+     *  Consumed once by the cached cold-start path (see loadAllConfiguredProviders) and
+     *  dropped whenever a load does not take it - a force refresh reads nothing anyway. */
+    internal var catalogLivePreload: Deferred<List<Channel>>? = null
 
     companion object {
         internal const val REQUEST_EXPORT_BACKUP = 2001
@@ -1437,6 +1444,16 @@ class MainActivity : AppCompatActivity() {
         applySystemBarInsets()
 
         prefs = getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+        // Start the catalogue's live read now, before anything else in onCreate, so its
+        // query and per-row Channel mapping run while the rest of start-up is still on the
+        // main thread - the paint path takes this result instead of issuing the read when
+        // it is finally reached (see catalogLivePreload).
+        if (hasProviderConfigured()) {
+            catalogLivePreload = scope.async(Dispatchers.IO) {
+                runCatching { CatalogRepository.get(this@MainActivity).live() }
+                    .getOrDefault(emptyList())
+            }
+        }
         // Which screen the app opens on (Settings → General). Read here, before anything
         // renders, and taken by the first paint - see pendingStartScreen.
         pendingStartScreen = startScreenPref()

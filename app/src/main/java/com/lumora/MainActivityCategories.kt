@@ -583,7 +583,14 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
                 animeSections = animeSectionsSnapshot,
                 useClassicLayout = useClassicLayout,
                 favoriteChannelIds = favoriteChannelIds,
-                categorize = categorize
+                categorize = categorize,
+                // The live list may carry plugin-fetched entries after the first paint, and
+                // the anime catalogue's sidebar sections arrive the same way - both produce a
+                // key the catalogue-only cold start never computes, so they get their own
+                // cache slot instead of evicting the one it reads (see buildCategoryRows).
+                pluginVariant = animeSectionsSnapshot.isNotEmpty() || list.any {
+                    it.id.startsWith(AnimeCatalogClient.ID_PREFIX) || it.pluginId != null
+                }
             )
         } else {
             // VOD rows come from the database-backed builder (buildVodContent) and are
@@ -721,7 +728,12 @@ internal fun MainActivity.buildCategoryRows(
     categorize: Boolean,   // render dynamic categories (buckets/brands/service clusters) for this tab
     /** When the list is DB-backed, a cheap key over the stored catalogue instead of a
      *  per-item hash (see the fingerprint below). */
-    catalogKey: String? = null
+    catalogKey: String? = null,
+    /** True for a list that carries plugin-supplied entries (the anime catalogue). Those
+     *  are fetched after the first paint and are not stored, so this pass produces a
+     *  different key than the catalogue-only one: it gets its own cache file, or the late
+     *  pass would evict the entry the next cold start reads. */
+    pluginVariant: Boolean = false
 ): MainActivity.CategoryBuildResult {
         // Rows are a pure function of these arguments, and the pass behind them (brand
         // clustering walks every live channel name twice) was the last multi-second item
@@ -751,7 +763,7 @@ internal fun MainActivity.buildCategoryRows(
         } else {
             DerivedCache.catalogFingerprint(list, rowsPrefsPart)
         }
-        DerivedCache.loadRows(this, tab, fingerprint)?.let { cached ->
+        DerivedCache.loadRows(this, tab, fingerprint, pluginVariant)?.let { cached ->
             perf("buildCategoryRows(cached,tab=$tab)", startedAt, "${cached.rows.size} rows")
             return MainActivity.CategoryBuildResult(cached.rows, cached.childrenByParent)
         }
@@ -1377,7 +1389,8 @@ internal fun MainActivity.buildCategoryRows(
             this,
             tab,
             fingerprint,
-            DerivedCache.RowsSnapshot(built.rows, built.childrenByParent)
+            DerivedCache.RowsSnapshot(built.rows, built.childrenByParent),
+            pluginVariant
         )
         return built
 }

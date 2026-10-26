@@ -40,7 +40,8 @@ object DerivedCache {
     private const val LIVE_FILE = "derived_live.txt"
     private const val VOD_FILE = "derived_vod.txt"
     private const val SEP = ''
-    private fun rowsFile(tab: Int) = "derived_rows_$tab.txt"
+    private fun rowsFile(tab: Int, pluginVariant: Boolean = false) =
+        "derived_rows_$tab${if (pluginVariant) "_p" else ""}.txt"
     /** Separates ids inside one row's matchIds/channelIds field. */
     private const val ID_SEP = '\u0002'
     /** Stands in for a null category id ("All" rows), which is meaningful and not the same
@@ -134,8 +135,14 @@ object DerivedCache {
      *
      * Cached per tab, since the three tabs are built separately and independently.
      */
-    fun saveRows(context: Context, tab: Int, fingerprint: String, snapshot: RowsSnapshot) {
-        write(context, rowsFile(tab), fingerprint) { out ->
+    fun saveRows(
+        context: Context,
+        tab: Int,
+        fingerprint: String,
+        snapshot: RowsSnapshot,
+        pluginVariant: Boolean = false
+    ) {
+        write(context, rowsFile(tab, pluginVariant), fingerprint) { out ->
             for (row in snapshot.rows) appendRow(out, "R", null, row)
             for ((parentId, children) in snapshot.childrenByParent) {
                 for (child in children) appendRow(out, "K", parentId, child)
@@ -143,8 +150,13 @@ object DerivedCache {
         }
     }
 
-    fun loadRows(context: Context, tab: Int, fingerprint: String): RowsSnapshot? {
-        val lines = read(context, rowsFile(tab), fingerprint) ?: return null
+    fun loadRows(
+        context: Context,
+        tab: Int,
+        fingerprint: String,
+        pluginVariant: Boolean = false
+    ): RowsSnapshot? {
+        val lines = read(context, rowsFile(tab, pluginVariant), fingerprint) ?: return null
         val rows = ArrayList<CategoryFilter>()
         val children = LinkedHashMap<String, MutableList<CategoryFilter>>()
         for (line in lines) {
@@ -195,9 +207,13 @@ object DerivedCache {
         if (field.isEmpty()) emptySet() else field.split(ID_SEP).toSet()
 
     fun clear(context: Context) {
-        runCatching { File(context.filesDir, LIVE_FILE).delete() }
-        runCatching { File(context.filesDir, VOD_FILE).delete() }
-        for (tab in 0..2) runCatching { File(context.filesDir, rowsFile(tab)).delete() }
+        for (name in listOf(LIVE_FILE, VOD_FILE)) {
+            runCatching { File(context.filesDir, name).delete() }
+        }
+        for (tab in 0..2) {
+            runCatching { File(context.filesDir, rowsFile(tab)).delete() }
+            runCatching { File(context.filesDir, rowsFile(tab, pluginVariant = true)).delete() }
+        }
     }
 
     // ── Shared plumbing ─────────────────────────────
@@ -231,7 +247,17 @@ object DerivedCache {
         if (!file.exists()) return null
         return try {
             file.bufferedReader().use { reader ->
-                if (reader.readLine() != fingerprint) return null
+                val stored = reader.readLine()
+                if (stored != fingerprint) {
+                    // A silent miss turns into a multi-second pass on a TV, so say which
+                    // input moved: "stored" is what the last session wrote, "now" is what
+                    // this one computed (the LumoraPerf line above names the pass).
+                    android.util.Log.i(
+                        "LumoraPerf",
+                        "derived cache miss $fileName\n  stored=$stored\n  now=$fingerprint"
+                    )
+                    return null
+                }
                 reader.readLines().filter { it.isNotBlank() }
             }
         } catch (e: Exception) {

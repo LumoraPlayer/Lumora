@@ -383,6 +383,11 @@ internal fun MainActivity.deriveLiveHalf(list: List<Channel>) {
     val showUntagged = prefs.getBoolean(PREF_LOCALITY_SHOW_UNTAGGED, true)
     val backupIds = backupSourceIds()
 
+    // Plugin-supplied entries (the anime catalogue) ride in allChannels as SERIES. They are
+    // not in Room and arrive after the first paint, but this pass only consumes LIVE rows -
+    // the fingerprint hashes exactly those (see liveDerivedFingerprint), so both passes share
+    // one cache entry instead of overwriting each other.
+
     // Same catalogue, same prefs, same answer - restore last time's grouping instead of
     // re-running it (see DerivedCache).
     val fingerprint = liveDerivedFingerprint(
@@ -428,7 +433,9 @@ internal fun MainActivity.deriveLiveHalf(list: List<Channel>) {
         "${list.size} in / ${liveChannels.size} live out" +
             if (localities.isEmpty()) "" else " (localities=${localities.sorted().joinToString(",")})"
     )
-    DerivedCache.saveLive(this, fingerprint, DerivedCache.LiveSnapshot(liveChannels, liveVersions))
+    DerivedCache.saveLive(
+        this, fingerprint, DerivedCache.LiveSnapshot(liveChannels, liveVersions)
+    )
 }
 
 /**
@@ -449,8 +456,13 @@ internal fun MainActivity.liveDerivedFingerprint(
     showUntagged: Boolean
 ): String {
     val selectionKey = localityKey(localities)
+    // Only LIVE rows feed this pass - the grouping, the adult/locality filters and
+    // localityFallbacks all skip everything else - so only those are hashed. The anime
+    // catalogue rides in allChannels as SERIES and is fetched after the first paint; it
+    // changes nothing here, but hashing it gave the same output a second key, so the
+    // post-fetch pass wrote a cache the catalogue-only cold start could never read.
     return DerivedCache.catalogFingerprint(
-        list,
+        list.filter { it.mediaType == MediaType.LIVE },
         "live:$hideAdult:$useClassic:$groupChannels:$selectionKey:$showUntagged"
     )
 }
