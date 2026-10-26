@@ -568,21 +568,48 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
     // All three prepend ABOVE Jellyfin, so the sidebar leads
     // Up Next > Continue Watching > Newest > Jellyfin > the real categories.
     val synthetic = withContext(Dispatchers.Default) {
-        val rows = buildCategoryRows(
-            list = list,
-            versionsById = versionsById,
-            tab = tab,
-            pinned = pinned,
-            hiddenIds = hiddenIds,
-            expanded = expandedSnapshot,
-            animeSections = animeSectionsSnapshot,
-            useClassicLayout = useClassicLayout,
-            favoriteChannelIds = favoriteChannelIds,
-            categorize = categorize
-        )
+        val rows = if (tab == 0) {
+            buildCategoryRows(
+                list = list,
+                versionsById = versionsById,
+                tab = tab,
+                pinned = pinned,
+                hiddenIds = hiddenIds,
+                expanded = expandedSnapshot,
+                animeSections = animeSectionsSnapshot,
+                useClassicLayout = useClassicLayout,
+                favoriteChannelIds = favoriteChannelIds,
+                categorize = categorize
+            )
+        } else {
+            // VOD rows come from the database-backed builder (buildVodContent) and are
+            // cached there; this only rebuilds them for a tab the main pass has not
+            // reached (the player's side menu asks for the other tab).
+            val cachedRows = if (tab == 1) cachedSeriesCategoryRows else cachedFilmCategoryRows
+            val cachedChildren =
+                if (tab == 1) cachedSeriesCategoryChildren else cachedFilmCategoryChildren
+            if (cachedRows.isNotEmpty()) {
+                MainActivity.CategoryBuildResult(cachedRows, cachedChildren)
+            } else {
+                val type = if (tab == 1) com.lumora.model.MediaType.SERIES else com.lumora.model.MediaType.MOVIE
+                val repo = com.lumora.data.catalog.CatalogRepository.get(this@buildCategoriesForActiveTab)
+                val built = buildVodRows(
+                    tab, type, vodEnglishOnly(), vodHideAdult(), categorize,
+                    inMemoryVodChannels(), repo.vodVersionKey(type)
+                )
+                MainActivity.CategoryBuildResult(built.rows, built.children)
+            }
+        }
+        val newest = if (tab != 0) {
+            val type = if (tab == 1) com.lumora.model.MediaType.SERIES else com.lumora.model.MediaType.MOVIE
+            com.lumora.data.catalog.CatalogRepository.get(this@buildCategoriesForActiveTab)
+                .vodPage(type, null, vodEnglishOnly(), vodHideAdult(), 0, VOD_SHELF_PREVIEW)
+        } else {
+            emptyList()
+        }
         MainActivity.SyntheticCategoryRows(
             result = rows,
-            newest = if (tab != 0) newestByDate(list) else emptyList(),
+            newest = newest,
             continueWatching = when (tab) {
                 1 -> seriesContinueItems()
                 2 -> movieContinueItems()
@@ -675,7 +702,7 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
 }
 
 /** Pure ordering pipeline behind the sidebar - shared with the Series/Films poster
- *  shelves (see computeDerivedContent) so both render the same categories in the same
+ *  shelves (see buildVodRows) so both render the same categories in the same
  *  order, by construction. The category-order preference is the one pref read here, folded
  *  into the fingerprint below; every other input is passed in as a snapshot. */
 internal fun MainActivity.buildCategoryRows(
@@ -688,7 +715,10 @@ internal fun MainActivity.buildCategoryRows(
     animeSections: List<AnimeCatalogClient.Section>,
     useClassicLayout: Boolean,
     favoriteChannelIds: Set<String>,   // tab 0 only
-    categorize: Boolean   // render dynamic categories (buckets/brands/service clusters) for this tab
+    categorize: Boolean,   // render dynamic categories (buckets/brands/service clusters) for this tab
+    /** When the list is DB-backed, a cheap key over the stored catalogue instead of a
+     *  per-item hash (see the fingerprint below). */
+    catalogKey: String? = null
 ): MainActivity.CategoryBuildResult {
         // Rows are a pure function of these arguments, and the pass behind them (brand
         // clustering walks every live channel name twice) was the last multi-second item
@@ -697,22 +727,27 @@ internal fun MainActivity.buildCategoryRows(
         // The one preference this pass reads - folded into the fingerprint below so toggling
         // it invalidates the cached rows like any other input would.
         val alphabeticalLiveCategories = prefs.getBoolean(PREF_ALPHABETICAL_LIVE_CATEGORIES, false)
-        val fingerprint = DerivedCache.catalogFingerprint(
-            list,
-            // The rows are a function of this function's *code* as much as of its
-            // arguments - which rows exist at all (the collapse row, say) changes between
-            // builds while catalog and prefs stay identical, so a fingerprint over inputs
-            // alone keeps restoring rows built by older logic forever.
-            //
-            // Both parts are needed: versionCode covers released upgrades, and
-            // CATEGORY_ROWS_LOGIC_VERSION covers changes made *within* one versionCode -
-            // every development build carries the same versionCode, so on its own it
-            // silently failed to invalidate anything. Bump it whenever what this function
-            // emits changes.
+        // The rows are a function of this function's *code* as much as of its
+        // arguments - which rows exist at all (the collapse row, say) changes between
+        // builds while catalog and prefs stay identical, so a fingerprint over inputs
+        // alone keeps restoring rows built by older logic forever.
+        //
+        // Both parts are needed: versionCode covers released upgrades, and
+        // CATEGORY_ROWS_LOGIC_VERSION covers changes made *within* one versionCode -
+        // every development build carries the same versionCode, so on its own it
+        // silently failed to invalidate anything. Bump it whenever what this function
+        // emits changes.
+        val rowsPrefsPart =
             "rows:$tab:${BuildConfig.VERSION_CODE}.$CATEGORY_ROWS_LOGIC_VERSION:${pinned.hashCode()}:${hiddenIds.hashCode()}:" +
                 "${expanded.hashCode()}:${animeSections.hashCode()}:${favoriteChannelIds.hashCode()}:" +
                 "${versionsById.size}:$useClassicLayout:$categorize:$alphabeticalLiveCategories"
-        )
+        val fingerprint = if (catalogKey != null) {
+            // A DB-backed list cannot be hashed item by item cheaply - the caller supplies
+            // a key over the stored catalogue instead (count + max sort keys).
+            "$catalogKey|$rowsPrefsPart"
+        } else {
+            DerivedCache.catalogFingerprint(list, rowsPrefsPart)
+        }
         DerivedCache.loadRows(this, tab, fingerprint)?.let { cached ->
             perf("buildCategoryRows(cached,tab=$tab)", startedAt, "${cached.rows.size} rows")
             return MainActivity.CategoryBuildResult(cached.rows, cached.childrenByParent)
@@ -980,6 +1015,9 @@ internal fun MainActivity.buildCategoryRows(
                     name = label,
                     count = members.sumOf { it.first.count },
                     pinned = pinned.contains(bucketId),
+                    // The union of the members' provider category keys: DB-backed VOD reads
+                    // resolve a bucket by this instead of by the (six-figure) id set.
+                    matchIds = members.flatMap { it.first.matchIds }.toSet(),
                     channelIds = channelIds,
                     isParent = true,
                     expanded = isExpanded,
@@ -1376,9 +1414,11 @@ internal fun MainActivity.setGridSpan(recyclerView: RecyclerView, adapter: Poste
 internal fun MainActivity.showSeeAll(shelf: ContentShelf) {
     selectedShelfItems = shelf.items
     selectedCategoryLabel = shelf.title
-    selectedRowId = null
-    selectedCategoryIds = null
-    selectedBrandChannelIds = null
+    selectedRowId = shelf.categoryId
+    // The shelf only previews a page of its row; these keys let the grid page the rest
+    // out of the catalogue database. Newest has no keys - it is the "all, by date" query.
+    selectedCategoryIds = shelf.matchIds.takeIf { it.isNotEmpty() }
+    selectedBrandChannelIds = shelf.channelIds.takeIf { it.isNotEmpty() }
     scope.launch { applyCategoryFilter(wholesale = true) }
 }
 
@@ -1446,134 +1486,28 @@ internal suspend fun MainActivity.applyCategoryFilter(
             if (wholesale) liveAdapter.replaceAll(filtered, commit) else liveAdapter.submitList(filtered, commit)
             binding.liveContent.scrollToPosition(0)
         }
-        1 -> {
-            val source = seriesList
-            val shelfItems = selectedShelfItems
-            // Continue Watching's items are in-progress episodes, not seriesList members -
-            // a filterKey() match against seriesList would render an empty grid. Serve the
-            // continue list directly.
-            if (selectedRowId == CONTINUE_WATCHING_CATEGORY_ID) {
-                setGridSpan(binding.seriesContent, seriesGridAdapter, R.id.tabSeries)
-                binding.seriesContent.adapter = seriesGridAdapter
-                seriesGridAdapter.replaceAll(seriesContinueItems())
-                binding.seriesContent.scrollToPosition(0)
-                return
-            }
-            // Favourites re-reads the store rather than using the row's channelIds: the grid
-            // is where items get un-starred (long-press), and a stale id set would leave the
-            // dropped poster on screen until the next rebuild.
-            if (selectedRowId == FAVOURITES_CATEGORY_ID) {
-                val favIds = FavoritesStore.getFavoriteSeriesIds(this)
-                val filtered = withContext(Dispatchers.Default) { source.filter { it.id in favIds } }
-                if (generation != categoryFilterGeneration) return
-                setGridSpan(binding.seriesContent, seriesGridAdapter, R.id.tabSeries)
-                binding.seriesContent.adapter = seriesGridAdapter
-                seriesGridAdapter.replaceAll(filtered)
-                binding.seriesContent.scrollToPosition(0)
-                return
-            }
-            // Up Next is episodes too, and not seriesList members either - same reason,
-            // same direct serve. seriesGridAdapter's click is onHomeItemClick, which
-            // resolves an episode tile to its series' detail page.
-            if (selectedRowId == UP_NEXT_CATEGORY_ID) {
-                setGridSpan(binding.seriesContent, seriesGridAdapter, R.id.tabSeries)
-                binding.seriesContent.adapter = seriesGridAdapter
-                seriesGridAdapter.replaceAll(seriesUpNextItems())
-                binding.seriesContent.scrollToPosition(0)
-                return
-            }
-            // A dynamic row (genre bucket or streaming service) carries an explicit set
-            // of channel ids rather than provider category ids, because it deliberately
-            // spans several of them. Only Live TV honoured that, so on Series/Films
-            // picking one set matchIds to null and fell straight through to the "no
-            // filter, show the shelves" branch - which looked like the click did nothing.
-            val brandIds = selectedBrandChannelIds
-            if (shelfItems != null) {
-                setGridSpan(binding.seriesContent, seriesGridAdapter, R.id.tabSeries)
-                binding.seriesContent.adapter = seriesGridAdapter
-                seriesGridAdapter.replaceAll(shelfItems)
-            } else if (brandIds != null) {
-                val filtered = withContext(Dispatchers.Default) { source.filter { it.id in brandIds } }
-                // A newer category switch started while this filter ran - its result is the
-                // one the user is waiting for, so drop ours rather than overwrite it.
-                if (generation != categoryFilterGeneration) return
-                setGridSpan(binding.seriesContent, seriesGridAdapter, R.id.tabSeries)
-                binding.seriesContent.adapter = seriesGridAdapter
-                seriesGridAdapter.replaceAll(filtered)
-            } else if (matchIds == null) {
-                binding.seriesContent.layoutManager = LinearLayoutManager(this)
-                binding.seriesContent.adapter = seriesShelfAdapter
-                seriesShelfAdapter.submitList(seriesShelves)
-            } else {
-                val filtered = withContext(Dispatchers.Default) {
-                    if (matchIds.isEmpty()) emptyList() else source.filter { it.filterKey() in matchIds }
-                }
-                // A newer category switch started while this filter ran - its result is the
-                // one the user is waiting for, so drop ours rather than overwrite it.
-                if (generation != categoryFilterGeneration) return
-                setGridSpan(binding.seriesContent, seriesGridAdapter, R.id.tabSeries)
-                binding.seriesContent.adapter = seriesGridAdapter
-                seriesGridAdapter.replaceAll(filtered)
-            }
-            binding.seriesContent.scrollToPosition(0)
-        }
-        2 -> {
-            val source = filmList
-            val shelfItems = selectedShelfItems
-            // Continue Watching holds in-progress films, not filmList members - same
-            // direct serve as the Series branch. filmsGridAdapter's click is playItem,
-            // which opens a film's detail page (with its Resume button) rather than
-            // playing straight into it.
-            if (selectedRowId == CONTINUE_WATCHING_CATEGORY_ID) {
-                setGridSpan(binding.filmsContent, filmsGridAdapter, R.id.tabFilms)
-                binding.filmsContent.adapter = filmsGridAdapter
-                filmsGridAdapter.replaceAll(movieContinueItems())
-                binding.filmsContent.scrollToPosition(0)
-                return
-            }
-            // Favourites re-reads the store rather than using the row's channelIds: the grid
-            // is where items get un-starred (long-press), and a stale id set would leave the
-            // dropped poster on screen until the next rebuild.
-            if (selectedRowId == FAVOURITES_CATEGORY_ID) {
-                val favIds = FavoritesStore.getFavoriteSeriesIds(this)
-                val filtered = withContext(Dispatchers.Default) { source.filter { it.id in favIds } }
-                if (generation != categoryFilterGeneration) return
-                setGridSpan(binding.filmsContent, filmsGridAdapter, R.id.tabFilms)
-                binding.filmsContent.adapter = filmsGridAdapter
-                filmsGridAdapter.replaceAll(filtered)
-                binding.filmsContent.scrollToPosition(0)
-                return
-            }
-            val brandIds = selectedBrandChannelIds // see the Series branch above
-            if (shelfItems != null) {
-                setGridSpan(binding.filmsContent, filmsGridAdapter, R.id.tabFilms)
-                binding.filmsContent.adapter = filmsGridAdapter
-                filmsGridAdapter.replaceAll(shelfItems)
-            } else if (brandIds != null) {
-                val filtered = withContext(Dispatchers.Default) { source.filter { it.id in brandIds } }
-                // A newer category switch started while this filter ran - its result is the
-                // one the user is waiting for, so drop ours rather than overwrite it.
-                if (generation != categoryFilterGeneration) return
-                setGridSpan(binding.filmsContent, filmsGridAdapter, R.id.tabFilms)
-                binding.filmsContent.adapter = filmsGridAdapter
-                filmsGridAdapter.replaceAll(filtered)
-            } else if (matchIds == null) {
-                binding.filmsContent.layoutManager = LinearLayoutManager(this)
-                binding.filmsContent.adapter = filmsShelfAdapter
-                filmsShelfAdapter.submitList(filmShelves)
-            } else {
-                val filtered = withContext(Dispatchers.Default) {
-                    if (matchIds.isEmpty()) emptyList() else source.filter { it.filterKey() in matchIds }
-                }
-                // A newer category switch started while this filter ran - its result is the
-                // one the user is waiting for, so drop ours rather than overwrite it.
-                if (generation != categoryFilterGeneration) return
-                setGridSpan(binding.filmsContent, filmsGridAdapter, R.id.tabFilms)
-                binding.filmsContent.adapter = filmsGridAdapter
-                filmsGridAdapter.replaceAll(filtered)
-            }
-            binding.filmsContent.scrollToPosition(0)
-        }
+        1 -> applyVodTabFilter(
+            tab = 1,
+            type = MediaType.SERIES,
+            recycler = binding.seriesContent,
+            adapter = seriesGridAdapter,
+            shelfAdapter = seriesShelfAdapter,
+            shelves = seriesShelves,
+            topTarget = R.id.tabSeries,
+            wholesale = wholesale,
+            generation = generation
+        )
+        2 -> applyVodTabFilter(
+            tab = 2,
+            type = MediaType.MOVIE,
+            recycler = binding.filmsContent,
+            adapter = filmsGridAdapter,
+            shelfAdapter = filmsShelfAdapter,
+            shelves = filmShelves,
+            topTarget = R.id.tabFilms,
+            wholesale = wholesale,
+            generation = generation
+        )
     }
 }
 

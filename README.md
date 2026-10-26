@@ -155,7 +155,7 @@ Anything else on Android 7.1 (SDK 25) or newer should work; those are just the d
 - **Language:** Kotlin
 - **UI:** Android Views/XML
 - **Playback:** [AndroidX Media3](https://developer.android.com/media/media3) (ExoPlayer)
-- **Persistence:** Room, WorkManager (background sync), SharedPreferences, a flat delimited-text catalogue cache
+- **Persistence:** Room (catalogue, guide, recordings, watch history), WorkManager (background sync), SharedPreferences
 - **Networking:** OkHttp
 - **Car:** AndroidX Car App Library
 - **Min SDK:** 25 (Android 7.1) · **Target SDK:** 36
@@ -202,7 +202,7 @@ app/src/main/java/com/lumora/
 ├── adapter/       RecyclerView adapters (channels, categories, shelves, episodes, ...)
 ├── anime/         Anime catalogue client
 ├── auto/          Android Auto car-app classes
-├── cache/         Local caches (catalogue, favorites, playback position, watch history, ...)
+├── cache/         Local caches (derived catalogue rows, favorites, playback position, watch history, ...)
 ├── data/          Providers, Room database, backup, sync workers, update checker
 │   ├── local/     Room database, DAOs, entities
 │   ├── remote/    Jellyfin / Silo / Plex / Stalker / TMDB network clients

@@ -30,7 +30,7 @@ private const val MAX_ENTRIES = 20_000
  * can be far larger - a completed long-running show is hundreds of them and must not push
  * anybody's resume points out.
  *
- * Plain newline-delimited text for the same reason [ChannelCache] is: parsing tens of thousands
+ * Plain newline-delimited text for the same reason the catalogue's flat encodings are: parsing tens of thousands
  * of short lines with `split` costs a fraction of what a JSON tree does on a TV stick, and this
  * is read during startup.
  */

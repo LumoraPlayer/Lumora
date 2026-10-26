@@ -7,7 +7,6 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.view.View
 import android.widget.*
-import com.lumora.cache.ChannelCache
 import com.lumora.cache.PlaybackPositionStore
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
@@ -19,6 +18,7 @@ import com.lumora.data.IptvProviderStore
 import com.lumora.data.MediaServerStore
 import com.lumora.data.RedditProviderHealth
 import com.lumora.data.ScannerStreamFailureWatch
+import com.lumora.data.catalog.CatalogRepository
 import com.lumora.anime.AnimeCatalogClient
 import com.lumora.parser.M3uParser
 import com.lumora.parser.XtreamClient
@@ -317,14 +317,13 @@ internal fun MainActivity.isTypeAllowed(
     }
 }
 
-/** Every gate a cached catalog has to pass before it is shown: enabled owner (a disabled
- *  provider's items must not survive in the cache), the global VOD switch, the per-provider
- *  content types, and the plugin-content drop. The cache is saved unfiltered, so every read
- *  of it - cold start and the failed-refresh fallback - applies this, or a provider/type
- *  switched off since the cache was written resurrects until the next successful fetch.
- *  Items with no owner (media-server/anime channels) skip the id check; [isTypeAllowed]
- *  still validates their account. */
-internal fun MainActivity.filterCachedCatalog(
+/** Every gate the stored live catalogue has to pass before it is painted: enabled owner,
+ *  the global VOD switch (which drops any non-live entry), the per-provider content types
+ *  and the plugin-content drop. The database retains rows across gate changes, so applying
+ *  this at read time keeps a switched-off provider/type from resurrecting before its rows
+ *  are deleted (the toggle handlers do delete them). Items with no owner (anime/plugin
+ *  channels) skip the id check; [isTypeAllowed] still validates their account. */
+internal fun MainActivity.filterResidentCatalog(
     channels: List<Channel>,
     typeGates: List<IptvProviderConfig> = IptvProviderStore.load(prefs),
     serverGates: List<MediaServerConfig> = mediaServers()
@@ -333,7 +332,11 @@ internal fun MainActivity.filterCachedCatalog(
     val vodDisabled = isVodDisabled()
     return dropDisabledPluginContent(
         channels.filter { ch ->
-            (ch.sourceProviderId == null || ch.sourceProviderId in enabledIds) &&
+            // The cache now holds live (and the handful of in-memory anime entries) only -
+            // films and series are read from the catalogue database. An older cache still
+            // carries its VOD; dropping it here is what retires that copy.
+            (ch.mediaType == MediaType.LIVE || ch.id.startsWith(AnimeCatalogClient.ID_PREFIX)) &&
+                (ch.sourceProviderId == null || ch.sourceProviderId in enabledIds) &&
                 (!vodDisabled || ch.mediaType == MediaType.LIVE) &&
                 isTypeAllowed(ch, typeGates, serverGates)
         }
@@ -532,56 +535,23 @@ internal fun MainActivity.hasOtherVisibleSource(excludeId: String): Boolean {
  *  to achieve that meant a full "Connecting to ..." reload - visible behind the settings
  *  dialog - and left the catalog at the mercy of a provider that happened to be down.
  *  Switching one *on* genuinely needs its catalog, so that still refreshes. */
-internal fun MainActivity.applyProviderToggle(enabled: Boolean, belongsToProvider: (Channel) -> Boolean) {
+internal fun MainActivity.applyProviderToggle(
+    enabled: Boolean,
+    providerId: String? = null,
+    belongsToProvider: (Channel) -> Boolean
+) {
     if (enabled) { loadAllConfiguredProviders(forceRefresh = true); return }
     scope.launch {
+        // The provider's stored VOD has to go with its live channels, or a switched-off
+        // provider keeps appearing in the Films/Series tabs.
+        if (providerId != null) {
+            runCatching {
+                CatalogRepository.get(this@applyProviderToggle).deleteProvider(providerId)
+            }
+        }
         allChannels = allChannels.filterNot(belongsToProvider)
         classifyAndShow()
-        persistCatalog(allChannels)
     }
-}
-
-/** Saves [channels] to the disk catalog cache, first merging back the previously-cached
- *  movies/series of any provider whose VOD gate is currently active. Fetch-time gates skip
- *  the slow VOD/series crawl, which would otherwise strip that provider's VOD from the
- *  cache and leave it unrecoverable until a network fetch runs with the gate lifted. The
- *  cold-start filter (loadAllConfiguredProviders) is what hides gated VOD at display time,
- *  so the cache itself stays display-unfiltered. */
-internal suspend fun MainActivity.persistCatalog(channels: List<Channel>) = withContext(Dispatchers.IO) {
-    val configs = IptvProviderStore.load(prefs)
-    val servers = mediaServers()
-    val configuredIds = configs.map { it.id }.toSet()
-    // Fast path: no content-type gate is active (per-provider flags fold the global VOD
-    // gate in via isVodDisabled), so the cache can be saved unfiltered. Silo's live flag is
-    // exempt: it defaults off and can never produce live channels, so treating it as a gate
-    // would push every persist through the slow resurrect path for nothing.
-    val anyGateOff = configs.any { !providerAllowsLive(it) || !providerAllowsMovies(it) || !providerAllowsSeries(it) } ||
-        // Shares are exempt: their stored gates are deliberately inert (no catalogue, no live
-        // channels), so counting them here pushed every persist through the slow resurrect
-        // path for nothing.
-        servers.any { !it.isShare && ((!it.isSilo && !jellyfinAllowsLive(it)) || !jellyfinAllowsMovies(it) || !jellyfinAllowsSeries(it)) }
-    if (!anyGateOff) {
-        ChannelCache.save(this@persistCatalog, channels)
-        return@withContext
-    }
-    val old = ChannelCache.load(this@persistCatalog)
-    if (old.isNullOrEmpty()) {
-        ChannelCache.save(this@persistCatalog, channels)
-        return@withContext
-    }
-    val known = channels.map { it.id }.toSet()
-    // Keep cached items whose type is currently gated OFF for their still-configured
-    // owner, so re-enabling the type restores them without a network re-fetch. Items of
-    // dropped/removed providers and of types that are ON do not resurrect.
-    val resurrect = old.filter { ch ->
-        if (ch.id in known) return@filter false
-        val ownerConfigured =
-            if (ch.isOwnLibrary) mediaServerOwner(ch, servers) != null
-            else ch.sourceProviderId != null && ch.sourceProviderId in configuredIds
-        if (!ownerConfigured) return@filter false
-        !isTypeAllowed(ch, configs, servers)
-    }
-    ChannelCache.save(this@persistCatalog, channels + resurrect)
 }
 
 /** Drops catalog items that only exist because a plugin supplied them, once that plugin
@@ -676,7 +646,7 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
     // Toggling/adding/removing providers in quick succession each calls this with no
     // ordering guarantee between the launched coroutines - without cancelling the
     // previous one, whichever network fetch happens to finish last wins and gets written
-    // to allChannels/ChannelCache, which can silently persist a stale provider list.
+    // to allChannels/the catalogue database, which can silently persist a stale provider list.
     //
     // Waited on, not just cancelled: cancel() only sets a flag and returns, so the outgoing
     // load carried on fetching while the new one started. Against one Stalker portal that
@@ -692,27 +662,32 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         // work for a result that is almost always identical. Providers change rarely,
         // so the network is only worth hitting once every CATALOG_TTL_MS - or right
         // away when the user changes a provider, which force-refreshes.
+        // The catalogue is in Room now: live is read back from it, films/series come from
+        // buildVodContent(). There is no text cache to consult.
         var cached: List<Channel>? = null
-        var cachedWasLegacy = false
         if (!forceRefresh) {
-            val loaded = withContext(Dispatchers.IO) { ChannelCache.loadWithMeta(this@loadAllConfiguredProviders) }
-            cached = loaded?.channels
-            cachedWasLegacy = loaded?.legacyFormat == true
+            val loaded = withContext(Dispatchers.IO) {
+                runCatching {
+                    CatalogRepository.get(this@loadAllConfiguredProviders).live()
+                }.getOrDefault(emptyList())
+            }
+            // One-time cleanup of the pre-Room cache files; they are never read again.
+            withContext(Dispatchers.IO) {
+                runCatching { File(filesDir, "channels_cache_v2.txt").delete() }
+                runCatching { File(filesDir, "channels_cache.txt").delete() }
+            }
+            cached = loaded.ifEmpty { null }
             if (!cached.isNullOrEmpty()) {
-                // The content-type gates apply to a cached cold start too - the cache
-                // is saved unfiltered, so types switched off since it was written would
-                // otherwise resurrect here (a cache saved with VOD on, for example).
-                // Both lists are read once, not per channel: each is a JSON parse, and this
-                // filter runs across a catalogue of tens of thousands of items.
-                cached = filterCachedCatalog(
+                // The content-type gates apply to a cold start too - types switched off
+                // without a row delete (older data) must not resurrect here.
+                cached = filterResidentCatalog(
                     cached,
                     typeGates = IptvProviderStore.load(prefs),
                     serverGates = mediaServers()
                 )
-                // Paint the cached catalog immediately (Live first, films/series in background),
-                // then only hit the network when the cache is stale - a non-stale cache returns
-                // here; a stale one falls through and refreshes silently under the content.
-                val hadContentOnScreen = uiPainted // content already rendered before this cached paint?
+                // Paint the stored live list immediately (films/series in background),
+                // then only hit the network when the catalogue is stale.
+                val hadContentOnScreen = uiPainted // content already rendered before this paint?
                 allChannels = cached
                 classifyAndShowLiveFirst()
                 uiPainted = true
@@ -722,14 +697,51 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 // lands. Clearing here first - before that render - blanked the screen into a
                 // "Loading..." -> blank -> "Loading..." sandwich, because selectTab re-raises
                 // the same message on entry. Only drop the status when content was already on
-                // screen before this cached paint (a warm re-load).
+                // screen before this paint (a warm re-load).
                 if (hadContentOnScreen) setStatus("", visible = false)
-                // A cache written before a Channel field existed reads back with that
-                // field at its default for every item - which is why Catch Up stayed
-                // hidden on an upgraded install: tvArchive was false catalogue-wide until
-                // something refetched. Treat that file as stale so the refresh below runs
-                // once, silently, under the content already on screen.
-                if (!isCatalogStale() && !cachedWasLegacy) return@launch
+                if (!isCatalogStale()) {
+                    // Anime/plugin entries are not stored in the catalogue database - their
+                    // plugin rebuilds them - so a warm start still has to fetch that half.
+                    if (enabledAnimePlugin() != null) {
+                        val anime = withContext(Dispatchers.IO) {
+                            withTimeoutOrNull(PROVIDER_FETCH_TIMEOUT_MS) { fetchAnimeChannels() }
+                                ?: emptyList()
+                        }
+                        if (anime.isNotEmpty()) {
+                            allChannels = allChannels + anime
+                            classifyAndShowLiveFirst()
+                            deriveFilmsSeries()
+                        }
+                    }
+                    return@launch
+                }
+            } else {
+                // No live rows, but films/series may still be stored - a VOD-only panel.
+                // Refetching 150 MB every launch because the live list is empty would undo
+                // the point of the database.
+                val hasStoredVod = withContext(Dispatchers.IO) {
+                    runCatching {
+                        CatalogRepository.get(this@loadAllConfiguredProviders).count() > 0
+                    }.getOrDefault(false)
+                }
+                if (hasStoredVod) {
+                    allChannels = emptyList()
+                    uiPainted = true
+                    classifyAndShow()
+                    if (!isCatalogStale()) {
+                        if (enabledAnimePlugin() != null) {
+                            val anime = withContext(Dispatchers.IO) {
+                                withTimeoutOrNull(PROVIDER_FETCH_TIMEOUT_MS) { fetchAnimeChannels() }
+                                    ?: emptyList()
+                            }
+                            if (anime.isNotEmpty()) {
+                                allChannels = anime
+                                classifyAndShow()
+                            }
+                        }
+                        return@launch
+                    }
+                }
             }
         }
 
@@ -804,6 +816,28 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                     partialMergedIds += config.id
                     mergeProviderPartial(config.id, result.channels)
                     renderLivePartial()
+                    // Xtream streams its VOD straight into the catalogue database during
+                    // the fetch; the other providers hand back a list, which is persisted
+                    // here before the in-memory copy is dropped.
+                    if (config.type != "xtream") {
+                        runCatching {
+                            val repository = CatalogRepository.get(this@loadAllConfiguredProviders)
+                            // m3u_plus lists episodes as individual rows. Persist the
+                            // episode rows (the detail screen rebuilds seasons from them)
+                            // plus the synthetic show cards the grid renders.
+                            val toStore = if (config.type == "m3u") {
+                                result.channels + com.lumora.util.collapseM3uEpisodeRows(
+                                    result.channels.filter { it.mediaType == MediaType.SERIES }
+                                )
+                            } else {
+                                result.channels
+                            }
+                            repository.replaceProvider(
+                                config.id, toStore,
+                                backup = IptvProviderStore.load(prefs).firstOrNull { it.id == config.id }?.backup == true
+                            )
+                        }
+                    }
                 }
                 config to result
             }
@@ -816,14 +850,19 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         for ((config, result) in fetchResults) {
             when (result) {
                 is FetchResult.Success ->
-                    combined += result.channels.filter { it.sourceProviderId == null || it.sourceProviderId in enabledProviderIds }
+                    combined += result.channels.filter {
+                        it.mediaType == MediaType.LIVE &&
+                            (it.sourceProviderId == null || it.sourceProviderId in enabledProviderIds)
+                    }
                 is FetchResult.Failure -> {
-                    // A Stalker portal that failed/timed out on its VOD/series half still
-                    // delivered its live channels through the partial merge - keep them
-                    // rather than letting the final replace wipe them off screen. Skipped
-                    // when the provider was toggled off mid-load (same gate as Success).
-                    if (config.id in partialMergedIds && config.id in enabledProviderIds) {
-                        combined += allChannels.filter { it.sourceProviderId == config.id }
+                    // Keep whatever this provider already had resident (its previous live
+                    // list, or the half a Stalker fetch merged before the VOD/series half
+                    // failed) instead of letting the final replace wipe it off screen.
+                    // Skipped when the provider was toggled off mid-load.
+                    if (config.id in enabledProviderIds) {
+                        combined += allChannels.filter {
+                            it.sourceProviderId == config.id && it.mediaType == MediaType.LIVE
+                        }
                     }
                     errors += "${config.name}: ${result.message}"
                 }
@@ -843,7 +882,13 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
                 )
             }
             when (val result = deferred.await()) {
-                is FetchResult.Success -> combined += result.channels
+                is FetchResult.Success -> {
+                    runCatching {
+                        CatalogRepository.get(this@loadAllConfiguredProviders)
+                            .replaceProvider(server.id, result.channels)
+                    }
+                    combined += result.channels.filter { it.mediaType == MediaType.LIVE }
+                }
                 is FetchResult.Failure -> errors += result.message
             }
         }
@@ -858,13 +903,25 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         // Covers both the stale-cache refresh and a forceRefresh (e.g. a VOD-toggle reload)
         // whose fetches all failed - forceRefresh never loads `cached` up front, so fall back
         // to reading the disk cache here.
-        if (combined.isEmpty()) {
+        //
+        // A saved provider may be VOD-only (no live channels at all): `combined` is empty
+        // then, but the catalogue database is not. The empty check has to ask both.
+        val catalogCount = withContext(Dispatchers.IO) {
+            runCatching {
+                CatalogRepository.get(this@loadAllConfiguredProviders).count()
+            }.getOrDefault(0)
+        }
+        if (combined.isEmpty() && catalogCount == 0) {
             // The disk fallback has to pass the same gates the cached cold start above does -
             // the cache is saved unfiltered, so without them a total-failure refresh
             // resurrected providers the user had switched off and VOD types they had gated.
-            val fallback = (cached ?: withContext(Dispatchers.IO) { ChannelCache.load(this@loadAllConfiguredProviders) })
-                ?.let { filterCachedCatalog(it) }
-            if (!fallback.isNullOrEmpty()) {
+            val storedLive = cached ?: withContext(Dispatchers.IO) {
+                runCatching {
+                    CatalogRepository.get(this@loadAllConfiguredProviders).live()
+                }.getOrDefault(emptyList())
+            }
+            val fallback = filterResidentCatalog(storedLive)
+            if (fallback.isNotEmpty()) {
                 allChannels = fallback
                 filmsSeriesDeriveJob?.cancel()
             }
@@ -881,10 +938,24 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
             return@launch
         }
 
+        // Ranks are written with the backup flag at ingest; only a change in the backup set
+        // needs a database pass, and then only over the providers that moved.
+        runCatching {
+            val current = backupSourceIds()
+            val previous = prefs.getString(PREF_CATALOG_BACKUP_RANK_KEY, null)
+                ?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+            if (previous.toSet() != current) {
+                CatalogRepository.get(this@loadAllConfiguredProviders)
+                    .syncBackupRanks(previous, current)
+                prefs.edit()
+                    .putString(PREF_CATALOG_BACKUP_RANK_KEY, current.sorted().joinToString(","))
+                    .apply()
+            }
+        }
+
         allChannels = combined
         filmsSeriesDeriveJob?.cancel()
         classifyAndShow(preserveUi = shouldPreserveUiOnLoad())
-        persistCatalog(allChannels)
         // Only a load that actually produced a catalog resets the TTL - stamping it on a
         // total failure would leave the app sitting on an empty catalog for 12 hours.
         if (combined.isNotEmpty()) {
@@ -1056,25 +1127,24 @@ internal suspend fun MainActivity.fetchXtreamChannels(config: IptvProviderConfig
         val auth = authResult.getOrElse { return FetchResult.Failure(it.message?.take(60) ?: "auth error") }
         if (!auth.valid) return FetchResult.Failure("auth failed - check server URL and credentials")
 
-        val live: List<Channel>
-        val films: List<Channel>
-        val series: List<Channel>
+        val live = ArrayList<Channel>()
+        val isBackup = IptvProviderStore.load(prefs).firstOrNull { it.id == config.id }?.backup == true
+        var liveFailed = false
         withContext(Dispatchers.IO) {
             // Content-type gates: the (slow) VOD/series category+stream fetches are
             // skipped entirely for types this provider has switched off.
             val liveOff = !providerAllowsLive(config)
             val moviesOff = !providerAllowsMovies(config)
             val seriesOff = !providerAllowsSeries(config)
-            val liveCatsDeferred: Deferred<List<Pair<String, String>>>? = if (liveOff) null else async { runCatching { client.getLiveCategories(xtreamProvider) }.getOrDefault(emptyList()) }
-            val vodCatsDeferred: Deferred<List<Pair<String, String>>>? = if (moviesOff) null else async { runCatching { client.getVodCategories(xtreamProvider) }.getOrDefault(emptyList()) }
-            val seriesCatsDeferred: Deferred<List<Pair<String, String>>>? = if (seriesOff) null else async { runCatching { client.getSeriesCategories(xtreamProvider) }.getOrDefault(emptyList()) }
-            val liveDeferred: Deferred<List<Channel>>? = if (liveOff) null else async { client.getLiveStreams(xtreamProvider) }
-            val filmsDeferred: Deferred<List<Channel>>? = if (moviesOff) null else async { client.getVodStreams(xtreamProvider) }
-            val seriesDeferred: Deferred<List<Channel>>? = if (seriesOff) null else async { client.getSeries(xtreamProvider) }
-
-            val liveCatNames = liveCatsDeferred?.await()?.toMap() ?: emptyMap()
-            val vodCatNames = vodCatsDeferred?.await()?.toMap() ?: emptyMap()
-            val seriesCatNames = seriesCatsDeferred?.await()?.toMap() ?: emptyMap()
+            // Category lists are small (tens of KB) and every stream needs one to label
+            // it, so they are fetched up front. The bulk lists are streamed straight from
+            // the socket into Room below - they are never a List<Channel> here.
+            val liveCatNames = if (liveOff) emptyMap() else
+                runCatching { client.getLiveCategories(xtreamProvider) }.getOrDefault(emptyList()).toMap()
+            val vodCatNames = if (moviesOff) emptyMap() else
+                runCatching { client.getVodCategories(xtreamProvider) }.getOrDefault(emptyList()).toMap()
+            val seriesCatNames = if (seriesOff) emptyMap() else
+                runCatching { client.getSeriesCategories(xtreamProvider) }.getOrDefault(emptyList()).toMap()
 
             // Resolve each stream's category name from the authoritative category list.
             // get_vod_streams (and often get_live_streams) carries only a numeric category_id
@@ -1092,10 +1162,49 @@ internal suspend fun MainActivity.fetchXtreamChannels(config: IptvProviderConfig
                 }
                 return mapped.copy(sourceProviderId = config.id)
             }
-            live = liveDeferred?.await()?.map { withCategory(it, liveCatNames, "uncat_live") } ?: emptyList()
-            films = filmsDeferred?.await()?.map { withCategory(it, vodCatNames, "uncat_vod") } ?: emptyList()
-            series = seriesDeferred?.await()?.map { withCategory(it, seriesCatNames, "uncat_series") } ?: emptyList()
+
+            val repository = CatalogRepository.get(this@fetchXtreamChannels)
+
+            /** Streams one bulk list into the catalogue database. Only the live half is
+             *  collected into memory; films and series are read from the database by the
+             *  VOD content builder. A database problem must never fail a fetch the live
+             *  half could have served. */
+            fun ingest(
+                action: String,
+                type: MediaType,
+                names: Map<String, String>,
+                uncatId: String,
+                into: MutableList<Channel>?
+            ): Boolean {
+                val writer = runCatching { repository.writer(config.id, type, isBackup) }.getOrNull()
+                runCatching { writer?.begin() }
+                val delivered = client.streamBulkList(
+                    xtreamProvider, action, type,
+                    transform = { withCategory(it, names, uncatId) }
+                ) { channel ->
+                    into?.add(channel)
+                    // Let a database error abort the stream: the writer keeps the rows
+                    // already written (updates of existing copies), and the rows this
+                    // ingest never reached remain the old ones.
+                    writer?.add(channel)
+                }
+                if (delivered == null) runCatching { writer?.abort() } else runCatching { writer?.finish() }
+                return delivered != null
+            }
+
+            if (!liveOff && !ingest("get_live_streams", MediaType.LIVE, liveCatNames, "uncat_live", live)) {
+                liveFailed = true
+            }
+            // Films and series are database-only now - not collected into the in-memory
+            // catalogue (that was the 220 MB half of the crash).
+            if (!moviesOff) ingest("get_vod_streams", MediaType.MOVIE, vodCatNames, "uncat_vod", null)
+            if (!seriesOff) ingest("get_series", MediaType.SERIES, seriesCatNames, "uncat_series", null)
         }
+
+        // A provider that could not deliver its live list must not be reported as a
+        // successful empty one: the loader's failure branch keeps the live channels it
+        // already has instead of replacing them with nothing.
+        if (liveFailed) return FetchResult.Failure("live channels failed to load")
 
         // Persist the subscription expiry so Settings' "Active until / Expired" line can
         // display - xtream_exp_date / xtream_is_trial were never written anywhere before,
@@ -1106,7 +1215,7 @@ internal suspend fun MainActivity.fetchXtreamChannels(config: IptvProviderConfig
             .putBoolean("xtream_is_trial", auth.isTrial)
             .apply()
         onExpiry(formatSubscriptionStatus(auth.expDateSeconds, auth.isTrial))
-        FetchResult.Success(live + films + series)
+        FetchResult.Success(live)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

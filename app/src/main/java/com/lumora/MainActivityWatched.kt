@@ -298,7 +298,9 @@ private fun MainActivity.pushWatchedToMediaServers(item: Channel, watched: Boole
     if (jellyfinClients.isEmpty() && plexClients.isEmpty()) return
     val normalizedTitle = shared.substringAfter('|').substringBefore('|')
     scope.launch {
-        for (candidate in allChannels) {
+        val ownCopies = com.lumora.data.catalog.CatalogRepository.get(this@pushWatchedToMediaServers)
+            .ownLibrary(item.mediaType)
+        for (candidate in ownCopies) {
             if (!candidate.isOwnLibrary) continue
             val sourceId = candidate.sourceProviderId ?: continue
             val rawId = rawMediaItemId(candidate.id)

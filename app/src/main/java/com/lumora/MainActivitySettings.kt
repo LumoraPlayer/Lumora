@@ -39,6 +39,7 @@ import com.lumora.util.localFileDisplayName
 import com.lumora.data.local.entity.EpgSourceEntity
 import com.lumora.data.backup.BackupManager
 import com.lumora.data.MediaServerStore
+import com.lumora.data.catalog.CatalogRepository
 import com.lumora.localfiles.hasLocalFilesAccess
 import com.lumora.shares.SmbUrl
 import com.lumora.data.remote.jellyfin.JellyfinProvider
@@ -1768,7 +1769,7 @@ internal fun MainActivity.showProviderSettings() {
                 val checked = !enabledBox.isChecked
                 enabledBox.isChecked = checked
                 IptvProviderStore.setEnabled(prefs, cfg.id, checked)
-                applyProviderToggle(checked) { it.sourceProviderId == cfg.id }
+                applyProviderToggle(checked, cfg.id) { it.sourceProviderId == cfg.id }
                 // A disabled row must not keep the green it had while it was in use, and a
                 // re-enabled one deserves a fresh answer rather than the stale cached one.
                 ProviderStatusProbe.forget(cfg.id)
@@ -1786,9 +1787,26 @@ internal fun MainActivity.showProviderSettings() {
                     if (hasProviderConfigured()) scope.launch { loadAllConfiguredProviders(forceRefresh = true) }
                 }
             }
-            bindContentBox(row.findViewById(R.id.rowTvBox), cfg.liveEnabled) { on -> IptvProviderStore.setContentFlags(prefs, cfg.id, live = on) }
-            bindContentBox(row.findViewById(R.id.rowMoviesBox), cfg.moviesEnabled) { on -> IptvProviderStore.setContentFlags(prefs, cfg.id, movies = on) }
-            bindContentBox(row.findViewById(R.id.rowSeriesBox), cfg.seriesEnabled) { on -> IptvProviderStore.setContentFlags(prefs, cfg.id, series = on) }
+            bindContentBox(row.findViewById(R.id.rowTvBox), cfg.liveEnabled) { on ->
+                IptvProviderStore.setContentFlags(prefs, cfg.id, live = on)
+                if (!on) scope.launch {
+                    CatalogRepository.get(this@showProviderSettings).deleteProviderType(cfg.id, MediaType.LIVE)
+                }
+            }
+            bindContentBox(row.findViewById(R.id.rowMoviesBox), cfg.moviesEnabled) { on ->
+                IptvProviderStore.setContentFlags(prefs, cfg.id, movies = on)
+                if (!on) scope.launch {
+                    val repo = CatalogRepository.get(this@showProviderSettings)
+                    repo.deleteProviderType(cfg.id, MediaType.MOVIE)
+                }
+            }
+            bindContentBox(row.findViewById(R.id.rowSeriesBox), cfg.seriesEnabled) { on ->
+                IptvProviderStore.setContentFlags(prefs, cfg.id, series = on)
+                if (!on) scope.launch {
+                    val repo = CatalogRepository.get(this@showProviderSettings)
+                    repo.deleteProviderType(cfg.id, MediaType.SERIES)
+                }
+            }
             row.findViewById<TextView>(R.id.rowName).text = cfg.name
             val typeLabel = when (cfg.type) {
                 "xtream" -> getString(R.string.provider_type_xtream)
@@ -1810,6 +1828,10 @@ internal fun MainActivity.showProviderSettings() {
                     .setMessage(getString(R.string.sett_remove_provider_message))
                     .setPositiveButton(getString(R.string.remove)) { _, _ ->
                         IptvProviderStore.remove(prefs, cfg.id)
+                        scope.launch {
+                            val repo = CatalogRepository.get(this@showProviderSettings)
+                            repo.deleteProvider(cfg.id)
+                        }
                         pruneRemovedSource(cfg.name, cfg.id, cfg.url)
                         renderIptvProviderList()
                         // The removed row's own Remove button was holding focus and is
@@ -1839,7 +1861,7 @@ internal fun MainActivity.showProviderSettings() {
                 // Matched through mediaServerOwner rather than on sourceProviderId directly, so
                 // items from a cache written before media servers became a list (no source id
                 // on them) are dropped too instead of lingering until the next refresh.
-                applyProviderToggle(checked) { mediaServerOwner(it, servers)?.id == server.id }
+                applyProviderToggle(checked, server.id) { mediaServerOwner(it, servers)?.id == server.id }
                 ProviderStatusProbe.forget(server.id)
                 bindProviderStatus(row, server.id, checked) { client ->
                     ProviderStatusProbe.probeServer(server, client)
@@ -1870,13 +1892,24 @@ internal fun MainActivity.showProviderSettings() {
                 tvBox.isEnabled = false
                 bindServerBox(moviesBox, server.moviesEnabled) { on ->
                     MediaServerStore.setContentFlags(prefs, server.id, movies = on)
+                    if (!on) scope.launch {
+                        val repo = CatalogRepository.get(this@showProviderSettings)
+                        repo.deleteProviderType(server.id, MediaType.MOVIE)
+                    }
                 }
                 bindServerBox(seriesBox, server.seriesEnabled) { on ->
                     MediaServerStore.setContentFlags(prefs, server.id, series = on)
+                    if (!on) scope.launch {
+                        val repo = CatalogRepository.get(this@showProviderSettings)
+                        repo.deleteProviderType(server.id, MediaType.SERIES)
+                    }
                 }
             } else {
                 bindServerBox(tvBox, server.liveEnabled) { on ->
                     MediaServerStore.setContentFlags(prefs, server.id, live = on)
+                    if (!on) scope.launch {
+                        CatalogRepository.get(this@showProviderSettings).deleteProviderType(server.id, MediaType.LIVE)
+                    }
                 }
                 // Read the STORED flags (like the provider rows), not the effective gates: the
                 // effective gates fold in the global VOD switch, so an account that allows
@@ -1884,9 +1917,17 @@ internal fun MainActivity.showProviderSettings() {
                 // and look broken.
                 bindServerBox(moviesBox, server.moviesEnabled) { on ->
                     MediaServerStore.setContentFlags(prefs, server.id, movies = on)
+                    if (!on) scope.launch {
+                        val repo = CatalogRepository.get(this@showProviderSettings)
+                        repo.deleteProviderType(server.id, MediaType.MOVIE)
+                    }
                 }
                 bindServerBox(seriesBox, server.seriesEnabled) { on ->
                     MediaServerStore.setContentFlags(prefs, server.id, series = on)
+                    if (!on) scope.launch {
+                        val repo = CatalogRepository.get(this@showProviderSettings)
+                        repo.deleteProviderType(server.id, MediaType.SERIES)
+                    }
                 }
             }
             val typeLabel = getString(
@@ -1944,6 +1985,10 @@ internal fun MainActivity.showProviderSettings() {
                         // this install to plex.tv, and minting a new one on every remove/re-add
                         // would litter the user's Plex device list with a fresh entry each time.
                         MediaServerStore.remove(prefs, server.id)
+                        scope.launch {
+                            val repo = CatalogRepository.get(this@showProviderSettings)
+                            repo.deleteProvider(server.id)
+                        }
                         pruneRemovedSource(server.name, server.id, server.url)
                         jellyfinClients.remove(server.id)
                         plexClients.remove(server.id)
@@ -2155,7 +2200,7 @@ internal fun MainActivity.showProviderSettings() {
     hideNonEnglish.isChecked = prefs.getBoolean(PREF_HIDE_NON_ENGLISH, true)
     hideNonEnglish.setOnCheckedChangeListener { _, checked ->
         prefs.edit().putBoolean(PREF_HIDE_NON_ENGLISH, checked).apply()
-        if (allChannels.isNotEmpty()) scope.launch { classifyAndShow() }
+        if (allChannels.isNotEmpty() || filmList.isNotEmpty() || seriesList.isNotEmpty()) scope.launch { classifyAndShow() }
     }
 
     // ── Regions pane (Live TV locality picker) ──────────────────────────────
@@ -2286,7 +2331,7 @@ internal fun MainActivity.showProviderSettings() {
         hideAdult.isChecked = checked
         hideAdult.setOnCheckedChangeListener(hideAdultListener)
         prefs.edit().putBoolean(PREF_HIDE_ADULT, checked).apply()
-        if (allChannels.isNotEmpty()) scope.launch { classifyAndShow() }
+        if (allChannels.isNotEmpty() || filmList.isNotEmpty() || seriesList.isNotEmpty()) scope.launch { classifyAndShow() }
     }
     hideAdultListener = CompoundButton.OnCheckedChangeListener { _, checked ->
         // Turning filtering ON is always allowed. Turning it OFF needs the PIN, if one
@@ -2311,19 +2356,19 @@ internal fun MainActivity.showProviderSettings() {
     categorizeLive.isChecked = prefs.getBoolean(PREF_CATEGORIZE_LIVE, true)
     categorizeLive.setOnCheckedChangeListener { _, checked ->
         prefs.edit().putBoolean(PREF_CATEGORIZE_LIVE, checked).apply()
-        if (allChannels.isNotEmpty()) scope.launch { classifyAndShow() }
+        if (allChannels.isNotEmpty() || filmList.isNotEmpty() || seriesList.isNotEmpty()) scope.launch { classifyAndShow() }
     }
     val categorizeVod = dialogView.findViewById<CheckBox>(R.id.settingsCategorizeVod)
     categorizeVod.isChecked = prefs.getBoolean(PREF_CATEGORIZE_VOD, true)
     categorizeVod.setOnCheckedChangeListener { _, checked ->
         prefs.edit().putBoolean(PREF_CATEGORIZE_VOD, checked).apply()
-        if (allChannels.isNotEmpty()) scope.launch { classifyAndShow() }
+        if (allChannels.isNotEmpty() || filmList.isNotEmpty() || seriesList.isNotEmpty()) scope.launch { classifyAndShow() }
     }
     val groupChannelsBox = dialogView.findViewById<CheckBox>(R.id.settingsGroupChannels)
     groupChannelsBox.isChecked = prefs.getBoolean(PREF_GROUP_CHANNELS, true)
     groupChannelsBox.setOnCheckedChangeListener { _, checked ->
         prefs.edit().putBoolean(PREF_GROUP_CHANNELS, checked).apply()
-        if (allChannels.isNotEmpty()) scope.launch { classifyAndShow() }
+        if (allChannels.isNotEmpty() || filmList.isNotEmpty() || seriesList.isNotEmpty()) scope.launch { classifyAndShow() }
     }
 
     // Dub playback preferences: prefer dub-flagged search results, and keep the
@@ -2732,7 +2777,7 @@ internal fun MainActivity.showProviderSettings() {
         val loadInFlight = providerLoadJob?.isActive == true
         if (!hasProviderEnabled() && !hasPlugin) {
             showEmptyState()
-        } else if (allChannels.isEmpty() && !hasPlugin && !loadInFlight) {
+        } else if (allChannels.isEmpty() && filmList.isEmpty() && seriesList.isEmpty() && !hasPlugin && !loadInFlight) {
             // Enabled, but it returned nothing (fetch failed, or an empty catalogue).
             showEmptyState()
         } else {

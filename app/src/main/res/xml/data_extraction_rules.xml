@@ -17,6 +17,7 @@
         <exclude domain="sharedpref" path="plugin_prefs.xml" />
         <exclude domain="sharedpref" path="iptv_prefs.xml" />
         <exclude domain="file" path="channels_cache.txt" />
+        <exclude domain="file" path="channels_cache_v2.txt" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="plugin_scripts" />
@@ -24,5 +25,6 @@
         <exclude domain="sharedpref" path="plugin_prefs.xml" />
         <exclude domain="sharedpref" path="iptv_prefs.xml" />
         <exclude domain="file" path="channels_cache.txt" />
+        <exclude domain="file" path="channels_cache_v2.txt" />
     </device-transfer>
 </data-extraction-rules>

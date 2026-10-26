@@ -11,7 +11,8 @@ import java.io.File
  * Disk cache for the *derived* catalogue - the output of the quality-grouping and duplicate
  * -folding passes, not the provider data they run on.
  *
- * [ChannelCache] already makes the raw catalogue cheap to reload, but re-deriving from it was
+ * [com.lumora.data.catalog.CatalogRepository] already makes the raw catalogue cheap to reload,
+ * but re-deriving from it was
  * the real cost of a cold start: grouping 30k live channels by normalised name, then folding
  * 28k film titles and 5k series into their duplicate sets, ran to ~9s on a TV stick every
  * single launch to produce a result that is identical until the catalogue or the prefs that
@@ -55,13 +56,6 @@ object DerivedCache {
     class RowsSnapshot(
         val rows: List<CategoryFilter>,
         val childrenByParent: Map<String, List<CategoryFilter>>
-    )
-
-    class VodSnapshot(
-        val films: List<Channel>,
-        val filmVersions: Map<String, List<Channel>>,
-        val series: List<Channel>,
-        val seriesVersions: Map<String, List<Channel>>
     )
 
     /**
@@ -128,51 +122,6 @@ object DerivedCache {
         }
         if (channels.isEmpty()) return null
         return LiveSnapshot(channels, versions)
-    }
-
-    // ── Films / series ──────────────────────────────
-
-    fun saveVod(context: Context, fingerprint: String, snapshot: VodSnapshot) {
-        if (snapshot.films.any { it.id.isBlank() } || snapshot.series.any { it.id.isBlank() }) return
-        write(context, VOD_FILE, fingerprint) { out ->
-            appendVodItems(out, "F", snapshot.films)
-            appendVodVersions(out, "FV", snapshot.filmVersions)
-            appendVodItems(out, "S", snapshot.series)
-            appendVodVersions(out, "SV", snapshot.seriesVersions)
-        }
-    }
-
-    fun loadVod(context: Context, fingerprint: String, raw: List<Channel>): VodSnapshot? {
-        val lines = read(context, VOD_FILE, fingerprint) ?: return null
-        val byId = indexById(raw)
-        val films = ArrayList<Channel>()
-        val series = ArrayList<Channel>()
-        val filmVersions = HashMap<String, List<Channel>>()
-        val seriesVersions = HashMap<String, List<Channel>>()
-        for (line in lines) {
-            val f = line.split(SEP)
-            val tag = f.getOrNull(0)
-            when (tag) {
-                "F", "S" -> {
-                    val base = byId[f.getOrNull(1) ?: return null] ?: return null
-                    // Field 2 is the year the derive resolved out of the title, blank when the
-                    // provider's own year already stood.
-                    val year = f.getOrNull(2)?.ifEmpty { null }
-                    val item = if (year == base.year) base else base.copy(year = year)
-                    if (tag == "F") films.add(item) else series.add(item)
-                }
-                "FV", "SV" -> {
-                    val repId = f.getOrNull(1) ?: return null
-                    val members = f.drop(2).mapNotNull { byId[it] }
-                    if (members.size > 1) {
-                        if (tag == "FV") filmVersions[repId] = members else seriesVersions[repId] = members
-                    }
-                }
-                else -> return null
-            }
-        }
-        if (films.isEmpty() && series.isEmpty()) return null
-        return VodSnapshot(films, filmVersions, series, seriesVersions)
     }
 
     // ── Category rows ───────────────────────────────
@@ -252,20 +201,6 @@ object DerivedCache {
     }
 
     // ── Shared plumbing ─────────────────────────────
-
-    private fun appendVodItems(out: Appendable, tag: String, items: List<Channel>) {
-        for (ch in items) {
-            out.append(tag).append(SEP).append(ch.id).append(SEP).append(clean(ch.year ?: "")).append('\n')
-        }
-    }
-
-    private fun appendVodVersions(out: Appendable, tag: String, versions: Map<String, List<Channel>>) {
-        for ((repId, members) in versions) {
-            out.append(tag).append(SEP).append(repId)
-            for (m in members) out.append(SEP).append(m.id)
-            out.append('\n')
-        }
-    }
 
     private fun indexById(raw: List<Channel>): Map<String, Channel> {
         val byId = HashMap<String, Channel>(raw.size)

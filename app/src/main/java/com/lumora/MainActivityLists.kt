@@ -700,7 +700,7 @@ internal suspend fun MainActivity.loadSeriesContent(
  *  whose name carries no m3u_plus marker - is matched by show title instead, so it too
  *  reaches the panel's episodes. Null when this isn't an M3U show, so the Xtream path
  *  still handles everything it used to. */
-internal fun MainActivity.m3uSeriesSeasons(item: Channel): List<Pair<String, List<Channel>>>? {
+internal suspend fun MainActivity.m3uSeriesSeasons(item: Channel): List<Pair<String, List<Channel>>>? {
     if (item.isJellyfin || item.isPlex) return null
     if (xtreamProviderFor(item) != null || stalkerConfigFor(item) != null) return null
     val providerId = item.sourceProviderId
@@ -712,13 +712,19 @@ internal fun MainActivity.m3uSeriesSeasons(item: Channel): List<Pair<String, Lis
         item.categoryId?.startsWith(M3U_SHOW_ID_PREFIX) == true -> item.categoryId
         else -> seriesShowKey(item.name)?.let { m3uShowId(it) }
     }
+    // Episode rows are in the catalogue database now, so the scan the pure helpers do is
+    // scoped by SQL first: the stamped parent id, or the title's longest word as the
+    // legacy/name fallback.
+    val probe = item.name.split(' ').filter { it.length > 2 }.maxByOrNull { it.length }.orEmpty()
+    val candidates = com.lumora.data.catalog.CatalogRepository.get(this)
+        .m3uSeriesCandidates(providerId, wantId.orEmpty(), probe, 5000)
     if (wantId != null) {
-        m3uSeasonsFrom(allChannels, wantId, providerId).takeIf { it.isNotEmpty() }?.let { return it }
+        m3uSeasonsFrom(candidates, wantId, providerId).takeIf { it.isNotEmpty() }?.let { return it }
     }
     // A series opened from Discover/TMDB (or any entry carrying no m3u marker) has no id
     // to match; the panel's episode rows are found by show title instead, so Play works
     // instead of falling through to Find Stream.
-    return m3uSeasonsForSeriesTitle(allChannels, item.name, providerId)?.takeIf { it.isNotEmpty() }
+    return m3uSeasonsForSeriesTitle(candidates, item.name, providerId)?.takeIf { it.isNotEmpty() }
 }
 
 /** Chip label for one version of a duplicated title: which provider it came from first,
@@ -796,6 +802,9 @@ private fun sameScore(a: String?, b: String?): Boolean {
  *  on a sibling copy (series only - see the series version chips below), since the map is
  *  keyed by the group's representative and a sibling isn't in it. */
 internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Channel>? = null) {
+    // A film/series opened from a paged grid or a search hit may not be one of the shelf
+    // previews; keep it resident so next/previous and the version chips can find it.
+    ensureVodResident(item)
     isContentDetailVisible = true
     // Any opening starts a fresh trail; the person-page return flag is re-armed by
     // openPersonCredit once this call has reset the screen.
@@ -1596,7 +1605,11 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 if (nowShowingDetailId != requestedItemId) return@launch
                 applyDetails(details)
                 enrichDetailsFromTmdb(details, isSeries = false, requestedItemId = requestedItemId)
-                val versions = versionGroupContaining(filmVersions, item.id) ?: listOf(item)
+                val versions = versionGroupContaining(filmVersions, item.id)
+                    ?: com.lumora.data.catalog.CatalogRepository.get(this@showContentDetail)
+                        .vodVersions(item).takeIf { it.size > 1 }
+                        ?.also { group -> filmVersions = filmVersions + (group.first().id to group) }
+                    ?: listOf(item)
                 // The group is ordered best-copy-first, and that is what Play uses for a card
                 // opened from a shelf (where the opened item *is* the first). Opened from
                 // Continue Watching or a search hit, though, the item is some other copy in

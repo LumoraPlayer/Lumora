@@ -270,13 +270,18 @@ internal fun MainActivity.pullSimklWatched(force: Boolean = false, onDone: ((Int
         SimklStore.markWatchedPulled(prefs)
         // The catalogue may be loaded by now, in which case the marks can be spelled
         // against it straight away; if it is not, this is a no-op and the catalogue load
-        // does it later (see classifyAndShow).
-        aliasRemoteWatchedMarks()
+        // does it later (see classifyAndShow). The index build is a database walk - keep it
+        // off the main dispatcher.
+        withContext(Dispatchers.Default) {
+            aliasRemoteWatchedMarks()
+            if (added > 0) {
+                clearUpNextMemo()
+                // The catalogue may not be loaded yet on a cold start; classifyAndShow re-runs
+                // this reconciliation once it lands, so nothing raced here is lost.
+                reconcileTraktUpNextTrails()
+            }
+        }
         if (added > 0) {
-            clearUpNextMemo()
-            // The catalogue may not be loaded yet on a cold start; classifyAndShow re-runs
-            // this reconciliation once it lands, so nothing raced here is lost.
-            reconcileTraktUpNextTrails()
             refreshHomeShelvesIfShowing()
             refreshSeriesShelvesIfShowing()
         }

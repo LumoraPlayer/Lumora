@@ -11,7 +11,7 @@ import com.lumora.data.local.dao.*
 import com.lumora.data.local.entity.*
 
 @Database(
-    version = 7,
+    version = 9,
     exportSchema = true,
     entities = [
         ProviderEntity::class,
@@ -22,7 +22,8 @@ import com.lumora.data.local.entity.*
         CustomGroupEntity::class,
         CustomGroupMemberEntity::class,
         EpgProgramEntity::class,
-        EpgGuideStateEntity::class
+        EpgGuideStateEntity::class,
+        CatalogChannelEntity::class
     ]
 )
 abstract class LumoraDatabase : RoomDatabase() {
@@ -32,6 +33,7 @@ abstract class LumoraDatabase : RoomDatabase() {
     abstract fun watchHistoryDao(): WatchHistoryDao
     abstract fun customGroupDao(): CustomGroupDao
     abstract fun epgProgramDao(): EpgProgramDao
+    abstract fun catalogChannelDao(): CatalogChannelDao
 
     companion object {
         @Volatile private var instance: LumoraDatabase? = null
@@ -57,7 +59,7 @@ abstract class LumoraDatabase : RoomDatabase() {
 
         /** v3 drops `channels`, `categories` and `downloads`. All three were write-only tables
          *  filled by the catalog sync worker, which nothing ever scheduled - the browsable
-         *  catalogue lives in [com.lumora.cache.ChannelCache] and downloads in
+         *  catalogue lives in [com.lumora.data.local.entity.CatalogChannelEntity] and downloads in
          *  `download/DownloadStore`, so no reader ever went near them. Dropping loses nothing
          *  because nothing was ever written. */
         private val MIGRATION_2_3 = object : Migration(2, 3) {
@@ -151,6 +153,60 @@ abstract class LumoraDatabase : RoomDatabase() {
             }
         }
 
+        /** v8 introduced the Room-backed catalogue. v9 added the ingest token and retired
+         *  the old `channels_cache.txt` text cache entirely. */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `catalog_channels` (" +
+                        "`uid` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `providerId` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `url` TEXT NOT NULL, `logoUrl` TEXT, `posterUrl` TEXT, " +
+                        "`backdropUrl` TEXT, `group` TEXT, `tvgId` TEXT, `tvgName` TEXT, `tvgChno` TEXT, " +
+                        "`mediaType` TEXT NOT NULL, `categoryId` TEXT, `categoryName` TEXT, `description` TEXT, " +
+                        "`episodeNum` INTEGER, `season` INTEGER, `year` TEXT, `rating` TEXT, `imdbRating` TEXT, " +
+                        "`releaseDate` TEXT, `isJellyfin` INTEGER NOT NULL, `isPlex` INTEGER NOT NULL, " +
+                        "`streamUserAgent` TEXT, `streamHeaders` TEXT, `avOffsetMs` INTEGER NOT NULL, " +
+                        "`stalkerCmd` TEXT, `pluginToken` TEXT, `pluginId` TEXT, `tvArchive` INTEGER NOT NULL, " +
+                        "`tvArchiveDays` INTEGER NOT NULL, `tmdbId` TEXT, `trailerKey` TEXT, `drmType` TEXT, " +
+                        "`drmKeys` TEXT, `drmLicenseUrl` TEXT, `drmSchemeData` TEXT, `manifestType` TEXT, " +
+                        "`manifestHeaders` TEXT, `drmLicenseHeaders` TEXT, `drmPostData` TEXT, " +
+                        "`drmLicenseResponse` TEXT, `groupId` TEXT, `filterKey` TEXT, `isEnglish` INTEGER NOT NULL, " +
+                        "`isAdult` INTEGER NOT NULL, `qualityScore` INTEGER NOT NULL, `hasPoster` INTEGER NOT NULL, " +
+                        "`orderIndex` INTEGER NOT NULL, `yearSort` INTEGER NOT NULL, `dateSort` INTEGER NOT NULL, " +
+                        "`baseRank` INTEGER NOT NULL, `rank` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`uid`))"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_providerId` ON `catalog_channels` (`providerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType` ON `catalog_channels` (`mediaType`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_categoryId` ON `catalog_channels` (`categoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_groupId` ON `catalog_channels` (`groupId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_filterKey` ON `catalog_channels` (`filterKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_name` ON `catalog_channels` (`name`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_tmdbId` ON `catalog_channels` (`tmdbId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_providerId` ON `catalog_channels` (`mediaType`, `providerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_groupId_rank` ON `catalog_channels` (`mediaType`, `groupId`, `rank`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_categoryId` ON `catalog_channels` (`mediaType`, `categoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_filterKey` ON `catalog_channels` (`mediaType`, `filterKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_filterKey_dateSort` ON `catalog_channels` (`mediaType`, `filterKey`, `dateSort`)")
+            }
+        }
+
+        /** v9 adds the ingest generation token. A refresh updates rows in place; only a
+         *  completed ingest deletes the rows it did not see. Without the token a failed
+         *  fetch had to either wipe the type first (losing a good catalogue) or leave
+         *  removed items behind forever. */
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `catalog_channels` ADD COLUMN `syncToken` INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_syncToken` " +
+                        "ON `catalog_channels` (`mediaType`, `syncToken`)"
+                )
+            }
+        }
+
         fun getInstance(context: Context): LumoraDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -158,7 +214,7 @@ abstract class LumoraDatabase : RoomDatabase() {
                     LumoraDatabase::class.java,
                     "lumora.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .build()
                     .also { instance = it }
             }

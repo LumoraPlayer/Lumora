@@ -1,0 +1,1269 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 9,
+    "identityHash": "1960cc13d83b61d5dfd5767dd0fd6736",
+    "entities": [
+      {
+        "tableName": "providers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, `serverUrl` TEXT, `username` TEXT, `passwordEncrypted` TEXT, `m3uUrl` TEXT, `userAgent` TEXT, `macAddress` TEXT, `serialNumber` TEXT, `jellyfinToken` TEXT, `jellyfinUserId` TEXT, `active` INTEGER NOT NULL, `syncEnabled` INTEGER NOT NULL, `epgSyncEnabled` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `lastSyncAt` INTEGER, `expDateSeconds` INTEGER, `isTrial` INTEGER NOT NULL, `maxConnections` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverUrl",
+            "columnName": "serverUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "username",
+            "columnName": "username",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "passwordEncrypted",
+            "columnName": "passwordEncrypted",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "m3uUrl",
+            "columnName": "m3uUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "userAgent",
+            "columnName": "userAgent",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "macAddress",
+            "columnName": "macAddress",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "serialNumber",
+            "columnName": "serialNumber",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "jellyfinToken",
+            "columnName": "jellyfinToken",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "jellyfinUserId",
+            "columnName": "jellyfinUserId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "active",
+            "columnName": "active",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncEnabled",
+            "columnName": "syncEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "epgSyncEnabled",
+            "columnName": "epgSyncEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSyncAt",
+            "columnName": "lastSyncAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "expDateSeconds",
+            "columnName": "expDateSeconds",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isTrial",
+            "columnName": "isTrial",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxConnections",
+            "columnName": "maxConnections",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "recordings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `channelId` TEXT NOT NULL, `channelName` TEXT NOT NULL, `programTitle` TEXT NOT NULL, `startTimeUtc` INTEGER NOT NULL, `stopTimeUtc` INTEGER NOT NULL, `status` TEXT NOT NULL, `sourceType` TEXT NOT NULL, `filePath` TEXT, `fileSize` INTEGER NOT NULL, `durationMs` INTEGER NOT NULL, `priority` INTEGER NOT NULL, `paddingBeforeMin` INTEGER NOT NULL, `paddingAfterMin` INTEGER NOT NULL, `recurringRule` TEXT, `failureReason` TEXT, `errorMessage` TEXT, `retryCount` INTEGER NOT NULL, `providerId` TEXT, `createdAt` INTEGER NOT NULL, `completedAt` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelId",
+            "columnName": "channelId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelName",
+            "columnName": "channelName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "programTitle",
+            "columnName": "programTitle",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startTimeUtc",
+            "columnName": "startTimeUtc",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stopTimeUtc",
+            "columnName": "stopTimeUtc",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceType",
+            "columnName": "sourceType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filePath",
+            "columnName": "filePath",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "fileSize",
+            "columnName": "fileSize",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "durationMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "priority",
+            "columnName": "priority",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "paddingBeforeMin",
+            "columnName": "paddingBeforeMin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "paddingAfterMin",
+            "columnName": "paddingAfterMin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recurringRule",
+            "columnName": "recurringRule",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "failureReason",
+            "columnName": "failureReason",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "errorMessage",
+            "columnName": "errorMessage",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "retryCount",
+            "columnName": "retryCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerId",
+            "columnName": "providerId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completedAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_recordings_channelId",
+            "unique": false,
+            "columnNames": [
+              "channelId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recordings_channelId` ON `${TABLE_NAME}` (`channelId`)"
+          },
+          {
+            "name": "index_recordings_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_recordings_status` ON `${TABLE_NAME}` (`status`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "recording_storage",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `localPath` TEXT, `safTreeUri` TEXT, `maxSimultaneous` INTEGER NOT NULL, `retentionDays` INTEGER NOT NULL, `fileNamePattern` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localPath",
+            "columnName": "localPath",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "safTreeUri",
+            "columnName": "safTreeUri",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "maxSimultaneous",
+            "columnName": "maxSimultaneous",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "retentionDays",
+            "columnName": "retentionDays",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileNamePattern",
+            "columnName": "fileNamePattern",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "epg_sources",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `url` TEXT NOT NULL, `enabled` INTEGER NOT NULL, `priority` INTEGER NOT NULL, `userAgent` TEXT, `lastRefreshedAt` INTEGER, `lastSuccessAt` INTEGER, `etag` TEXT, `lastModified` TEXT, `refreshIntervalHours` INTEGER NOT NULL, `channelCount` INTEGER NOT NULL, `consecutiveFailures` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "enabled",
+            "columnName": "enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "priority",
+            "columnName": "priority",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userAgent",
+            "columnName": "userAgent",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lastRefreshedAt",
+            "columnName": "lastRefreshedAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lastSuccessAt",
+            "columnName": "lastSuccessAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "etag",
+            "columnName": "etag",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "lastModified",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "refreshIntervalHours",
+            "columnName": "refreshIntervalHours",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelCount",
+            "columnName": "channelCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "consecutiveFailures",
+            "columnName": "consecutiveFailures",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "watch_history",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `channelId` TEXT NOT NULL, `channelName` TEXT NOT NULL, `mediaType` TEXT NOT NULL, `positionMs` INTEGER NOT NULL, `durationMs` INTEGER NOT NULL, `progressPercent` REAL NOT NULL, `status` TEXT NOT NULL, `watchCount` INTEGER NOT NULL, `firstWatchedAt` INTEGER NOT NULL, `lastWatchedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelId",
+            "columnName": "channelId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelName",
+            "columnName": "channelName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaType",
+            "columnName": "mediaType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "positionMs",
+            "columnName": "positionMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "durationMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "progressPercent",
+            "columnName": "progressPercent",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "watchCount",
+            "columnName": "watchCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstWatchedAt",
+            "columnName": "firstWatchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastWatchedAt",
+            "columnName": "lastWatchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_watch_history_channelId",
+            "unique": false,
+            "columnNames": [
+              "channelId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_watch_history_channelId` ON `${TABLE_NAME}` (`channelId`)"
+          },
+          {
+            "name": "index_watch_history_lastWatchedAt",
+            "unique": false,
+            "columnNames": [
+              "lastWatchedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_watch_history_lastWatchedAt` ON `${TABLE_NAME}` (`lastWatchedAt`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "custom_groups",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `mediaType` TEXT NOT NULL, `isHidden` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mediaType",
+            "columnName": "mediaType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isHidden",
+            "columnName": "isHidden",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "custom_group_members",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `groupId` TEXT NOT NULL, `channelId` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "groupId",
+            "columnName": "groupId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelId",
+            "columnName": "channelId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_custom_group_members_groupId",
+            "unique": false,
+            "columnNames": [
+              "groupId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_custom_group_members_groupId` ON `${TABLE_NAME}` (`groupId`)"
+          },
+          {
+            "name": "index_custom_group_members_channelId",
+            "unique": false,
+            "columnNames": [
+              "channelId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_custom_group_members_channelId` ON `${TABLE_NAME}` (`channelId`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "epg_programs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`channelId` TEXT NOT NULL, `guideKey` TEXT NOT NULL, `startTimestamp` INTEGER NOT NULL, `stopTimestamp` INTEGER NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `priority` INTEGER NOT NULL DEFAULT 0, `titleShape` INTEGER NOT NULL DEFAULT 0, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`guideKey`, `startTimestamp`))",
+        "fields": [
+          {
+            "fieldPath": "channelId",
+            "columnName": "channelId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "guideKey",
+            "columnName": "guideKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startTimestamp",
+            "columnName": "startTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stopTimestamp",
+            "columnName": "stopTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "priority",
+            "columnName": "priority",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "titleShape",
+            "columnName": "titleShape",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "guideKey",
+            "startTimestamp"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_epg_programs_channelId",
+            "unique": false,
+            "columnNames": [
+              "channelId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_epg_programs_channelId` ON `${TABLE_NAME}` (`channelId`)"
+          },
+          {
+            "name": "index_epg_programs_stopTimestamp",
+            "unique": false,
+            "columnNames": [
+              "stopTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_epg_programs_stopTimestamp` ON `${TABLE_NAME}` (`stopTimestamp`)"
+          },
+          {
+            "name": "index_epg_programs_titleShape_stopTimestamp",
+            "unique": false,
+            "columnNames": [
+              "titleShape",
+              "stopTimestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_epg_programs_titleShape_stopTimestamp` ON `${TABLE_NAME}` (`titleShape`, `stopTimestamp`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "epg_guide_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`guideKey` TEXT NOT NULL, `checkedAt` INTEGER NOT NULL, `hasGuide` INTEGER NOT NULL, PRIMARY KEY(`guideKey`))",
+        "fields": [
+          {
+            "fieldPath": "guideKey",
+            "columnName": "guideKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "checkedAt",
+            "columnName": "checkedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasGuide",
+            "columnName": "hasGuide",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "guideKey"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "catalog_channels",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`uid` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `providerId` TEXT NOT NULL, `name` TEXT NOT NULL, `url` TEXT NOT NULL, `logoUrl` TEXT, `posterUrl` TEXT, `backdropUrl` TEXT, `group` TEXT, `tvgId` TEXT, `tvgName` TEXT, `tvgChno` TEXT, `mediaType` TEXT NOT NULL, `categoryId` TEXT, `categoryName` TEXT, `description` TEXT, `episodeNum` INTEGER, `season` INTEGER, `year` TEXT, `rating` TEXT, `imdbRating` TEXT, `releaseDate` TEXT, `isJellyfin` INTEGER NOT NULL, `isPlex` INTEGER NOT NULL, `streamUserAgent` TEXT, `streamHeaders` TEXT, `avOffsetMs` INTEGER NOT NULL, `stalkerCmd` TEXT, `pluginToken` TEXT, `pluginId` TEXT, `tvArchive` INTEGER NOT NULL, `tvArchiveDays` INTEGER NOT NULL, `tmdbId` TEXT, `trailerKey` TEXT, `drmType` TEXT, `drmKeys` TEXT, `drmLicenseUrl` TEXT, `drmSchemeData` TEXT, `manifestType` TEXT, `manifestHeaders` TEXT, `drmLicenseHeaders` TEXT, `drmPostData` TEXT, `drmLicenseResponse` TEXT, `groupId` TEXT, `filterKey` TEXT, `isEnglish` INTEGER NOT NULL, `isAdult` INTEGER NOT NULL, `qualityScore` INTEGER NOT NULL, `hasPoster` INTEGER NOT NULL, `orderIndex` INTEGER NOT NULL, `yearSort` INTEGER NOT NULL, `dateSort` INTEGER NOT NULL, `syncToken` INTEGER NOT NULL, `baseRank` INTEGER NOT NULL, `rank` INTEGER NOT NULL, PRIMARY KEY(`uid`))",
+        "fields": [
+          {
+            "fieldPath": "uid",
+            "columnName": "uid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerId",
+            "columnName": "providerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "logoUrl",
+            "columnName": "logoUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "posterUrl",
+            "columnName": "posterUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "backdropUrl",
+            "columnName": "backdropUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "group",
+            "columnName": "group",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "tvgId",
+            "columnName": "tvgId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "tvgName",
+            "columnName": "tvgName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "tvgChno",
+            "columnName": "tvgChno",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "mediaType",
+            "columnName": "mediaType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryId",
+            "columnName": "categoryId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "categoryName",
+            "columnName": "categoryName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "episodeNum",
+            "columnName": "episodeNum",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "season",
+            "columnName": "season",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "year",
+            "columnName": "year",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "rating",
+            "columnName": "rating",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "imdbRating",
+            "columnName": "imdbRating",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "releaseDate",
+            "columnName": "releaseDate",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isJellyfin",
+            "columnName": "isJellyfin",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isPlex",
+            "columnName": "isPlex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "streamUserAgent",
+            "columnName": "streamUserAgent",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "streamHeaders",
+            "columnName": "streamHeaders",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "avOffsetMs",
+            "columnName": "avOffsetMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stalkerCmd",
+            "columnName": "stalkerCmd",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pluginToken",
+            "columnName": "pluginToken",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pluginId",
+            "columnName": "pluginId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "tvArchive",
+            "columnName": "tvArchive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tvArchiveDays",
+            "columnName": "tvArchiveDays",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tmdbId",
+            "columnName": "tmdbId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "trailerKey",
+            "columnName": "trailerKey",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmType",
+            "columnName": "drmType",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmKeys",
+            "columnName": "drmKeys",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmLicenseUrl",
+            "columnName": "drmLicenseUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmSchemeData",
+            "columnName": "drmSchemeData",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "manifestType",
+            "columnName": "manifestType",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "manifestHeaders",
+            "columnName": "manifestHeaders",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmLicenseHeaders",
+            "columnName": "drmLicenseHeaders",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmPostData",
+            "columnName": "drmPostData",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "drmLicenseResponse",
+            "columnName": "drmLicenseResponse",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "groupId",
+            "columnName": "groupId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "filterKey",
+            "columnName": "filterKey",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isEnglish",
+            "columnName": "isEnglish",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAdult",
+            "columnName": "isAdult",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "qualityScore",
+            "columnName": "qualityScore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasPoster",
+            "columnName": "hasPoster",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "orderIndex",
+            "columnName": "orderIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "yearSort",
+            "columnName": "yearSort",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateSort",
+            "columnName": "dateSort",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncToken",
+            "columnName": "syncToken",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baseRank",
+            "columnName": "baseRank",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rank",
+            "columnName": "rank",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "uid"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_catalog_channels_providerId",
+            "unique": false,
+            "columnNames": [
+              "providerId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_providerId` ON `${TABLE_NAME}` (`providerId`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType",
+            "unique": false,
+            "columnNames": [
+              "mediaType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType` ON `${TABLE_NAME}` (`mediaType`)"
+          },
+          {
+            "name": "index_catalog_channels_categoryId",
+            "unique": false,
+            "columnNames": [
+              "categoryId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_categoryId` ON `${TABLE_NAME}` (`categoryId`)"
+          },
+          {
+            "name": "index_catalog_channels_groupId",
+            "unique": false,
+            "columnNames": [
+              "groupId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_groupId` ON `${TABLE_NAME}` (`groupId`)"
+          },
+          {
+            "name": "index_catalog_channels_filterKey",
+            "unique": false,
+            "columnNames": [
+              "filterKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_filterKey` ON `${TABLE_NAME}` (`filterKey`)"
+          },
+          {
+            "name": "index_catalog_channels_name",
+            "unique": false,
+            "columnNames": [
+              "name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_name` ON `${TABLE_NAME}` (`name`)"
+          },
+          {
+            "name": "index_catalog_channels_tmdbId",
+            "unique": false,
+            "columnNames": [
+              "tmdbId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_tmdbId` ON `${TABLE_NAME}` (`tmdbId`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_providerId",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "providerId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_providerId` ON `${TABLE_NAME}` (`mediaType`, `providerId`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_groupId_rank",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "groupId",
+              "rank"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_groupId_rank` ON `${TABLE_NAME}` (`mediaType`, `groupId`, `rank`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_categoryId",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "categoryId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_categoryId` ON `${TABLE_NAME}` (`mediaType`, `categoryId`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_filterKey",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "filterKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_filterKey` ON `${TABLE_NAME}` (`mediaType`, `filterKey`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_filterKey_dateSort",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "filterKey",
+              "dateSort"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_filterKey_dateSort` ON `${TABLE_NAME}` (`mediaType`, `filterKey`, `dateSort`)"
+          },
+          {
+            "name": "index_catalog_channels_mediaType_syncToken",
+            "unique": false,
+            "columnNames": [
+              "mediaType",
+              "syncToken"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_channels_mediaType_syncToken` ON `${TABLE_NAME}` (`mediaType`, `syncToken`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1960cc13d83b61d5dfd5767dd0fd6736')"
+    ]
+  }
+}

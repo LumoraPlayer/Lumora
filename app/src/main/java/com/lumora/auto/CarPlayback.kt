@@ -4,7 +4,7 @@ package com.lumora.auto
 import android.content.Context
 import android.view.Surface
 import androidx.media3.common.Player
-import com.lumora.cache.ChannelCache
+import com.lumora.data.catalog.CatalogRepository
 import com.lumora.cache.FavoritesStore
 import com.lumora.cache.RecentlyPlayedStore
 import com.lumora.model.Channel
@@ -46,8 +46,10 @@ class CarPlayback(private val context: Context) {
      */
     @Synchronized
     fun loadCatalog(): List<Channel> {
-        val cached = ChannelCache.load(context).orEmpty()
-        channels = cached.filter {
+        val stored = kotlinx.coroutines.runBlocking {
+            com.lumora.data.catalog.CatalogRepository.get(context).live()
+        }
+        channels = stored.filter {
             it.mediaType == MediaType.LIVE && it.url.isNotBlank() &&
                 it.stalkerCmd.isNullOrBlank() && it.pluginToken.isNullOrBlank()
         }

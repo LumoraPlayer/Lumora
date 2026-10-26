@@ -184,8 +184,10 @@ internal fun MainActivity.localSeriesIndex(): LocalSeriesIndex {
         val title = normalizeTitleForGrouping(cleanVodTitle(ch.name))
         if (title.isNotBlank()) byTitle.putIfAbsent(title, ch)
     }
-    for (ch in allChannels) add(ch)
-    for (ch in seriesList) add(ch)
+    kotlinx.coroutines.runBlocking {
+        com.lumora.data.catalog.CatalogRepository.get(this@localSeriesIndex)
+            .forEachVodTitle { ch -> if (ch.mediaType == MediaType.SERIES) add(ch) }
+    }
     return LocalSeriesIndex(byTmdbId, byTitle)
 }
 

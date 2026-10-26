@@ -249,6 +249,10 @@ internal const val START_SCREEN_FILMS = "films"
 // When the catalog was last fetched from the network; the cache serves every launch until
 // this is CATALOG_TTL_MS old (a provider change force-refreshes regardless).
 internal const val PREF_CATALOG_REFRESHED_AT = "catalog_refreshed_at"
+/** Sorted ids of the providers marked backup when `catalog_channels.rank` was last
+ *  recalculated. Ranks are normally written correctly at ingest; this only forces the
+ *  full-table pass when the set itself changed (see loadAllConfiguredProviders). */
+internal const val PREF_CATALOG_BACKUP_RANK_KEY = "catalog_backup_rank_key"
 internal const val CATALOG_TTL_MS = 24 * 60 * 60 * 1000L
 /** How long the projected-display driving warning stays up before accepting itself. The
  *  warning must never be a dead end on a head unit whose only input this dialog cannot see,
@@ -586,6 +590,10 @@ class MainActivity : AppCompatActivity() {
      *  re-running the expensive buildCategoryRows() pass. */
     internal var cachedSeriesCategoryRows: List<CategoryFilter> = emptyList()
     internal var cachedFilmCategoryRows: List<CategoryFilter> = emptyList()
+    /** Expanded-group children for the VOD rows above, so expand/collapse splices instead of
+     *  re-running the database row build. */
+    internal var cachedSeriesCategoryChildren: Map<String, List<CategoryFilter>> = emptyMap()
+    internal var cachedFilmCategoryChildren: Map<String, List<CategoryFilter>> = emptyMap()
     internal var currentVersionGroup: List<Channel> = emptyList()
     internal var currentVersionIndex = 0
     /** The other channels carrying the game being watched, when it was started from the Sports
@@ -907,6 +915,17 @@ class MainActivity : AppCompatActivity() {
     // exact category name doesn't necessarily line up with the sidebar's merged rows).
     // Takes priority over selectedCategoryIds in applyCategoryFilter when set.
     internal var selectedShelfItems: List<Channel>? = null
+    // ── DB-backed VOD grid paging ───────────────────
+    // The grid under the Films/Series tabs pages through catalog_channels instead of
+    // filtering a resident list. These remember what the current grid is showing.
+    internal var vodGridType: MediaType? = null
+    internal var vodGridMatchIds: Set<String>? = null
+    internal var vodGridSourceIds: Set<String>? = null
+    internal var vodGridAll: Boolean = false
+    internal var vodGridOffset: Int = 0
+    internal var vodGridTotal: Int = 0
+    internal var vodGridLoading: Boolean = false
+    internal var vodGridItems: MutableList<Channel> = mutableListOf()
     /** Bumped by every applyCategoryFilter() run. Each run filters the whole catalog on a
      *  background dispatcher, and nothing cancels the run a fast category switch just
      *  superseded - two in flight can resume in either order, so without this the *older*
@@ -1263,6 +1282,9 @@ class MainActivity : AppCompatActivity() {
     /** The in-flight films/series derive launched by deriveFilmsSeries(), if any - cancelled
      *  on a new provider load and joined before tab switches that need it. */
     internal var filmsSeriesDeriveJob: Job? = null
+    /** The last DB-built Films/Series content, keyed by the stored catalogue + the prefs
+     *  that shape its shelves. See buildVodContent(). */
+    internal var vodContentCache: VodContentCache? = null
     /** The in-flight surgical live re-render launched by renderLivePartial(), if any -
      *  coalesces the near-simultaneous provider-completion re-renders into one pass. */
     internal var liveRenderJob: Job? = null
@@ -1490,6 +1512,7 @@ class MainActivity : AppCompatActivity() {
 
         setupChannelList()
         setupTabs()
+        setupVodGridPaging()
         setupPlayerControls()
         setupMultiviewControls()
         setupToolbar()
@@ -2884,17 +2907,6 @@ class MainActivity : AppCompatActivity() {
 
     // ── Provider Loading ───────────────────────────
 
-    internal data class DerivedContent(
-        val liveChannels: List<Channel>,
-        val liveVersions: Map<String, List<Channel>>,
-        val filmList: List<Channel>,
-        val filmVersions: Map<String, List<Channel>>,
-        val filmShelves: List<ContentShelf>,
-        val seriesList: List<Channel>,
-        val seriesVersions: Map<String, List<Channel>>,
-        val seriesShelves: List<ContentShelf>
-    )
-
     /** The films/series half of a derive pass, returned whole so callers can assign the
      *  fields on the thread of their choosing (side-effect assignment on a cancellable
      *  Default-thread job could land after a newer load's fresh write). */
@@ -2906,7 +2918,10 @@ class MainActivity : AppCompatActivity() {
         val seriesVersions: Map<String, List<Channel>>,
         val seriesShelves: List<ContentShelf>,
         val seriesCategoryRows: List<CategoryFilter>,
-        val filmCategoryRows: List<CategoryFilter>
+        val filmCategoryRows: List<CategoryFilter>,
+        /** Expanded-group children for the DB-built VOD rows. */
+        val seriesCategoryChildren: Map<String, List<CategoryFilter>> = emptyMap(),
+        val filmCategoryChildren: Map<String, List<CategoryFilter>> = emptyMap()
     )
 
     /** A channel's filter key: Xtream category id, or M3U group name as a fallback.

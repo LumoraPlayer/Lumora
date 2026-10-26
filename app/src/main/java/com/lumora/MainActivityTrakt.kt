@@ -405,17 +405,22 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
         TraktStore.markWatchedPulled(prefs)
         // The catalogue may be loaded by now, in which case the marks can be spelled
         // against it straight away; if it is not, this is a no-op and the catalogue load
-        // does it later (see classifyAndShow).
-        aliasRemoteWatchedMarks()
+        // does it later (see classifyAndShow). Both passes build the series index from the
+        // catalogue database, so keep them off the main dispatcher.
+        withContext(Dispatchers.Default) {
+            aliasRemoteWatchedMarks()
+            if (added > 0) {
+                // Watched state decides what "next episode" means, so the memo behind Up Next is
+                // stale the moment any mark lands.
+                clearUpNextMemo()
+                // The catalog this install is matching Trakt titles against may not be loaded yet
+                // (this whole pull runs off app launch, racing loadSavedProvider's own async
+                // fetch) - reconcileTraktUpNextTrails is also called from classifyAndShow, so a
+                // catalog that lands after this point still picks these marks up.
+                reconcileTraktUpNextTrails()
+            }
+        }
         if (added > 0) {
-            // Watched state decides what "next episode" means, so the memo behind Up Next is
-            // stale the moment any mark lands.
-            clearUpNextMemo()
-            // The catalog this install is matching Trakt titles against may not be loaded yet
-            // (this whole pull runs off app launch, racing loadSavedProvider's own async
-            // fetch) - reconcileTraktUpNextTrails is also called from classifyAndShow, so a
-            // catalog that lands after this point still picks these marks up.
-            reconcileTraktUpNextTrails()
             refreshHomeShelvesIfShowing()
             refreshSeriesShelvesIfShowing()
         }
@@ -439,7 +444,7 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
  * or reshuffling Up Next's most-recent ordering.
  */
 internal fun MainActivity.reconcileTraktUpNextTrails() {
-    if (allChannels.isEmpty()) return
+    if (allChannels.isEmpty() && filmList.isEmpty() && seriesList.isEmpty()) return
     // The same index the mark spelling uses, so both passes agree on what "the same show"
     // means - and so a derived Series-tab card (an m3u_plus panel's show) can answer too.
     val seriesIndex = localSeriesIndex()
@@ -630,14 +635,21 @@ internal fun MainActivity.buildWatchedTitleIndex(): Map<String, WatchedTitle> {
         if (normalized.isBlank()) return
         index.putIfAbsent("$prefix|$normalized", WatchedTitle(cleaned, year))
     }
-    for (channel in allChannels) {
-        when (channel.mediaType) {
-            MediaType.MOVIE -> put("m", channel.name, channel.year)
-            // Top-level series entries only. An episode's own name is the episode's, and its
-            // show is already in this list under its own entry.
-            MediaType.SERIES -> if (channel.episodeNum == null) put("e", channel.name, channel.year)
-            MediaType.LIVE -> Unit
-        }
+    // The catalogue is in Room now, so the VOD half of the index is built from a paged
+    // database walk rather than a resident list.
+    kotlinx.coroutines.runBlocking {
+        com.lumora.data.catalog.CatalogRepository.get(this@buildWatchedTitleIndex)
+            .forEachVodTitle { channel ->
+                when (channel.mediaType) {
+                    MediaType.MOVIE -> put("m", channel.name, channel.year)
+                    // Top-level series entries only. An episode's own name is the episode's,
+                    // and its show is already in this list under its own entry.
+                    MediaType.SERIES -> if (channel.episodeNum == null) {
+                        put("e", channel.name, channel.year)
+                    }
+                    MediaType.LIVE -> Unit
+                }
+            }
     }
     for (item in com.lumora.cache.PlaybackPositionStore.getAllInProgress(this)) {
         when (item.mediaType) {

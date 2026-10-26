@@ -382,18 +382,58 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
     searchDisplayedCount = 0
     scope.launch {
         val filter = searchFilter
+        // Films and series are database-only now: query them for this term instead of
+        // scanning a resident list. Both queries are capped; the UI says "N of M" from
+        // whatever comes back.
+        val vodResults = if (isVodDisabled()) {
+            emptyList()
+        } else withContext(Dispatchers.IO) {
+            val repo = com.lumora.data.catalog.CatalogRepository.get(this@runSearch)
+            val english = vodEnglishOnly()
+            val adult = vodHideAdult()
+            when (filter) {
+                MainActivity.SearchFilter.ALL ->
+                    repo.vodSearch(com.lumora.model.MediaType.MOVIE, query, english, adult, 400) +
+                        repo.vodSearch(com.lumora.model.MediaType.SERIES, query, english, adult, 400)
+                MainActivity.SearchFilter.MOVIE ->
+                    repo.vodSearch(com.lumora.model.MediaType.MOVIE, query, english, adult, 400)
+                MainActivity.SearchFilter.SERIES ->
+                    repo.vodSearch(com.lumora.model.MediaType.SERIES, query, english, adult, 400)
+                MainActivity.SearchFilter.LIVE -> emptyList()
+            }
+        }
+        // Versions for anything a search hit can open, so its detail screen has chips and
+        // the player can fail over without another round trip.
+        withContext(Dispatchers.IO) {
+            val repo = com.lumora.data.catalog.CatalogRepository.get(this@runSearch)
+            val english = vodEnglishOnly()
+            val adult = vodHideAdult()
+            for (type in listOf(com.lumora.model.MediaType.MOVIE, com.lumora.model.MediaType.SERIES)) {
+                val hits = vodResults.filter { it.mediaType == type }
+                if (hits.isEmpty()) continue
+                val versions = repo.vodVersionGroups(type, hits)
+                if (type == com.lumora.model.MediaType.MOVIE) filmVersions = filmVersions + versions
+                else seriesVersions = seriesVersions + versions
+            }
+        }
         val mediaResults = withContext(Dispatchers.Default) {
             val lower = query.lowercase()
             // P1-2: compiled once per query, not per comparison - the boundary regex was
             // built inside searchRank (called by the comparator), so sorting ~50k titles
             // compiled ~1.5M Patterns and cost seconds on a TV stick.
             val boundaryRegex = Regex("\\b" + Regex.escape(lower))
-            val source = when (filter) {
-                MainActivity.SearchFilter.ALL -> liveChannels + filmList + seriesList
-                MainActivity.SearchFilter.LIVE -> liveChannels
-                MainActivity.SearchFilter.MOVIE -> filmList
-                MainActivity.SearchFilter.SERIES -> seriesList
+            val liveSource = when (filter) {
+                MainActivity.SearchFilter.ALL, MainActivity.SearchFilter.LIVE -> liveChannels
+                else -> emptyList()
             }
+            // In-memory anime/plugin entries are never written to the catalogue DB, so add
+            // them explicitly or they stop being searchable.
+            val inMemoryVod = if (filter == MainActivity.SearchFilter.LIVE || isVodDisabled()) {
+                emptyList()
+            } else {
+                inMemoryVodChannels()
+            }
+            val source = liveSource + vodResults + inMemoryVod
             // Lowercase each title once: the comparator used to call searchRank (and lowercase)
             // per comparison, allocating a fresh String per element per compare - on a
             // six-figure series list that is seconds of GC churn for a single query.

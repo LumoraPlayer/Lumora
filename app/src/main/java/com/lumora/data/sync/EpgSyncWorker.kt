@@ -9,7 +9,7 @@ import com.lumora.BaseApplication
 import com.lumora.PREF_CLASSIC_CATEGORY_LAYOUT
 import com.lumora.PREF_GROUP_CHANNELS
 import com.lumora.PREF_HIDE_ADULT
-import com.lumora.cache.ChannelCache
+import com.lumora.data.catalog.CatalogRepository
 import com.lumora.cache.DerivedCache
 import com.lumora.data.IptvProviderStore
 import com.lumora.data.local.LumoraDatabase
@@ -51,7 +51,7 @@ class EpgSyncWorker(
         // cache wrote rows for VOD items and non-representative variants that the reader
         // never asks for, and a feed matching only a variant was invisible. Load the same
         // representative list the app derives.
-        val cachedChannels = ChannelCache.load(applicationContext).orEmpty()
+        val cachedChannels = com.lumora.data.catalog.CatalogRepository.get(applicationContext).live()
         // No catalogue yet (a fresh install, or a run that beat the first load) means no
         // programme in any feed can match anything. Nothing about that is the sources' fault,
         // and charging them a failure each would retire every EPG source on a device that had

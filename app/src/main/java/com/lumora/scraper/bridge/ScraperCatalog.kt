@@ -27,7 +27,7 @@ import java.util.Locale
  *
  * That also settles the awkward part of the model mismatch. There is no mapping of a site's
  * `Movie`/`TvShow` into [com.lumora.model.Channel] to maintain, no scraper item in
- * `allChannels`, nothing to keep out of [com.lumora.cache.ChannelCache]. A scraper's models
+ * `allChannels`, nothing to keep out of the catalogue. A scraper's models
  * exist only inside [findSources], long enough to get from a title to a list of embed hosts.
  *
  * Everything here is suspending and hits the network. All of it is dispatched to IO, because the

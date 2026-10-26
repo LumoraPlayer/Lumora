@@ -5,5 +5,10 @@ data class ContentShelf(
     val title: String,
     val items: List<Channel>,
     val pinned: Boolean = false,
-    val categoryId: String? = null
+    val categoryId: String? = null,
+    /** Provider category keys behind this shelf, so "See all" can page it from the catalogue
+     *  database instead of being limited to the preview items above. */
+    val matchIds: Set<String> = emptySet(),
+    /** Explicit item ids, for rows that are not identified by category (anime/own-library). */
+    val channelIds: Set<String> = emptySet()
 )

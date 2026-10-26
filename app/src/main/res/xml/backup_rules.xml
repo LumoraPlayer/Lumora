@@ -32,4 +32,5 @@
     <!-- The cached catalogue is large (tens of MB on a merged setup), rebuilt from the network
          on first load anyway, and pins the restore to whatever the providers looked like then. -->
     <exclude domain="file" path="channels_cache.txt" />
+    <exclude domain="file" path="channels_cache_v2.txt" />
 </full-backup-content>

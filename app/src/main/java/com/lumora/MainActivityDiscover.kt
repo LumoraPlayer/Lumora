@@ -479,17 +479,22 @@ internal fun MainActivity.setDiscoverStatus(text: String?) {
  * the same screen, minus a Play button it has no URL for, with Find Stream as the action.
  */
 internal fun MainActivity.onDiscoverItemClick(item: Channel) {
-    // Every copy, not the best one: the detail screen needs the whole set for its version chips.
-    val versions = catalogVersionsFor(findCatalogMatches(item))
-    val match = versions.firstOrNull()
-    if (match != null) {
-        showContentDetail(match, versions.takeIf { it.size > 1 })
-        // The Discover tile is tagged with the TMDB id, but showContentDetail stamped
-        // detailReturnItemId with the library copy's id - Back then found no tile with that
-        // tag and fell back to the tab. Re-point the return id at the tile the user tapped.
-        detailReturnItemId = item.id
-    } else {
-        showContentDetail(item)
+    scope.launch {
+        // The catalogue lookup is a database query now; keep it off the click thread and
+        // open the detail screen when it answers.
+        val versions = withContext(Dispatchers.Default) {
+            catalogVersionsFor(findCatalogMatches(item))
+        }
+        val match = versions.firstOrNull()
+        if (match != null) {
+            showContentDetail(match, versions.takeIf { it.size > 1 })
+            // The Discover tile is tagged with the TMDB id, but showContentDetail stamped
+            // detailReturnItemId with the library copy's id - Back then found no tile with that
+            // tag and fell back to the tab. Re-point the return id at the tile the user tapped.
+            detailReturnItemId = item.id
+        } else {
+            showContentDetail(item)
+        }
     }
 }
 
@@ -525,7 +530,7 @@ internal fun MainActivity.startDiscoverStreamSearch(item: Channel) {
  *  "NF - Troy The Odyssey", a different film, and reported it as owned. Provider decoration
  *  is stripped with cleanVodTitle() instead, which is what the prefix case actually needed,
  *  so a title containing another title no longer matches at all. */
-internal fun MainActivity.findCatalogMatches(item: Channel): List<Channel> {
+internal suspend fun MainActivity.findCatalogMatches(item: Channel): List<Channel> {
     val target = normalizeMatchTitle(item.name)
     if (target.isBlank()) return emptyList()
     // A TMDB id on both sides is authoritative, so it skips the whole name/year pipeline.
@@ -535,7 +540,8 @@ internal fun MainActivity.findCatalogMatches(item: Channel): List<Channel> {
     // on Discover tiles by TmdbClient and read from the server's ProviderIds (see
     // JellyfinProvider), and the panel's own `tmdb` field feeds it for Xtream copies too.
     if (item.tmdbId != null) {
-        val byId = allChannels.filter { it.mediaType == item.mediaType && it.tmdbId == item.tmdbId }
+        val byId = com.lumora.data.catalog.CatalogRepository.get(this)
+            .vodByTmdbId(item.mediaType, item.tmdbId)
         if (byId.isNotEmpty()) {
             return byId.sortedBy { if (it.isOwnLibrary) 0 else 1 }.distinctBy { it.id.ifBlank { it.url } }
         }
@@ -548,8 +554,14 @@ internal fun MainActivity.findCatalogMatches(item: Channel): List<Channel> {
     // test rejects almost everything for the price of an indexOf.
     val backupIds = backupSourceIds()
     val probe = target.split(' ').maxByOrNull { it.length }.orEmpty()
+    val candidates = if (probe.isEmpty()) {
+        emptyList()
+    } else {
+        com.lumora.data.catalog.CatalogRepository.get(this)
+            .vodByTitleProbe(item.mediaType, probe, 200)
+    }
     val scored = mutableListOf<Pair<Int, Channel>>()
-    for (candidate in allChannels) {
+    for (candidate in candidates) {
         if (candidate.mediaType != item.mediaType) continue
         if (probe.isNotEmpty() && !candidate.name.contains(probe, ignoreCase = true)) continue
         // A year both sides agree on is a hard filter, exactly as before: two films can
@@ -790,6 +802,10 @@ internal fun MainActivity.resolveHomeTileSeries(channel: Channel): Channel? {
             it.mediaType == MediaType.SERIES && it.id == id &&
                 it.isJellyfin == channel.isJellyfin && it.isPlex == channel.isPlex &&
                 (channel.sourceProviderId == null || it.sourceProviderId == channel.sourceProviderId)
+        } ?: seriesList.firstOrNull {
+            it.mediaType == MediaType.SERIES && it.id == id &&
+                it.isJellyfin == channel.isJellyfin && it.isPlex == channel.isPlex &&
+                (channel.sourceProviderId == null || it.sourceProviderId == channel.sourceProviderId)
         }?.let { return it }
     }
     // The name-based fallbacks below walk the provider's series rows. That list is copied
@@ -798,7 +814,7 @@ internal fun MainActivity.resolveHomeTileSeries(channel: Channel): Channel? {
     // been removed, a panel that never stamped one), and the hot path - an episode row's
     // watched state - reads the show out of the row's own name instead (see
     // seriesTitleForEpisode).
-    val candidates = allChannels.filter {
+    val candidates = seriesList.filter {
         it.mediaType == MediaType.SERIES &&
             it.isJellyfin == channel.isJellyfin && it.isPlex == channel.isPlex &&
             (channel.sourceProviderId == null || it.sourceProviderId == channel.sourceProviderId)
@@ -1273,6 +1289,8 @@ internal fun MainActivity.fetchUpNextSeries(seriesIds: List<String>) {
             if (epoch != upNextEpoch) break
             val series = allChannels.firstOrNull {
                 it.mediaType == MediaType.SERIES && it.id == seriesId
+            } ?: seriesList.firstOrNull {
+                it.mediaType == MediaType.SERIES && it.id == seriesId
             } ?: continue // not in catalog yet - leave unresolved, retry next build
             val seasons = withContext(Dispatchers.IO) {
                 runCatching { loadSeriesContent(series).second }.getOrNull()
@@ -1631,6 +1649,12 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
     val candidates = HashMap<String, MutableList<Channel>>()
     for (ch in allChannels) {
         if (ch.mediaType != MediaType.SERIES) continue
+        if (ch.id !in wanted) continue
+        candidates.getOrPut(ch.id) { mutableListOf() }.add(ch)
+    }
+    // Series cards live in the VOD list now, not `allChannels` - a parent stamped on an
+    // in-progress episode is resolved from the bounded series set as well.
+    for (ch in seriesList) {
         if (ch.id !in wanted) continue
         candidates.getOrPut(ch.id) { mutableListOf() }.add(ch)
     }

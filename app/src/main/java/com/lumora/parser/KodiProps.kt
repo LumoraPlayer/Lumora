@@ -220,7 +220,7 @@ object KodiProps {
     }
 
     /**
-     * Encodes a header map for flat persistence (ChannelCache columns, which split on a
+     * Encodes a header map for flat persistence (catalogue columns, which split on a
      * control char but otherwise keep `&`/`=` literally): `%` first, then `&` and `=`.
      * Pure Kotlin so plain JUnit covers the round trip.
      */

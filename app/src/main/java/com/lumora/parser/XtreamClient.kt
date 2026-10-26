@@ -434,6 +434,83 @@ class XtreamClient(private val client: OkHttpClient) {
         }
 
     /**
+     * Streams one bulk list to [onItem] instead of returning it.
+     *
+     * This is the ingest path for the persisted catalogue: a 200k-movie panel answers with
+     * ~80 MB of JSON, and the list-returning calls above would hold every mapped `Channel`
+     * before anything could be stored. Here each item is mapped and handed straight to the
+     * caller's batch writer, so the resident peak is one item plus the writer's batch.
+     *
+     * [transform] runs on each mapped item before it is emitted - the fetch stamps the
+     * resolved category name and provider id there.
+     *
+     * Blocking (OkHttp + a synchronous JSON pull); call from Dispatchers.IO. Returns the
+     * number of items delivered, or null when the request itself failed
+     * ([lastFetchError] says why).
+     */
+    fun streamBulkList(
+        provider: Provider,
+        action: String,
+        mediaType: MediaType,
+        transform: (Channel) -> Channel = { it },
+        onItem: (Channel) -> Unit
+    ): Int? {
+        val key = when (action) {
+            "get_live_streams" -> "live_streams"
+            "get_vod_streams" -> "vod_streams"
+            "get_series" -> "series"
+            else -> ""
+        }
+        val readItem: (Map<String, String?>, String?) -> Channel? = when (action) {
+            "get_series" -> { map, _ -> seriesFromMap(map)?.let(transform) }
+            else -> { map, first -> streamFromMap(map, first, mediaType, provider)?.let(transform) }
+        }
+        return streamBulkArrayInto(buildApiUrl(provider, "action=$action"), key, readItem, onItem)
+    }
+
+    /** The HTTP/JSON half of [streamBulkList]: one request, streamed item by item. */
+    private fun <T> streamBulkArrayInto(
+        url: String,
+        key: String,
+        readItem: (Map<String, String?>, String?) -> T?,
+        onItem: (T) -> Unit
+    ): Int? {
+        return try {
+            val request = Request.Builder().url(url)
+                .header("User-Agent", "Lumora/1.0")
+                .header("Accept", "application/json, text/plain, */*")
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    lastFetchError = "Server returned HTTP ${response.code}"
+                    Log.w(TAG, "HTTP ${response.code} for $url")
+                    return null
+                }
+                val body = response.body ?: return null
+                var count = 0
+                body.charStream().use { stream ->
+                    JsonReader(stream).use { reader ->
+                        reader.isLenient = true
+                        readBulkArrayInto(reader, key, readItem) { item ->
+                            onItem(item)
+                            count++
+                        }
+                    }
+                }
+                count
+            }
+        } catch (e: OutOfMemoryError) {
+            lastFetchError = "Playlist too large to load"
+            Log.w(TAG, "OOM streaming $url")
+            null
+        } catch (e: Exception) {
+            lastFetchError = e.message ?: e.javaClass.simpleName
+            Log.w(TAG, "Network error fetching $url: ${e.message}")
+            null
+        }
+    }
+
+    /**
      * Bulk-list fetch that never holds the whole response in memory at once (issue #8).
      *
      * A 100k-channel panel answers get_live_streams/get_vod_streams/get_series with tens
@@ -488,11 +565,24 @@ class XtreamClient(private val client: OkHttpClient) {
         readItem: (Map<String, String?>, String?) -> T?
     ): List<T> {
         val out = ArrayList<T>()
+        readBulkArrayInto(reader, key, readItem) { out.add(it) }
+        return out
+    }
+
+    /** Same traversal as [readBulkArray], but hands each item to [emit] instead of collecting
+     *  them - the streaming ingest path writes straight to the catalogue database, so the
+     *  whole list never exists in memory. */
+    private fun <T> readBulkArrayInto(
+        reader: JsonReader,
+        key: String,
+        readItem: (Map<String, String?>, String?) -> T?,
+        emit: (T) -> Unit
+    ) {
         fun drainArray() {
             reader.beginArray()
             while (reader.hasNext()) {
                 try {
-                    readItemWithObject(reader, readItem)?.let(out::add)
+                    readItemWithObject(reader, readItem)?.let(emit)
                 } catch (_: Exception) {
                     // One malformed item must not lose the tens of thousands after it -
                     // resync past whatever structure the failed read left open.
@@ -517,7 +607,6 @@ class XtreamClient(private val client: OkHttpClient) {
             }
             else -> reader.skipValue()
         }
-        return out
     }
 
     private fun <T> readItemWithObject(

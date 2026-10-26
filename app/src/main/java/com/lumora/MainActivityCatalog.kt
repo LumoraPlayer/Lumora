@@ -48,16 +48,21 @@ internal fun MainActivity.formatSubscriptionStatus(expDateSeconds: Long?, isTria
  */
 internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
     val snapshot = allChannels
-    val derived = withContext(Dispatchers.Default) { computeDerivedContent(snapshot) }
+    // Live stays resident (the guide, sports matcher and multiview scan it); films and
+    // series are read back from the catalogue database as capped shelves.
+    withContext(Dispatchers.Default) { deriveLiveHalf(snapshot) }
+    val vod = buildVodContent()
 
-    liveChannels = derived.liveChannels
-    liveVersions = derived.liveVersions
-    filmList = derived.filmList
-    filmVersions = derived.filmVersions
-    filmShelves = derived.filmShelves
-    seriesList = derived.seriesList
-    seriesVersions = derived.seriesVersions
-    seriesShelves = derived.seriesShelves
+    filmList = vod.filmList
+    filmVersions = vod.filmVersions
+    filmShelves = vod.filmShelves
+    seriesList = vod.seriesList
+    seriesVersions = vod.seriesVersions
+    seriesShelves = vod.seriesShelves
+    cachedSeriesCategoryRows = vod.seriesCategoryRows
+    cachedFilmCategoryRows = vod.filmCategoryRows
+    cachedSeriesCategoryChildren = vod.seriesCategoryChildren
+    cachedFilmCategoryChildren = vod.filmCategoryChildren
 
     // A Trakt pull that ran before this catalog had loaded (both race off app launch) could
     // not match its titles against anything - retry now that allChannels is current. Cheap
@@ -77,7 +82,8 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
     // provider-sourced channels at all - gating the whole content area on allChannels alone
     // trapped a plugin-only setup (e.g. just torrent-search enabled, which contributes no
     // catalog entries) behind the "No provider configured" empty state for no reason.
-    val hasContent = allChannels.isNotEmpty() || hasProviderlessSource()
+    // A VOD-only panel has no live channels at all, so the derived lists count too.
+    val hasContent = allChannels.isNotEmpty() || filmList.isNotEmpty() || seriesList.isNotEmpty() || hasProviderlessSource()
 
     // Adapters are safe to (re)bind under an open overlay - only the visible screen
     // must not be, since it lives behind the overlay. Bind first, then swap visibility
@@ -216,7 +222,7 @@ internal fun MainActivity.classifyAndShowLiveFirst() {
         withContext(Dispatchers.Default) { deriveLiveHalf(allChannels) }
         // Mirror of classifyAndShow()'s first-paint bind block, live side only - the
         // other tabs' adapters and shelves belong to their own render path.
-        val hasContent = allChannels.isNotEmpty() || hasProviderlessSource()
+        val hasContent = allChannels.isNotEmpty() || filmList.isNotEmpty() || seriesList.isNotEmpty() || hasProviderlessSource()
         if (hasContent) {
             // Mirror of classifyAndShow()'s adapter-bind block (all five, not just the
             // live side): on warm/stale-cache starts this is the only bind that runs, so
@@ -270,7 +276,7 @@ internal fun MainActivity.deriveFilmsSeries() {
     val snapshot = allChannels
     filmsSeriesDeriveJob = scope.launch(Dispatchers.Default) {
         if (allChannels !== snapshot) return@launch
-        val result = deriveFilmsSeriesHalf(snapshot)
+        val result = buildVodContent()
         withContext(Dispatchers.Main) {
             // Guard again before touching the UI: the shelf build is seconds of work on
             // a big catalog, and a newer load may have swapped allChannels mid-derive.
@@ -284,6 +290,8 @@ internal fun MainActivity.deriveFilmsSeries() {
             seriesShelves = result.seriesShelves
             cachedSeriesCategoryRows = result.seriesCategoryRows
             cachedFilmCategoryRows = result.filmCategoryRows
+            cachedSeriesCategoryChildren = result.seriesCategoryChildren
+            cachedFilmCategoryChildren = result.filmCategoryChildren
             // Mirror of classifyAndShow()'s shelf submits for the films/series shelves.
             seriesShelfAdapter.submitList(seriesShelves)
             filmsShelfAdapter.submitList(filmShelves)
@@ -301,7 +309,11 @@ internal fun MainActivity.deriveFilmsSeries() {
  *  wiped by that final replace a moment later. */
 internal fun MainActivity.mergeProviderPartial(configId: String?, channels: List<Channel>) {
     val enabledIds = IptvProviderStore.load(prefs).filter { it.enabled }.map { it.id }.toSet()
-    val filtered = channels.filter { it.sourceProviderId == null || it.sourceProviderId in enabledIds }
+    // Only the live half stays resident. Films and series from this provider are in the
+    // catalogue database and are rendered from there by buildVodContent().
+    val filtered = channels.filter {
+        it.mediaType == MediaType.LIVE && (it.sourceProviderId == null || it.sourceProviderId in enabledIds)
+    }
     allChannels = allChannels.filterNot { it.sourceProviderId == configId } + filtered
 }
 
@@ -356,20 +368,6 @@ internal fun MainActivity.renderLivePartial() {
 
 // No hideNonEnglish/hideAdult parameters: both halves read those prefs themselves (the
 // derive-cache fingerprint depends on them), so the arguments were passed in and ignored.
-internal fun MainActivity.computeDerivedContent(allChannels: List<Channel>): MainActivity.DerivedContent {
-    deriveLiveHalf(allChannels)
-    val result = deriveFilmsSeriesHalf(allChannels)
-    filmList = result.filmList
-    filmVersions = result.filmVersions
-    filmShelves = result.filmShelves
-    seriesList = result.seriesList
-    seriesVersions = result.seriesVersions
-    seriesShelves = result.seriesShelves
-    cachedSeriesCategoryRows = result.seriesCategoryRows
-    cachedFilmCategoryRows = result.filmCategoryRows
-    return MainActivity.DerivedContent(liveChannels, liveVersions, filmList, filmVersions, filmShelves, seriesList, seriesVersions, seriesShelves)
-}
-
 /** Live half of the derive pass: filter + adult-drop + quality-version grouping into
  *  liveChannels/liveVersions. Cheap relative to the films/series half (no shelves), so
  *  it's extracted first and reused by the paint-Live-ASAP path. */
@@ -476,149 +474,6 @@ internal fun MainActivity.vodDerivedFingerprint(
  *  which pass owns a slow start on the actual TV hardware. */
 internal fun MainActivity.perf(stage: String, startedAt: Long, detail: String = "") {
     android.util.Log.i("LumoraPerf", "$stage: ${System.currentTimeMillis() - startedAt}ms $detail")
-}
-
-/** Films/series half of the derive pass: dedup/sort, category rows, and shelf build into
- *  a [MainActivity.FilmsSeriesContent] result (no field side effects - the caller assigns them on its
- *  own thread). The expensive half - run off the main thread. */
-
-internal fun MainActivity.deriveFilmsSeriesHalf(list: List<Channel>): MainActivity.FilmsSeriesContent {
-    val startedAt = System.currentTimeMillis()
-    val hideNonEnglish = prefs.getBoolean(PREF_HIDE_NON_ENGLISH, true)
-    val hideAdult = prefs.getBoolean(PREF_HIDE_ADULT, true)
-    val groupChannels = prefs.getBoolean(PREF_GROUP_CHANNELS, true)
-    // Backup providers are loaded for failover but hidden from browsing - the grouping
-    // below keeps their copies in the versions maps while the display lists drop them.
-    val backupIds = backupSourceIds()
-    val categorizeVod = prefs.getBoolean(PREF_CATEGORIZE_VOD, true)
-    fun isAdult(ch: Channel) = hideAdult && isAdultCategory(ch.categoryName, ch.group)
-
-    // One pass, not four: the chained filter/filterNot/map each walked the whole 50k+
-    // catalogue and allocated its own intermediate list. Same predicates, same order.
-    // The dedup/sort half is a pure function of the catalogue and three prefs, so it is
-    // restored from disk when nothing that feeds it has changed (see DerivedCache). The
-    // category rows and shelves below are always rebuilt: they also depend on pinned,
-    // hidden, favourites and Continue Watching, which move constantly.
-    val vodFingerprint = vodDerivedFingerprint(list, hideAdult, hideNonEnglish, groupChannels)
-    val cachedVod = DerivedCache.loadVod(this, vodFingerprint, list)
-
-    val films: List<Channel>
-    val versions: Map<String, List<Channel>>
-    if (cachedVod != null) {
-        films = cachedVod.films
-        versions = cachedVod.filmVersions
-    } else {
-        val rawFilms = list.mapNotNull { ch ->
-            if (ch.mediaType != MediaType.MOVIE) null
-            else if (hideNonEnglish && isNonEnglishTitle(ch.name)) null
-            else if (isAdult(ch)) null
-            else ch.withResolvedYear()
-        }
-        val (groupedFilms, filmVers) = if (groupChannels) groupDuplicateMovies(rawFilms, backupIds) else rawFilms to emptyMap()
-        films = groupedFilms.sortedByDescending { it.year?.toIntOrNull() ?: -1 }
-            .withoutBackupOnlyGroups(filmVers, backupIds)
-        versions = filmVers
-    }
-    // "Newest" pools the most recent releases (by date, not rating) into one shelf
-    // pinned at the top, sorted by release date descending regardless of category.
-    val newestFilms = newestByDate(films)
-    // Poster shelves derive from the SAME category rows as the sidebar - same categories,
-    // same order, guaranteed by construction. Snapshot the per-tab pinned/hidden sets
-    // once here (they're per-tab prefs keys and both tabs' shelves are built in this one
-    // pass). Never write categoryChildrenCache from here - that stays sidebar-owned.
-    val filmPinned = getPinnedCategories(2)
-    val filmHidden = getHiddenCategories(2)
-    val seriesPinned = getPinnedCategories(1)
-    val seriesHidden = getHiddenCategories(1)
-    val animeSectionsSnapshot = animeSections
-    val filmCategoryRows = buildCategoryRows(
-        list = films, versionsById = versions, tab = 2,
-        pinned = filmPinned, hiddenIds = filmHidden, expanded = emptySet(),
-        animeSections = emptyList(), useClassicLayout = false, favoriteChannelIds = emptySet(),
-        categorize = categorizeVod
-    )
-    // The old buildShelves() count-sorting is gone - shelf order IS the sidebar's row
-    // order. Films keeps its single "Newest" prepend, exactly as before.
-    val filmShelvesLocal = shelvesFromCategoryRows(filmCategoryRows.rows, films)
-        .let { shelves -> if (newestFilms.isEmpty()) shelves else listOf(ContentShelf(getString(R.string.category_newest), newestFilms, categoryId = NEWEST_CATEGORY_ID)) + shelves }
-        // One merged Continue Watching row leads the poster, mirroring the Series tab's
-        // lead shelf (films have no Up Next and no poster favourites shelf, so it is
-        // Continue Watching alone rather than the merged row series use).
-        .let { shelves ->
-            val lead = movieContinueItems()
-            if (lead.isEmpty()) shelves
-            else listOf(ContentShelf(getString(R.string.category_continue_watching), lead)) + shelves
-        }
-
-    val series: List<Channel>
-    val seriesVers: Map<String, List<Channel>>
-    if (cachedVod != null) {
-        series = cachedVod.series
-        seriesVers = cachedVod.seriesVersions
-    } else {
-        val rawSeries = list.mapNotNull { ch ->
-            if (ch.mediaType != MediaType.SERIES) null
-            else if (hideNonEnglish && isNonEnglishTitle(ch.name)) null
-            else if (isAdult(ch)) null
-            else ch.withResolvedYear()
-        }
-        // Real release date (from the provider's bulk series list) sorts more precisely
-        // than year alone; falls back to year for anything that came back without one. The
-        // date is parsed rather than string-compared - panels send day-first and other
-        // spellings that a raw comparison orders wrongly (see releaseDateSortKey). Keyed
-        // once per item, not once per comparison.
-        val (groupedSeries, vers) = if (groupChannels) groupDuplicateSeries(rawSeries, backupIds) else rawSeries to emptyMap()
-        series = groupedSeries
-            .map { it to releaseDateSortKey(it.releaseDate, it.year) }
-            .sortedWith(
-                compareByDescending<Pair<Channel, Int>> { it.second }
-                    .thenByDescending { it.first.year?.toIntOrNull() ?: -1 }
-            )
-            .map { it.first }
-            .withoutBackupOnlyGroups(vers, backupIds)
-        seriesVers = vers
-        DerivedCache.saveVod(
-            this,
-            vodFingerprint,
-            DerivedCache.VodSnapshot(films, versions, series, seriesVers)
-        )
-    }
-    // Favourited series get their own shelf pinned above everything else in the
-    // Series tab itself, not just on Home.
-    val favoriteSeriesIds = FavoritesStore.getFavoriteSeriesIds(this)
-    val favoriteSeries = series.filter { it.id in favoriteSeriesIds }
-    val newestSeries = newestByDate(series)
-    val seriesCategoryRows = buildCategoryRows(
-        list = series, versionsById = seriesVers, tab = 1,
-        pinned = seriesPinned, hiddenIds = seriesHidden, expanded = emptySet(),
-        animeSections = animeSectionsSnapshot, useClassicLayout = false, favoriteChannelIds = emptySet(),
-        categorize = categorizeVod
-    )
-    // Newest stays pinned at the top of the poster, above the sidebar-derived category
-    // shelves, and one merged Continue Watching row leads the lot - Continue Watching, Up
-    // Next and Favourites are a single shelf here rather than the three separate rows the
-    // sidebar keeps (see seriesPosterLeadShelfItems).
-    val seriesShelvesLocal = shelvesFromCategoryRows(seriesCategoryRows.rows, series)
-        .let { shelves ->
-            (if (newestSeries.isEmpty()) shelves else listOf(ContentShelf(getString(R.string.category_newest), newestSeries, categoryId = NEWEST_CATEGORY_ID)) + shelves)
-        }
-        .let { shelves ->
-            val lead = seriesPosterLeadShelfItems(favoriteSeries)
-            if (lead.isEmpty()) shelves
-            else listOf(ContentShelf(getString(R.string.category_continue_watching), lead)) + shelves
-        }
-
-    perf("deriveFilmsSeriesHalf", startedAt, "${films.size} films / ${series.size} series")
-    return MainActivity.FilmsSeriesContent(
-        filmList = films,
-        filmVersions = versions,
-        filmShelves = filmShelvesLocal,
-        seriesList = series,
-        seriesVersions = seriesVers,
-        seriesShelves = seriesShelvesLocal,
-        seriesCategoryRows = seriesCategoryRows.rows,
-        filmCategoryRows = filmCategoryRows.rows
-    )
 }
 
 /** Maps sidebar category rows (the output of [buildCategoryRows], already in sidebar
