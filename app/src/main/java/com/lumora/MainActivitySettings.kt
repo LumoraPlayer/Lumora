@@ -1784,7 +1784,11 @@ internal fun MainActivity.showProviderSettings() {
                 box.isChecked = checked
                 box.setOnClickListener {
                     write(box.isChecked)
-                    if (hasProviderConfigured()) scope.launch { loadAllConfiguredProviders(forceRefresh = true) }
+                    // Scoped to this provider: switching its Movies/Series gate only changes
+                    // what this source carries, and a full load would re-fetch everyone.
+                    if (hasProviderConfigured()) scope.launch {
+                        loadAllConfiguredProviders(forceRefresh = true, only = setOf(cfg.id))
+                    }
                 }
             }
             bindContentBox(row.findViewById(R.id.rowTvBox), cfg.liveEnabled) { on ->
@@ -1841,16 +1845,19 @@ internal fun MainActivity.showProviderSettings() {
                     .setMessage(getString(R.string.sett_remove_provider_message))
                     .setPositiveButton(getString(R.string.remove)) { _, _ ->
                         IptvProviderStore.remove(prefs, cfg.id)
-                        scope.launch {
-                            val repo = CatalogRepository.get(this@showProviderSettings)
-                            repo.deleteProvider(cfg.id)
-                        }
                         pruneRemovedSource(cfg.name, cfg.id, cfg.url)
                         renderIptvProviderList()
                         // The removed row's own Remove button was holding focus and is
                         // gone now - see focusWhenReady.
                         focusWhenReady(addIptvProviderButton)
-                        loadAllConfiguredProviders(forceRefresh = true)
+                        // A removal is local: its rows go, the screen repaints from what is
+                        // left, and no other provider is re-fetched. `forceRefresh = true`
+                        // here re-imported every remaining provider's whole catalogue,
+                        // which is minutes of scanning after deleting one row. The
+                        // switch-off path already does exactly this teardown - rows,
+                        // resident live list, playback/preview/Multiview - so it is reused
+                        // rather than duplicated.
+                        applyProviderToggle(false, cfg.id) { it.sourceProviderId == cfg.id }
                     }
                     .setNegativeButton(getString(R.string.cancel), null)
                     .show()
@@ -1884,7 +1891,10 @@ internal fun MainActivity.showProviderSettings() {
                 box.isChecked = checked
                 box.setOnClickListener {
                     write(box.isChecked)
-                    if (hasProviderConfigured()) scope.launch { loadAllConfiguredProviders(forceRefresh = true) }
+                    // Scoped to this server, same as an IPTV row's gates.
+                    if (hasProviderConfigured()) scope.launch {
+                        loadAllConfiguredProviders(forceRefresh = true, only = setOf(server.id))
+                    }
                 }
             }
             val tvBox = row.findViewById<CheckBox>(R.id.rowTvBox)
@@ -2016,7 +2026,10 @@ internal fun MainActivity.showProviderSettings() {
                         ensureFileBrowserDismissed()
                         renderIptvProviderList()
                         focusWhenReady(addIptvProviderButton)
-                        loadAllConfiguredProviders(forceRefresh = true)
+                        // Same as an IPTV removal: drop this server's rows and repaint
+                        // from what is left. A force refresh here re-scanned every other
+                        // provider for a removal that touched none of them.
+                        applyProviderToggle(false, server.id) { it.sourceProviderId == server.id }
                     }
                     .setNegativeButton(getString(R.string.cancel), null)
                     .show()

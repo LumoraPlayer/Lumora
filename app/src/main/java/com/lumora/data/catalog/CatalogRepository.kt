@@ -392,6 +392,24 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         dao.deleteForProvider(providerId)
     }
 
+    /** Hides a switched-off provider's rows in place instead of deleting them, so switching
+     *  it back on can reuse the catalogue instead of re-downloading it. Every VOD read
+     *  filters `rank > 0`; live is gated in memory by the enabled-provider set. */
+    suspend fun parkProvider(providerId: String) = withContext(Dispatchers.IO) {
+        dao.parkProvider(providerId)
+    }
+
+    /** Un-hides a provider parked by [parkProvider], re-applying the backup demotion when it
+     *  is a backup source (the same offset the backup set uses). */
+    suspend fun restoreProvider(providerId: String, backup: Boolean) = withContext(Dispatchers.IO) {
+        dao.restoreProvider(providerId, if (backup) 1_000_000_000 else 0)
+    }
+
+    /** One provider's live rows, so re-enabling it needs no network round trip. */
+    suspend fun liveForProvider(providerId: String): List<Channel> = withContext(Dispatchers.IO) {
+        dao.liveForProvider(providerId).map(CatalogMapping::toChannel)
+    }
+
     /** Drops one provider's catalogue of one type (its Movies/Series box was switched off). */
     suspend fun deleteProviderType(providerId: String, mediaType: MediaType) =
         withContext(Dispatchers.IO) {

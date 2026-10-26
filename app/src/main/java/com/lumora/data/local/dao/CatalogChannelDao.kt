@@ -45,6 +45,30 @@ interface CatalogChannelDao {
     @Query("DELETE FROM catalog_channels WHERE providerId = :providerId")
     suspend fun deleteForProvider(providerId: String): Int
 
+    /**
+     * Hides one provider's rows without deleting them.
+     *
+     * Switching a provider off used to delete its whole catalogue, so switching it back on
+     * re-downloaded it even when it had been fetched an hour earlier. Every VOD read filters
+     * `rank > 0` and every live read is gated in memory by the enabled-provider set, so
+     * parking the rows at a rank no real row can hold is enough to make them invisible -
+     * and [restoreProvider] puts the real value back from `baseRank` without a fetch.
+     */
+    @Query("UPDATE catalog_channels SET rank = -2000000000 WHERE providerId = :providerId")
+    suspend fun parkProvider(providerId: String): Int
+
+    /** Un-parks one provider's rows, re-applying the backup demotion when it is a backup
+     *  source (the same offset `demoteBackupProviders` uses). */
+    @Query("UPDATE catalog_channels SET rank = baseRank - :demotion WHERE providerId = :providerId")
+    suspend fun restoreProvider(providerId: String, demotion: Int): Int
+
+    /** One provider's live rows, so re-enabling it does not need a network round trip. */
+    @Query(
+        "SELECT * FROM catalog_channels WHERE mediaType = 'LIVE' AND providerId = :providerId " +
+            "ORDER BY orderIndex ASC, uid ASC"
+    )
+    suspend fun liveForProvider(providerId: String): List<CatalogChannelEntity>
+
     /** Replaces one provider's catalogue of one type - the streaming ingest path writes
      *  live, movies and series separately and must not delete the half it has not
      *  re-fetched yet. */
@@ -117,6 +141,7 @@ interface CatalogChannelDao {
     @Query(
         "SELECT * FROM catalog_channels WHERE name LIKE '%' || :query || '%' " +
             "AND (:mediaType IS NULL OR mediaType = :mediaType) " +
+            "AND rank > -1500000000 " +
             "ORDER BY yearSort DESC, name COLLATE NOCASE ASC LIMIT :limit"
     )
     suspend fun search(query: String, mediaType: String?, limit: Int): List<CatalogChannelEntity>
@@ -255,9 +280,12 @@ interface CatalogChannelDao {
         hideAdult: Boolean
     ): List<CatalogLeafRow>
 
-    /** One title's copies, best first - the version chips and playback failover. */
+    /** One title's copies, best first - the version chips and playback failover.
+     *  The rank floor keeps parked (switched-off provider) copies out while still listing
+     *  backup sources, which are demoted to `baseRank - 1e9` and so stay above it. */
     @Query(
         "SELECT * FROM catalog_channels WHERE mediaType = :mediaType AND groupId = :groupId " +
+            "AND rank > -1500000000 " +
             "ORDER BY rank DESC, orderIndex ASC"
     )
     suspend fun vodVersions(mediaType: String, groupId: String): List<CatalogChannelEntity>
@@ -312,6 +340,7 @@ interface CatalogChannelDao {
 
     @Query(
         "SELECT * FROM catalog_channels WHERE mediaType = :mediaType AND groupId IN (:groups) " +
+            "AND rank > -1500000000 " +
             "ORDER BY rank DESC, orderIndex ASC"
     )
     suspend fun vodVersionsForGroups(mediaType: String, groups: List<String>): List<CatalogChannelEntity>
@@ -331,10 +360,11 @@ interface CatalogChannelDao {
     )
     suspend fun vodByTitleProbe(mediaType: String, probe: String, limit: Int): List<CatalogChannelEntity>
 
-    /** Own-library copies (every copy, not one per group), for watched-mark propagation. */
+    /** Own-library copies (every copy, not one per group), for watched-mark propagation.
+     *  Parked (switched-off server) rows are filtered by the rank floor. */
     @Query(
         "SELECT * FROM catalog_channels " +
-            "WHERE mediaType = :mediaType AND (isJellyfin = 1 OR isPlex = 1)"
+            "WHERE mediaType = :mediaType AND (isJellyfin = 1 OR isPlex = 1) AND rank > -1500000000"
     )
     suspend fun ownLibrary(mediaType: String): List<CatalogChannelEntity>
 

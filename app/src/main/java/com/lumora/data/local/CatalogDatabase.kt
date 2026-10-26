@@ -44,6 +44,9 @@ abstract class CatalogDatabase : RoomDatabase() {
                     CatalogDatabase::class.java,
                     NAME
                 )
+                    // WAL explicitly: a bulk ingest writes while the UI reads, so readers
+                    // must stay on their own snapshot rather than wait behind a write.
+                    .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                     .build()
                     .also { instance = it }
             }

@@ -10,7 +10,7 @@ import org.junit.Test
  * The size line the ingest banner and the provider row show, and the threshold that turns
  * it into the "ask your provider to disable channels" warning.
  *
- * The boundary is the part worth pinning down: a panel measured at or past 100 MB is already
+ * The boundary is the part worth pinning down: a panel measured at or past 50 MB is already
  * expensive to ingest, and the formatted text has to stay short enough for a TV banner without
  * a locale-dependent decimal mark.
  */
@@ -29,10 +29,10 @@ class CatalogIngestSizeTest {
     }
 
     @Test
-    fun `the extremely-large warning starts at exactly one hundred megabytes`() {
-        assertEquals(100L * 1024 * 1024, CATALOGUE_TOO_LARGE_BYTES)
-        assertFalse(99L * 1024 * 1024 >= CATALOGUE_TOO_LARGE_BYTES)
-        assertTrue(100L * 1024 * 1024 >= CATALOGUE_TOO_LARGE_BYTES)
-        assertTrue(128L * 1024 * 1024 >= CATALOGUE_TOO_LARGE_BYTES)
+    fun `the extremely-large warning starts at exactly fifty megabytes`() {
+        assertEquals(50L * 1024 * 1024, CATALOGUE_TOO_LARGE_BYTES)
+        assertFalse(49L * 1024 * 1024 >= CATALOGUE_TOO_LARGE_BYTES)
+        assertTrue(50L * 1024 * 1024 >= CATALOGUE_TOO_LARGE_BYTES)
+        assertTrue(64L * 1024 * 1024 >= CATALOGUE_TOO_LARGE_BYTES)
     }
 }

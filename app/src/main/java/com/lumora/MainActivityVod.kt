@@ -130,33 +130,74 @@ internal class VodRows(
  * (Continue Watching) are refreshed in place by refreshFilmShelvesIfShowing() /
  * refreshSeriesShelvesIfShowing(), which do not re-run this.
  */
-internal suspend fun MainActivity.buildVodContent(): MainActivity.FilmsSeriesContent = VOD_BUILD_MUTEX.withLock {
+internal suspend fun MainActivity.buildVodContent(
+    /** 1 builds Series first, 2 (the default for anything else) builds Films first. The tab
+     *  the user is looking at is built and published before the other one starts. */
+    preferredTab: Int = activeTab,
+    /** Called with each usable state as it lands: the previous cache first (if its key no
+     *  longer matches), then each tab's rows before its shelves, then the finished content.
+     *  Lets the caller paint instead of waiting for the whole pass. */
+    onProgress: (suspend (MainActivity.FilmsSeriesContent) -> Unit)? = null
+): MainActivity.FilmsSeriesContent = VOD_BUILD_MUTEX.withLock {
     val repo = CatalogRepository.get(this)
     if (isVodDisabled()) return emptyVodContent()
     val key = buildVodCacheKey(repo)
-    vodContentCache?.takeIf { it.key == key }?.let { cached ->
-        val refreshed = refreshVodLead(cached.content)
-        vodContentCache = VodContentCache(key, refreshed)
-        return refreshed
+    vodContentCache?.let { cached ->
+        if (cached.key == key) {
+            val refreshed = refreshVodLead(cached.content)
+            vodContentCache = VodContentCache(key, refreshed)
+            return refreshed
+        }
+        // Stale-while-revalidate: the cached content describes the same tabs from before
+        // this catalogue/pref change. Keeping it on screen beats blanking Films/Series for
+        // the seconds (minutes on a six-figure panel) the rebuild takes.
+        onProgress?.invoke(refreshVodLead(cached.content))
     }
 
-    val films = buildVodTab(tab = 2, type = MediaType.MOVIE)
-    val series = buildVodTab(tab = 1, type = MediaType.SERIES)
-    val content = MainActivity.FilmsSeriesContent(
-        filmList = films.list,
-        filmVersions = films.versions,
-        filmShelves = films.shelves,
-        seriesList = series.list,
-        seriesVersions = series.versions,
-        seriesShelves = series.shelves,
-        seriesCategoryRows = series.rows,
-        filmCategoryRows = films.rows,
-        seriesCategoryChildren = series.children,
-        filmCategoryChildren = films.children
-    )
+    var content = vodContentCache?.content ?: emptyVodContent()
+    val order = if (preferredTab == 1) {
+        listOf(1 to MediaType.SERIES, 2 to MediaType.MOVIE)
+    } else {
+        listOf(2 to MediaType.MOVIE, 1 to MediaType.SERIES)
+    }
+    for ((tab, type) in order) {
+        // Rows first: the category sidebar and the tab's filter state need them, and they
+        // are the part that has to exist before anything can be selected. Shelves (one
+        // grouped query per category) follow on their own publish, so the derived rows are
+        // on screen while they build.
+        val rowsOnly = buildVodTab(tab = tab, type = type, rowsOnly = true)
+        content = content.withTab(tab, rowsOnly)
+        onProgress?.invoke(content)
+
+        val full = buildVodTab(tab = tab, type = type, rowsOnly = false)
+        content = content.withTab(tab, full)
+        if (onProgress != null) onProgress.invoke(content)
+    }
     vodContentCache = VodContentCache(key, content)
-    return content
+    content
 }
+
+/** Replaces one tab's half of [FilmsSeriesContent]. A rows-only pass carries no shelves or
+ *  resident list, so those keep whatever the previous state had instead of blanking the
+ *  grid and the navigation set for the length of the shelf build. */
+private fun MainActivity.FilmsSeriesContent.withTab(tab: Int, part: VodTab): MainActivity.FilmsSeriesContent =
+    if (tab == 1) {
+        copy(
+            seriesList = part.list.ifEmpty { seriesList },
+            seriesVersions = part.versions.ifEmpty { seriesVersions },
+            seriesShelves = part.shelves.ifEmpty { seriesShelves },
+            seriesCategoryRows = part.rows,
+            seriesCategoryChildren = part.children
+        )
+    } else {
+        copy(
+            filmList = part.list.ifEmpty { filmList },
+            filmVersions = part.versions.ifEmpty { filmVersions },
+            filmShelves = part.shelves.ifEmpty { filmShelves },
+            filmCategoryRows = part.rows,
+            filmCategoryChildren = part.children
+        )
+    }
 
 internal class VodContentCache(
     val key: String,
@@ -220,13 +261,16 @@ private suspend fun MainActivity.buildVodCacheKey(repo: CatalogRepository): Stri
     append(FavoritesStore.getFavoriteSeriesIds(this@buildVodCacheKey).hashCode())
 }
 
-private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType): VodTab {
+private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType, rowsOnly: Boolean = false): VodTab {
     val repo = CatalogRepository.get(this)
     val englishOnly = vodEnglishOnly()
     val hideAdult = vodHideAdult()
     val categorize = prefs.getBoolean(PREF_CATEGORIZE_VOD, true)
     val anime = inMemoryVodChannels()
     val rows = buildVodRows(tab, type, englishOnly, hideAdult, categorize, anime)
+    // First pass: the category rows are what the sidebar and the tab's filter need, and
+    // they land before the per-category shelf queries that follow (see buildVodContent).
+    if (rowsOnly) return VodTab(emptyList(), emptyMap(), emptyList(), rows.rows, rows.children)
     val catalogShelves = buildVodShelves(rows.rows, type, englishOnly, hideAdult, anime)
 
     val newest = repo.vodPage(type, null, englishOnly, hideAdult, 0, VOD_SHELF_PREVIEW)

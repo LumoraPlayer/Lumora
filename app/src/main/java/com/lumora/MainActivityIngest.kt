@@ -10,10 +10,10 @@ import java.util.Locale
  *
  * A panel past this size costs the device real time and memory on every ingest, and the
  * only effective fix is on the provider's side (fewer channels on the subscription), so
- * the number is worth stating rather than silently grinding: 100 MB of JSON is comfortably
- * a six-figure stream count once it lands in the catalogue database.
+ * the number is worth stating rather than silently grinding: 50 MB of JSON is already a
+ * six-figure stream count once it lands in the catalogue database.
  */
-internal const val CATALOGUE_TOO_LARGE_BYTES = 100L * 1024 * 1024
+internal const val CATALOGUE_TOO_LARGE_BYTES = 50L * 1024 * 1024
 
 /** "84 MB", "1.2 GB" - the size line the banner and the provider list share. */
 internal fun formatCatalogueSize(bytes: Long): String = when {
@@ -87,6 +87,9 @@ internal fun MainActivity.publishCatalogConnecting(providerId: String, name: Str
 
 /** Paints the banner from whatever the enabled providers have reported. */
 internal fun MainActivity.renderCatalogIngest() {
+    // Hiding the banner is about the narration, not the work: keep collecting state (the
+    // end-of-load summary and the stored sizes still need it) and skip the repaint.
+    if (catalogIngestHidden) return
     val states = catalogIngest.values
     if (states.isEmpty()) {
         hideIngestBanner()
@@ -100,31 +103,35 @@ internal fun MainActivity.renderCatalogIngest() {
     val phaseTotal = current.phaseTotal
     val tooLarge = bytes >= CATALOGUE_TOO_LARGE_BYTES ||
         (phaseTotal != null && phaseTotal >= CATALOGUE_TOO_LARGE_BYTES)
+    val sizeText = if (phaseTotal != null && phaseTotal > 0) {
+        getString(
+            R.string.ingest_size_of,
+            formatCatalogueSize(current.phaseBytes),
+            formatCatalogueSize(phaseTotal)
+        )
+    } else {
+        formatCatalogueSize(bytes)
+    }
     val text = when {
         current.phase == "connecting" -> getString(R.string.ingest_connecting, current.name)
+        // The warning rides on the same what/how-far line as ordinary progress: an
+        // oversized panel is also the slowest ingest there is, so dropping the phase and
+        // the count for it left the banner silent about what it was doing at the worst
+        // possible moment.
         tooLarge -> getString(
             R.string.ingest_too_large,
             current.name,
-            formatCatalogueSize(maxOf(bytes, phaseTotal ?: 0L))
+            ingestPhaseLabel(current.phase),
+            NumberFormat.getIntegerInstance().format(rows),
+            sizeText
         )
-        else -> {
-            val sizeText = if (phaseTotal != null && phaseTotal > 0) {
-                getString(
-                    R.string.ingest_size_of,
-                    formatCatalogueSize(current.phaseBytes),
-                    formatCatalogueSize(phaseTotal)
-                )
-            } else {
-                formatCatalogueSize(bytes)
-            }
-            getString(
-                R.string.ingest_progress,
-                current.name,
-                ingestPhaseLabel(current.phase),
-                NumberFormat.getIntegerInstance().format(rows),
-                sizeText
-            )
-        }
+        else -> getString(
+            R.string.ingest_progress,
+            current.name,
+            ingestPhaseLabel(current.phase),
+            NumberFormat.getIntegerInstance().format(rows),
+            sizeText
+        )
     }
     // Known total -> determinate bar; a chunked response keeps the bar moving on its own.
     val fraction = if (current.phase == "connecting") {
@@ -135,10 +142,25 @@ internal fun MainActivity.renderCatalogIngest() {
     showIngestBanner(text, fraction)
 }
 
+/** Drops the banner for the rest of this load. The ingest keeps running in the background:
+ *  a six-figure panel is a minutes-long wait, and the card floats over whatever screen the
+ *  user moves to. The next load starts with it visible again. */
+internal fun MainActivity.hideCatalogIngest() {
+    catalogIngestHidden = true
+    catalogIngestPaintedAt = 0L
+    // The button that was just pressed is going away with the card - hand focus to the
+    // toolbar rather than letting the framework pick the first focusable it finds.
+    val hadFocus = binding.ingestHide.isFocused
+    hideIngestBanner()
+    if (hadFocus) binding.btnRefresh.requestFocus()
+}
+
 /** Drops the narration - the load's own summary message takes over. */
 internal fun MainActivity.resetCatalogIngest() {
     catalogIngest.clear()
     catalogIngestPaintedAt = 0L
+    catalogIngestHidden = false
+    catalogIngestFocusTaken = false
     hideIngestBanner()
 }
 
@@ -151,6 +173,22 @@ private fun MainActivity.showIngestBanner(text: String, fraction: Float?) {
     } else {
         bar.isIndeterminate = false
         bar.progress = (fraction * 100).toInt()
+    }
+    // The card floats over the panes, so the D-pad has no geometric route into it: focus
+    // search always finds the content underneath first, which left the Hide button
+    // unreachable on a remote. Take focus once per load, on the frame it appears - pressing
+    // OK then hides the narration, any direction moves back into the content. Never while a
+    // player or the Settings overlay owns the screen: those are the user's context, not
+    // ours to interrupt.
+    if (!catalogIngestFocusTaken) {
+        catalogIngestFocusTaken = true
+        if (!isPlayerVisible && activeSettingsOverlay == null) {
+            binding.ingestHide.post {
+                if (!catalogIngestHidden && binding.ingestBanner.visibility == View.VISIBLE) {
+                    binding.ingestHide.requestFocus()
+                }
+            }
+        }
     }
 }
 

@@ -1304,6 +1304,12 @@ class MainActivity : AppCompatActivity() {
     internal val catalogIngest = LinkedHashMap<String, CatalogIngestState>()
     /** Throttle for [publishCatalogIngest]'s status repaints. */
     internal var catalogIngestPaintedAt = 0L
+    /** Set by the banner's Hide button: the import keeps running, the narration stops until
+     *  the next load starts. Main-thread only, like the map above. */
+    internal var catalogIngestHidden = false
+    /** True once the banner has taken focus for this load, so it does it on appearance
+     *  rather than on every repaint (see MainActivityIngest.showIngestBanner). */
+    internal var catalogIngestFocusTaken = false
 
     companion object {
         internal const val REQUEST_EXPORT_BACKUP = 2001

@@ -9,9 +9,9 @@ import com.lumora.model.MediaType
 /**
  * One provider's incoming catalogue, written to Room in batches as it arrives.
  *
- * The point is that [add] never accumulates the catalogue: a 300k-item panel used to be a
+ * The point is that [add] never accumulates the catalogue: a 300k-item panel was a
  * `List<Channel>` in memory (260 MB) before anything could be shown. Here the buffer is a
- * few hundred rows; the rest is already in SQLite.
+ * couple of thousand rows; the rest is already in SQLite.
  *
  * [begin] deletes the provider's rows of that type first, so a refetch replaces the old
  * catalogue instead of stacking a second copy beside it. Types are replaced separately
@@ -35,10 +35,21 @@ class CatalogBatchWriter(
     /** Rows written so far, for the loader's status line and the tests. */
     val count: Int get() = written
 
+    /** Rows handed to [add] but not yet in the database: the buffer in front of the next
+     *  transaction. Ingestion progress reads this rather than [count] so the banner tracks
+     *  what has arrived instead of stepping by a whole batch. */
+    val pending: Int get() = written + buffer.size
+
+    /** Sum of the time spent inside Room's insert over this writer's life, for the ingest
+     *  log. Database vs parse is the one split a device-side profile cannot otherwise show. */
+    var flushNanos: Long = 0L
+        private set
+
     fun begin() {
         buffer.clear()
         orderIndex = 0
         written = 0
+        flushNanos = 0L
         token = System.currentTimeMillis()
     }
 
@@ -53,7 +64,9 @@ class CatalogBatchWriter(
 
     fun flush() {
         if (buffer.isEmpty()) return
+        val startedAt = System.nanoTime()
         dao.upsertAllBlocking(buffer)
+        flushNanos += System.nanoTime() - startedAt
         written += buffer.size
         buffer.clear()
     }
@@ -74,7 +87,10 @@ class CatalogBatchWriter(
 
     companion object {
         /** Rows per transaction. Large enough to amortise the SQLite write, small enough
-         *  that the transient entity list stays a rounding error in the heap. */
-        const val DEFAULT_BATCH_SIZE = 500
+         *  that the transient entity list stays a rounding error in the heap (2,000 rows is
+         *  about 1 MB of references). Four times the old 500: the catalogue table carries
+         *  fifteen indexes, so a commit is the expensive part, and a 300k-item panel used to
+         *  pay for 600 of them. */
+        const val DEFAULT_BATCH_SIZE = 2_000
     }
 }

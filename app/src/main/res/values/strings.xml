@@ -609,16 +609,22 @@
     <string name="mv_provider_max_conn_label">Simultaneous connections</string>
 
     <!-- Catalog ingest: the status row while a provider's catalogue streams in, and the
-         size badge in the provider list. A panel past CATALOGUE_TOO_LARGE_BYTES (100 MB)
+         size badge in the provider list. A panel past CATALOGUE_TOO_LARGE_BYTES (50 MB)
          is expensive to ingest and only the provider can shrink it, so the app says so. -->
     <string name="ingest_connecting">%1$s — connecting…</string>
     <string name="ingest_progress">%1$s — importing %2$s · %3$s items · %4$s</string>
     <string name="ingest_size_of">%1$s of %2$s</string>
-    <string name="ingest_too_large">%1$s — this playlist is extremely large (%2$s). Ask your provider to disable channels you do not need.</string>
+    <!-- The size warning keeps the same "what, how far" line as ingest_progress: it is
+         raised *during* an ingest, and dropping the phase/item count for it made the
+         banner stop saying what it was doing at exactly the size where the wait is
+         longest. -->
+    <string name="ingest_too_large">%1$s — importing %2$s · %3$s items · %4$s. This playlist is extremely large — ask your provider to disable content you do not need.</string>
     <string name="ingest_too_large_short">very large (%1$s)</string>
     <string name="ingest_phase_live">live TV</string>
     <string name="ingest_phase_films">films</string>
     <string name="ingest_phase_series">series</string>
     <string name="ingest_phase_playlist">playlist</string>
+    <!-- Hides the banner for the rest of the load. The import keeps running. -->
+    <string name="ingest_hide">Hide</string>
     <string name="sett_provider_very_large">very large</string>
 </resources>

@@ -5,6 +5,7 @@ import java.io.File
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.util.Log
 import android.view.View
 import android.widget.*
 import com.lumora.cache.PlaybackPositionStore
@@ -541,13 +542,41 @@ internal fun MainActivity.applyProviderToggle(
     providerId: String? = null,
     belongsToProvider: (Channel) -> Boolean
 ) {
-    if (enabled) { loadAllConfiguredProviders(forceRefresh = true); return }
+    if (enabled) {
+        if (providerId == null) {
+            loadAllConfiguredProviders(forceRefresh = true)
+            return
+        }
+        scope.launch {
+            val repo = CatalogRepository.get(this@applyProviderToggle)
+            // Rows still in the catalogue mean this provider was only switched off: put
+            // them back instead of re-downloading a catalogue we already have. The rows are
+            // parked at a rank no real row holds (see parkProvider), so this is also the
+            // un-hide. Only a provider with nothing stored is actually fetched.
+            val stored = runCatching { repo.countForProvider(providerId) }.getOrDefault(0)
+            if (stored > 0) {
+                val backup = IptvProviderStore.load(prefs)
+                    .firstOrNull { it.id == providerId }?.backup == true
+                runCatching { repo.restoreProvider(providerId, backup) }
+                val restored = runCatching { repo.liveForProvider(providerId) }
+                    .getOrDefault(emptyList())
+                allChannels = allChannels.filterNot(belongsToProvider) + restored
+                classifyAndShow(preserveUi = true)
+            } else {
+                // Nothing stored (first enable, or a source whose rows were pruned): fetch
+                // this one source only - a full load would re-scan every other provider.
+                loadAllConfiguredProviders(forceRefresh = true, only = setOf(providerId))
+            }
+        }
+        return
+    }
     scope.launch {
-        // The provider's stored VOD has to go with its live channels, or a switched-off
-        // provider keeps appearing in the Films/Series tabs.
+        // The rows are parked, not deleted: a provider switched off and back on reuses its
+        // catalogue instead of downloading it again. Parking hides them from every VOD read
+        // (`rank > 0`) and the in-memory live filter below drops them here and on reload.
         if (providerId != null) {
             runCatching {
-                CatalogRepository.get(this@applyProviderToggle).deleteProvider(providerId)
+                CatalogRepository.get(this@applyProviderToggle).parkProvider(providerId)
             }
         }
         allChannels = allChannels.filterNot(belongsToProvider)
@@ -634,7 +663,13 @@ internal fun MainActivity.applyImportedConfiguration() {
  *  a single active provider. [forceRefresh] skips the on-disk cache (used after a
  *  settings change, where showing stale content would be actively wrong) and re-fetches
  *  from the network(s) directly. */
-internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = false) {
+internal fun MainActivity.loadAllConfiguredProviders(
+    forceRefresh: Boolean = false,
+    /** When set, only these source ids are fetched. Every other source keeps the rows and
+     *  resident live channels it already has, which is what makes switching one provider
+     *  back on a one-provider fetch instead of a rescan of the whole setup. */
+    only: Set<String>? = null
+) {
     // A stream_search plugin (anime catalog, Discover/Find Stream) still has work to do here
     // even with zero traditional providers configured - bailing out before reaching the
     // anime-catalog fetch below meant a plugin-only setup never populated anything.
@@ -668,23 +703,25 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
     val previousLoad = providerLoadJob
     providerLoadJob = scope.launch {
         previousLoad?.cancelAndJoin()
-        // Enforce the storage invariant: only enabled sources own catalogue rows, and a type
-        // switched off for its provider owns none either. The VOD read side does not filter
-        // by provider/type, so this is what stops rows written by a fetch that overlapped a
-        // toggle/removal from outliving it. Global VOD-off is deliberately not applied here:
-        // the stored per-provider flags stay as the user set them, and buildVodContent()
-        // already serves nothing while VOD is globally disabled.
+        // Enforce the storage invariant: a *removed* source owns no catalogue rows, and a
+        // type switched off for an enabled provider owns none either. Disabled providers are
+        // deliberately still in the keep-list - their rows are parked (hidden by rank), not
+        // deleted, so switching one back on reuses the catalogue instead of re-downloading
+        // it. The VOD read side does not filter by provider/type, so this is what stops rows
+        // written by a fetch that overlapped a removal from outliving it. Global VOD-off is
+        // deliberately not applied here: the stored per-provider flags stay as the user set
+        // them, and buildVodContent() already serves nothing while VOD is globally disabled.
         suspend fun pruneCatalogue() {
-            val configs = IptvProviderStore.load(prefs).filter { it.enabled }
-            val servers = mediaServers().filter { it.enabled && it.producesCatalog && !it.isShare }
+            val configured = IptvProviderStore.load(prefs)
+            val servers = mediaServers().filter { it.producesCatalog && !it.isShare }
             val repo = CatalogRepository.get(this@loadAllConfiguredProviders)
-            repo.pruneProviders(configs.map { it.id } + servers.map { it.id })
-            for (config in configs) {
+            repo.pruneProviders(configured.map { it.id } + servers.map { it.id })
+            for (config in configured.filter { it.enabled }) {
                 if (!config.liveEnabled) repo.deleteProviderType(config.id, MediaType.LIVE)
                 if (!config.moviesEnabled) repo.deleteProviderType(config.id, MediaType.MOVIE)
                 if (!config.seriesEnabled) repo.deleteProviderType(config.id, MediaType.SERIES)
             }
-            for (server in servers) {
+            for (server in servers.filter { it.enabled }) {
                 if (!server.liveEnabled) repo.deleteProviderType(server.id, MediaType.LIVE)
                 if (!server.moviesEnabled) repo.deleteProviderType(server.id, MediaType.MOVIE)
                 if (!server.seriesEnabled) repo.deleteProviderType(server.id, MediaType.SERIES)
@@ -815,10 +852,27 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         }
 
         val combined = mutableListOf<Channel>()
+        if (only != null) {
+            // A single-source load (a provider switched back on) must not drop everyone
+            // else's live channels - they are not re-fetched, so the resident list is the
+            // freshest copy of them there is. Own-library items whose owner is ambiguous
+            // (no source id, one server of that type) are matched the same way the toggle
+            // itself matches them.
+            val serversNow = mediaServers()
+            combined += allChannels.filter { channel ->
+                val owner = mediaServerOwner(channel, serversNow)
+                if (owner != null) {
+                    owner.id !in only
+                } else {
+                    channel.sourceProviderId == null || channel.sourceProviderId !in only
+                }
+            }
+        }
         val errors = mutableListOf<String>()
         var expiryText: String? = null
 
-        val enabledConfigs = IptvProviderStore.load(prefs).filter { it.enabled }
+        val enabledConfigs = IptvProviderStore.load(prefs)
+            .filter { it.enabled && (only == null || it.id in only) }
         // The global VOD switch makes every non-Xtream fetch drop films/series; do not let
         // that empty half delete the stored VOD (see replaceProvider's skipTypes).
         val globalVodOffTypes =
@@ -834,7 +888,7 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         // fetch, and a provider that answers nothing must not leave its row behind.
         catalogIngest.clear()
         catalogIngestPaintedAt = 0L
-        val animeDeferred: Deferred<List<Channel>>? = if (enabledAnimePlugin() != null) {
+        val animeDeferred: Deferred<List<Channel>>? = if (only == null && enabledAnimePlugin() != null) {
             // fetchAnimeChannels does synchronous OkHttp calls, and this loader coroutine
             // runs on Main - the Dispatchers.IO hop mirrors the sequential version below.
             // Bounded like every other provider: an unresponsive anime catalog must not
@@ -859,7 +913,8 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
         // Started here so it overlaps; awaited below with the rest.
         // Every configured Jellyfin/Plex account, each on its own - one dead server can't hold
         // up another's catalog, and a per-account failure is reported as its own.
-        val enabledServers = mediaServers().filter { it.enabled && it.producesCatalog }
+        val enabledServers = mediaServers()
+            .filter { it.enabled && it.producesCatalog && (only == null || it.id in only) }
         val mediaServerDeferred = enabledServers.map { server ->
             // Bounded like every other provider. Unbounded, one unresponsive server held the
             // whole load open indefinitely, and because the loader cancelAndJoins the previous
@@ -889,6 +944,9 @@ internal fun MainActivity.loadAllConfiguredProviders(forceRefresh: Boolean = fal
             if (paintedFromStore) return
             renderLivePartial()
         }
+        // A fresh load narrates again even if the previous banner was hidden - including a
+        // load that was cancelled before its own reset could run.
+        resetCatalogIngest()
         val fetchResults = enabledConfigs.map { config ->
             async {
                 // Fetch threads report bytes/rows here; the map and the status row are
@@ -1342,26 +1400,53 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                     MediaType.MOVIE -> "films"
                     else -> "series"
                 }
+                val startedAt = System.currentTimeMillis()
+                var transformNanos = 0L
+                var entityNanos = 0L
+                var bytesRead = 0L
+                var rows = 0
                 val delivered = client.streamBulkList(
                     xtreamProvider, action, type,
-                    transform = { withCategory(it, names, uncatId) },
+                    transform = { channel ->
+                        val t = System.nanoTime()
+                        withCategory(channel, names, uncatId).also { transformNanos += System.nanoTime() - t }
+                    },
                     onItem = { channel ->
+                        val t = System.nanoTime()
                         into?.add(channel)
                         // Let a database error abort the stream: the writer keeps the rows
                         // already written (updates of existing copies), and the rows this
                         // ingest never reached remain the old ones.
                         writer?.add(channel)
+                        entityNanos += System.nanoTime() - t
+                        rows++
                     },
                     onProgress = { bytes, total ->
+                        bytesRead = bytes
                         // Rows come from the writer, so the count is what has actually landed
                         // in the catalogue database rather than what has been parsed.
-                        onProgress?.invoke(phase, writer?.count ?: 0, bytes, total)
+                        onProgress?.invoke(phase, writer?.pending ?: 0, bytes, total)
                     }
                 )
+                val dbNanos = writer?.flushNanos ?: 0L
                 if (delivered == null) runCatching { writer?.abort() } else runCatching { writer?.finish() }
+                val wall = System.currentTimeMillis() - startedAt
+                Log.i(
+                    "LumoraPerf",
+                    "ingest $phase wall=${wall}ms rows=$rows bytes=$bytesRead " +
+                        "db=${dbNanos / 1_000_000}ms entity=${entityNanos / 1_000_000}ms " +
+                        "transform=${transformNanos / 1_000_000}ms " +
+                        "reader=${(wall * 1_000_000 - dbNanos - entityNanos - transformNanos) / 1_000_000}ms"
+                )
                 return delivered != null
             }
 
+            // A panel's bulk lists are the only ingest that streams six figures of rows
+            // through Room. The indexes stay in place: dropping them for the duration was
+            // tried and reverted - while they were gone every VOD query became a full scan
+            // of a 200k-row table (9 s to build a category list), which blocked the UI and
+            // ended in an ANR, and rebuilding them mid-load starved the other provider's
+            // inserts.
             if (!liveOff && !ingest("get_live_streams", MediaType.LIVE, liveCatNames, "uncat_live", live)) {
                 liveFailed = true
             }

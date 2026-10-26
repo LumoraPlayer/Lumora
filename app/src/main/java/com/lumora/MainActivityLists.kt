@@ -365,7 +365,19 @@ internal fun MainActivity.selectTab(index: Int) {
         // A tab switch away from Live must not race the films/series derive: categories
         // for the Films/Series tabs read filmList/seriesList, so wait for any in-flight
         // derive to land before building them against possibly-stale lists.
-        if (index != 0) filmsSeriesDeriveJob?.join()
+        //
+        // Unless this tab's rows are already there: the derive publishes each tab as it
+        // finishes it, and joining the job then would block this tab behind the *other*
+        // one's build (a six-figure Films pass is minutes). A stale-but-present set keeps
+        // the tab usable, and the derive's own publish replaces it when it lands.
+        if (index != 0) {
+            val rowsReady = if (index == 1) {
+                cachedSeriesCategoryRows.isNotEmpty()
+            } else {
+                cachedFilmCategoryRows.isNotEmpty()
+            }
+            if (!rowsReady) filmsSeriesDeriveJob?.join()
+        }
         // Pre-expand the Sports bucket so its children are visible when the user
         // scrolls down to it, regardless of what's selected at the top.
         if (index == 0) expandedGroupKeys.add("${DYNAMIC_BUCKET_ID_PREFIX}Sports")
@@ -2065,6 +2077,9 @@ internal fun MainActivity.setupToolbar() {
     }
     binding.btnRefresh.setOnClickListener { reloadCurrentProvider() }
     binding.btnSearch.setOnClickListener { showSearchDialog() }
+    // Hides the ingest narration, not the ingest. Reset by resetCatalogIngest() at the
+    // start and end of every load, so the next one is visible again.
+    binding.ingestHide.setOnClickListener { hideCatalogIngest() }
     wireStartupChooser()
     binding.homeSearchBar.setOnClickListener { showSearchDialog() }
     // Phone-only re-expand affordance for a collapsed category rail: restores the

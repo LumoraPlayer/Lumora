@@ -53,18 +53,11 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
     // Live stays resident (the guide, sports matcher and multiview scan it); films and
     // series are read back from the catalogue database as capped shelves.
     withContext(Dispatchers.Default) { deriveLiveHalf(snapshot) }
-    val vod = buildVodContent()
-
-    filmList = vod.filmList
-    filmVersions = vod.filmVersions
-    filmShelves = vod.filmShelves
-    seriesList = vod.seriesList
-    seriesVersions = vod.seriesVersions
-    seriesShelves = vod.seriesShelves
-    cachedSeriesCategoryRows = vod.seriesCategoryRows
-    cachedFilmCategoryRows = vod.filmCategoryRows
-    cachedSeriesCategoryChildren = vod.seriesCategoryChildren
-    cachedFilmCategoryChildren = vod.filmCategoryChildren
+    // Publishes as it goes: the previous cache first, then rows, then shelves (see
+    // applyVodContent). The alternative - awaiting the whole pass - is what left the app
+    // blank for the length of a six-figure panel's Films build.
+    val vod = buildVodContent(onProgress = { applyVodContent(it) })
+    applyVodContent(vod)
 
     // A Trakt pull that ran before this catalog had loaded (both race off app launch) could
     // not match its titles against anything - retry now that allChannels is current. Cheap
@@ -279,29 +272,38 @@ internal fun MainActivity.deriveFilmsSeries() {
     val snapshot = allChannels
     filmsSeriesDeriveJob = scope.launch(Dispatchers.Default) {
         if (allChannels !== snapshot) return@launch
-        val result = buildVodContent()
-        withContext(Dispatchers.Main) {
-            // Guard again before touching the UI: the shelf build is seconds of work on
-            // a big catalog, and a newer load may have swapped allChannels mid-derive.
-            // isActive too - a cancelled job must never land its fields on the UI.
-            if (allChannels !== snapshot || !isActive) return@withContext
-            filmList = result.filmList
-            filmVersions = result.filmVersions
-            filmShelves = result.filmShelves
-            seriesList = result.seriesList
-            seriesVersions = result.seriesVersions
-            seriesShelves = result.seriesShelves
-            cachedSeriesCategoryRows = result.seriesCategoryRows
-            cachedFilmCategoryRows = result.filmCategoryRows
-            cachedSeriesCategoryChildren = result.seriesCategoryChildren
-            cachedFilmCategoryChildren = result.filmCategoryChildren
-            // Mirror of classifyAndShow()'s shelf submits for the films/series shelves.
-            seriesShelfAdapter.submitList(seriesShelves)
-            filmsShelfAdapter.submitList(filmShelves)
-            if (showingHome) homeShelfAdapter.submitList(buildHomeShelves())
-        }
+        // Build the tab the user is on first; every result is published as it lands, so a
+        // tab's rows are usable before the other tab (or its shelves) has finished.
+        val result = buildVodContent(
+            preferredTab = if (activeTab == 1) 1 else 2,
+            onProgress = { partial ->
+                if (allChannels === snapshot && isActive) applyVodContent(partial)
+            }
+        )
+        if (allChannels !== snapshot || !isActive) return@launch
+        applyVodContent(result)
     }
 }
+
+/** Applies a (possibly partial) films/series pass to the tab fields and their adapters.
+ *  Called repeatedly while [buildVodContent] streams results, so every assignment is a
+ *  plain replace - nothing accumulates. */
+internal suspend fun MainActivity.applyVodContent(content: MainActivity.FilmsSeriesContent) =
+    withContext(Dispatchers.Main) {
+        filmList = content.filmList
+        filmVersions = content.filmVersions
+        filmShelves = content.filmShelves
+        seriesList = content.seriesList
+        seriesVersions = content.seriesVersions
+        seriesShelves = content.seriesShelves
+        cachedSeriesCategoryRows = content.seriesCategoryRows
+        cachedFilmCategoryRows = content.filmCategoryRows
+        cachedSeriesCategoryChildren = content.seriesCategoryChildren
+        cachedFilmCategoryChildren = content.filmCategoryChildren
+        seriesShelfAdapter.submitList(seriesShelves)
+        filmsShelfAdapter.submitList(filmShelves)
+        if (showingHome) homeShelfAdapter.submitList(buildHomeShelves())
+    }
 
 /** Merges one provider's freshly-fetched channels into allChannels, replacing anything
  *  previously loaded from that same provider (matched by config id).
