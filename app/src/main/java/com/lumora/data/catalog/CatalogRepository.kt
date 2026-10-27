@@ -410,6 +410,11 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         dao.liveForProvider(providerId).map(CatalogMapping::toChannel)
     }
 
+    /** True when this provider still has at least one row of [mediaType] stored. */
+    suspend fun hasRows(providerId: String, mediaType: MediaType): Boolean = withContext(Dispatchers.IO) {
+        dao.countForProviderType(providerId, mediaType.name) > 0
+    }
+
     /** Drops one provider's catalogue of one type (its Movies/Series box was switched off). */
     suspend fun deleteProviderType(providerId: String, mediaType: MediaType) =
         withContext(Dispatchers.IO) {
@@ -417,8 +422,33 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         }
 
     /** Starts a streaming write for one provider/type. Call [CatalogBatchWriter.begin]. */
-    fun writer(providerId: String, mediaType: MediaType, backup: Boolean = false): CatalogBatchWriter =
-        CatalogBatchWriter(dao, providerId, mediaType, backup)
+    fun writer(providerId: String, mediaType: MediaType, backup: Boolean = false): CatalogBatchWriter {
+        tuneForBulkWrite()
+        return CatalogBatchWriter(dao, providerId, mediaType, backup)
+    }
+
+    /**
+     * Pragmas for the bulk ingest, applied on the connection the writer is about to use.
+     *
+     * Writing is 85-95% of an ingest's wall time (a 55k-row live list measured 162 s of SQLite
+     * against 0.5 s of parsing over 19 MB), and a re-ingest is the slow half of that: the
+     * insert is `OR REPLACE`, so every row that already exists is a delete plus an insert
+     * across the table's fifteen indexes. At the default 2 MB page cache a 250k-row catalogue
+     * does not fit, so nearly every index touch is a random read-modify-write on the eMMC.
+     * A bigger cache is the cheapest fix there is, and the catalogue is rebuilt from the
+     * providers, so it is tuned for throughput rather than durability.
+     *
+     * `synchronous=NORMAL` is the WAL default for a database that may be thrown away: it
+     * survives a process crash (only a power cut can drop the last commits), and a lost commit
+     * is repaired by the next refresh - the section is stamped only after its rows are in.
+     */
+    private fun tuneForBulkWrite() {
+        runCatching {
+            val db = db.openHelper.writableDatabase
+            db.execSQL("PRAGMA cache_size=-24576")
+            db.execSQL("PRAGMA synchronous=NORMAL")
+        }
+    }
 
     /** Replaces one provider's catalogue of one type. The Stalker fetch uses this to persist
      *  the live half as soon as it lands, before the slower VOD/series half can fail. */

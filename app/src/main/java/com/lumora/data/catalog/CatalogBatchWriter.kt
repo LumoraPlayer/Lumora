@@ -87,10 +87,10 @@ class CatalogBatchWriter(
 
     companion object {
         /** Rows per transaction. Large enough to amortise the SQLite write, small enough
-         *  that the transient entity list stays a rounding error in the heap (2,000 rows is
-         *  about 1 MB of references). Four times the old 500: the catalogue table carries
+         *  that the transient entity list stays a rounding error in the heap (5,000 rows is
+         *  about 2 MB of references). Eight times the old 500: the catalogue table carries
          *  fifteen indexes, so a commit is the expensive part, and a 300k-item panel used to
          *  pay for 600 of them. */
-        const val DEFAULT_BATCH_SIZE = 2_000
+        const val DEFAULT_BATCH_SIZE = 5_000
     }
 }

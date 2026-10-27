@@ -84,4 +84,31 @@ class M3uLocalFileTest {
         ).channels
         assertEquals("/storage/emulated/0/Download/movies/film.mp4", channels.single().url)
     }
+
+    @Test
+    fun `streamed file parse keeps the playlist directory and reports rows`() {
+        // The local import path: a stream to count bytes from, the file's own directory for
+        // relative entries, and the row count the ingest banner narrates.
+        val dir = File(System.getProperty("java.io.tmpdir"), "lumora-playlist-test").apply { mkdirs() }
+        val file = File(dir, "list.m3u").apply {
+            writeText("#EXTM3U\n#EXTINF:-1,A Film\nmovies/film.mp4\n#EXTINF:-1,News\nhttps://ex.com/news.ts\n")
+        }
+        val reported = mutableListOf<Int>()
+        val channels = file.inputStream().use { stream ->
+            M3uParser.parseLocal(
+                stream,
+                file.length(),
+                file.parentFile,
+                onProgress = { _, total, rows ->
+                    // The size is stated for a real file, so the banner can show a real bar.
+                    assertEquals(file.length(), total)
+                    reported.add(rows)
+                }
+            )
+        }.channels
+
+        assertEquals(2, channels.size)
+        assertEquals(File(dir, "movies/film.mp4").absolutePath, channels.first().url)
+        assertEquals(2, reported.last())
+    }
 }

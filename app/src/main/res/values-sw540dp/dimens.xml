@@ -238,7 +238,7 @@
          settings/refresh pair and the clock on one line at 960dp, and every dp here is a dp
          the buttons lose. -->
     <dimen name="toolbar_padding_horizontal">24dp</dimen>
-    <dimen name="toolbar_padding_top">16dp</dimen>
+    <dimen name="toolbar_padding_top">4dp</dimen>
     <!-- The brand mark: 36dp rather than 40dp, for the same reason as the row's horizontal
          padding - it is a mark, not a label, and it reads the same two dp smaller. -->
     <dimen name="toolbar_brand_size">36dp</dimen>

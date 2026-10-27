@@ -435,11 +435,16 @@ internal fun MainActivity.deriveLiveHalf(list: List<Channel>) {
         "${list.size} in / ${liveChannels.size} live out" +
             if (localities.isEmpty()) "" else " (localities=${localities.sorted().joinToString(",")})"
     )
-    DerivedCache.saveLive(
-        this, fingerprint, DerivedCache.LiveSnapshot(liveChannels, liveVersions)
-    )
+    // The cache is skipped while a catalogue is still streaming in: the list is half-filled,
+    // so the entry would be invalidated by the next batch anyway, and the write is a multi-MB
+    // file competing with the ingest writing the database on the same storage. The load's own
+    // derive at the end stores it once, for the full catalogue.
+    if (!catalogIngestRunning) {
+        DerivedCache.saveLive(
+            this, fingerprint, DerivedCache.LiveSnapshot(liveChannels, liveVersions)
+        )
+    }
 }
-
 /**
  * Cache key for the live derive: the catalogue itself, plus every pref that changes what
  * the pass produces. Anything not listed here (categorize, pinned/hidden, favourites)

@@ -16,7 +16,9 @@
     android:orientation="horizontal"
     android:paddingHorizontal="14dp"
     android:paddingVertical="12dp"
-    android:stateListAnimator="@animator/focus_scale">
+    android:stateListAnimator="@animator/focus_scale"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <LinearLayout
         android:layout_width="0dp"

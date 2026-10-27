@@ -617,6 +617,45 @@ internal fun MainActivity.isCatalogStale(): Boolean {
     return last <= 0L || System.currentTimeMillis() - last >= CATALOG_TTL_MS
 }
 
+// ── Per-section completion, so a load resumes instead of starting over ──
+//
+// The catalogue stamp above covers a whole load. A load is several bulk lists (live, films,
+// series - on a 300k panel that is seven minutes), and only the last one lets the load finish
+// and stamp. A restart, a crash, a provider that times out or a newer load superseding this
+// one therefore threw away every section that *had* completed, however long it took: the next
+// start saw a stale catalogue and re-downloaded 55k live rows that were already in the
+// database. These three keys record each section as it finishes; a load skips a section whose
+// rows are still stored and whose completion is inside the same TTL.
+
+private fun ingestSectionKey(providerId: String, type: MediaType) = "ingest_done_${providerId}_${type.name}"
+
+/** When this provider's [type] half last finished ingesting, or 0 if it never has. */
+internal fun MainActivity.ingestSectionDoneAt(providerId: String, type: MediaType): Long =
+    prefs.getLong(ingestSectionKey(providerId, type), 0L)
+
+/** Records that one section of a provider's catalogue was just ingested in full. */
+internal fun MainActivity.markIngestSectionDone(providerId: String, type: MediaType) {
+    prefs.edit().putLong(ingestSectionKey(providerId, type), System.currentTimeMillis()).apply()
+}
+
+/**
+ * Whether one section of a provider's catalogue can be served from the database instead of
+ * being fetched again.
+ *
+ * All four have to hold: the load allows resuming at all (a forced load does not), the type is
+ * switched on, the section has actually finished once before and that was inside the TTL, and
+ * its rows are still in the catalogue - a section whose rows were pruned must be fetched, no
+ * matter how recent its timestamp says it is.
+ */
+internal fun canResumeIngestSection(
+    resume: Boolean,
+    sectionEnabled: Boolean,
+    completedAt: Long,
+    now: Long,
+    hasRows: Boolean
+): Boolean = resume && sectionEnabled && hasRows &&
+    completedAt > 0L && now - completedAt < CATALOG_TTL_MS
+
 /** Brings the running app in line with data a backup restore just wrote. Both the settings
  *  provider list (when its overlay is open) and the in-memory catalog were loaded before the
  *  import and still show the pre-import state, so without this a perfectly successful restore
@@ -947,11 +986,28 @@ internal fun MainActivity.loadAllConfiguredProviders(
         // A fresh load narrates again even if the previous banner was hidden - including a
         // load that was cancelled before its own reset could run.
         resetCatalogIngest()
+        // The live derive skips its disk cache while a catalogue is streaming in (see
+        // deriveLiveHalf); cleared by finishCatalogIngest once the transfer is over.
+        catalogIngestRunning = true
+        // Which VOD half goes first, when a provider gets to choose: the tab the app is
+        // about to show. The user can change it mid-load by opening the other tab
+        // (prioritizeIngestSection), and the provider picks it up at its next phase.
+        ingestPriorityTab = activeTab
         val fetchResults = enabledConfigs.map { config ->
             async {
                 // Fetch threads report bytes/rows here; the map and the status row are
                 // main-thread state (see MainActivityIngest.kt).
                 publishCatalogConnecting(config.id, config.name)
+                // Live-first handovers from a fetch thread are posted back to main on a
+                // scope tied to *this* load, so a load cancelled by a newer one cannot merge
+                // a half-finished live list into the new load's.
+                val loadScope = CoroutineScope(coroutineContext)
+                // Suspend handover for the providers that fetch on their own threads: it
+                // hops to main and returns only once the live list is on screen, so the
+                // (slow) VOD half never starts before Live TV does.
+                val publishLive: suspend (List<Channel>) -> Unit = { live ->
+                    withContext(Dispatchers.Main) { showPartial(config.id, live) }
+                }
                 val onProgress: (String, Int, Long, Long?) -> Unit = { phase, rows, bytes, total ->
                     scope.launch {
                         publishCatalogIngest(config.id, config.name, phase, rows, bytes, total)
@@ -959,11 +1015,16 @@ internal fun MainActivity.loadAllConfiguredProviders(
                 }
                 val result = withTimeoutOrNull(PROVIDER_FETCH_TIMEOUT_MS) {
                     when (config.type) {
-                        "xtream" -> fetchXtreamChannels(config, { expiryText = it }, onProgress)
-                        "stalker" -> fetchStalkerChannels(config) { live ->
-                            showPartial(config.id, live)
+                        // A forced load (provider edited, backup restored, provider re-added)
+                        // must re-read the panel; otherwise sections that already finished are
+                        // resumed instead of downloaded again.
+                        "xtream" -> fetchXtreamChannels(
+                            config, { expiryText = it }, onProgress, publishLive, resume = !forceRefresh
+                        )
+                        "stalker" -> fetchStalkerChannels(config, publishLive)
+                        else -> fetchM3uChannels(config, onProgress) { live ->
+                            loadScope.launch { showPartial(config.id, live) }
                         }
-                        else -> fetchM3uChannels(config, onProgress)
                     }
                 } ?: FetchResult.Failure("timed out")
                 if (result is FetchResult.Success) {
@@ -977,11 +1038,17 @@ internal fun MainActivity.loadAllConfiguredProviders(
                             val repository = CatalogRepository.get(this@loadAllConfiguredProviders)
                             // m3u_plus lists episodes as individual rows. Persist the
                             // episode rows (the detail screen rebuilds seasons from them)
-                            // plus the synthetic show cards the grid renders.
+                            // plus the synthetic show cards the grid renders. The fold
+                            // normalises every series title, which on a six-figure playlist
+                            // is seconds of work - off the main thread, because this is the
+                            // frame immediately after the download (and whoever asked for
+                            // the import is watching it).
                             val toStore = if (config.type == "m3u") {
-                                result.channels + com.lumora.util.collapseM3uEpisodeRows(
-                                    result.channels.filter { it.mediaType == MediaType.SERIES }
-                                )
+                                withContext(Dispatchers.IO) {
+                                    result.channels + com.lumora.util.collapseM3uEpisodeRows(
+                                        result.channels.filter { it.mediaType == MediaType.SERIES }
+                                    )
+                                }
                             } else {
                                 result.channels
                             }
@@ -996,6 +1063,12 @@ internal fun MainActivity.loadAllConfiguredProviders(
                 config to result
             }
         }.awaitAll()
+        // The transfer is over. Everything below it - the merge, the episode fold, the
+        // database write and the catalogue render - is real work, but it is no longer an
+        // import, and leaving the "Importing ..." card up through it is what made a finished
+        // download look like a frozen one. The measured sizes stay in catalogIngest for the
+        // end-of-load summary.
+        finishCatalogIngest()
         // Enabled ids are re-read here rather than reusing the pre-loop snapshot: toggling
         // a provider off mid-refresh drops its id from this set, so the channels it just
         // fetched can't slip back into the catalog. Items with no sourceProviderId
@@ -1162,6 +1235,16 @@ internal fun MainActivity.loadAllConfiguredProviders(
             }
             if (errors.isEmpty()) mainHandler.postDelayed({ setStatus("", visible = false) }, 4000)
         }
+    }.also { load ->
+        // A load that dies before its own reset - an OOM on a six-figure panel, an
+        // unexpected throw - used to leave the ingest card up for good, which is a frozen
+        // import as far as the screen is concerned. Completion runs on whichever thread
+        // finished or cancelled the job, so the view work is posted to main; and the
+        // identity check keeps a load cancelled by a newer one from taking the newer one's
+        // narration down with it.
+        load.invokeOnCompletion {
+            mainHandler.post { if (providerLoadJob === load) finishCatalogIngest() }
+        }
     }
 }
 
@@ -1265,33 +1348,80 @@ internal fun MainActivity.fetchAnimeChannels(): List<Channel> {
 
 // ── M3U / Xtream channel fetch ─────────────────
 
+/** How often the live half of a playlist is handed to the screen while the rest of the file
+ *  is still streaming in. Each handover costs a live re-derive over everything collected so
+ *  far, so this is a time budget rather than a row count - a playlist that is mostly films
+ *  must not spend its time re-deriving a live list that barely grew. */
+private const val M3U_LIVE_FLUSH_MS = 10_000L
+
 internal suspend fun MainActivity.fetchM3uChannels(
     config: IptvProviderConfig,
     /** Ingest narration: the playlist is one download, so the phase is always "playlist". */
-    onProgress: ((phase: String, rows: Int, bytes: Long, total: Long?) -> Unit)? = null
+    onProgress: ((phase: String, rows: Int, bytes: Long, total: Long?) -> Unit)? = null,
+    /** Live-first: the live half as it accumulates, so Live TV fills in while the rest of a
+     *  large playlist is still being read. Called with everything collected so far - the
+     *  loader replaces this provider's rows rather than appending - at most once per
+     *  [M3U_LIVE_FLUSH_MS], because each call costs a live re-derive. */
+    onLive: ((List<Channel>) -> Unit)? = null
 ): FetchResult {
     val raw = config.url?.trim() ?: return FetchResult.Failure("no URL")
     if (raw.isBlank()) return FetchResult.Failure("no URL")
+    val allowLive = providerAllowsLive(config)
     return try {
-        val result = withContext(Dispatchers.IO) {
-            if (isLocalFileUrl(raw)) parseLocalPlaylist(raw)
-            else M3uParser.parseFromUrl(raw, BaseApplication.instance.okHttpClient) { bytes, total ->
-                onProgress?.invoke("playlist", 0, bytes, total)
+        // The gate and the per-entry copy are both whole-catalogue passes - on a six-figure
+        // playlist that is hundreds of thousands of predicate calls and the same again in
+        // fresh Channel objects, and they used to run on the main thread in the frame right
+        // after the download finished (exactly when the import is meant to feel done).
+        val channels = withContext(Dispatchers.IO) {
+            val live = ArrayList<Channel>()
+            var nextFlushAt = System.currentTimeMillis() + M3U_LIVE_FLUSH_MS
+            val collectLive: (Channel) -> Unit = { ch ->
+                if (allowLive && ch.mediaType == MediaType.LIVE) {
+                    // Stamped here, not only on the final list: the loader replaces this
+                    // provider's resident rows by sourceProviderId, so an unstamped partial
+                    // would be merged again on the next flush and never removed.
+                    live.add(ch.copy(streamUserAgent = config.userAgent, sourceProviderId = config.id))
+                    // Time-boxed rather than row-boxed: a playlist that is 90% films would
+                    // otherwise flush a live list that barely grew, and each flush is a full
+                    // derive over everything collected so far.
+                    val now = System.currentTimeMillis()
+                    if (onLive != null && now >= nextFlushAt) {
+                        nextFlushAt = now + M3U_LIVE_FLUSH_MS
+                        onLive(ArrayList(live))
+                    }
+                }
             }
+            val parsed = if (isLocalFileUrl(raw)) {
+                parseLocalPlaylist(raw, { bytes, total, rows ->
+                    onProgress?.invoke("playlist", rows, bytes, total)
+                }, collectLive)
+            } else M3uParser.parseFromUrl(
+                raw,
+                BaseApplication.instance.okHttpClient,
+                onProgress = { bytes, total, rows ->
+                    onProgress?.invoke("playlist", rows, bytes, total)
+                },
+                onEntry = collectLive
+            )
+            // The last flush may have been a while ago - hand over the finished live half so
+            // the screen does not wait for the VOD persist below.
+            if (onLive != null && live.isNotEmpty()) onLive(live)
+            // Content-type gates: an M3U file lists live and VOD in one parse - drop the
+            // types this provider has switched off, per mediaType.
+            // sourceProviderId isn't needed for playback here (an M3U item's url is already
+            // final), but it's what names the provider a duplicate came from on the detail
+            // screen's version chips - without it every M3U copy is an anonymous "Version N".
+            parsed.channels
+                .filter { ch ->
+                    when (ch.mediaType) {
+                        MediaType.LIVE -> allowLive
+                        MediaType.MOVIE -> providerAllowsMovies(config)
+                        MediaType.SERIES -> providerAllowsSeries(config)
+                    }
+                }
+                .map { it.copy(streamUserAgent = config.userAgent, sourceProviderId = config.id) }
         }
-        // Content-type gates: an M3U file lists live and VOD in one parse - drop the
-        // types this provider has switched off, per mediaType.
-        val channels = result.channels.filter { ch ->
-            when (ch.mediaType) {
-                MediaType.LIVE -> providerAllowsLive(config)
-                MediaType.MOVIE -> providerAllowsMovies(config)
-                MediaType.SERIES -> providerAllowsSeries(config)
-            }
-        }
-        // sourceProviderId isn't needed for playback here (an M3U item's url is already
-        // final), but it's what names the provider a duplicate came from on the detail
-        // screen's version chips - without it every M3U copy is an anonymous "Version N".
-        FetchResult.Success(channels.map { it.copy(streamUserAgent = config.userAgent, sourceProviderId = config.id) })
+        FetchResult.Success(channels)
     } catch (e: CancellationException) {
         throw e
     } catch (e: SecurityException) {
@@ -1307,13 +1437,23 @@ internal suspend fun MainActivity.fetchM3uChannels(
  *  `content://` URIs (from the system file picker) open through the ContentResolver under
  *  the persisted read permission taken when the file was picked; `file://` URIs and raw
  *  absolute paths open as files, with relative stream entries resolved against the
- *  playlist's own directory (see M3uParser.parse). */
-private fun MainActivity.parseLocalPlaylist(raw: String): M3uParser.ParseResult {
+ *  playlist's own directory (see M3uParser.parse).
+ *
+ *  [onProgress] narrates the read exactly as the network path does - a playlist on the TV's
+ *  own storage can be just as large as a downloaded one, and it used to parse with the
+ *  banner stuck on "Connecting to <provider>" and no numbers at all. */
+private fun MainActivity.parseLocalPlaylist(
+    raw: String,
+    onProgress: ((bytes: Long, total: Long?, rows: Int) -> Unit)? = null,
+    onEntry: ((Channel) -> Unit)? = null
+): M3uParser.ParseResult {
     val trimmed = raw.trim()
     if (trimmed.startsWith("content:", ignoreCase = true)) {
         val uri = android.net.Uri.parse(trimmed)
         val stream = contentResolver.openInputStream(uri) ?: throw Exception("can't open file")
-        stream.use { return M3uParser.parse(java.io.BufferedReader(java.io.InputStreamReader(it, Charsets.UTF_8))) }
+        // No total: a SAF provider does not state its size without being opened twice, and
+        // the banner narrates the byte count either way.
+        stream.use { return M3uParser.parseLocal(it, onProgress = onProgress, onEntry = onEntry) }
     }
     val file = if (trimmed.startsWith("file:", ignoreCase = true)) {
         val path = android.net.Uri.parse(trimmed).path ?: throw Exception("bad file URI")
@@ -1323,7 +1463,15 @@ private fun MainActivity.parseLocalPlaylist(raw: String): M3uParser.ParseResult 
     }
     if (!file.exists()) throw Exception("file not found")
     if (!file.canRead()) throw Exception("can't read file")
-    file.inputStream().bufferedReader(Charsets.UTF_8).use { return M3uParser.parse(it, file.parentFile) }
+    file.inputStream().use {
+        return M3uParser.parseLocal(
+            it,
+            total = file.length().takeIf { size -> size > 0 },
+            baseDir = file.parentFile,
+            onProgress = onProgress,
+            onEntry = onEntry
+        )
+    }
 }
 
 internal suspend fun MainActivity.fetchXtreamChannels(
@@ -1331,7 +1479,15 @@ internal suspend fun MainActivity.fetchXtreamChannels(
     onExpiry: (String?) -> Unit,
     /** Ingest narration: phase ("live"/"films"/"series"), rows written, bytes read, and the
      *  phase's stated size when the panel sends a Content-Length. */
-    onProgress: ((phase: String, rows: Int, bytes: Long, total: Long?) -> Unit)? = null
+    onProgress: ((phase: String, rows: Int, bytes: Long, total: Long?) -> Unit)? = null,
+    /** Live-first: the live list as soon as it has landed, while films and series are still
+     *  streaming. Without it Live TV stayed empty until the whole VOD catalogue had been
+     *  ingested, which on a six-figure panel is minutes after the live half was ready. */
+    onLive: (suspend (List<Channel>) -> Unit)? = null,
+    /** Resume: sections that finished within the TTL and still have their rows are not
+     *  fetched again. False for a forced load (provider edited, backup restored), where the
+     *  whole point is to re-read the panel. */
+    resume: Boolean = false
 ): FetchResult {
     return try {
         val xtreamProvider = Provider(
@@ -1353,14 +1509,36 @@ internal suspend fun MainActivity.fetchXtreamChannels(
             val liveOff = !providerAllowsLive(config)
             val moviesOff = !providerAllowsMovies(config)
             val seriesOff = !providerAllowsSeries(config)
+            val repository = CatalogRepository.get(this@fetchXtreamChannels)
+
+            // Resume: a section that finished inside the TTL and still has its rows is not
+            // downloaded again. This is what makes an interrupted load - restart, crash,
+            // timeout, a newer load superseding this one - resume instead of re-fetching six
+            // minutes of live and film lists that were already in the database. `resume` is
+            // false for a forced load (provider edited, backup restored), where re-reading
+            // the panel is the whole point.
+            val now = System.currentTimeMillis()
+            val resumeLive = canResumeIngestSection(
+                resume, !liveOff, ingestSectionDoneAt(config.id, MediaType.LIVE), now,
+                repository.hasRows(config.id, MediaType.LIVE)
+            )
+            val resumeMovies = canResumeIngestSection(
+                resume, !moviesOff, ingestSectionDoneAt(config.id, MediaType.MOVIE), now,
+                repository.hasRows(config.id, MediaType.MOVIE)
+            )
+            val resumeSeries = canResumeIngestSection(
+                resume, !seriesOff, ingestSectionDoneAt(config.id, MediaType.SERIES), now,
+                repository.hasRows(config.id, MediaType.SERIES)
+            )
             // Category lists are small (tens of KB) and every stream needs one to label
-            // it, so they are fetched up front. The bulk lists are streamed straight from
-            // the socket into Room below - they are never a List<Channel> here.
-            val liveCatNames = if (liveOff) emptyMap() else
+            // it, so they are fetched up front for the sections that will actually be read.
+            // The bulk lists are streamed straight from the socket into Room below - they are
+            // never a List<Channel> here.
+            val liveCatNames = if (liveOff || resumeLive) emptyMap() else
                 runCatching { client.getLiveCategories(xtreamProvider) }.getOrDefault(emptyList()).toMap()
-            val vodCatNames = if (moviesOff) emptyMap() else
+            val vodCatNames = if (moviesOff || resumeMovies) emptyMap() else
                 runCatching { client.getVodCategories(xtreamProvider) }.getOrDefault(emptyList()).toMap()
-            val seriesCatNames = if (seriesOff) emptyMap() else
+            val seriesCatNames = if (seriesOff || resumeSeries) emptyMap() else
                 runCatching { client.getSeriesCategories(xtreamProvider) }.getOrDefault(emptyList()).toMap()
 
             // Resolve each stream's category name from the authoritative category list.
@@ -1379,8 +1557,6 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                 }
                 return mapped.copy(sourceProviderId = config.id)
             }
-
-            val repository = CatalogRepository.get(this@fetchXtreamChannels)
 
             /** Streams one bulk list into the catalogue database. Only the live half is
              *  collected into memory; films and series are read from the database by the
@@ -1429,7 +1605,11 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                     }
                 )
                 val dbNanos = writer?.flushNanos ?: 0L
-                if (delivered == null) runCatching { writer?.abort() } else runCatching { writer?.finish() }
+                // A section that reached the end of its list is resumable: a load that dies
+                // before the next one starts must not re-download it (see canResumeIngestSection).
+                val complete = delivered != null
+                if (!complete) runCatching { writer?.abort() } else runCatching { writer?.finish() }
+                if (complete) markIngestSectionDone(config.id, type)
                 val wall = System.currentTimeMillis() - startedAt
                 Log.i(
                     "LumoraPerf",
@@ -1447,13 +1627,41 @@ internal suspend fun MainActivity.fetchXtreamChannels(
             // of a 200k-row table (9 s to build a category list), which blocked the UI and
             // ended in an ANR, and rebuilding them mid-load starved the other provider's
             // inserts.
-            if (!liveOff && !ingest("get_live_streams", MediaType.LIVE, liveCatNames, "uncat_live", live)) {
-                liveFailed = true
+            if (!liveOff) {
+                if (resumeLive) {
+                    // Already stored and current: hand the resident list the rows it would
+                    // have fetched. No network, no writer, no re-ingest.
+                    live.addAll(repository.liveForProvider(config.id))
+                } else if (!ingest("get_live_streams", MediaType.LIVE, liveCatNames, "uncat_live", live)) {
+                    liveFailed = true
+                }
             }
+            // Live TV is usable as soon as its list has landed. Films and series are the
+            // bulk of a panel - minutes of streaming - and the screen no longer waits for
+            // them: the loader paints from here and the VOD halves keep importing behind the
+            // running app (the ingest card narrates them). The handover hops to main and
+            // suspends this fetch until the paint is done, so the film list cannot start
+            // streaming while Live TV is still empty.
+            if (!liveFailed && live.isNotEmpty()) onLive?.invoke(live)
+
             // Films and series are database-only now - not collected into the in-memory
             // catalogue (that was the 220 MB half of the crash).
-            if (!moviesOff) ingest("get_vod_streams", MediaType.MOVIE, vodCatNames, "uncat_vod", null)
-            if (!seriesOff) ingest("get_series", MediaType.SERIES, seriesCatNames, "uncat_series", null)
+            //
+            // Whichever tab the user is on goes first. Each of these is a full bulk list to
+            // stream and ingest, and they used to run in a fixed order, so opening Series
+            // while films were downloading bought a wait for the entire film list first.
+            // The flag is read at this boundary - a tab switch during a phase takes effect
+            // for the next one, not for the one already streaming.
+            val seriesFirst = ingestPriorityTab == 1
+            if (!seriesFirst && !moviesOff && !resumeMovies) {
+                ingest("get_vod_streams", MediaType.MOVIE, vodCatNames, "uncat_vod", null)
+            }
+            if (!seriesOff && !resumeSeries) {
+                ingest("get_series", MediaType.SERIES, seriesCatNames, "uncat_series", null)
+            }
+            if (seriesFirst && !moviesOff && !resumeMovies) {
+                ingest("get_vod_streams", MediaType.MOVIE, vodCatNames, "uncat_vod", null)
+            }
         }
 
         // A provider that could not deliver its live list must not be reported as a

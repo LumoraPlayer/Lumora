@@ -27,7 +27,9 @@
             android:gravity="center"
             android:paddingHorizontal="@dimen/settings_gap"
             android:stateListAnimator="@animator/focus_scale_flat"
-            android:visibility="gone">
+            android:visibility="gone"
+            android:clipChildren="false"
+            android:clipToPadding="false">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -59,7 +61,9 @@
             android:focusable="true"
             android:gravity="center"
             android:paddingHorizontal="@dimen/settings_gap"
-            android:stateListAnimator="@animator/focus_scale_flat">
+            android:stateListAnimator="@animator/focus_scale_flat"
+            android:clipChildren="false"
+            android:clipToPadding="false">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -88,7 +92,7 @@
         android:layout_marginTop="@dimen/settings_gap"
         android:layout_weight="1"
         android:clipChildren="false"
-        android:clipToPadding="false"
+            android:clipToPadding="false"
         android:scrollbars="none">
 
         <LinearLayout

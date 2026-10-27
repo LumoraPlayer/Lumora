@@ -34,7 +34,9 @@
         android:paddingHorizontal="@dimen/category_row_padding_horizontal"
         android:paddingVertical="@dimen/category_row_padding_vertical"
         android:stateListAnimator="@animator/focus_scale"
-        android:nextFocusLeft="@id/categoryStar">
+        android:nextFocusLeft="@id/categoryStar"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <!-- ★ white when the category is pinned, ☆ grey when not. Sits before the name, as
              its own D-pad target: LEFT from the row lands on it, OK toggles the pin. The
@@ -56,7 +58,9 @@
             android:stateListAnimator="@animator/focus_scale_flat"
             android:text="☆"
             android:textColor="@color/text_secondary"
-            android:textSize="@dimen/category_row_text" />
+            android:textSize="@dimen/category_row_text"
+            android:clipChildren="false"
+    android:clipToPadding="false"/>
 
         <TextView
             android:id="@+id/categoryLabel"

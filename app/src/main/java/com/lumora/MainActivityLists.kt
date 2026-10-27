@@ -332,6 +332,11 @@ internal fun MainActivity.selectTab(index: Int) {
     // function.
     updateCatchupTabVisibility()
 
+    // Opening Films or Series while the catalogue behind it is still importing pulls that
+    // half forward and puts its narration back on screen - the tab is thin because the
+    // import is still running, and nothing else on this screen says so.
+    if (index != 0) prioritizeIngestSection(index)
+
     // Series/Films with no IPTV/Jellyfin provider: the catalog these tabs normally browse
     // is empty, but a plugin can still resolve a stream for a TMDB title, so fall back to
     // Discover's own catalog instead of an empty category sidebar.
@@ -761,8 +766,9 @@ internal fun MainActivity.inflateVersionChip(parent: ViewGroup, label: String): 
     val padH = (12 * resources.displayMetrics.density).toInt()
     val padV = (8 * resources.displayMetrics.density).toInt()
     chip.setPadding(padH, padV, padH, padV)
-    chip.background = ContextCompat.getDrawable(this, R.drawable.bg_select_item)
-    // No focus-scale animator: bg_select_item already rings on focus, and any scale-up
+    chip.background = ContextCompat.getDrawable(this, R.drawable.bg_season_chip)
+    chip.setTextColor(ContextCompat.getColor(this, R.color.season_chip_text))
+    // No focus-scale animator: bg_season_chip already rings on focus, and any scale-up
     // overflows the horizontally-clipped chip scrollers - the focused edge chip read
     // as cut off. Same reason the season chips and cast faces carry none.
     chip.isClickable = true

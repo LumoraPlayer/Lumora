@@ -85,5 +85,7 @@
         android:padding="10dp"
         android:src="@android:drawable/ic_menu_delete"
         android:stateListAnimator="@animator/focus_scale"
-        android:tint="@color/text_secondary" />
+        android:tint="@color/text_secondary"
+        android:clipChildren="false"
+    android:clipToPadding="false"/>
 </LinearLayout>

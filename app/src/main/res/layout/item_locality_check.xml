@@ -14,4 +14,6 @@
     android:stateListAnimator="@animator/focus_scale_flat"
     android:textColor="@color/text_primary"
     android:textSize="@dimen/settings_text_body"
-    android:fontFamily="@font/inter_medium" />
+    android:fontFamily="@font/inter_medium"
+    android:clipChildren="false"
+    android:clipToPadding="false"/>

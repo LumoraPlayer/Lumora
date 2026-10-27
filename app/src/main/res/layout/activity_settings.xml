@@ -37,16 +37,44 @@
         android:clipToPadding="false"
         android:orientation="vertical">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="18dp"
             android:layout_marginTop="@dimen/settings_gap_xl"
             android:layout_marginBottom="@dimen/settings_gap_l"
-            android:text="@string/settings"
-            android:textColor="@color/text_primary"
-            android:textSize="@dimen/settings_text_section"
-            android:fontFamily="@font/inter_bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/settings"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/settings_text_section"
+                android:fontFamily="@font/inter_bold" />
+
+            <LinearLayout
+                android:id="@+id/navCollapseRail"
+                style="@style/Widget.Lumora.SettingsNavRow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="@dimen/settings_gap_m"
+                android:padding="@dimen/settings_gap_xs"
+                android:background="@drawable/nav_rail_item_glass">
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_arrow_left"
+                    android:tint="@color/nav_icon_tint" />
+                <TextView
+                    style="@style/Widget.Lumora.SettingsNavLabel"
+                    android:layout_marginStart="@dimen/settings_gap_xs"
+                    android:textSize="@dimen/settings_text_caption"
+                    android:text="@string/settings_nav_collapse" />
+            </LinearLayout>
+        </LinearLayout>
 
         <!-- Scrollable so the rail never clips the last row on shorter panels - this rail has
              no fixed height budget of its own. Clipped to its own bounds (unlike the
@@ -71,25 +99,6 @@
                 android:paddingHorizontal="@dimen/settings_gap_m"
                 android:paddingTop="@dimen/settings_gap_s"
                 android:paddingBottom="@dimen/settings_gap">
-
-                <!-- Collapse row - first in the rail, directly under the "Settings" title,
-                     so the way out sits where the eye already is rather than below ten
-                     rows of scroll. Collapses the whole rail (see collapseSettingsRail());
-                     the floating settingsExpandRailButton pill is the way back. Not part
-                     of the navRows/pane mapping - it selects no section. -->
-                <LinearLayout
-                    android:id="@+id/navCollapseRail"
-                    style="@style/Widget.Lumora.SettingsNavRow"
-                    android:background="@drawable/nav_rail_item_glass">
-                    <ImageView
-                        android:layout_width="@dimen/settings_nav_icon_size"
-                        android:layout_height="@dimen/settings_nav_icon_size"
-                        android:src="@drawable/ic_arrow_left"
-                        android:tint="@color/nav_icon_tint" />
-                    <TextView
-                        style="@style/Widget.Lumora.SettingsNavLabel"
-                        android:text="@string/settings_nav_collapse" />
-                </LinearLayout>
 
                 <LinearLayout android:id="@+id/navGeneral" style="@style/Widget.Lumora.SettingsNavRow" android:tag="0" android:background="@drawable/nav_rail_item_glass">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_settings" android:tint="@color/nav_icon_tint" />
@@ -349,7 +358,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -431,7 +442,9 @@
                             android:orientation="vertical"
                             android:paddingHorizontal="4dp"
                             android:paddingVertical="6dp"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_m3u" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/playlist_link" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
@@ -450,7 +463,9 @@
                             android:orientation="vertical"
                             android:paddingHorizontal="4dp"
                             android:paddingVertical="6dp"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_xtream" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/login_codes" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
@@ -469,7 +484,9 @@
                             android:orientation="vertical"
                             android:paddingHorizontal="4dp"
                             android:paddingVertical="6dp"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_stalker" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/mac_address" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
@@ -484,7 +501,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:orientation="horizontal">
 
                         <LinearLayout
@@ -501,7 +518,9 @@
                             android:orientation="vertical"
                             android:paddingHorizontal="4dp"
                             android:paddingVertical="6dp"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_jellyfin" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
@@ -520,7 +539,9 @@
                             android:orientation="vertical"
                             android:paddingHorizontal="4dp"
                             android:paddingVertical="6dp"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_silo" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
@@ -539,7 +560,9 @@
                             android:orientation="vertical"
                             android:paddingHorizontal="4dp"
                             android:paddingVertical="6dp"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_plex" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
@@ -553,7 +576,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:orientation="horizontal">
 
                         <LinearLayout
@@ -570,7 +593,9 @@
                             android:orientation="vertical"
                             android:paddingHorizontal="4dp"
                             android:paddingVertical="6dp"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_smb" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/network_share" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
@@ -589,7 +614,9 @@
                             android:orientation="vertical"
                             android:paddingHorizontal="4dp"
                             android:paddingVertical="6dp"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_webdav" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/network_share" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
@@ -608,7 +635,7 @@
                         android:layout_height="wrap_content"
                         android:background="@drawable/bg_type_summary_pill"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
                         android:paddingHorizontal="@dimen/settings_gap_ml"
@@ -637,7 +664,9 @@
                             android:stateListAnimator="@animator/focus_scale_flat"
                             android:text="@string/change"
                             android:textColor="@color/primary_light"
-                            android:textSize="@dimen/settings_text_body" />
+                            android:textSize="@dimen/settings_text_body"
+                            android:clipChildren="false"
+    android:clipToPadding="false"/>
                     </LinearLayout>
 
                     <!-- Steps 2-4 stay hidden until a type is picked above (see
@@ -648,7 +677,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -667,7 +696,9 @@
                         android:clickable="true"
                         android:focusable="true"
                         android:gravity="center"
-                        android:stateListAnimator="@animator/focus_scale_flat">
+                        android:stateListAnimator="@animator/focus_scale_flat"
+                        android:clipChildren="false"
+                        android:clipToPadding="false">
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -790,7 +821,9 @@
                         android:stateListAnimator="@animator/focus_scale_flat"
                         android:text="@string/sett_provider_backup"
                         android:textColor="@color/text_primary"
-                        android:textSize="@dimen/settings_text_caption" />
+                        android:textSize="@dimen/settings_text_caption"
+                        android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                     <TextView
                         android:id="@+id/settingsProviderBackupHint"
@@ -876,7 +909,9 @@
                             android:clickable="true"
                             android:focusable="true"
                             android:gravity="center"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
 
                             <TextView
                                 android:layout_width="wrap_content"
@@ -910,7 +945,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -979,7 +1014,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -1083,7 +1118,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -1113,7 +1148,9 @@
                             android:clickable="true"
                             android:focusable="true"
                             android:gravity="center"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
                             <TextView
                                 android:id="@+id/settingsJellyfinQuickConnectLabel"
                                 android:layout_width="wrap_content"
@@ -1175,7 +1212,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -1197,7 +1234,9 @@
                             android:clickable="true"
                             android:focusable="true"
                             android:gravity="center"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
                             <TextView
                                 android:id="@+id/settingsPlexSignInLabel"
                                 android:layout_width="wrap_content"
@@ -1254,7 +1293,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -1312,7 +1351,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:orientation="vertical"
                         android:visibility="gone">
 
@@ -1372,7 +1411,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/settings_gap_m"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                            android:clipToPadding="false"
                         android:orientation="horizontal"
                         android:visibility="gone">
 
@@ -1386,7 +1425,9 @@
                             android:clickable="true"
                             android:focusable="true"
                             android:gravity="center"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
 
                             <TextView
                                 android:layout_width="wrap_content"
@@ -1407,7 +1448,9 @@
                             android:clickable="true"
                             android:focusable="true"
                             android:gravity="center"
-                            android:stateListAnimator="@animator/focus_scale_flat">
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
 
                             <TextView
                                 android:layout_width="wrap_content"
@@ -1445,7 +1488,9 @@
                         android:text="@string/cancel"
                         android:textColor="@color/text_secondary"
                         android:textSize="@dimen/settings_text_caption"
-                        android:fontFamily="@font/inter_medium" />
+                        android:fontFamily="@font/inter_medium"
+                        android:clipChildren="false"
+    android:clipToPadding="false"/>
                 </LinearLayout>
             </LinearLayout>
 
@@ -1455,7 +1500,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                        android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1470,7 +1515,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/recording_storage" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -1486,7 +1533,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/playback_settings" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -1502,7 +1551,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -1519,7 +1570,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1538,7 +1589,9 @@
                     android:text="@string/hide_non_english"
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
-                    android:fontFamily="@font/inter_medium" />
+                    android:fontFamily="@font/inter_medium"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <!-- Shortcut to the Regions pane (its own rail section). Shows the current
                      selection at a glance; the actual picker is a full pane because a
@@ -1554,7 +1607,9 @@
                     android:focusable="true"
                     android:gravity="center"
                     android:orientation="vertical"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -1589,7 +1644,9 @@
                     android:text="@string/hide_adult_categories"
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
-                    android:fontFamily="@font/inter_medium" />
+                    android:fontFamily="@font/inter_medium"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <CheckBox
                     android:id="@+id/settingsCategorizeLive"
@@ -1605,7 +1662,9 @@
                     android:text="@string/categorize_live"
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
-                    android:fontFamily="@font/inter_medium" />
+                    android:fontFamily="@font/inter_medium"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <CheckBox
                     android:id="@+id/settingsCategorizeVod"
@@ -1621,7 +1680,9 @@
                     android:text="@string/categorize_vod"
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
-                    android:fontFamily="@font/inter_medium" />
+                    android:fontFamily="@font/inter_medium"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <CheckBox
                     android:id="@+id/settingsGroupChannels"
@@ -1637,7 +1698,9 @@
                     android:text="@string/group_channels"
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
-                    android:fontFamily="@font/inter_medium" />
+                    android:fontFamily="@font/inter_medium"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
             </LinearLayout>
 
             <!-- Pane: Regions. The Live TV locality picker. A real pane rather than a
@@ -1650,7 +1713,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1684,7 +1747,9 @@
                     android:text="@string/sett_locality_show_untagged"
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
-                    android:fontFamily="@font/inter_medium" />
+                    android:fontFamily="@font/inter_medium"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <LinearLayout
                     android:id="@+id/settingsRegionsDetect"
@@ -1696,7 +1761,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -1713,7 +1780,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1728,7 +1795,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:id="@+id/settingsParentalPinLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/set_parental_pin" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -1742,7 +1811,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/clear_watch_history" android:textColor="@color/live_red" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
             </LinearLayout>
@@ -1753,7 +1824,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1768,7 +1839,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/export_backup" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -1793,7 +1866,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/import_backup" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
             </LinearLayout>
@@ -1804,7 +1879,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1819,7 +1894,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/add_epg_source" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
             </LinearLayout>
@@ -1832,7 +1909,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1863,7 +1940,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1901,7 +1978,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -1929,7 +2006,9 @@
                     android:text="@string/plug_auto_update"
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
-                    android:fontFamily="@font/inter_medium" />
+                    android:fontFamily="@font/inter_medium"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -1952,7 +2031,9 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:padding="@dimen/settings_gap_l"
-                    android:stateListAnimator="@animator/focus_scale">
+                    android:stateListAnimator="@animator/focus_scale"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -1985,7 +2066,9 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:padding="@dimen/settings_gap_l"
-                    android:stateListAnimator="@animator/focus_scale">
+                    android:stateListAnimator="@animator/focus_scale"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -2018,7 +2101,9 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:padding="@dimen/settings_gap_l"
-                    android:stateListAnimator="@animator/focus_scale">
+                    android:stateListAnimator="@animator/focus_scale"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -2080,7 +2165,9 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:padding="@dimen/settings_gap_ml"
-                    android:stateListAnimator="@animator/focus_scale">
+                    android:stateListAnimator="@animator/focus_scale"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -2134,7 +2221,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -2191,7 +2278,9 @@
                     android:focusable="true"
                     android:gravity="center"
                     android:stateListAnimator="@animator/focus_scale_flat"
-                    android:visibility="gone">
+                    android:visibility="gone"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/trakt_connect" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -2209,7 +2298,9 @@
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
                     android:fontFamily="@font/inter_medium"
-                    android:visibility="gone" />
+                    android:visibility="gone"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <CheckBox
                     android:id="@+id/traktWatchedSyncCheck"
@@ -2225,7 +2316,9 @@
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
                     android:fontFamily="@font/inter_medium"
-                    android:visibility="gone" />
+                    android:visibility="gone"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <LinearLayout
                     android:id="@+id/traktSyncNowRow"
@@ -2238,7 +2331,9 @@
                     android:focusable="true"
                     android:gravity="center"
                     android:stateListAnimator="@animator/focus_scale_flat"
-                    android:visibility="gone">
+                    android:visibility="gone"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/trakt_sync_now" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -2252,7 +2347,9 @@
                     android:focusable="true"
                     android:gravity="center"
                     android:stateListAnimator="@animator/focus_scale_flat"
-                    android:visibility="gone">
+                    android:visibility="gone"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/trakt_sign_out" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
             </LinearLayout>
@@ -2265,7 +2362,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -2298,7 +2395,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView
                         android:id="@+id/debridServiceLabel"
                         android:layout_width="wrap_content"
@@ -2334,7 +2433,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/debrid_save" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -2347,7 +2448,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/debrid_clear" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
             </LinearLayout>
@@ -2359,7 +2462,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -2415,7 +2518,9 @@
                     android:focusable="true"
                     android:gravity="center"
                     android:stateListAnimator="@animator/focus_scale_flat"
-                    android:visibility="gone">
+                    android:visibility="gone"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/simkl_connect" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -2433,7 +2538,9 @@
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
                     android:fontFamily="@font/inter_medium"
-                    android:visibility="gone" />
+                    android:visibility="gone"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <CheckBox
                     android:id="@+id/simklWatchedSyncCheck"
@@ -2449,7 +2556,9 @@
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
                     android:fontFamily="@font/inter_medium"
-                    android:visibility="gone" />
+                    android:visibility="gone"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <LinearLayout
                     android:id="@+id/simklSyncNowRow"
@@ -2462,7 +2571,9 @@
                     android:focusable="true"
                     android:gravity="center"
                     android:stateListAnimator="@animator/focus_scale_flat"
-                    android:visibility="gone">
+                    android:visibility="gone"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/simkl_sync_now" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -2476,7 +2587,9 @@
                     android:focusable="true"
                     android:gravity="center"
                     android:stateListAnimator="@animator/focus_scale_flat"
-                    android:visibility="gone">
+                    android:visibility="gone"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/simkl_sign_out" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
             </LinearLayout>
@@ -2488,7 +2601,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -2524,7 +2637,9 @@
                     android:text="@string/diag_save_crashes"
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
-                    android:fontFamily="@font/inter_medium" />
+                    android:fontFamily="@font/inter_medium"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <CheckBox
                     android:id="@+id/diagLogCheck"
@@ -2539,7 +2654,9 @@
                     android:text="@string/diag_record_log"
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/settings_text_body"
-                    android:fontFamily="@font/inter_medium" />
+                    android:fontFamily="@font/inter_medium"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <LinearLayout
                     android:id="@+id/diagQrRow"
@@ -2551,7 +2668,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/diag_share" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -2568,7 +2687,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/diag_save_device" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
@@ -2581,7 +2702,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/diag_clear" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
             </LinearLayout>
@@ -2592,7 +2715,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -2656,7 +2779,9 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
                     android:paddingHorizontal="@dimen/settings_gap_l"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/github" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/github_url" android:textColor="@color/primary_light" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_regular" />
                 </LinearLayout>
@@ -2675,7 +2800,9 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
                     android:paddingHorizontal="@dimen/settings_gap_l"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/discord" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/discord_url" android:textColor="@color/primary_light" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_regular" />
                 </LinearLayout>
@@ -2692,7 +2819,9 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:stateListAnimator="@animator/focus_scale_flat">
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
                     <TextView android:id="@+id/settingsCheckUpdateLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/check_for_updates" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
             </LinearLayout>
@@ -2708,7 +2837,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical"
                 android:visibility="gone">
 
@@ -2810,7 +2939,9 @@
                         android:focusable="true"
                         android:gravity="center"
                         android:paddingHorizontal="@dimen/settings_gap"
-                        android:stateListAnimator="@animator/focus_scale">
+                        android:stateListAnimator="@animator/focus_scale"
+                        android:clipChildren="false"
+                        android:clipToPadding="false">
                         <TextView
                             android:id="@+id/pluginDetailRunLabel"
                             android:layout_width="wrap_content"
@@ -2831,7 +2962,9 @@
                         android:focusable="true"
                         android:gravity="center"
                         android:paddingHorizontal="@dimen/settings_gap"
-                        android:stateListAnimator="@animator/focus_scale">
+                        android:stateListAnimator="@animator/focus_scale"
+                        android:clipChildren="false"
+                        android:clipToPadding="false">
                         <TextView
                             android:id="@+id/pluginDetailUpdateLabel"
                             android:layout_width="wrap_content"
@@ -2851,7 +2984,9 @@
                         android:focusable="true"
                         android:gravity="center"
                         android:paddingHorizontal="@dimen/settings_gap"
-                        android:stateListAnimator="@animator/focus_scale">
+                        android:stateListAnimator="@animator/focus_scale"
+                        android:clipChildren="false"
+                        android:clipToPadding="false">
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
@@ -2868,7 +3003,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/settings_gap_xl"
                     android:clipChildren="false"
-                    android:clipToPadding="false"
+                        android:clipToPadding="false"
                     android:orientation="vertical"
                     android:visibility="gone">
 
@@ -2935,7 +3070,7 @@
         android:layout_height="wrap_content"
         android:background="@color/canvas_elevated"
         android:clipChildren="false"
-        android:clipToPadding="false"
+                        android:clipToPadding="false"
         android:gravity="end|center_vertical"
         android:orientation="horizontal"
         android:padding="@dimen/settings_gap_l"
@@ -2951,7 +3086,9 @@
             android:focusable="true"
             android:gravity="center"
             android:paddingHorizontal="@dimen/settings_pane_padding"
-            android:stateListAnimator="@animator/focus_scale_flat">
+            android:stateListAnimator="@animator/focus_scale_flat"
+            android:clipChildren="false"
+            android:clipToPadding="false">
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -2987,7 +3124,9 @@
         android:paddingStart="14dp"
         android:paddingEnd="12dp"
         android:stateListAnimator="@animator/focus_scale_flat"
-        android:visibility="gone">
+        android:visibility="gone"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <TextView
             android:layout_width="wrap_content"

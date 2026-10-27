@@ -71,7 +71,9 @@
         android:clickable="true"
         android:focusable="true"
         android:paddingHorizontal="@dimen/settings_gap"
-        android:stateListAnimator="@animator/focus_scale">
+        android:stateListAnimator="@animator/focus_scale"
+        android:clipChildren="false"
+        android:clipToPadding="false">
         <TextView
             android:id="@+id/candidateAddLabel"
             android:layout_width="wrap_content"

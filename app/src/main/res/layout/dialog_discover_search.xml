@@ -82,7 +82,9 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="20dp"
@@ -103,7 +105,7 @@
             android:layout_weight="1"
             android:layout_marginTop="@dimen/search_section_gap"
             android:clipChildren="false"
-            android:clipToPadding="false"
+                android:clipToPadding="false"
             android:orientation="horizontal">
 
             <!-- Keyboard, centred in its column exactly like the main search overlay's:

@@ -6,6 +6,8 @@
     android:layout_height="wrap_content"
     android:layout_margin="8dp"
     android:clickable="true"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:focusable="true"
     android:foreground="@drawable/bg_poster_focus_ring"
     android:stateListAnimator="@animator/focus_scale">

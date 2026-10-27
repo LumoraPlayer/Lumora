@@ -624,6 +624,11 @@
     <string name="ingest_phase_films">Films</string>
     <string name="ingest_phase_series">Series</string>
     <string name="ingest_phase_playlist">Playlist</string>
+    <!-- Raised instead of ingest_progress when the pane in front of the user is a Films or
+         Series tab whose half of the catalogue is still on its way: their section, not
+         whatever happens to be streaming right now. Clicking that tab also fetches it first
+         (MainActivityIngest.prioritizeIngestSection). -->
+    <string name="ingest_section_background">%1$s — %2$s importing in the background · %3$s items · %4$s</string>
     <!-- Hides the banner for the rest of the load. The import keeps running. -->
     <string name="ingest_hide">Hide</string>
     <string name="sett_provider_very_large">very large</string>

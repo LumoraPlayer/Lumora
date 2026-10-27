@@ -25,7 +25,9 @@
     android:orientation="horizontal"
     android:paddingHorizontal="12dp"
     android:paddingVertical="7dp"
-    android:stateListAnimator="@animator/focus_scale">
+    android:stateListAnimator="@animator/focus_scale"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <ImageView
         android:id="@+id/sportsFilterChipIcon"

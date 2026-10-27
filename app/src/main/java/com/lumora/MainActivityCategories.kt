@@ -477,7 +477,7 @@ internal fun MainActivity.applyChromeWrap() {
 
     // Gap between wrapped lines. The pills scale to 1.06x on focus (focus_scale_flat), so
     // without it a focused pill on the first line grows into the one below.
-    binding.tabBarRow.lineSpacing = if (portrait) (4 * resources.displayMetrics.density).toInt() else 0
+    binding.tabBarRow.lineSpacing = if (portrait) (2 * resources.displayMetrics.density).toInt() else 0
     binding.tabBarRow.wrap = portrait
 }
 

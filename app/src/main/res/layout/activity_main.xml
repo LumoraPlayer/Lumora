@@ -63,7 +63,9 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:paddingHorizontal="24dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -87,7 +89,9 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:paddingHorizontal="20dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -111,13 +115,13 @@
             android:layout_height="wrap_content"
             android:background="@android:color/transparent"
             android:clipChildren="false"
-            android:clipToPadding="false"
+                android:clipToPadding="false"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="@dimen/toolbar_padding_horizontal"
             android:paddingEnd="@dimen/toolbar_padding_horizontal"
             android:paddingTop="@dimen/toolbar_padding_top"
-            android:paddingBottom="6dp">
+            android:paddingBottom="4dp">
 
             <!-- Left group: brand + tab scroller. weight=1 absorbs the free middle of the
                  row, so the button cluster stays pinned right even when the scroller is
@@ -210,9 +214,9 @@
             android:layout_height="wrap_content"
             android:background="@android:color/transparent"
             android:clipChildren="false"
-            android:clipToPadding="false"
+                android:clipToPadding="false"
             android:paddingHorizontal="@dimen/chrome_row_padding_h"
-            android:paddingBottom="6dp">
+            android:paddingBottom="4dp">
 
             <LinearLayout
                 android:id="@+id/tabLive"
@@ -231,7 +235,9 @@
                 android:nextFocusLeft="@id/tabDownloads"
                 android:nextFocusRight="@id/tabSeries"
                 android:stateListAnimator="@animator/focus_scale_flat"
-                android:layerType="none">
+                android:layerType="none"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -315,7 +321,9 @@
                 android:nextFocusLeft="@id/tabLive"
                 android:nextFocusRight="@id/tabSeries"
                 android:stateListAnimator="@animator/focus_scale_flat"
-                android:layerType="none">
+                android:layerType="none"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -368,7 +376,9 @@
                 android:nextFocusLeft="@id/tabLive"
                 android:nextFocusRight="@id/tabFilms"
                 android:stateListAnimator="@animator/focus_scale_flat"
-                android:layerType="none">
+                android:layerType="none"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -421,7 +431,9 @@
                 android:nextFocusLeft="@id/tabSeries"
                 android:nextFocusRight="@id/tabHome"
                 android:stateListAnimator="@animator/focus_scale_flat"
-                android:layerType="none">
+                android:layerType="none"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -474,7 +486,9 @@
                 android:nextFocusLeft="@id/tabFilms"
                 android:nextFocusRight="@id/tabDiscover"
                 android:stateListAnimator="@animator/focus_scale_flat"
-                android:layerType="none">
+                android:layerType="none"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -527,7 +541,9 @@
                 android:nextFocusLeft="@id/tabHome"
                 android:nextFocusRight="@id/btnSearch"
                 android:stateListAnimator="@animator/focus_scale_flat"
-                android:layerType="none">
+                android:layerType="none"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -587,7 +603,9 @@
                 android:nextFocusLeft="@id/tabDiscover"
                 android:nextFocusRight="@id/btnSettings"
                 android:stateListAnimator="@animator/focus_scale_flat"
-                android:layerType="none">
+                android:layerType="none"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -640,7 +658,9 @@
                 android:nextFocusRight="@id/btnSettings"
                 android:stateListAnimator="@animator/focus_scale_flat"
                 android:layerType="none"
-                android:visibility="gone">
+                android:visibility="gone"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <LinearLayout
                     android:layout_width="wrap_content"
@@ -704,7 +724,9 @@
                 android:paddingHorizontal="@dimen/chrome_button_padding_h"
                 android:paddingTop="@dimen/tab_padding_vertical"
                 android:paddingBottom="@dimen/tab_padding_vertical"
-                android:stateListAnimator="@animator/focus_scale_flat">
+                android:stateListAnimator="@animator/focus_scale_flat"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:id="@+id/btnSettingsIcon"
@@ -730,7 +752,9 @@
                 android:paddingHorizontal="@dimen/chrome_button_padding_h"
                 android:paddingTop="@dimen/tab_padding_vertical"
                 android:paddingBottom="@dimen/tab_padding_vertical"
-                android:stateListAnimator="@animator/focus_scale_flat">
+                android:stateListAnimator="@animator/focus_scale_flat"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="20dp"
@@ -944,7 +968,9 @@
             android:paddingHorizontal="16dp"
             android:paddingVertical="12dp"
             android:stateListAnimator="@animator/focus_scale_flat"
-            android:visibility="gone">
+            android:visibility="gone"
+            android:clipChildren="false"
+            android:clipToPadding="false">
 
             <ImageView
                 android:layout_width="20dp"
@@ -1056,7 +1082,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="10dp"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="horizontal">
 
                 <TextView
@@ -1076,7 +1102,9 @@
                     android:stateListAnimator="@animator/focus_scale"
                     android:text="@string/search_filter_all"
                     android:textColor="@color/season_chip_text"
-                    android:textSize="@dimen/text_body_s" />
+                    android:textSize="@dimen/text_body_s"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <TextView
                     android:id="@+id/discoverFilterMovies"
@@ -1095,7 +1123,9 @@
                     android:stateListAnimator="@animator/focus_scale"
                     android:text="@string/search_filter_films"
                     android:textColor="@color/season_chip_text"
-                    android:textSize="@dimen/text_body_s" />
+                    android:textSize="@dimen/text_body_s"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <TextView
                     android:id="@+id/discoverFilterSeries"
@@ -1113,7 +1143,9 @@
                     android:stateListAnimator="@animator/focus_scale"
                     android:text="@string/search_filter_series"
                     android:textColor="@color/season_chip_text"
-                    android:textSize="@dimen/text_body_s" />
+                    android:textSize="@dimen/text_body_s"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
             </LinearLayout>
 
             <TextView
@@ -1160,7 +1192,7 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:clipChildren="false"
-            android:clipToPadding="false"
+                    android:clipToPadding="false"
             android:orientation="horizontal">
 
             <androidx.recyclerview.widget.RecyclerView
@@ -1669,7 +1701,9 @@
                     android:paddingStart="14dp"
                     android:paddingEnd="12dp"
                     android:stateListAnimator="@animator/focus_scale_flat"
-                    android:visibility="gone">
+                    android:visibility="gone"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -1708,14 +1742,14 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipChildren="false"
-            android:clipToPadding="false"
+                    android:clipToPadding="false"
             android:fillViewport="true">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:orientation="vertical">
 
                 <!-- Compact poster (2:3, a thumb not a hero) sits beside the
@@ -1808,7 +1842,9 @@
                                     android:focusable="true"
                                     android:gravity="center"
                                     android:stateListAnimator="@animator/focus_scale"
-                                    android:visibility="gone">
+                                    android:visibility="gone"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false">
 
                                     <TextView
                                         android:id="@+id/detailFavoriteIcon"
@@ -1855,7 +1891,7 @@
                             android:layout_marginStart="16dp"
                             android:layout_weight="1"
                             android:clipChildren="false"
-                            android:clipToPadding="false"
+                                    android:clipToPadding="false"
                             android:orientation="vertical">
 
                             <TextView
@@ -1906,7 +1942,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:clipChildren="false"
-                            android:clipToPadding="false"
+                                    android:clipToPadding="false"
                             android:orientation="horizontal">
 
                             <LinearLayout
@@ -1914,7 +1950,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_weight="1.2"
                                 android:clipChildren="false"
-                                android:clipToPadding="false"
+                                    android:clipToPadding="false"
                                 android:orientation="vertical">
 
                             <!-- Play / Find & Play / trailer sit in the title
@@ -1928,7 +1964,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginStart="@dimen/detail_actions_start_margin"
                                 android:clipChildren="false"
-                                android:clipToPadding="false"
+                                    android:clipToPadding="false"
                                 android:orientation="horizontal">
 
                                 <!-- Compact actions: Play, Find and Trailer share this one
@@ -1945,7 +1981,9 @@
                                     android:orientation="horizontal"
                                     android:paddingHorizontal="20dp"
                                     android:stateListAnimator="@animator/focus_scale"
-                                    android:visibility="gone">
+                                    android:visibility="gone"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false">
 
                                     <ImageView
                                         android:layout_width="14dp"
@@ -1976,7 +2014,9 @@
                                     android:focusable="true"
                                     android:gravity="center"
                                     android:stateListAnimator="@animator/focus_scale"
-                                    android:visibility="gone">
+                                    android:visibility="gone"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false">
 
                                     <ImageView
                                         android:id="@+id/detailDownloadIcon"
@@ -2003,7 +2043,9 @@
                                     android:orientation="horizontal"
                                     android:paddingHorizontal="14dp"
                                     android:stateListAnimator="@animator/focus_scale"
-                                    android:visibility="gone">
+                                    android:visibility="gone"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false">
 
                                     <TextView
                                         android:layout_width="wrap_content"
@@ -2029,7 +2071,9 @@
                                     android:orientation="horizontal"
                                     android:paddingHorizontal="14dp"
                                     android:stateListAnimator="@animator/focus_scale"
-                                    android:visibility="gone">
+                                    android:visibility="gone"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false">
 
                                     <TextView
                                         android:layout_width="wrap_content"
@@ -2050,7 +2094,7 @@
                                 android:layout_marginStart="16dp"
                                 android:layout_weight="1"
                                 android:clipChildren="false"
-                                android:clipToPadding="false"
+                                    android:clipToPadding="false"
                                 android:orientation="vertical">
 
                             <!-- Cast closes the Overview column: it reads as part of the
@@ -2075,7 +2119,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginBottom="-6dp"
                                 android:clipChildren="false"
-                                android:clipToPadding="false"
+                                    android:clipToPadding="false"
                                 android:scrollbars="none"
                                 android:visibility="gone">
 
@@ -2119,7 +2163,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:clipChildren="false"
-                    android:clipToPadding="false"
+                                    android:clipToPadding="false"
                     android:orientation="vertical"
                     android:paddingHorizontal="24dp"
                     android:paddingBottom="24dp">
@@ -2134,7 +2178,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                                    android:clipToPadding="false"
                         android:orientation="horizontal">
 
                         <LinearLayout
@@ -2142,7 +2186,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:clipChildren="false"
-                            android:clipToPadding="false"
+                                    android:clipToPadding="false"
                             android:orientation="vertical">
 
 
@@ -2231,7 +2275,7 @@
                                 android:layout_marginTop="6dp"
                                 android:layout_marginEnd="0dp"
                                 android:clipChildren="false"
-                                android:clipToPadding="false"
+                                    android:clipToPadding="false"
                                 android:nestedScrollingEnabled="true"
                                 android:overScrollMode="never"
                                 android:paddingHorizontal="6dp"
@@ -2259,7 +2303,9 @@
             android:padding="12dp"
             android:stateListAnimator="@animator/focus_scale"
             android:src="@drawable/ic_x"
-            android:tint="@color/text_primary" />
+            android:tint="@color/text_primary"
+            android:clipChildren="false"
+    android:clipToPadding="false"/>
     </FrameLayout>
 
     <!-- ============================================================
@@ -2455,7 +2501,9 @@
             android:padding="12dp"
             android:stateListAnimator="@animator/focus_scale"
             android:src="@drawable/ic_x"
-            android:tint="@color/text_primary" />
+            android:tint="@color/text_primary"
+            android:clipChildren="false"
+    android:clipToPadding="false"/>
     </FrameLayout>
 
     <!-- ============================================================
@@ -2466,7 +2514,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipChildren="false"
-        android:clipToPadding="false"
+            android:clipToPadding="false"
         android:visibility="gone">
 
         <com.lumora.player.VideoAspectFrameLayout
@@ -2550,7 +2598,9 @@
                     android:text="@string/mv_add_pane"
                     android:textAllCaps="true"
                     android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_tiny" />
+                    android:textSize="@dimen/text_tiny"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <TextView
                     android:id="@+id/btnMvChange"
@@ -2566,7 +2616,9 @@
                     android:text="@string/mv_change"
                     android:textAllCaps="true"
                     android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_tiny" />
+                    android:textSize="@dimen/text_tiny"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <TextView
                     android:id="@+id/btnMvFullscreen"
@@ -2582,7 +2634,9 @@
                     android:text="@string/mv_fullscreen"
                     android:textAllCaps="true"
                     android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_tiny" />
+                    android:textSize="@dimen/text_tiny"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <TextView
                     android:id="@+id/btnMvClose"
@@ -2598,7 +2652,9 @@
                     android:text="@string/mv_close_pane"
                     android:textAllCaps="true"
                     android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_tiny" />
+                    android:textSize="@dimen/text_tiny"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <TextView
                     android:id="@+id/btnMvExit"
@@ -2613,7 +2669,9 @@
                     android:text="@string/mv_exit"
                     android:textAllCaps="true"
                     android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_tiny" />
+                    android:textSize="@dimen/text_tiny"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
             </LinearLayout>
         </LinearLayout>
 
@@ -2639,7 +2697,9 @@
             android:textAllCaps="false"
             android:textColor="@color/text_primary"
             android:textSize="@dimen/settings_text_body"
-            android:visibility="gone" />
+            android:visibility="gone"
+            android:clipChildren="false"
+    android:clipToPadding="false"/>
 
         <ProgressBar
             android:id="@+id/bufferingSpinner"
@@ -2749,7 +2809,9 @@
                     android:padding="12dp"
                     android:stateListAnimator="@animator/focus_scale"
                     android:src="@drawable/ic_x"
-                    android:tint="@color/text_primary" />
+                    android:tint="@color/text_primary"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
                 <!-- Phone access to the side menu - TV remotes open it with DPAD_LEFT, so this
                      is hidden on TV (see setupPlayerControls). -->
                 <ImageButton
@@ -2764,7 +2826,9 @@
                     android:padding="12dp"
                     android:stateListAnimator="@animator/focus_scale"
                     android:src="@drawable/ic_menu"
-                    android:tint="@color/text_primary" />
+                    android:tint="@color/text_primary"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                 <!-- Pushes the settings gear to the far right edge of the top strip. -->
                 <Space
@@ -2783,7 +2847,9 @@
                     android:padding="12dp"
                     android:stateListAnimator="@animator/focus_scale"
                     android:src="@drawable/ic_settings"
-                    android:tint="@color/text_primary" />
+                    android:tint="@color/text_primary"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
             </LinearLayout>
 
             <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
@@ -2793,7 +2859,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/grad_player_bottom"
                 android:clipChildren="false"
-                android:clipToPadding="false"
+                    android:clipToPadding="false"
                 android:paddingTop="6dp">
 
                 <LinearLayout
@@ -2964,7 +3030,9 @@
                                 android:padding="10dp"
                                 android:stateListAnimator="@animator/focus_scale"
                                 android:src="@android:drawable/ic_media_previous"
-                                android:tint="@color/text_primary" />
+                                android:tint="@color/text_primary"
+                                android:clipChildren="false"
+    android:clipToPadding="false"/>
                             <ImageButton
                                 android:id="@+id/btnRewind"
                                 android:layout_width="34dp"
@@ -2980,7 +3048,9 @@
                                 android:padding="8dp"
                                 android:stateListAnimator="@animator/focus_scale"
                                 android:src="@android:drawable/ic_media_rew"
-                                android:tint="@color/text_primary" />
+                                android:tint="@color/text_primary"
+                                android:clipChildren="false"
+    android:clipToPadding="false"/>
                             <ImageButton
                                 android:id="@+id/btnPlayPause"
                                 android:layout_width="42dp"
@@ -2996,7 +3066,9 @@
                                 android:padding="11dp"
                                 android:stateListAnimator="@animator/focus_scale"
                                 android:src="@drawable/ic_play"
-                                android:tint="@android:color/white" />
+                                android:tint="@android:color/white"
+                                android:clipChildren="false"
+    android:clipToPadding="false"/>
                             <ImageButton
                                 android:id="@+id/btnFastForward"
                                 android:layout_width="34dp"
@@ -3012,7 +3084,9 @@
                                 android:padding="8dp"
                                 android:stateListAnimator="@animator/focus_scale"
                                 android:src="@android:drawable/ic_media_ff"
-                                android:tint="@color/text_primary" />
+                                android:tint="@color/text_primary"
+                                android:clipChildren="false"
+    android:clipToPadding="false"/>
                             <ImageButton
                                 android:id="@+id/btnNextChannel"
                                 android:layout_width="34dp"
@@ -3026,7 +3100,9 @@
                                 android:padding="12dp"
                                 android:stateListAnimator="@animator/focus_scale"
                                 android:src="@android:drawable/ic_media_next"
-                                android:tint="@color/text_primary" />
+                                android:tint="@color/text_primary"
+                                android:clipChildren="false"
+    android:clipToPadding="false"/>
                         </LinearLayout>
 
                                             <LinearLayout
@@ -3035,7 +3111,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:clipChildren="false"
-                        android:clipToPadding="false"
+                                android:clipToPadding="false"
                         android:orientation="vertical">
 
                         <LinearLayout
@@ -3062,7 +3138,9 @@
                                     android:text="@string/speed_default"
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_tiny" />
+                                    android:textSize="@dimen/text_tiny"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <!-- Opens the multiview grid with the live channel playing
                                      (see MainActivityMultiview). Live only - hidden for VOD in
@@ -3086,7 +3164,9 @@
                                     android:text="@string/mv_multiview"
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_tiny" />
+                                    android:textSize="@dimen/text_tiny"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <TextView
                                     android:includeFontPadding="false"
@@ -3106,7 +3186,9 @@
                                     android:text="@string/play_audio_offset_default"
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_tiny" />
+                                    android:textSize="@dimen/text_tiny"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <TextView
                                     android:includeFontPadding="false"
@@ -3126,7 +3208,9 @@
                                     android:text="@string/sleep_timer_button"
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_tiny" />
+                                    android:textSize="@dimen/text_tiny"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <androidx.mediarouter.app.MediaRouteButton
                                     android:id="@+id/btnCast"
@@ -3137,7 +3221,9 @@
                                     android:background="@drawable/bg_toolbar_button"
                                     android:focusable="true"
                                     android:paddingHorizontal="4dp"
-                                    android:stateListAnimator="@animator/focus_scale" />
+                                    android:stateListAnimator="@animator/focus_scale"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <!-- Hands the stream to VLC/MX Player/whatever is installed, at the
                                      current position (see MainActivityExternalPlayer.kt). Sits next
@@ -3161,7 +3247,9 @@
                                     android:text="@string/open_in_external_player_short"
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_tiny" />
+                                    android:textSize="@dimen/text_tiny"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <TextView
                                     android:includeFontPadding="false"
@@ -3181,7 +3269,9 @@
                                     android:text="@string/diag"
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_tiny" />
+                                    android:textSize="@dimen/text_tiny"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                         </LinearLayout>
 
@@ -3211,7 +3301,9 @@
                                     android:textAllCaps="true"
                                     android:textColor="@color/live_red"
                                     android:textSize="@dimen/text_tiny"
-                                    android:textStyle="bold" />
+                                    android:textStyle="bold"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <TextView
                                     android:includeFontPadding="false"
@@ -3232,7 +3324,9 @@
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
                                     android:textSize="@dimen/text_tiny"
-                                    android:visibility="gone" />
+                                    android:visibility="gone"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <TextView
                                     android:includeFontPadding="false"
@@ -3252,7 +3346,9 @@
                                     android:text="@string/fit"
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_tiny" />
+                                    android:textSize="@dimen/text_tiny"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <TextView
                                     android:includeFontPadding="false"
@@ -3272,7 +3368,9 @@
                                     android:text="@string/audio"
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_tiny" />
+                                    android:textSize="@dimen/text_tiny"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <TextView
                                     android:includeFontPadding="false"
@@ -3292,7 +3390,9 @@
                                     android:text="@string/quality"
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_tiny" />
+                                    android:textSize="@dimen/text_tiny"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <TextView
                                     android:includeFontPadding="false"
@@ -3312,7 +3412,9 @@
                                     android:text="@string/subtitles"
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_tiny" />
+                                    android:textSize="@dimen/text_tiny"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                                 <!-- Only shown for an item the server actually has chapters for
                                      (Jellyfin or Plex) - see updateChaptersButtonVisibility. -->
@@ -3334,7 +3436,9 @@
                                     android:textAllCaps="true"
                                     android:textColor="@color/text_primary"
                                     android:textSize="@dimen/text_tiny"
-                                    android:visibility="gone" />
+                                    android:visibility="gone"
+                                    android:clipChildren="false"
+    android:clipToPadding="false"/>
 
                         </LinearLayout>
 
@@ -3429,7 +3533,7 @@
             android:layout_gravity="start"
             android:background="@drawable/bg_player_side_menu"
             android:clipChildren="false"
-            android:clipToPadding="false"
+                                    android:clipToPadding="false"
             android:elevation="8dp"
             android:orientation="horizontal"
             android:outlineProvider="background"
@@ -3440,7 +3544,7 @@
             android:layout_width="@dimen/player_side_menu_width"
             android:layout_height="match_parent"
             android:clipChildren="false"
-            android:clipToPadding="false"
+                                    android:clipToPadding="false"
             android:orientation="vertical"
             android:padding="8dp">
 
@@ -3476,7 +3580,9 @@
                     android:padding="10dp"
                     android:src="@drawable/ic_x"
                     android:stateListAnimator="@animator/focus_scale"
-                    android:tint="@color/text_primary" />
+                    android:tint="@color/text_primary"
+                    android:clipChildren="false"
+    android:clipToPadding="false"/>
             </LinearLayout>
 
             <!-- App navigation: the same destinations as the top chrome (Home / Live TV /
@@ -3499,7 +3605,9 @@
                 android:nextFocusDown="@id/navLive"
                 android:orientation="horizontal"
                 android:paddingHorizontal="10dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="@dimen/side_menu_icon"
@@ -3533,7 +3641,9 @@
                 android:nextFocusDown="@id/navSports"
                 android:orientation="horizontal"
                 android:paddingHorizontal="10dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="@dimen/side_menu_icon"
@@ -3577,7 +3687,9 @@
                 android:nextFocusDown="@id/navSeries"
                 android:orientation="horizontal"
                 android:paddingHorizontal="10dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="@dimen/side_menu_icon"
@@ -3611,7 +3723,9 @@
                 android:nextFocusDown="@id/navFilms"
                 android:orientation="horizontal"
                 android:paddingHorizontal="10dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="@dimen/side_menu_icon"
@@ -3654,7 +3768,9 @@
                 android:nextFocusDown="@id/navDiscover"
                 android:orientation="horizontal"
                 android:paddingHorizontal="10dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="@dimen/side_menu_icon"
@@ -3697,7 +3813,9 @@
                 android:nextFocusDown="@id/navSearch"
                 android:orientation="horizontal"
                 android:paddingHorizontal="10dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="@dimen/side_menu_icon"
@@ -3733,7 +3851,9 @@
                 android:nextFocusDown="@id/navDownloads"
                 android:orientation="horizontal"
                 android:paddingHorizontal="10dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="@dimen/side_menu_icon"
@@ -3770,7 +3890,9 @@
                 android:orientation="horizontal"
                 android:paddingHorizontal="10dp"
                 android:stateListAnimator="@animator/focus_scale"
-                android:visibility="gone">
+                android:visibility="gone"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="@dimen/side_menu_icon"
@@ -3806,7 +3928,9 @@
                 android:nextFocusDown="@id/btnCloseSideMenu"
                 android:orientation="horizontal"
                 android:paddingHorizontal="10dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="@dimen/side_menu_icon"
@@ -3905,7 +4029,9 @@
             android:stateListAnimator="@animator/focus_scale"
             android:textColor="@color/text_primary"
             android:textSize="@dimen/settings_text_body"
-            android:visibility="gone" />
+            android:visibility="gone"
+            android:clipChildren="false"
+    android:clipToPadding="false"/>
     </FrameLayout>
 
     <!-- Mandatory-update block: an opaque, focus-owning screen shown only when the installed
@@ -3959,7 +4085,9 @@
             android:text="@string/plug_update_now"
             android:textAllCaps="false"
             android:textColor="@color/text_primary"
-            android:textSize="@dimen/settings_text_body" />
+            android:textSize="@dimen/settings_text_body"
+            android:clipChildren="false"
+    android:clipToPadding="false"/>
     </LinearLayout>
 
     <!-- Catalog ingest banner. Deliberately NOT the status row: that one only owns the
@@ -4009,7 +4137,9 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:paddingHorizontal="20dp"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <TextView
                     android:layout_width="wrap_content"

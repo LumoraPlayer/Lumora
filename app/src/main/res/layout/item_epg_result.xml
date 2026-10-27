@@ -15,7 +15,9 @@
     android:clickable="true"
     android:focusable="true"
     android:foreground="@drawable/bg_poster_focus_ring"
-    android:stateListAnimator="@animator/focus_scale">
+    android:stateListAnimator="@animator/focus_scale"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <!-- 16:9 artwork (channel logo / program backdrop) centre-cropped into the same area
          the poster grid uses, so the row height matches item_poster_grid exactly. The

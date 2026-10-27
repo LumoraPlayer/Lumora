@@ -29,6 +29,7 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.text.TextPaint
 import android.text.style.MetricAffectingSpan
 import android.widget.*
@@ -1307,9 +1308,20 @@ class MainActivity : AppCompatActivity() {
     /** Set by the banner's Hide button: the import keeps running, the narration stops until
      *  the next load starts. Main-thread only, like the map above. */
     internal var catalogIngestHidden = false
-    /** True once the banner has taken focus for this load, so it does it on appearance
-     *  rather than on every repaint (see MainActivityIngest.showIngestBanner). */
+    /** True while the card holds focus (or has just been given it), so a repaint does not
+     *  fight the user for it - see MainActivityIngest.takeIngestFocus. */
     internal var catalogIngestFocusTaken = false
+    /** The focus guard installed while the card is on screen; see guardIngestFocus. */
+    internal var ingestFocusGuard: ViewTreeObserver.OnGlobalFocusChangeListener? = null
+    /** True while a provider load is streaming catalogues in. Read off the main thread by
+     *  the live derive, which skips its disk cache for a half-filled catalogue - it would be
+     *  invalidated by the next batch anyway, and the multi-MB write competes with the ingest
+     *  writing the database (see deriveLiveHalf). */
+    @Volatile internal var catalogIngestRunning = false
+    /** The Films/Series tab the user opened while a catalogue was still importing: that
+     *  half is fetched (Xtream) and rebuilt (every provider) ahead of the other one. -1 when
+     *  the user has not asked for either. Read from the fetch threads, hence @Volatile. */
+    @Volatile internal var ingestPriorityTab = -1
 
     companion object {
         internal const val REQUEST_EXPORT_BACKUP = 2001

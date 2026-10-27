@@ -34,7 +34,9 @@
         android:nextFocusDown="@id/liveMenuMultiview"
         android:orientation="horizontal"
         android:paddingHorizontal="10dp"
-        android:stateListAnimator="@animator/focus_scale">
+        android:stateListAnimator="@animator/focus_scale"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <ImageView
             android:layout_width="@dimen/side_menu_icon"
@@ -69,7 +71,9 @@
         android:nextFocusDown="@id/liveMenuCatchup"
         android:orientation="horizontal"
         android:paddingHorizontal="10dp"
-        android:stateListAnimator="@animator/focus_scale">
+        android:stateListAnimator="@animator/focus_scale"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <ImageView
             android:layout_width="@dimen/side_menu_icon"
@@ -104,7 +108,9 @@
         android:nextFocusDown="@id/liveMenuLive"
         android:orientation="horizontal"
         android:paddingHorizontal="10dp"
-        android:stateListAnimator="@animator/focus_scale">
+        android:stateListAnimator="@animator/focus_scale"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <ImageView
             android:layout_width="@dimen/side_menu_icon"

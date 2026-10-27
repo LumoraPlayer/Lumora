@@ -13,6 +13,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.BufferedReader
 import java.io.File
+import java.io.InputStream
 import java.io.InputStreamReader
 
 /**
@@ -44,11 +45,18 @@ object M3uParser {
     private val SERIES_TVG_TYPES = setOf("series", "serie", "tv", "show", "tvshow", "tv-show")
     private val LIVE_TVG_TYPES = setOf("live", "channel", "tv channel")
 
-    /** Parse an M3U playlist from a URL using the provided OkHttp client. */
+    /** Parse an M3U playlist from a URL using the provided OkHttp client.
+     *
+     *  [onProgress] reports the bytes read so far, the response's Content-Length when the
+     *  server states one, and the number of entries parsed so far - a playlist download is
+     *  one long stream, so both numbers are what the ingest banner has to say. */
     suspend fun parseFromUrl(
         url: String,
         client: OkHttpClient,
-        onProgress: ((bytes: Long, total: Long?) -> Unit)? = null
+        onProgress: ((bytes: Long, total: Long?, rows: Int) -> Unit)? = null,
+        /** Every accepted entry as it is parsed, so a caller can hand the live half to the
+         *  screen while the rest of the file is still coming down. */
+        onEntry: ((Channel) -> Unit)? = null
     ): ParseResult =
         withContext(Dispatchers.IO) {
             val request = Request.Builder().url(normalizeServerUrl(url))
@@ -67,24 +75,50 @@ object M3uParser {
             }
             // A playlist can be hundreds of megabytes, and the only honest progress signal
             // is the bytes coming off the socket: count them and let the caller narrate.
-            val total = body.contentLength().takeIf { it > 0 }
-            val counting = CountingInputStream(body.byteStream())
-            val reader = BufferedReader(InputStreamReader(counting, Charsets.UTF_8))
-            var reported = 0L
-            reader.use { buffered ->
-                val result = parse(buffered, onLine = {
-                    if (onProgress != null) {
-                        val read = counting.count
-                        if (read - reported >= M3U_PROGRESS_STEP_BYTES) {
-                            reported = read
-                            onProgress(read, total)
-                        }
-                    }
-                })
-                onProgress?.invoke(counting.count, total)
-                result
-            }
+            parseStream(body.byteStream(), body.contentLength().takeIf { it > 0 }, null, onProgress, onEntry)
         }
+
+    /** Parse a playlist that is already on this device - the local half of [parseFromUrl].
+     *
+     *  Same streaming parse and the same progress reporting; only the byte source differs.
+     *  Without it a local import narrated nothing at all (the banner sat on "Connecting
+     *  to <provider>" for the whole file), which reads as a hang on a big playlist.
+     *  [total] is the file size when it is known - a SAF document may not state one, and
+     *  the caller then gets the indeterminate bar it already gets for a chunked download. */
+    fun parseLocal(
+        input: InputStream,
+        total: Long? = null,
+        baseDir: File? = null,
+        onProgress: ((bytes: Long, total: Long?, rows: Int) -> Unit)? = null,
+        onEntry: ((Channel) -> Unit)? = null
+    ): ParseResult = parseStream(input, total?.takeIf { it > 0 }, baseDir, onProgress, onEntry)
+
+    /** The one streaming body both sources share: count bytes, count accepted rows, and
+     *  report them at most once per [M3U_PROGRESS_STEP_BYTES] plus once at the end. */
+    private fun parseStream(
+        input: InputStream,
+        total: Long?,
+        baseDir: File?,
+        onProgress: ((bytes: Long, total: Long?, rows: Int) -> Unit)?,
+        onEntry: ((Channel) -> Unit)?
+    ): ParseResult {
+        val counting = CountingInputStream(input)
+        val reader = BufferedReader(InputStreamReader(counting, Charsets.UTF_8))
+        var reported = 0L
+        return reader.use { buffered ->
+            val result = parse(buffered, baseDir, onProgress = { rows ->
+                if (onProgress != null) {
+                    val read = counting.count
+                    if (read - reported >= M3U_PROGRESS_STEP_BYTES) {
+                        reported = read
+                        onProgress(read, total, rows)
+                    }
+                }
+            }, onEntry = onEntry)
+            onProgress?.invoke(counting.count, total, result.channels.size)
+            result
+        }
+    }
 
     /** Parse M3U content from a string. [baseDir] resolves relative stream entries
      *  against the playlist file's directory - a local file can list `movies/film.mp4`
@@ -95,14 +129,22 @@ object M3uParser {
 
     /** Parse M3U content from a BufferedReader (streaming).
      *
-     *  [onLine] is polled as the reader advances, so a caller streaming a huge playlist can
-     *  report how many bytes have come off the socket without the parser knowing anything
+     *  [onProgress] is polled as the reader advances with the number of entries parsed so
+     *  far, so a caller streaming a huge playlist can report how many channels have landed
+     *  as well as how many bytes have come off the socket - the parser itself knows nothing
      *  about HTTP. Called roughly once per line. */
-    fun parse(reader: BufferedReader, baseDir: File? = null, onLine: (() -> Unit)? = null): ParseResult {
+    fun parse(
+        reader: BufferedReader,
+        baseDir: File? = null,
+        onProgress: ((rows: Int) -> Unit)? = null,
+        /** Every accepted entry as it is parsed. */
+        onEntry: ((Channel) -> Unit)? = null
+    ): ParseResult {
+        var rows = 0
         return parse(object : Iterator<String> {
             private var nextLine: String? = reader.readLine()
             override fun hasNext(): Boolean {
-                onLine?.invoke()
+                onProgress?.invoke(rows)
                 return nextLine != null
             }
             override fun next(): String {
@@ -110,7 +152,10 @@ object M3uParser {
                 nextLine = reader.readLine()
                 return current
             }
-        }, baseDir)
+        }, baseDir) { channel ->
+            rows++
+            onEntry?.invoke(channel)
+        }
     }
 
     /**
@@ -149,7 +194,12 @@ object M3uParser {
         return MediaType.LIVE
     }
 
-    private fun parse(lineIterator: Iterator<String>, baseDir: File? = null): ParseResult {
+    private fun parse(
+        lineIterator: Iterator<String>,
+        baseDir: File? = null,
+        /** Fired once per accepted entry (a row the caller can count or hand to the UI). */
+        onEntry: ((Channel) -> Unit)? = null
+    ): ParseResult {
         var header: String? = null
         val channels = mutableListOf<Channel>()
         var currentExtInf: String? = null
@@ -186,7 +236,10 @@ object M3uParser {
                 line.startsWith("#") -> { /* skip other tags */ }
                 else -> {
                     val channel = parseChannel(line, currentExtInf, baseDir, pendingKodi, pendingVlcOpts)
-                    if (channel != null) channels.add(channel)
+                    if (channel != null) {
+                        channels.add(channel)
+                        onEntry?.invoke(channel)
+                    }
                     currentExtInf = null
                     pendingKodi.clear()
                     pendingVlcOpts.clear()
@@ -236,19 +289,16 @@ object M3uParser {
         var rating: String? = null
 
         if (extInf != null) {
-            val attrRegex = """(\w[\w-]*)\s*=\s*"([^"]*)"""".toRegex()
-            var matchCount = 0
-            for (match in attrRegex.findAll(extInf)) {
-                if (++matchCount > 50) break // max 50 attributes per EXTINF
-                when (match.groupValues[1].lowercase()) {
-                    "tvg-id" -> tvgId = match.groupValues[2]
-                    "tvg-name" -> tvgName = match.groupValues[2]
-                    "tvg-logo" -> logoUrl = match.groupValues[2].ifBlank { null }
-                    "tvg-chno" -> tvgChno = match.groupValues[2]
-                    "tvg-type" -> tvgType = match.groupValues[2]
-                    "group-title" -> group = match.groupValues[2]
-                    "year" -> year = match.groupValues[2]
-                    "rating" -> rating = match.groupValues[2]
+            forEachExtInfAttribute(extInf) { attrName, value ->
+                when (attrName.lowercase()) {
+                    "tvg-id" -> tvgId = value
+                    "tvg-name" -> tvgName = value
+                    "tvg-logo" -> logoUrl = value.ifBlank { null }
+                    "tvg-chno" -> tvgChno = value
+                    "tvg-type" -> tvgType = value
+                    "group-title" -> group = value
+                    "year" -> year = value
+                    "rating" -> rating = value
                 }
             }
 
@@ -380,6 +430,54 @@ object M3uParser {
             manifestType = manifestType
         )
     }
+
+    /** Walks the `name="value"` pairs on an EXTINF attribute list.
+     *
+     *  Hand-rolled rather than a Regex on purpose. This runs once per entry, and building a
+     *  fresh pattern object per call - which is what a `toRegex()` inside the parse loop
+     *  does - costs more than parsing the rest of the line: a 150k-entry playlist compiled
+     *  it 150k times. Same grammar the pattern accepted - a word-ish name, optional spaces
+     *  around `=`, then a double-quoted value (no escapes in the format) - plus the spaces
+     *  after `=` that hand-written playlists sometimes carry.
+     *
+     *  [maxAttributes] caps how far a single malformed line can run. */
+    private inline fun forEachExtInfAttribute(
+        extInf: String,
+        maxAttributes: Int = 50,
+        action: (name: String, value: String) -> Unit
+    ) {
+        var matched = 0
+        var i = 0
+        while (i < extInf.length) {
+            val eq = extInf.indexOf('=', i)
+            if (eq < 0) return
+            // A quoted value is the only thing worth reading: `tvg-id=x` and bare text
+            // (the title often carries "=") are not attributes.
+            var valueStart = eq + 1
+            while (valueStart < extInf.length && extInf[valueStart].isWhitespace()) valueStart++
+            if (valueStart >= extInf.length || extInf[valueStart] != '"') {
+                i = eq + 1
+                continue
+            }
+            var nameEnd = eq - 1
+            while (nameEnd >= i && extInf[nameEnd].isWhitespace()) nameEnd--
+            var nameStart = nameEnd
+            while (nameStart >= i && isExtInfNameChar(extInf[nameStart])) nameStart--
+            nameStart++
+            val first = extInf.getOrNull(nameStart)
+            if (nameStart > nameEnd || first == null || !(first.isLetterOrDigit() || first == '_')) {
+                i = eq + 1
+                continue
+            }
+            val close = extInf.indexOf('"', valueStart + 1)
+            if (close < 0) return
+            action(extInf.substring(nameStart, nameEnd + 1), extInf.substring(valueStart + 1, close))
+            if (++matched >= maxAttributes) return
+            i = close + 1
+        }
+    }
+
+    private fun isExtInfNameChar(c: Char): Boolean = c.isLetterOrDigit() || c == '_' || c == '-'
 
     /** Index of the comma separating the EXTINF attribute list from the display title: the
      *  FIRST comma outside double quotes. Attribute values routinely contain commas

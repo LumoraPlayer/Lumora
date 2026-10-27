@@ -17,7 +17,9 @@
     android:gravity="center_vertical"
     android:orientation="horizontal"
     android:paddingHorizontal="10dp"
-    android:stateListAnimator="@animator/focus_scale">
+    android:stateListAnimator="@animator/focus_scale"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <!-- Name over an optional "what's on now" line. The row is wrap_content with a
          minHeight rather than a fixed height so category rows keep exactly the height they

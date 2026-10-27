@@ -93,7 +93,9 @@
         android:stateListAnimator="@animator/focus_scale_flat"
         android:text="@string/provider_content_tv"
         android:textColor="@color/text_primary"
-        android:textSize="@dimen/settings_text_caption" />
+        android:textSize="@dimen/settings_text_caption"
+        android:clipChildren="false"
+    android:clipToPadding="false"/>
 
     <CheckBox
         android:id="@+id/rowMoviesBox"
@@ -111,7 +113,9 @@
         android:stateListAnimator="@animator/focus_scale_flat"
         android:text="@string/provider_content_movies"
         android:textColor="@color/text_primary"
-        android:textSize="@dimen/settings_text_caption" />
+        android:textSize="@dimen/settings_text_caption"
+        android:clipChildren="false"
+    android:clipToPadding="false"/>
 
     <CheckBox
         android:id="@+id/rowSeriesBox"
@@ -129,7 +133,9 @@
         android:stateListAnimator="@animator/focus_scale_flat"
         android:text="@string/provider_content_series"
         android:textColor="@color/text_primary"
-        android:textSize="@dimen/settings_text_caption" />
+        android:textSize="@dimen/settings_text_caption"
+        android:clipChildren="false"
+    android:clipToPadding="false"/>
 
     <LinearLayout
         android:id="@+id/rowBrowseButton"
@@ -144,7 +150,9 @@
         android:nextFocusRight="@+id/rowEditButton"
         android:paddingHorizontal="@dimen/settings_gap"
         android:stateListAnimator="@animator/focus_scale"
-        android:visibility="gone">
+        android:visibility="gone"
+        android:clipChildren="false"
+        android:clipToPadding="false">
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -166,7 +174,9 @@
         android:nextFocusLeft="@+id/rowSeriesBox"
         android:nextFocusRight="@+id/rowRemoveButton"
         android:paddingHorizontal="@dimen/settings_gap"
-        android:stateListAnimator="@animator/focus_scale">
+        android:stateListAnimator="@animator/focus_scale"
+        android:clipChildren="false"
+        android:clipToPadding="false">
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -187,7 +197,9 @@
         android:gravity="center"
         android:nextFocusLeft="@+id/rowEditButton"
         android:paddingHorizontal="@dimen/settings_gap"
-        android:stateListAnimator="@animator/focus_scale">
+        android:stateListAnimator="@animator/focus_scale"
+        android:clipChildren="false"
+        android:clipToPadding="false">
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

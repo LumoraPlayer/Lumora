@@ -86,7 +86,9 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
-                android:stateListAnimator="@animator/focus_scale">
+                android:stateListAnimator="@animator/focus_scale"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
                 <ImageView
                     android:layout_width="20dp"
@@ -122,7 +124,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/search_row_gap"
             android:clipChildren="false"
-            android:clipToPadding="false"
+                android:clipToPadding="false"
             android:orientation="vertical"
             android:visibility="gone">
 
@@ -155,7 +157,9 @@
                     android:stateListAnimator="@animator/focus_scale"
                     android:text="@string/search_recents_clear"
                     android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_body_s" />
+                    android:textSize="@dimen/text_body_s"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"/>
             </LinearLayout>
 
             <!-- Same clipping wrapper as the default layout: without it the scrolled row of
@@ -190,7 +194,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/search_row_gap"
             android:clipChildren="false"
-            android:clipToPadding="false"
+                    android:clipToPadding="false"
             android:gravity="center"
             android:orientation="horizontal"
             android:visibility="gone">
@@ -209,7 +213,9 @@
                 android:stateListAnimator="@animator/focus_scale"
                 android:text="@string/search_filter_all"
                 android:textColor="@color/season_chip_text"
-                android:textSize="@dimen/text_body_l" />
+                android:textSize="@dimen/text_body_l"
+                android:clipChildren="false"
+                android:clipToPadding="false"/>
 
             <TextView
                 android:id="@+id/searchFilterLive"
@@ -225,7 +231,9 @@
                 android:stateListAnimator="@animator/focus_scale"
                 android:text="@string/live_badge"
                 android:textColor="@color/season_chip_text"
-                android:textSize="@dimen/text_body_l" />
+                android:textSize="@dimen/text_body_l"
+                android:clipChildren="false"
+                android:clipToPadding="false"/>
 
             <TextView
                 android:id="@+id/searchFilterFilms"
@@ -241,7 +249,9 @@
                 android:stateListAnimator="@animator/focus_scale"
                 android:text="@string/search_filter_films"
                 android:textColor="@color/season_chip_text"
-                android:textSize="@dimen/text_body_l" />
+                android:textSize="@dimen/text_body_l"
+                android:clipChildren="false"
+                android:clipToPadding="false"/>
 
             <TextView
                 android:id="@+id/searchFilterSeries"
@@ -256,7 +266,9 @@
                 android:stateListAnimator="@animator/focus_scale"
                 android:text="@string/search_filter_series"
                 android:textColor="@color/season_chip_text"
-                android:textSize="@dimen/text_body_l" />
+                android:textSize="@dimen/text_body_l"
+                android:clipChildren="false"
+                android:clipToPadding="false"/>
         </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView
@@ -266,7 +278,7 @@
             android:layout_marginTop="@dimen/search_row_gap"
             android:layout_weight="1"
             android:clipChildren="false"
-            android:clipToPadding="false"
+                android:clipToPadding="false"
             android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>

@@ -98,6 +98,15 @@ interface CatalogChannelDao {
     @Query("SELECT COUNT(*) FROM catalog_channels WHERE providerId = :providerId")
     suspend fun countForProvider(providerId: String): Int
 
+    /** How many rows of one type one provider has stored - the guard behind resuming an
+     *  import: a section whose rows were pruned (or never written) must not be skipped just
+     *  because its completion timestamp is recent. Uses the (mediaType, providerId) index. */
+    @Query(
+        "SELECT COUNT(*) FROM catalog_channels WHERE providerId = :providerId " +
+            "AND mediaType = :mediaType"
+    )
+    suspend fun countForProviderType(providerId: String, mediaType: String): Int
+
     @Query("SELECT mediaType, COUNT(*) AS count FROM catalog_channels GROUP BY mediaType")
     suspend fun countsByType(): List<CatalogTypeCount>
 

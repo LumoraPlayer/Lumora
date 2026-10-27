@@ -45,35 +45,41 @@
             android:text="@string/see_all"
             android:textAllCaps="true"
             android:textColor="@color/text_primary"
-            android:textSize="@dimen/shelf_action_text" />
+            android:textSize="@dimen/shelf_action_text"
+            android:clipChildren="false"
+    android:clipToPadding="false"/>
 
         <TextView
             android:id="@+id/shelfPinButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
-            android:background="@drawable/bg_select_item"
+            android:background="@drawable/bg_toolbar_button"
             android:clickable="true"
             android:focusable="true"
             android:padding="8dp"
             android:stateListAnimator="@animator/focus_scale"
             android:text="☆"
             android:textColor="@color/text_secondary"
-            android:textSize="@dimen/text_body_l" />
+            android:textSize="@dimen/text_body_l"
+            android:clipChildren="false"
+    android:clipToPadding="false"/>
 
         <TextView
             android:id="@+id/shelfHideButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
-            android:background="@drawable/bg_select_item"
+            android:background="@drawable/bg_toolbar_button"
             android:clickable="true"
             android:focusable="true"
             android:padding="8dp"
             android:stateListAnimator="@animator/focus_scale"
             android:text="✕"
             android:textColor="@color/text_secondary"
-            android:textSize="@dimen/text_body_l" />
+            android:textSize="@dimen/text_body_l"
+            android:clipChildren="false"
+    android:clipToPadding="false"/>
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
@@ -81,6 +87,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:clipChildren="false"
-        android:clipToPadding="false"
+            android:clipToPadding="false"
         android:orientation="horizontal" />
 </LinearLayout>

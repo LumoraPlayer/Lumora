@@ -838,14 +838,10 @@ internal fun MainActivity.showProviderSettings() {
         binding.btnRefresh
     )
     val browseChromeVisibility = browseChromeViews.map { it.visibility }
-    if (tabBarWasVisible) browseChromeViews.forEach {
-        // INVISIBLE, not GONE: the pills keep their place so the row doesn't reflow under the
-        // user while the tree is up. A view that was already GONE (the Downloads tab on TV)
-        // has to STAY GONE, though - INVISIBLE still takes up room in the row's layout, so
-        // switching a GONE tab to INVISIBLE handed the Settings button a pill's width and
-        // pushed it off the end of the row, where nothing could see or reach it.
-        if (it.visibility == View.VISIBLE) it.visibility = View.INVISIBLE
-    }
+    // Keep the top chrome (tabs/search/refresh) VISIBLE while Settings is open so the user
+    // still has the full top menu and can tap a tab (e.g. Live TV) to leave Settings
+    // instead of hunting for the close button. The layout is already stable because nothing
+    // changes visibility, so the row does not reflow.
     val settingsButtonDescription = binding.btnSettings.contentDescription
     val settingsButtonIcon = binding.btnSettings.findViewById<ImageView>(R.id.btnSettingsIcon)
     val settingsButtonNextFocusLeftId = binding.btnSettings.nextFocusLeftId

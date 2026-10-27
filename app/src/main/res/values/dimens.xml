@@ -23,8 +23,8 @@
     <dimen name="settings_text_section">14sp</dimen>
     <dimen name="settings_text_title">17sp</dimen>
 
-    <dimen name="settings_nav_icon_size">26dp</dimen>
-    <dimen name="settings_nav_rail_width">220dp</dimen>
+    <dimen name="settings_nav_icon_size">20dp</dimen>
+    <dimen name="settings_nav_rail_width">140dp</dimen>
     <dimen name="settings_type_card_height">46dp</dimen>
     <!-- Overrides the content pane's uniform 24dp padding on the end edge only, so it must
          restate that 24dp as the non-TV baseline rather than being a 0dp "no inset". -->
@@ -100,7 +100,7 @@
     <!-- Tab pills are wrap_content in height with this above and below the label, and the
          tab bar itself is wrap_content around them - so the row's height is a function of
          tab_text, not a fixed bar the labels happen to sit inside. -->
-    <dimen name="tab_padding_vertical">12dp</dimen>
+    <dimen name="tab_padding_vertical">8dp</dimen>
     <!-- Extra gap before the first (Live TV) tab, TV tier only (see values-sw540dp) - zero
          here, the brand's own translationX already sets the phone spacing. -->
     <dimen name="tab_live_start_gap">0dp</dimen>
@@ -110,10 +110,10 @@
          values-port copy of these stale after a rotate. Icon over label instead of beside it
          roughly halves a pill's width, which is what gets the nine chrome items onto two
          wrapped lines in a ~260dp window instead of three. -->
-    <dimen name="tab_text_compact">11sp</dimen>
-    <dimen name="tab_padding_compact_horizontal">6dp</dimen>
-    <dimen name="tab_padding_compact_vertical">6dp</dimen>
-    <dimen name="tab_label_compact_gap">2dp</dimen>
+    <dimen name="tab_text_compact">10sp</dimen>
+    <dimen name="tab_padding_compact_horizontal">4dp</dimen>
+    <dimen name="tab_padding_compact_vertical">3dp</dimen>
+    <dimen name="tab_label_compact_gap">1dp</dimen>
     <dimen name="tab_label_gap">8dp</dimen>
     <dimen name="poster_title_text">10sp</dimen>
     <!-- Floor for the auto-sized poster/EPG titles. A hard 8sp meant any title that wrapped
@@ -224,7 +224,7 @@
          zero here since the phone brand already sits flush against the row's top edge. -->
     <dimen name="toolbar_brand_translate_y">0dp</dimen>
     <dimen name="toolbar_padding_horizontal">20dp</dimen>
-    <dimen name="toolbar_padding_top">4dp</dimen>
+    <dimen name="toolbar_padding_top">2dp</dimen>
     <dimen name="settings_outer_padding_horizontal">0dp</dimen>
     <dimen name="settings_outer_padding_vertical">0dp</dimen>
     <dimen name="player_controls_safe_horizontal_inset">16dp</dimen>

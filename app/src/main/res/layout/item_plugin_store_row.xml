@@ -48,7 +48,9 @@
         android:clickable="true"
         android:focusable="true"
         android:paddingHorizontal="@dimen/settings_gap"
-        android:stateListAnimator="@animator/focus_scale">
+        android:stateListAnimator="@animator/focus_scale"
+        android:clipChildren="false"
+        android:clipToPadding="false">
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -68,7 +70,9 @@
         android:focusable="true"
         android:gravity="center"
         android:paddingHorizontal="@dimen/settings_gap"
-        android:stateListAnimator="@animator/focus_scale">
+        android:stateListAnimator="@animator/focus_scale"
+        android:clipChildren="false"
+        android:clipToPadding="false">
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

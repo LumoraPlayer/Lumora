@@ -176,7 +176,9 @@
         android:src="@android:drawable/stat_sys_download"
         android:stateListAnimator="@animator/focus_scale"
         android:tint="@color/text_secondary"
-        android:visibility="gone" />
+        android:visibility="gone"
+        android:clipChildren="false"
+    android:clipToPadding="false"/>
 
     <!-- Watched-state toggle - the checkmark IS the control. Filled green when the
          episode is watched, hollow outline otherwise (state_selected drives both this
@@ -198,5 +200,7 @@
         android:stateListAnimator="@animator/focus_scale_flat"
         android:text="✓"
         android:textColor="@color/episode_check_text"
-        android:textSize="@dimen/text_subhead" />
+        android:textSize="@dimen/text_subhead"
+        android:clipChildren="false"
+    android:clipToPadding="false"/>
 </LinearLayout>
