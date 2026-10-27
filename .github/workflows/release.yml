@@ -14,13 +14,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     # LUMORAPLAYER_PAT is the LumoraPlayer account's token; GITLAB_TOKEN and GITFLIC_TOKEN
-    # are the GitLab and GitFlic tokens. They live here rather than inline in the steps below
-    # because secrets cannot be referenced in step `if:` conditions, and the steps must be
-    # skipped (not fail) on forks that never set the secrets.
+    # are the GitLab and GitFlic tokens, and DISCORD_WEBHOOK_URL is the #releases channel's
+    # incoming webhook. They live here rather than inline in the steps below because secrets
+    # cannot be referenced in step `if:` conditions, and the steps must be skipped (not fail)
+    # on forks that never set the secrets.
     env:
       MIRROR_TOKEN: ${{ secrets.LUMORAPLAYER_PAT }}
       GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
       GITFLIC_TOKEN: ${{ secrets.GITFLIC_TOKEN }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -112,6 +114,18 @@ jobs:
           body_path: release-notes.md
           files: |
             app/build/outputs/apk/release/Lumora.apk
+
+      # Discord is fed from here, not from a repository webhook: Discord's GitHub
+      # rendering keeps only its generic release card and drops the body, which is how
+      # 6.3 shipped an announcement with no changelog in it. The script posts the notes
+      # from release-notes.md as an embed and writes its message id into the release body
+      # as an HTML comment, so a re-run edits that message instead of announcing twice.
+      # A fork without the secret skips the step rather than failing the release.
+      - name: Announce on Discord
+        if: startsWith(github.ref, 'refs/tags/v') && env.DISCORD_WEBHOOK_URL != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/discord_release.py
 
       # The same release goes to the other Lumora home - whichever repository that is for
       # this one, read from the MIRROR_REPO repository variable (one value per repository) so
