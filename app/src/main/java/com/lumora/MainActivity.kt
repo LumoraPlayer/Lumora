@@ -8,6 +8,7 @@ import android.app.DownloadManager
 import android.app.PictureInPictureParams
 import android.content.pm.PackageManager
 import androidx.activity.OnBackPressedCallback
+import android.util.Log
 import android.view.Display
 import androidx.car.app.connection.CarConnection
 import androidx.core.app.ActivityCompat
@@ -1467,6 +1468,23 @@ class MainActivity : AppCompatActivity() {
         applySystemBarInsets()
 
         prefs = getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+        // Storage breakdown: the catalogue database is the usual answer to "why is Lumora
+        // taking gigabytes", and it is not obvious from the UI which file owns the space.
+        runCatching {
+            fun sizeOf(f: java.io.File?): Long {
+                if (f == null || !f.exists()) return 0L
+                return if (f.isDirectory) f.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                else f.length()
+            }
+            Log.i("LumoraStorage", "filesDir=${sizeOf(filesDir)} cacheDir=${sizeOf(cacheDir)} " +
+                "externalCache=${sizeOf(externalCacheDir)} " +
+                "lumora.db=${sizeOf(getDatabasePath("lumora.db"))} " +
+                "lumora_catalog.db=${sizeOf(getDatabasePath("lumora_catalog.db"))} " +
+                "lumora_catalog.db-wal=${sizeOf(java.io.File(getDatabasePath("lumora_catalog.db").absolutePath + "-wal"))} " +
+                "lumora_catalog.db-shm=${sizeOf(java.io.File(getDatabasePath("lumora_catalog.db").absolutePath + "-shm"))} " +
+                "derived_live=${sizeOf(java.io.File(filesDir, "derived_live.txt"))} " +
+                "derived_vod=${sizeOf(java.io.File(filesDir, "derived_vod.txt"))}")
+        }
         // Start the catalogue's live read now, before anything else in onCreate, so its
         // query and per-row Channel mapping run while the rest of start-up is still on the
         // main thread - the paint path takes this result instead of issuing the read when

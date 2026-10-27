@@ -83,6 +83,12 @@ class CatalogBatchWriter(
      *  A failed refresh therefore leaves a usable mixed catalogue, not an empty one. */
     fun abort() {
         buffer.clear()
+        // An interrupted import has already committed some of its batches. Without this they
+        // stay beside the old rows (different syncToken) and stack up across interruptions -
+        // the usual explanation for a catalogue that takes hundreds of MB on a panel that is
+        // not that large. The catalogue is rebuilt from the providers, so dropping the
+        // partial write is harmless.
+        runCatching { dao.deleteByTokenBlocking(providerId, mediaType.name, token) }
     }
 
     companion object {

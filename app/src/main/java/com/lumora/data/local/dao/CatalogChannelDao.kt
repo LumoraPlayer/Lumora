@@ -86,6 +86,15 @@ interface CatalogChannelDao {
     )
     fun deleteStaleRowsBlocking(providerId: String, mediaType: String, syncToken: Long): Int
 
+    /** Drops rows written by one specific ingest attempt. Used by [CatalogBatchWriter.abort]
+     *  so an interrupted import does not leave its committed batches beside the old rows,
+     *  which would otherwise stack up across repeated interruptions. */
+    @Query(
+        "DELETE FROM catalog_channels WHERE providerId = :providerId " +
+            "AND mediaType = :mediaType AND syncToken = :syncToken"
+    )
+    fun deleteByTokenBlocking(providerId: String, mediaType: String, syncToken: Long): Int
+
     /** Rows left behind by providers that are disabled or no longer configured - including
      *  a fetch that finished after its provider was removed/toggled off. There is no
      *  "delete everything" query on purpose: see CatalogRepository.pruneProviders. */

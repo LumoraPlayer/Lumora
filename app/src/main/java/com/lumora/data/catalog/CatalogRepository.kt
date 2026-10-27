@@ -459,9 +459,14 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         backup: Boolean = false
     ) = withContext(Dispatchers.IO) {
         val writer = writer(providerId, mediaType, backup)
-        writer.begin()
-        writer.addAll(channels)
-        writer.finish()
+        try {
+            writer.begin()
+            writer.addAll(channels)
+            writer.finish()
+        } catch (e: Throwable) {
+            writer.abort()
+            throw e
+        }
     }
 
     /** Replaces a provider's whole stored catalogue from an already-materialised list (the
@@ -482,9 +487,14 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         for (type in MediaType.values()) {
             if (type in skipTypes) continue
             val writer = writer(providerId, type, backup)
-            writer.begin()
-            writer.addAll(channels.filter { it.mediaType == type })
-            writer.finish()
+            try {
+                writer.begin()
+                writer.addAll(channels.filter { it.mediaType == type })
+                writer.finish()
+            } catch (e: Throwable) {
+                writer.abort()
+                throw e
+            }
         }
     }
 

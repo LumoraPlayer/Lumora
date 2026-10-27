@@ -1581,29 +1581,37 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                 var entityNanos = 0L
                 var bytesRead = 0L
                 var rows = 0
-                val delivered = client.streamBulkList(
-                    xtreamProvider, action, type,
-                    transform = { channel ->
-                        val t = System.nanoTime()
-                        withCategory(channel, names, uncatId).also { transformNanos += System.nanoTime() - t }
-                    },
-                    onItem = { channel ->
-                        val t = System.nanoTime()
-                        into?.add(channel)
-                        // Let a database error abort the stream: the writer keeps the rows
-                        // already written (updates of existing copies), and the rows this
-                        // ingest never reached remain the old ones.
-                        writer?.add(channel)
-                        entityNanos += System.nanoTime() - t
-                        rows++
-                    },
-                    onProgress = { bytes, total ->
-                        bytesRead = bytes
-                        // Rows come from the writer, so the count is what has actually landed
-                        // in the catalogue database rather than what has been parsed.
-                        onProgress?.invoke(phase, writer?.pending ?: 0, bytes, total)
+                val delivered = try {
+                    client.streamBulkList(
+                        xtreamProvider, action, type,
+                        transform = { channel ->
+                            val t = System.nanoTime()
+                            withCategory(channel, names, uncatId).also { transformNanos += System.nanoTime() - t }
+                        },
+                        onItem = { channel ->
+                            val t = System.nanoTime()
+                            into?.add(channel)
+                            // Let a database error abort the stream: the writer keeps the rows
+                            // already written (updates of existing copies), and the rows this
+                            // ingest never reached remain the old ones.
+                            writer?.add(channel)
+                            entityNanos += System.nanoTime() - t
+                            rows++
+                        },
+                        onProgress = { bytes, total ->
+                            bytesRead = bytes
+                            // Rows come from the writer, so the count is what has actually landed
+                            // in the catalogue database rather than what has been parsed.
+                            onProgress?.invoke(phase, writer?.pending ?: 0, bytes, total)
+                        }
+                    ) ?: run {
+                        runCatching { writer?.abort() }
+                        null
                     }
-                )
+                } catch (e: Throwable) {
+                    runCatching { writer?.abort() }
+                    throw e
+                }
                 val dbNanos = writer?.flushNanos ?: 0L
                 // A section that reached the end of its list is resumable: a load that dies
                 // before the next one starts must not re-download it (see canResumeIngestSection).
