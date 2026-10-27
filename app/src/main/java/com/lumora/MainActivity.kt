@@ -1470,20 +1470,107 @@ class MainActivity : AppCompatActivity() {
         prefs = getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
         // Storage breakdown: the catalogue database is the usual answer to "why is Lumora
         // taking gigabytes", and it is not obvious from the UI which file owns the space.
+        //
+        // This line has to cover *everything* the OS counts as this package's storage, or it
+        // answers the question with a number that does not match the one in Settings. It used
+        // to name only filesDir/cacheDir/databases - the three smallest parts - so an app the
+        // system reported as ~900 MB logged ~360 MB, and the ~530 MB difference (external
+        // files, WebView profile, prefs) looked like a leak in the catalogue. Everything the
+        // package can own on either volume is stated here, and the parts sum to dataDir plus
+        // the external dirs.
         runCatching {
             fun sizeOf(f: java.io.File?): Long {
                 if (f == null || !f.exists()) return 0L
                 return if (f.isDirectory) f.walkTopDown().filter { it.isFile }.sumOf { it.length() }
                 else f.length()
             }
+            val extDirs = getExternalFilesDirs(null).filterNotNull()
             Log.i("LumoraStorage", "filesDir=${sizeOf(filesDir)} cacheDir=${sizeOf(cacheDir)} " +
                 "externalCache=${sizeOf(externalCacheDir)} " +
+                "dataDir=${sizeOf(dataDir)} " +
+                "databasesDir=${sizeOf(java.io.File(dataDir, "databases"))} " +
+                "sharedPrefs=${sizeOf(java.io.File(dataDir, "shared_prefs"))} " +
+                "webview=${sizeOf(java.io.File(dataDir, "app_webview"))} " +
+                "noBackup=${sizeOf(java.io.File(dataDir, "no_backup"))} " +
                 "lumora.db=${sizeOf(getDatabasePath("lumora.db"))} " +
                 "lumora_catalog.db=${sizeOf(getDatabasePath("lumora_catalog.db"))} " +
                 "lumora_catalog.db-wal=${sizeOf(java.io.File(getDatabasePath("lumora_catalog.db").absolutePath + "-wal"))} " +
                 "lumora_catalog.db-shm=${sizeOf(java.io.File(getDatabasePath("lumora_catalog.db").absolutePath + "-shm"))} " +
                 "derived_live=${sizeOf(java.io.File(filesDir, "derived_live.txt"))} " +
-                "derived_vod=${sizeOf(java.io.File(filesDir, "derived_vod.txt"))}")
+                "derived_vod=${sizeOf(java.io.File(filesDir, "derived_vod.txt"))} " +
+                // One entry per volume, in the order the platform reports them: [primary, SD].
+                "externalFiles=${extDirs.joinToString("|") { sizeOf(it).toString() }}")
+        }
+        // Pages are the other half of the catalogue answer: file size is live pages plus the
+        // free list, and only the free list can be reclaimed. Logged off the main thread
+        // because it opens the database, which start-up already needs a moment later anyway.
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                val db = com.lumora.data.local.CatalogDatabase.getInstance(this@MainActivity)
+                    .openHelper.readableDatabase
+                fun pragma(name: String): Long = db.query("PRAGMA $name").use {
+                    if (it.moveToFirst()) it.getLong(0) else -1L
+                }
+                val pages = pragma("page_count")
+                val free = pragma("freelist_count")
+                val pageSize = pragma("page_size")
+                Log.i(
+                    "LumoraStorage",
+                    "catalog pages=$pages free=$free pageSize=$pageSize " +
+                        "live=${(pages - free) * pageSize} reclaimable=${free * pageSize}"
+                )
+                // One composition pass per installed build: which b-tree actually owns the
+                // bytes. dbstat is the only way to split a 350 MB file into "the rows" and
+                // "each of the fifteen indexes" without guessing, and storage is a recurring
+                // complaint. Once per version because the pass walks every page of the file;
+                // a build that has already reported (or whose SQLite lacks the table) is
+                // marked so the scan cannot repeat on every launch.
+                if (prefs.getInt("catalog_composition_version", 0) != BuildConfig.VERSION_CODE) {
+                    runCatching {
+                        val parts = ArrayList<String>()
+                        db.query(
+                            "SELECT name, SUM(pgsize) AS bytes FROM dbstat " +
+                                "GROUP BY name ORDER BY bytes DESC LIMIT 10"
+                        ).use { c ->
+                            while (c.moveToNext()) parts += "${c.getString(0)}=${c.getLong(1)}"
+                        }
+                        Log.i("LumoraStorage", "catalogComposition=${parts.joinToString("|")}")
+                    }
+                    prefs.edit()
+                        .putInt("catalog_composition_version", BuildConfig.VERSION_CODE)
+                        .apply()
+                }
+            }
+            // External storage is where the rest of the package's footprint hides: the offline
+            // HLS cache (hls_downloads, never evicted) lives there, and a cancelled or killed
+            // download leaves its segments behind with no DownloadStore record pointing at
+            // them. Per-child sizes beside the record count are the only way to tell the two
+            // apart - a directory far bigger than its records is orphaned cache.
+            runCatching {
+                fun sizeOf(f: java.io.File?): Long {
+                    if (f == null || !f.exists()) return 0L
+                    return if (f.isDirectory) f.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                    else f.length()
+                }
+                val base = getExternalFilesDir(null)
+                val kids = base?.listFiles()?.sortedByDescending { sizeOf(it) }
+                    ?.joinToString("|") { "${it.name}=${sizeOf(it)}" }.orEmpty()
+                val records = com.lumora.download.DownloadStore.getAll(this@MainActivity)
+                Log.i(
+                    "LumoraStorage",
+                    "externalChildren=$kids downloadRecords=${records.size} " +
+                        "hlsRecords=${records.count { com.lumora.download.HlsDownloads.owns(it) }}"
+                )
+            }
+            // Update installers are the one thing this app writes outside its own files and
+            // never removed again - downloadApk() hands DownloadManager a destination in
+            // files/Download and DownloadManager never overwrites, it appends " (1)". Sweep
+            // them on every start so the directory cannot silently grow to hundreds of MB
+            // again (see AppUpdateInstaller.pruneDownloads).
+            runCatching {
+                val freed = com.lumora.data.update.AppUpdateInstaller(this@MainActivity).pruneDownloads()
+                if (freed > 0) Log.i("LumoraStorage", "updateApkPrune freed=$freed")
+            }
         }
         // Start the catalogue's live read now, before anything else in onCreate, so its
         // query and per-row Channel mapping run while the rest of start-up is still on the

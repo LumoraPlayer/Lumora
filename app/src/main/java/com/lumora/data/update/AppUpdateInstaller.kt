@@ -27,7 +27,7 @@ class AppUpdateInstaller(private val context: Context) {
      * Returns the DownloadManager ID for tracking progress.
      */
     fun downloadApk(downloadUrl: String, versionName: String): Long {
-        val fileName = "Lumora_v$versionName.apk"
+        val fileName = "Lumora_$VERSION_TAG$versionName.apk"
         val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
         // The public Downloads dir (setDestinationInExternalPublicDir) requires
@@ -138,5 +138,57 @@ class AppUpdateInstaller(private val context: Context) {
             val localUri = it.getString(it.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI))
             return localUri?.let { Uri.parse(it).path }
         }
+    }
+
+    /**
+     * Deletes update APKs left behind by earlier downloads, returning the bytes reclaimed.
+     *
+     * Nothing used to remove these. [downloadApk] has DownloadManager write
+     * `Lumora_v<version>.apk` into the app's own external Download directory, and
+     * DownloadManager resolves a name clash by appending " (1)", " (2)", ... rather than
+     * overwriting - so every update attempt that was retried, declined, interrupted or
+     * superseded parked another full installer (about 31 MB) in a directory the app never
+     * looked at again. One device had 874 MB in there, 28 copies of the same APK, with no
+     * DownloadStore record pointing at any of them; that alone looked like a 900 MB "catalogue"
+     * leak.
+     *
+     * The file only has to survive from the moment the download finishes to the moment the
+     * package installer reads it, which is seconds to a couple of minutes - so anything older
+     * than [KEEP_FRESH_MS] is spent and safe to drop. The age check is what keeps this from
+     * racing a download that is still running or an install prompt that is still open; a file
+     * that young is left for the next pass. Startup calls this off the main thread.
+     *
+     * The diagnostics exports that share this directory (the Lumora subdirectory of plain-text
+     * reports) are left alone: they are user-facing output, not our leftovers, and kilobytes.
+     */
+    fun pruneDownloads(): Long {
+        val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return 0L
+        val cutoff = System.currentTimeMillis() - KEEP_FRESH_MS
+        var freed = 0L
+        var removed = 0
+        dir.listFiles()?.forEach { file ->
+            if (!file.isFile) return@forEach
+            if (!file.name.startsWith("Lumora_$VERSION_TAG") || !file.name.endsWith(".apk", true)) {
+                return@forEach
+            }
+            if (file.lastModified() > cutoff) return@forEach
+            val size = file.length()
+            if (runCatching { file.delete() }.getOrDefault(false)) {
+                freed += size
+                removed++
+            }
+        }
+        if (removed > 0) {
+            android.util.Log.i(TAG, "pruned $removed stale update apk(s), freed ${freed / (1024 * 1024)} MB")
+        }
+        return freed
+    }
+
+    private companion object {
+        /** Prefix every update APK is written with - also what [pruneDownloads] recognises. */
+        const val VERSION_TAG = "v"
+
+        /** How long a downloaded installer is left alone, in case an install is still in flight. */
+        const val KEEP_FRESH_MS = 15L * 60 * 1000
     }
 }
