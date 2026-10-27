@@ -2271,14 +2271,37 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+    /** PiP chrome, shared by the two callbacks: 26+ delivers the configuration-carrying
+     *  override, 24-25 only ever call the single-argument one. */
+    private fun applyPipModeChanged(isInPictureInPictureMode: Boolean) {
         if (isInPictureInPictureMode) {
             mainHandler.removeCallbacks(hideControlsRunnable)
             binding.controlsOverlay.visibility = View.GONE
         } else if (isPlayerVisible) {
             showControls()
         }
+    }
+
+    // PiP exists from API 24, but the callback that carries the new Configuration only from
+    // API 26 - and overriding the newer one alone left 24-25 with no callback at all, so the
+    // controls overlay stayed up over the PiP window on Android 7.x. This is the one those
+    // releases actually call; on 26+ the framework calls the two-argument override below,
+    // whose super call lands here too, hence the version gate on the body.
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) applyPipModeChanged(isInPictureInPictureMode)
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: android.content.res.Configuration
+    ) {
+        // The super call itself is the API-26 part: below O this method is never invoked by
+        // the framework, and the platform's Activity has no such method to delegate to.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        }
+        applyPipModeChanged(isInPictureInPictureMode)
     }
 
     /** The Activity handles orientation changes itself (configChanges in the manifest), so
