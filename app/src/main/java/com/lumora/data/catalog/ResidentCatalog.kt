@@ -3,6 +3,8 @@ package com.lumora.data.catalog
 
 import android.content.Context
 import android.util.Log
+import com.lumora.cache.ChannelCache
+import com.lumora.data.IptvProviderStore
 import com.lumora.data.local.dao.CatalogCategoryCount
 import com.lumora.data.local.dao.CatalogChannelDao
 import com.lumora.data.local.dao.CatalogLeafRow
@@ -333,6 +335,38 @@ object ResidentCatalog {
         state = null
     }
 
+    /** Drops one provider's rows from the resident list (a switched-off/removed source). */
+    suspend fun removeProvider(context: Context, providerId: String) {
+        val current = state ?: return
+        replaceRows(context, current.rows.filterNot { it.providerId == providerId })
+    }
+
+    /** Drops one type of one provider from the resident list (its Movies/Series gate). */
+    suspend fun removeProviderType(context: Context, providerId: String, mediaType: MediaType) {
+        val current = state ?: return
+        replaceRows(
+            context,
+            current.rows.filterNot {
+                it.providerId == providerId && it.mediaType == mediaType.name
+            }
+        )
+    }
+
+    private suspend fun replaceRows(context: Context, rows: List<CatalogChannelEntity>) {
+        val built = try {
+            withContext(Dispatchers.Default) { buildState(rows) }
+        } catch (e: OutOfMemoryError) {
+            Log.w(TAG, "resident removal OOM; using Room", e)
+            failed = true
+            clear()
+            return
+        }
+        state = built
+        withContext(Dispatchers.IO) {
+            runCatching { ChannelCache.save(context, built.allChannels()) }
+        }
+    }
+
     /** Reloads the resident rows if the catalogue is still under the RAM cutoff; clears it otherwise. */
     suspend fun refresh(context: Context, dao: CatalogChannelDao) {
         if (!CatalogMode.isRamEligible(context)) {
@@ -347,7 +381,71 @@ object ResidentCatalog {
             return
         }
         state = built
+        withContext(Dispatchers.IO) {
+            runCatching { ChannelCache.save(context, built.allChannels()) }
+        }
         Log.i(TAG, "resident catalogue rows=${built.count()}")
+    }
+
+    /**
+     * Builds the resident model straight from an ingest, without writing the catalogue to
+     * Room. Used when the playlist's measured payload is under the cutoff: the flat
+     * [ChannelCache] file is the persistence, and the next cold start reads it instead of
+     * running the database scan.
+     */
+    suspend fun refreshFromChannels(context: Context, channels: List<Channel>): Boolean {
+        val built = try {
+            withContext(Dispatchers.Default) {
+                buildFromChannels(context, channels, System.currentTimeMillis())
+            }
+        } catch (e: OutOfMemoryError) {
+            Log.w(TAG, "resident ingest OOM (${channels.size} rows); using Room", e)
+            failed = true
+            clear()
+            return false
+        } catch (e: Exception) {
+            Log.w(TAG, "resident ingest failed; using Room", e)
+            failed = true
+            clear()
+            return false
+        }
+        state = built
+        failed = false
+        withContext(Dispatchers.IO) {
+            runCatching { ChannelCache.save(context, channels) }
+        }
+        Log.i(TAG, "resident catalogue ingested rows=${built.count()}")
+        return true
+    }
+
+    private fun buildFromChannels(
+        context: Context,
+        channels: List<Channel>,
+        syncToken: Long = 0L
+    ): State {
+        val prefs = context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+        val backupIds = IptvProviderStore.load(prefs)
+            .filter { it.backup }
+            .map { it.id }
+            .toHashSet()
+        val orderByProviderType = HashMap<String, Int>()
+        val seen = HashSet<String>()
+        val rows = ArrayList<CatalogChannelEntity>(channels.size)
+        for (channel in channels) {
+            val key = "${channel.sourceProviderId}\u0000${channel.mediaType}"
+            val order = orderByProviderType.getOrDefault(key, 0)
+            orderByProviderType[key] = order + 1
+            val row = runCatching {
+                CatalogMapping.toEntity(
+                    channel = channel,
+                    orderIndex = order,
+                    backup = channel.sourceProviderId in backupIds,
+                    syncToken = syncToken
+                )
+            }.getOrNull() ?: continue
+            if (seen.add(row.uid)) rows += row
+        }
+        return buildState(rows)
     }
 
     /** Loads once for readers that race the start-up preload. */
@@ -358,11 +456,35 @@ object ResidentCatalog {
         loadMutex.withLock {
             state?.let { return it }
             if (failed) return null
+            // A RAM-mode ingest persists only the flat cache; prefer it over a database
+            // scan. If there is no cache (first switch from the DB path), the rows are in
+            // Room and the build below seeds the cache for the next start.
+            val cached = withContext(Dispatchers.IO) {
+                runCatching { ChannelCache.load(context) }.getOrNull()
+            }
+            if (!cached.isNullOrEmpty()) {
+                val built = try {
+                    withContext(Dispatchers.Default) { buildFromChannels(context, cached) }
+                } catch (e: OutOfMemoryError) {
+                    Log.w(TAG, "resident cache OOM (${cached.size} rows); using Room", e)
+                    null
+                }
+                if (built != null) {
+                    state = built
+                    Log.i(TAG, "resident catalogue loaded from cache rows=${built.count()}")
+                    return built
+                }
+                failed = true
+                return null
+            }
             val built = buildFrom(dao) ?: run {
                 failed = true
                 return null
             }
             state = built
+            withContext(Dispatchers.IO) {
+                runCatching { ChannelCache.save(context, built.allChannels()) }
+            }
             Log.i(TAG, "resident catalogue loaded rows=${built.count()}")
             return built
         }

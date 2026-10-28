@@ -729,6 +729,17 @@ internal fun MainActivity.loadAllConfiguredProviders(
     // still contain items from a provider that's since been switched off, and their chips
     // should still say where they came from.
     providerNamesById = IptvProviderStore.load(prefs).associate { it.id to it.name }
+    // Small playlists are ingested straight into the resident model; the database write and
+    // its fifteen indexes are skipped entirely. The decision uses the sizes measured by the
+    // previous load, so the first load of a new setup still goes through Room (there is no
+    // size to judge yet) and the next one uses RAM.
+    val ramLoad = com.lumora.data.catalog.CatalogMode.isRamEligible(this)
+    val ramCollected: MutableList<Channel>? = if (ramLoad) {
+        java.util.Collections.synchronizedList(ArrayList())
+    } else {
+        null
+    }
+    val refreshedSourceIds: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet())
     // Toggling/adding/removing providers in quick succession each calls this with no
     // ordering guarantee between the launched coroutines - without cancelling the
     // previous one, whichever network fetch happens to finish last wins and gets written
@@ -774,6 +785,9 @@ internal fun MainActivity.loadAllConfiguredProviders(
         suspend fun pruneOnce() {
             if (pruned) return
             pruned = true
+            // A RAM-mode load never wrote catalogue rows, so there is nothing in Room to
+            // prune; the resident model is rebuilt from the fetched channels instead.
+            if (ramCollected != null) return
             val startedAt = System.currentTimeMillis()
             runCatching { pruneCatalogue() }
             perf("catalog prune", startedAt)
@@ -806,10 +820,10 @@ internal fun MainActivity.loadAllConfiguredProviders(
                 }.getOrDefault(emptyList())
             }
             perf("catalog live read", readStartedAt, "${loaded.size} rows")
-            // One-time cleanup of the pre-Room cache files; they are never read again.
+            // The flat cache is the RAM-mode persistence now; only the old v2 file is
+            // retired. Do not delete channels_cache.txt here.
             withContext(Dispatchers.IO) {
                 runCatching { File(filesDir, "channels_cache_v2.txt").delete() }
-                runCatching { File(filesDir, "channels_cache.txt").delete() }
             }
             var cached = loaded
             if (cached.isNotEmpty()) {
@@ -1019,7 +1033,8 @@ internal fun MainActivity.loadAllConfiguredProviders(
                         // must re-read the panel; otherwise sections that already finished are
                         // resumed instead of downloaded again.
                         "xtream" -> fetchXtreamChannels(
-                            config, { expiryText = it }, onProgress, publishLive, resume = !forceRefresh
+                            config, { expiryText = it }, onProgress, publishLive,
+                            resume = !forceRefresh, ramCollector = ramCollected
                         )
                         "stalker" -> fetchStalkerChannels(config, publishLive)
                         else -> fetchM3uChannels(config, onProgress) { live ->
@@ -1029,34 +1044,40 @@ internal fun MainActivity.loadAllConfiguredProviders(
                 } ?: FetchResult.Failure("timed out")
                 if (result is FetchResult.Success) {
                     catalogRefreshSucceeded = true
+                    refreshedSourceIds += config.id
                     showPartial(config.id, result.channels)
                     // Xtream streams its VOD straight into the catalogue database during
                     // the fetch; the other providers hand back a list, which is persisted
                     // here before the in-memory copy is dropped.
                     if (config.type != "xtream") {
-                        runCatching {
-                            val repository = CatalogRepository.get(this@loadAllConfiguredProviders)
-                            // m3u_plus lists episodes as individual rows. Persist the
-                            // episode rows (the detail screen rebuilds seasons from them)
-                            // plus the synthetic show cards the grid renders. The fold
-                            // normalises every series title, which on a six-figure playlist
-                            // is seconds of work - off the main thread, because this is the
-                            // frame immediately after the download (and whoever asked for
-                            // the import is watching it).
-                            val toStore = if (config.type == "m3u") {
-                                withContext(Dispatchers.IO) {
-                                    result.channels + com.lumora.util.collapseM3uEpisodeRows(
-                                        result.channels.filter { it.mediaType == MediaType.SERIES }
-                                    )
-                                }
-                            } else {
-                                result.channels
+                        // m3u_plus lists episodes as individual rows. Persist the episode
+                        // rows (the detail screen rebuilds seasons from them) plus the
+                        // synthetic show cards the grid renders. The fold normalises every
+                        // series title, which on a six-figure playlist is seconds of work -
+                        // off the main thread, because this is the frame immediately after
+                        // the download (and whoever asked for the import is watching it).
+                        val toStore = if (config.type == "m3u") {
+                            withContext(Dispatchers.IO) {
+                                result.channels + com.lumora.util.collapseM3uEpisodeRows(
+                                    result.channels.filter { it.mediaType == MediaType.SERIES }
+                                )
                             }
-                            repository.replaceProvider(
-                                config.id, toStore,
-                                backup = IptvProviderStore.load(prefs).firstOrNull { it.id == config.id }?.backup == true,
-                                skipTypes = globalVodOffTypes
-                            )
+                        } else {
+                            result.channels
+                        }
+                        if (ramCollected != null) {
+                            // Under the cutoff the whole catalogue is the resident list and
+                            // ChannelCache file; no database write is needed.
+                            ramCollected.addAll(toStore)
+                        } else {
+                            runCatching {
+                                val repository = CatalogRepository.get(this@loadAllConfiguredProviders)
+                                repository.replaceProvider(
+                                    config.id, toStore,
+                                    backup = IptvProviderStore.load(prefs).firstOrNull { it.id == config.id }?.backup == true,
+                                    skipTypes = globalVodOffTypes
+                                )
+                            }
                         }
                     }
                 }
@@ -1094,7 +1115,7 @@ internal fun MainActivity.loadAllConfiguredProviders(
                         // Persist the partial list too: Stalker merges its live half before
                         // fetching VOD/series, so a VOD failure used to leave that half only
                         // in RAM and lose it on the next start.
-                        if (live.isNotEmpty()) {
+                        if (live.isNotEmpty() && ramCollected == null) {
                             val backup = IptvProviderStore.load(prefs)
                                 .firstOrNull { it.id == config.id }?.backup == true
                             runCatching {
@@ -1123,12 +1144,17 @@ internal fun MainActivity.loadAllConfiguredProviders(
             when (val result = deferred.await()) {
                 is FetchResult.Success -> {
                     catalogRefreshSucceeded = true
-                    runCatching {
-                        CatalogRepository.get(this@loadAllConfiguredProviders)
-                            .replaceProvider(
-                                server.id, result.channels,
-                                skipTypes = globalVodOffTypes
-                            )
+                    refreshedSourceIds += server.id
+                    if (ramCollected != null) {
+                        ramCollected.addAll(result.channels)
+                    } else {
+                        runCatching {
+                            CatalogRepository.get(this@loadAllConfiguredProviders)
+                                .replaceProvider(
+                                    server.id, result.channels,
+                                    skipTypes = globalVodOffTypes
+                                )
+                        }
                     }
                     combined += result.channels.filter { it.mediaType == MediaType.LIVE }
                 }
@@ -1139,6 +1165,7 @@ internal fun MainActivity.loadAllConfiguredProviders(
         if (!animeChannels.isNullOrEmpty()) {
             catalogRefreshSucceeded = true
             combined += animeChannels
+            ramCollected?.addAll(animeChannels)
         }
 
         // Nothing answered: keep what is already on screen/on disk, surface the errors, and
@@ -1188,7 +1215,7 @@ internal fun MainActivity.loadAllConfiguredProviders(
             val current = backupSourceIds()
             val previous = prefs.getString(PREF_CATALOG_BACKUP_RANK_KEY, null)
                 ?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
-            if (previous.toSet() != current) {
+            if (ramCollected == null && previous.toSet() != current) {
                 CatalogRepository.get(this@loadAllConfiguredProviders)
                     .syncBackupRanks(previous, current)
                 prefs.edit()
@@ -1200,17 +1227,60 @@ internal fun MainActivity.loadAllConfiguredProviders(
         allChannels = combined
         filmsSeriesDeriveJob?.cancel()
         // Record what each provider actually downloaded before the paint, so the resident
-        // decision uses this load's sizes rather than the previous ones. A small catalogue is
-        // rebuilt in RAM before classifyAndShow() reads it; a large one drops the resident
-        // copy and keeps the Room path.
+        // decision uses this load's sizes rather than the previous ones.
         val measuredSizes = runCatching { persistCatalogueSizes() }.getOrDefault(emptyList())
         com.lumora.data.catalog.CatalogMode.invalidate()
-        if (com.lumora.data.catalog.CatalogMode.isRamEligible(this@loadAllConfiguredProviders)) {
-            runCatching {
-                CatalogRepository.get(this@loadAllConfiguredProviders).refreshResidentCatalog()
+        val repository = CatalogRepository.get(this@loadAllConfiguredProviders)
+
+        suspend fun persistCollectedToRoom(channels: List<Channel>) {
+            channels.asSequence()
+                .filter { !it.sourceProviderId.isNullOrBlank() }
+                .groupBy { it.sourceProviderId!! }
+                .forEach { (providerId, list) ->
+                    runCatching {
+                        repository.replaceProvider(
+                            providerId, list, skipTypes = globalVodOffTypes
+                        )
+                    }
+                }
+            val keep = IptvProviderStore.load(prefs).map { it.id } +
+                mediaServers().map { it.id }
+            runCatching { repository.pruneProviders(keep) }
+        }
+
+        if (ramCollected != null) {
+            if (com.lumora.data.catalog.CatalogMode.isRamEligible(this@loadAllConfiguredProviders)) {
+                // Keep the providers that were not fetched this time (a failed provider, or
+                // the others during a one-provider load) and replace only what answered.
+                val previous = com.lumora.data.catalog.ResidentCatalog.current()
+                    ?.allChannels()
+                    .orEmpty()
+                val enabledSources = enabledProviderIds +
+                    mediaServers().filter { it.enabled }.map { it.id }
+                val kept = previous.filterNot { channel ->
+                    channel.sourceProviderId in refreshedSourceIds ||
+                        (channel.sourceProviderId != null &&
+                            channel.sourceProviderId !in enabledSources) ||
+                        channel.id.startsWith(AnimeCatalogClient.ID_PREFIX)
+                }
+                val merged = kept + ramCollected.toList()
+                val resident = runCatching {
+                    repository.ingestResidentFromChannels(merged)
+                }.getOrDefault(false)
+                if (!resident) {
+                    // Too big to hold after all (or the build OOM'd): fall back to Room.
+                    persistCollectedToRoom(merged)
+                    repository.refreshResidentCatalog()
+                }
+            } else {
+                // The measured payload crossed the 40 MB cutoff during this load.
+                persistCollectedToRoom(ramCollected.toList())
+                repository.refreshResidentCatalog()
             }
         } else {
-            com.lumora.data.catalog.ResidentCatalog.clear()
+            // The normal database path (large or first load). This rebuilds the resident
+            // model when the payload is under the cutoff, and clears it otherwise.
+            repository.refreshResidentCatalog()
         }
         classifyAndShow(preserveUi = shouldPreserveUiOnLoad())
         // Pull the ingest narration down before the summary takes the row.
@@ -1498,7 +1568,11 @@ internal suspend fun MainActivity.fetchXtreamChannels(
     /** Resume: sections that finished within the TTL and still have their rows are not
      *  fetched again. False for a forced load (provider edited, backup restored), where the
      *  whole point is to re-read the panel. */
-    resume: Boolean = false
+    resume: Boolean = false,
+    /** When non-null, the whole catalogue is collected here instead of being written to
+     *  Room (the small-playlist RAM path). Resume is disabled because the collector must
+     *  see every section. */
+    ramCollector: MutableList<Channel>? = null
 ): FetchResult {
     return try {
         val xtreamProvider = Provider(
@@ -1530,15 +1604,18 @@ internal suspend fun MainActivity.fetchXtreamChannels(
             // the panel is the whole point.
             val now = System.currentTimeMillis()
             val resumeLive = canResumeIngestSection(
-                resume, !liveOff, ingestSectionDoneAt(config.id, MediaType.LIVE), now,
+                resume && ramCollector == null, !liveOff,
+                ingestSectionDoneAt(config.id, MediaType.LIVE), now,
                 repository.hasRows(config.id, MediaType.LIVE)
             )
             val resumeMovies = canResumeIngestSection(
-                resume, !moviesOff, ingestSectionDoneAt(config.id, MediaType.MOVIE), now,
+                resume && ramCollector == null, !moviesOff,
+                ingestSectionDoneAt(config.id, MediaType.MOVIE), now,
                 repository.hasRows(config.id, MediaType.MOVIE)
             )
             val resumeSeries = canResumeIngestSection(
-                resume, !seriesOff, ingestSectionDoneAt(config.id, MediaType.SERIES), now,
+                resume && ramCollector == null, !seriesOff,
+                ingestSectionDoneAt(config.id, MediaType.SERIES), now,
                 repository.hasRows(config.id, MediaType.SERIES)
             )
             // Category lists are small (tens of KB) and every stream needs one to label
@@ -1580,7 +1657,11 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                 uncatId: String,
                 into: MutableList<Channel>?
             ): Boolean {
-                val writer = runCatching { repository.writer(config.id, type, isBackup) }.getOrNull()
+                val writer = if (ramCollector == null) {
+                    runCatching { repository.writer(config.id, type, isBackup) }.getOrNull()
+                } else {
+                    null
+                }
                 runCatching { writer?.begin() }
                 val phase = when (type) {
                     MediaType.LIVE -> "live"
@@ -1602,6 +1683,7 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                         onItem = { channel ->
                             val t = System.nanoTime()
                             into?.add(channel)
+                            ramCollector?.add(channel)
                             // Let a database error abort the stream: the writer keeps the rows
                             // already written (updates of existing copies), and the rows this
                             // ingest never reached remain the old ones.
@@ -1611,9 +1693,9 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                         },
                         onProgress = { bytes, total ->
                             bytesRead = bytes
-                            // Rows come from the writer, so the count is what has actually landed
-                            // in the catalogue database rather than what has been parsed.
-                            onProgress?.invoke(phase, writer?.pending ?: 0, bytes, total)
+                            // Rows come from the writer when there is one; the RAM collector
+                            // counts parsed rows directly.
+                            onProgress?.invoke(phase, writer?.pending ?: rows, bytes, total)
                         }
                     ) ?: run {
                         runCatching { writer?.abort() }

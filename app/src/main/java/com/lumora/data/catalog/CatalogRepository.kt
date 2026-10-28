@@ -34,6 +34,9 @@ class CatalogRepository private constructor(
     suspend fun refreshResidentCatalog() {
         val ctx = context ?: return
         CatalogMode.invalidate()
+        if (!CatalogMode.isRamEligible(ctx)) {
+            com.lumora.cache.ChannelCache.clear(ctx)
+        }
         ResidentCatalog.refresh(ctx, dao)
     }
 
@@ -45,6 +48,12 @@ class CatalogRepository private constructor(
 
     /** The resident rows when active, or null when this catalogue uses the Room path. */
     suspend fun residentCatalog(): ResidentCatalog.State? = resident()
+
+    /** Builds the resident model from an ingest instead of writing those rows to Room. */
+    suspend fun ingestResidentFromChannels(channels: List<Channel>): Boolean {
+        val ctx = context ?: return false
+        return ResidentCatalog.refreshFromChannels(ctx, channels)
+    }
 
     suspend fun counts(): Map<MediaType, Int> = withContext(Dispatchers.IO) {
         resident()?.let { return@withContext it.countsByType() }
@@ -461,7 +470,12 @@ class CatalogRepository private constructor(
     /** Drops one provider's whole stored catalogue (provider removed, or switched off). */
     suspend fun deleteProvider(providerId: String) = withContext(Dispatchers.IO) {
         dao.deleteForProvider(providerId)
-        refreshResidentCatalog()
+        val ctx = context
+        if (ctx != null && ResidentCatalog.isActive()) {
+            ResidentCatalog.removeProvider(ctx, providerId)
+        } else {
+            refreshResidentCatalog()
+        }
     }
 
     /** Hides a switched-off provider's rows in place instead of deleting them, so switching
@@ -469,14 +483,24 @@ class CatalogRepository private constructor(
      *  filters `rank > 0`; live is gated in memory by the enabled-provider set. */
     suspend fun parkProvider(providerId: String) = withContext(Dispatchers.IO) {
         dao.parkProvider(providerId)
-        refreshResidentCatalog()
+        val ctx = context
+        if (ctx != null && ResidentCatalog.isActive()) {
+            ResidentCatalog.removeProvider(ctx, providerId)
+        } else {
+            refreshResidentCatalog()
+        }
     }
 
     /** Un-hides a provider parked by [parkProvider], re-applying the backup demotion when it
      *  is a backup source (the same offset the backup set uses). */
     suspend fun restoreProvider(providerId: String, backup: Boolean) = withContext(Dispatchers.IO) {
         dao.restoreProvider(providerId, if (backup) 1_000_000_000 else 0)
-        refreshResidentCatalog()
+        val ctx = context
+        if (ctx == null || !ResidentCatalog.isActive()) {
+            refreshResidentCatalog()
+        }
+        // In RAM mode the provider was removed from the resident list when parked; the
+        // caller sees countForProvider == 0 and fetches just that provider.
     }
 
     /** One provider's live rows, so re-enabling it needs no network round trip. */
@@ -495,7 +519,12 @@ class CatalogRepository private constructor(
     suspend fun deleteProviderType(providerId: String, mediaType: MediaType) =
         withContext(Dispatchers.IO) {
             dao.deleteForProviderType(providerId, mediaType.name)
-            refreshResidentCatalog()
+            val ctx = context
+            if (ctx != null && ResidentCatalog.isActive()) {
+                ResidentCatalog.removeProviderType(ctx, providerId, mediaType)
+            } else {
+                refreshResidentCatalog()
+            }
         }
 
     /** Starts a streaming write for one provider/type. Call [CatalogBatchWriter.begin]. */
