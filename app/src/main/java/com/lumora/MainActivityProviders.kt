@@ -1641,18 +1641,18 @@ internal suspend fun MainActivity.fetchXtreamChannels(
             // false for a forced load (provider edited, backup restored), where re-reading
             // the panel is the whole point.
             val now = System.currentTimeMillis()
-            val resumeLive = canResumeIngestSection(
-                resume && ramCollector == null, !liveOff,
+            val resumeLive = ramCollector == null && canResumeIngestSection(
+                resume, !liveOff,
                 ingestSectionDoneAt(config.id, MediaType.LIVE), now,
                 repository.hasRows(config.id, MediaType.LIVE)
             )
-            val resumeMovies = canResumeIngestSection(
-                resume && ramCollector == null, !moviesOff,
+            val resumeMovies = ramCollector == null && canResumeIngestSection(
+                resume, !moviesOff,
                 ingestSectionDoneAt(config.id, MediaType.MOVIE), now,
                 repository.hasRows(config.id, MediaType.MOVIE)
             )
-            val resumeSeries = canResumeIngestSection(
-                resume && ramCollector == null, !seriesOff,
+            val resumeSeries = ramCollector == null && canResumeIngestSection(
+                resume, !seriesOff,
                 ingestSectionDoneAt(config.id, MediaType.SERIES), now,
                 repository.hasRows(config.id, MediaType.SERIES)
             )
