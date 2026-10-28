@@ -120,7 +120,7 @@ object LocalityCatalog {
         fun alias(code: String, vararg names: String) {
             for (n in names) put(n, code)
         }
-        alias("UK", "UK", "GB", "EN", "UNITED KINGDOM", "GREAT BRITAIN", "BRITAIN")
+        alias("UK", "UK", "GB", "UNITED KINGDOM", "GREAT BRITAIN", "BRITAIN")
         alias("US", "US", "USA", "UNITED STATES", "UNITED STATES OF AMERICA", "AMERICA")
         alias("IE", "IE", "IRL", "IRELAND")
         alias("CA", "CA", "CANADA")

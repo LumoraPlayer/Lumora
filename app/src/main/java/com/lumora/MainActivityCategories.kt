@@ -35,8 +35,6 @@ import com.lumora.util.groupSeriesFilmCategories
 import com.lumora.util.CategoryGroup
 import com.lumora.util.cleanVodCategoryLabel
 import com.lumora.util.isAdultCategory
-import com.lumora.util.groupLiveQualityVersions
-import com.lumora.util.withoutBackupOnlyGroups
 import kotlinx.coroutines.*
 
 // ── Category rail, tabs & side-menu drill-down ──
@@ -1535,26 +1533,18 @@ internal fun MainActivity.onCategorySelected(category: CategoryFilter) {
     if (category.id == CLASSIC_LAYOUT_TOGGLE_ID) {
         val useClassic = prefs.getBoolean(PREF_CLASSIC_CATEGORY_LAYOUT, false)
         prefs.edit().putBoolean(PREF_CLASSIC_CATEGORY_LAYOUT, !useClassic).apply()
-        val newClassic = !useClassic
         scope.launch {
             // Classic mode shows ALL live channels flat (no version grouping), so
             // channels like SD variants that were collapsed into a higher-quality
             // representative are individually visible and contribute to their own
             // provider categories. Re-derive liveChannels/liveVersions before
             // rebuilding the sidebar so categories reflect the full channel list.
-            val hideAdult = prefs.getBoolean(PREF_HIDE_ADULT, true)
-            val snapshot = allChannels
-            val backupIds = backupSourceIds()
-            val rawLive = snapshot.filter { it.mediaType == MediaType.LIVE && !it.name.contains("##") }
-                .filterNot { hideAdult && isAdultCategory(it.categoryName, it.group) }
-            if (newClassic || !prefs.getBoolean(PREF_GROUP_CHANNELS, true)) {
-                liveChannels = rawLive.withoutBackupOnlyGroups(emptyMap(), backupIds)
-                liveVersions = emptyMap()
-            } else {
-                val (grouped, vers) = groupLiveQualityVersions(rawLive, backupIds)
-                liveChannels = grouped.withoutBackupOnlyGroups(vers, backupIds)
-                liveVersions = vers
-            }
+            //
+            // Goes through deriveLiveHalf rather than filtering here: this used to
+            // rebuild from allChannels by hand, which silently dropped the regions
+            // selection (and the per-provider locality fallbacks and the show-untagged
+            // toggle) until the next full classifyAndShow().
+            withContext(Dispatchers.Default) { deriveLiveHalf(allChannels) }
             rebuildCategoriesForActiveTab()
         }
         return

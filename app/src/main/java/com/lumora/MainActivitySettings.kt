@@ -2169,6 +2169,14 @@ internal fun MainActivity.showProviderSettings() {
     dialogView.findViewById<View>(R.id.settingsRecordingStorage).setOnClickListener {
         showRecordingStorageDialog { refreshRecordingStorageValue() }
     }
+    // Dedicated NAS entry so the phone-pairing flow is reachable without opening the
+    // destination picker first - the point of the Recordings section.
+    dialogView.findViewById<View>(R.id.settingsConnectNas).setOnClickListener {
+        showRecordingNasQrDialog { refreshRecordingStorageValue() }
+    }
+    dialogView.findViewById<View>(R.id.settingsAddNasManual).setOnClickListener {
+        showRecordingNasManualDialog { refreshRecordingStorageValue() }
+    }
     refreshRecordingStorageValue()
 
     // Playback settings. Only entries that change something belong here — the Decoder /
@@ -2575,7 +2583,10 @@ internal fun MainActivity.showProviderSettings() {
         R.id.navSports to R.id.paneSports,
         // Regions is appended for the same reason: the rail shows it under Filters, but
         // inserting it there would renumber every section below it.
-        R.id.navRegions to R.id.paneRegions
+        R.id.navRegions to R.id.paneRegions,
+        // Appended too: the rail shows Recordings right under Playback, but inserting it
+        // there would renumber Plugins (and the hardcoded selectSection(7) that uses it).
+        R.id.navRecordings to R.id.paneRecordings
     ).map { (navId, paneId) -> dialogView.findViewById<View>(navId) to dialogView.findViewById<View>(paneId) }
     wireTraktPane(dialogView)
     wireDebridPane(dialogView)
@@ -3216,6 +3227,9 @@ internal fun MainActivity.showRecordingStorageDialog(onChanged: () -> Unit = {})
         actions += getString(R.string.rec_dest_connect_nas) to {
             showRecordingNasQrDialog(onChanged)
         }
+        actions += getString(R.string.rec_dest_add_nas_manual) to {
+            showRecordingNasManualDialog(onChanged)
+        }
 
         val selectedShare = shares.firstOrNull { it.id == selectedShareId }
         if (selectedShare != null) {
@@ -3277,6 +3291,138 @@ private fun MainActivity.promptRecordingNasFolder(
         }
         .setNegativeButton(getString(R.string.cancel), null)
         .show()
+}
+
+/**
+ * Manual NAS setup from the TV: the same destination fields the phone QR form collects,
+ * entered with the remote instead of a phone. Saves the share and points recordings at it,
+ * then verifies reachability like the QR path.
+ */
+private fun MainActivity.showRecordingNasManualDialog(onChanged: () -> Unit = {}) {
+    val density = resources.displayMetrics.density
+    val pad = (20 * density).toInt()
+    val fieldGap = (10 * density).toInt()
+
+    val layout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(pad, fieldGap, pad, 0)
+    }
+
+    fun addLabel(res: Int) {
+        layout.addView(TextView(this).apply {
+            setText(res)
+            setTextColor(getColor(R.color.text_secondary))
+            textSize = 12f
+            setPadding(0, fieldGap, 0, 0)
+        })
+    }
+
+    fun addField(view: View) {
+        view.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        layout.addView(view)
+    }
+
+    val typeGroup = RadioGroup(this).apply {
+        orientation = RadioGroup.HORIZONTAL
+    }
+    val smbRadio = RadioButton(this).apply {
+        text = getString(R.string.provider_type_smb)
+        isChecked = true
+    }
+    val webdavRadio = RadioButton(this).apply {
+        text = getString(R.string.provider_type_webdav)
+    }
+    typeGroup.addView(smbRadio)
+    typeGroup.addView(webdavRadio)
+
+    val nameInput = EditText(this).apply {
+        hint = getString(R.string.rec_nas_manual_name)
+        inputType = android.text.InputType.TYPE_CLASS_TEXT
+    }
+    val addressInput = EditText(this).apply {
+        hint = getString(R.string.rec_nas_manual_address_hint)
+        inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+    }
+    val userInput = EditText(this).apply {
+        hint = getString(R.string.rec_nas_manual_user)
+        inputType = android.text.InputType.TYPE_CLASS_TEXT
+    }
+    val passInput = EditText(this).apply {
+        hint = getString(R.string.rec_nas_manual_pass)
+        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+    }
+    val folderInput = EditText(this).apply {
+        setText(RecordingStorage.DEFAULT_SHARE_FOLDER)
+        inputType = android.text.InputType.TYPE_CLASS_TEXT
+    }
+
+    addLabel(R.string.rec_nas_manual_type)
+    addField(typeGroup)
+    addLabel(R.string.rec_nas_manual_name)
+    addField(nameInput)
+    addLabel(R.string.rec_nas_manual_address)
+    addField(addressInput)
+    addLabel(R.string.rec_nas_manual_user)
+    addField(userInput)
+    addLabel(R.string.rec_nas_manual_pass)
+    addField(passInput)
+    addLabel(R.string.rec_nas_manual_folder)
+    addField(folderInput)
+
+    val dialog = AlertDialog.Builder(this)
+        .setTitle(getString(R.string.rec_nas_manual_title))
+        .setView(ScrollView(this).apply { addView(layout) })
+        .setPositiveButton(getString(R.string.save), null)
+        .setNegativeButton(getString(R.string.cancel), null)
+        .create()
+
+    dialog.setOnShowListener {
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val isSmb = smbRadio.isChecked
+            val raw = addressInput.text.toString().trim()
+            val url = if (isSmb) {
+                SmbUrl.normalize(raw)
+            } else {
+                when {
+                    raw.isBlank() -> null
+                    raw.startsWith("http://", true) || raw.startsWith("https://", true) -> raw
+                    else -> "http://$raw"
+                }
+            }
+            if (url == null) {
+                addressInput.error = getString(R.string.rec_nas_manual_invalid)
+                return@setOnClickListener
+            }
+            val saved = saveShareServer(
+                existingId = null,
+                type = if (isSmb) "smb" else "webdav",
+                url = url,
+                name = nameInput.text.toString().trim(),
+                username = userInput.text.toString().trim(),
+                password = passInput.text.toString()
+            )
+            val folder = RecordingStorage.normalizeFolder(folderInput.text.toString())
+                .ifBlank { RecordingStorage.DEFAULT_SHARE_FOLDER }
+            dialog.dismiss()
+            refreshIptvProviderList()
+            scope.launch {
+                RecordingStorage.useShare(this@showRecordingNasManualDialog, saved.id, folder)
+                onChanged()
+                Toast.makeText(
+                    this@showRecordingNasManualDialog,
+                    getString(R.string.rec_nas_saved, saved.name, folder),
+                    Toast.LENGTH_LONG
+                ).show()
+                testShareConnection(saved) { text ->
+                    Toast.makeText(this@showRecordingNasManualDialog, text, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+    dialog.show()
 }
 
 /**

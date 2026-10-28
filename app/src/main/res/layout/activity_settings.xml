@@ -115,6 +115,11 @@
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/playback" />
                 </LinearLayout>
 
+                <LinearLayout android:id="@+id/navRecordings" style="@style/Widget.Lumora.SettingsNavRow" android:background="@drawable/nav_rail_item_glass">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_downloads" android:tint="@color/nav_icon_tint" />
+                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/recording_storage" />
+                </LinearLayout>
+
                 <LinearLayout android:id="@+id/navFilters" style="@style/Widget.Lumora.SettingsNavRow" android:tag="3" android:background="@drawable/nav_rail_item_glass">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_filters" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/filters" />
@@ -1507,36 +1512,6 @@
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="@dimen/settings_gap_l" android:text="@string/playback" style="@style/TextAppearance.Lumora.SettingsTitle" />
 
                 <LinearLayout
-                    android:id="@+id/settingsRecordingStorage"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:paddingVertical="@dimen/settings_row_padding_vertical"
-                    android:background="@drawable/card_surface_background"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:stateListAnimator="@animator/focus_scale_flat"
-                    android:clipChildren="false"
-                    android:clipToPadding="false">
-                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/recording_storage" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
-                    <TextView
-                        android:id="@+id/settingsRecordingStorageValue"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/settings_gap_xs"
-                        android:gravity="center"
-                        android:maxLines="2"
-                        android:ellipsize="middle"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="@dimen/settings_text_caption"
-                        android:fontFamily="@font/inter_regular"
-                        android:visibility="gone" />
-                </LinearLayout>
-
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap" android:background="@color/divider" />
-
-                <LinearLayout
                     android:id="@+id/settingsDecoderMode"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -1574,6 +1549,103 @@
                         android:textColor="@color/text_primary"
                         android:textSize="@dimen/settings_text_body"
                         android:fontFamily="@font/inter_medium" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Pane: Recordings -->
+            <LinearLayout
+                android:id="@+id/paneRecordings"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="@dimen/settings_gap_l" android:text="@string/recording_storage" style="@style/TextAppearance.Lumora.SettingsTitle" />
+
+                <LinearLayout
+                    android:id="@+id/settingsRecordingStorage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                    android:background="@drawable/card_surface_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/recording_storage" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
+                    <TextView
+                        android:id="@+id/settingsRecordingStorageValue"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/settings_gap_xs"
+                        android:gravity="center"
+                        android:maxLines="2"
+                        android:ellipsize="middle"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/settings_text_caption"
+                        android:fontFamily="@font/inter_regular"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap" android:background="@color/divider" />
+
+                <LinearLayout
+                    android:id="@+id/settingsConnectNas"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/settings_gap"
+                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                    android:background="@drawable/card_surface_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/rec_dest_connect_nas" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/settings_gap_xs"
+                        android:gravity="center"
+                        android:text="@string/rec_nas_qr_caption"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/settings_text_caption"
+                        android:fontFamily="@font/inter_regular" />
+                </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap" android:background="@color/divider" />
+
+                <LinearLayout
+                    android:id="@+id/settingsAddNasManual"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/settings_gap"
+                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                    android:background="@drawable/card_surface_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/rec_dest_add_nas_manual" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/settings_gap_xs"
+                        android:gravity="center"
+                        android:text="@string/rec_nas_manual_caption"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/settings_text_caption"
+                        android:fontFamily="@font/inter_regular" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -1634,6 +1706,8 @@
                         android:id="@+id/settingsLocalityValue"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:maxLines="2"
+                        android:ellipsize="end"
                         android:text="@string/sett_locality_all"
                         android:textColor="@color/text_secondary"
                         android:textSize="@dimen/settings_text_caption"
