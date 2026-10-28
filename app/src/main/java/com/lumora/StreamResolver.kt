@@ -5,7 +5,7 @@ import android.content.Context
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
+import com.lumora.ui.dialog.LumoraDialog
 import androidx.core.content.ContextCompat
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
@@ -157,7 +157,7 @@ internal class StreamResolver(
             watching = null
         }
 
-        val dialog = AlertDialog.Builder(activity)
+        val dialog = LumoraDialog.Builder(activity)
             .setTitle(activity.getString(R.string.scraper_dialog_title, item.name + epTag))
             .setView(container)
             .setNegativeButton(android.R.string.cancel, null)

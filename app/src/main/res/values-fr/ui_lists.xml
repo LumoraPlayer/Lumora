@@ -68,6 +68,13 @@
     <string name="list_no_alt_video">Aucune autre qualité vidéo</string>
     <string name="list_no_subtitles">Aucun sous-titre disponible</string>
 
+    <!-- Sélecteur d'actualisation de la barre d'outils (MainActivityProviders.kt) -->
+    <string name="list_refresh_title">Actualiser les fournisseurs</string>
+    <string name="list_refresh_message">Choisissez ce qu\'il faut télécharger à nouveau. Les sources non sélectionnées conservent leur catalogue actuel.</string>
+    <string name="list_refresh_all">Tous les fournisseurs</string>
+    <string name="list_refresh_action">Actualiser</string>
+    <string name="list_refresh_none_selected">Sélectionnez au moins un fournisseur</string>
+
     <!-- Ligne/grille Reprendre la lecture (MainActivityDiscover.kt / MainActivityCategories.kt) -->
     <string name="list_cw_remove_item">Retirer de Reprendre la lecture</string>
     <string name="list_cw_clear_all">Vider Reprendre la lecture</string>

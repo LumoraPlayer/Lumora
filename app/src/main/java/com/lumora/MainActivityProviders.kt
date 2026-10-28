@@ -33,6 +33,7 @@ import com.lumora.plugin.js.JsPluginContract
 import com.lumora.plugin.js.PluginScriptManager
 import com.lumora.scraper.utils.DnsResolver
 import com.lumora.scraper.utils.UserPreferences
+import com.lumora.ui.dialog.LumoraDialog
 import kotlinx.coroutines.*
 import kotlinx.coroutines.CancellationException
 
@@ -696,6 +697,106 @@ internal fun MainActivity.applyImportedConfiguration() {
     step("streaming sites pane") { refreshScraperSettings.invoke() }
     step("dns resolver") { DnsResolver.setDnsUrl(UserPreferences.dohProviderUrl) }
     step("catalog reload") { loadAllConfiguredProviders(forceRefresh = true) }
+}
+
+// ── Toolbar refresh picker ─────────────────────
+
+/** One enabled source the toolbar refresh can re-fetch. */
+private data class RefreshSource(val id: String, val name: String)
+
+/**
+ * The toolbar's refresh button: ask which enabled source(s) to re-connect to.
+ *
+ * The button used to re-fetch every enabled provider at once, which on a large panel is a
+ * full catalogue import - the ingest banner, a minutes-long transfer and a rebuild of every
+ * provider the user did not touch. The picker keeps "everything" as the default selection
+ * but lets the load be narrowed; [loadAllConfiguredProviders] with `only` preserves the
+ * unselected sources' rows and resident channels, so a narrowed refresh costs only the
+ * providers it names.
+ *
+ * Only sources that can produce a catalogue are offered: an IPTV provider with every
+ * content gate switched off contributes nothing, and a media-server entry that is not a
+ * catalog source answers no catalogue call either. Disabled entries are absent for the
+ * same reason - the old button skipped them too.
+ *
+ * Selecting every source passes `only = null` rather than an explicit id set, which keeps
+ * the plugin catalogue (the anime catalog) refreshing with the rest as it did before.
+ */
+internal fun MainActivity.promptProviderRefresh() {
+    if (!hasProviderEnabled()) {
+        Toast.makeText(this, getString(R.string.play_no_provider_enabled), Toast.LENGTH_LONG).show()
+        showProviderSettings()
+        return
+    }
+    val sources = IptvProviderStore.load(prefs)
+        .filter { it.enabled && (it.liveEnabled || it.moviesEnabled || it.seriesEnabled) }
+        .map { RefreshSource(it.id, it.name) } +
+        mediaServers()
+            .filter { it.enabled && it.producesCatalog }
+            .map { RefreshSource(it.id, it.name) }
+    // A plugin-only catalogue (anime, or a providerless setup) has no row to offer. Keep
+    // the button's old whole-load behaviour rather than opening an empty picker.
+    if (sources.isEmpty()) {
+        Toast.makeText(this, getString(R.string.play_refreshing_providers), Toast.LENGTH_SHORT).show()
+        loadAllConfiguredProviders(forceRefresh = true)
+        return
+    }
+
+    // "All providers" is only worth a row when there is a choice to make. Everything starts
+    // selected, so a user who wants the old behaviour just confirms.
+    val showAll = sources.size > 1
+    val offset = if (showAll) 1 else 0
+    val labels = sources.mapTo(mutableListOf<CharSequence>()) { it.name }
+    if (showAll) labels.add(0, getString(R.string.list_refresh_all))
+    val checked = BooleanArray(labels.size) { true }
+
+    val dialog = LumoraDialog.Builder(this)
+        .setTitle(getString(R.string.list_refresh_title))
+        .setMessage(getString(R.string.list_refresh_message))
+        .setMultiChoiceItems(labels.toTypedArray(), checked) { d, which, isChecked ->
+            if (!showAll) return@setMultiChoiceItems
+            if (which == 0) {
+                // The master row drives every source row...
+                for (i in 1 until checked.size) {
+                    checked[i] = isChecked
+                    d.setItemChecked(i, isChecked)
+                }
+            } else {
+                // ...and follows them when they are picked one by one.
+                checked[0] = (1 until checked.size).all { checked[it] }
+                d.setItemChecked(0, checked[0])
+            }
+        }
+        // Set through the builder with no listener so the dialog's own click handling does
+        // not dismiss it; the real listener below can keep an empty selection open.
+        .setPositiveButton(getString(R.string.list_refresh_action), null)
+        .setNegativeButton(getString(R.string.cancel), null)
+        .create()
+
+    dialog.setOnShowListener {
+        dialog.getButton(LumoraDialog.BUTTON_POSITIVE).setOnClickListener {
+            val chosen = sources.filterIndexed { index, _ -> checked[index + offset] }
+            if (chosen.isEmpty()) {
+                Toast.makeText(
+                    this,
+                    getString(R.string.list_refresh_none_selected),
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@setOnClickListener
+            }
+            dialog.dismiss()
+            Toast.makeText(this, getString(R.string.play_refreshing_providers), Toast.LENGTH_SHORT).show()
+            if (chosen.size == sources.size) {
+                loadAllConfiguredProviders(forceRefresh = true)
+            } else {
+                loadAllConfiguredProviders(
+                    forceRefresh = true,
+                    only = chosen.mapTo(HashSet()) { it.id }
+                )
+            }
+        }
+    }
+    dialog.show()
 }
 
 /** The one place that loads whatever's configured+enabled across every IPTV provider

@@ -6,6 +6,7 @@ import com.lumora.scraper.models.Movie
 import com.lumora.scraper.models.TvShow
 import com.lumora.scraper.models.Video
 import com.lumora.scraper.providers.Provider
+import com.lumora.util.normalizeForSearch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -13,8 +14,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import java.text.Normalizer
-import java.util.Locale
 
 /**
  * The seam between the ported site scrapers and the rest of Lumora.
@@ -266,14 +265,14 @@ object ScraperCatalog {
     }
 
     /**
-     * Casefolds, strips accents, and drops everything that is not a letter or digit - the same
-     * title is written "Pokémon", "Pokemon" and "Pokemon:" across three sites, and none of those
-     * should count as different films.
+     * Casefolds, strips accents and Arabic spelling variants, and drops everything that is
+     * not a letter or digit - the same title is written "Pokémon", "Pokemon" and "Pokemon:"
+     * across three sites, and none of those should count as different films. The Arabic
+     * fold comes from [com.lumora.util.normalizeForSearch], so a site that spells "أحمد"
+     * and a site that spells "احمد" are the same title too.
      */
     private fun normalise(value: String): String =
-        Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
-            .replace(Regex("\\p{Mn}+"), "")
-            .filter { it.isLetterOrDigit() }
+        normalizeForSearch(value).filter { it.isLetterOrDigit() }
 
     /**
      * Turns one picked source into something playable.

@@ -11,6 +11,7 @@ import com.lumora.data.local.dao.CatalogLeafRow
 import com.lumora.data.local.entity.CatalogChannelEntity
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import com.lumora.util.normalizeForSearch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -71,13 +72,13 @@ object ResidentCatalog {
             .map(CatalogMapping::toChannel)
 
         fun search(query: String, mediaType: MediaType?, limit: Int): List<Channel> {
-            val needle = query.lowercase()
-            if (needle.isBlank()) return emptyList()
+            val needle = normalizeForSearch(query)
+            if (needle.isEmpty()) return emptyList()
             return rows.asSequence()
                 .filter { mediaType == null || it.mediaType == mediaType.name }
-                .filter { it.name.lowercase().contains(needle) }
+                .filter { it.searchKey().contains(needle) }
                 .sortedWith(compareByDescending<CatalogChannelEntity> { it.yearSort }
-                    .thenBy { it.name.lowercase() })
+                    .thenBy { it.searchKey() })
                 .take(limit)
                 .map(CatalogMapping::toChannel)
                 .toList()
@@ -222,12 +223,12 @@ object ResidentCatalog {
                 .map(CatalogMapping::toChannel)
 
         fun vodByTitleProbe(mediaType: MediaType, probe: String, limit: Int): List<Channel> {
-            if (probe.isBlank()) return emptyList()
-            val needle = probe.lowercase()
+            val needle = normalizeForSearch(probe)
+            if (needle.isEmpty()) return emptyList()
             return cardsOf(mediaType)
                 .asSequence()
-                .filter { it.name.lowercase().contains(needle) }
-                .sortedWith(compareBy<CatalogChannelEntity> { it.name.lowercase() }
+                .filter { it.searchKey().contains(needle) }
+                .sortedWith(compareBy<CatalogChannelEntity> { it.searchKey() }
                     .thenBy { it.groupId ?: it.uid })
                 .take(limit)
                 .map(CatalogMapping::toChannel)
@@ -245,12 +246,12 @@ object ResidentCatalog {
             probe: String,
             limit: Int
         ): List<Channel> {
-            val needle = probe.lowercase()
+            val needle = normalizeForSearch(probe)
             return rowsOf(MediaType.SERIES)
                 .asSequence()
                 .filter { providerId == null || it.providerId == providerId }
-                .filter { it.categoryId == showId || it.name.lowercase().contains(needle) }
-                .sortedWith(compareBy<CatalogChannelEntity> { it.name.lowercase() }
+                .filter { it.categoryId == showId || (needle.isNotEmpty() && it.searchKey().contains(needle)) }
+                .sortedWith(compareBy<CatalogChannelEntity> { it.searchKey() }
                     .thenBy { it.uid })
                 .take(limit)
                 .map(CatalogMapping::toChannel)
@@ -264,17 +265,17 @@ object ResidentCatalog {
             hideAdult: Boolean,
             limit: Int
         ): List<Channel> {
-            val needle = query.trim().lowercase()
+            val needle = normalizeForSearch(query)
             if (needle.isEmpty()) return emptyList()
             return cardsOf(mediaType)
                 .asSequence()
-                .filter { it.name.lowercase().contains(needle) }
+                .filter { it.searchKey().contains(needle) }
                 .filter { !englishOnly || it.isEnglish }
                 .filter { !hideAdult || !it.isAdult }
                 .sortedWith(
                     compareByDescending<CatalogChannelEntity> { it.dateSort }
                         .thenByDescending { it.yearSort }
-                        .thenBy { it.name.lowercase() }
+                        .thenBy { it.searchKey() }
                 )
                 .take(limit)
                 .map(CatalogMapping::toChannel)
@@ -583,3 +584,9 @@ object ResidentCatalog {
         ).joinToString(":")
     }
 }
+
+/** The normalised search key for a row. `searchName` is written at ingest and by the v2
+ *  migration; the fallback keeps rows built directly in tests (or by any future writer that
+ *  forgets the column) searchable instead of silently invisible. */
+private fun CatalogChannelEntity.searchKey(): String =
+    if (searchName.isNotEmpty()) searchName else normalizeForSearch(name)

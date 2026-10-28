@@ -229,6 +229,19 @@ class RecordingService : Service() {
             // Never let a live playlist or a segment come out of the app's HTTP cache: a
             // cached playlist repeats segments and a cached TS is a stale recording.
             .cache(null)
+            // A recording is a call that stays open for the length of the programme, and
+            // OkHttp holds its dispatcher slot for the whole call, body included. The shared
+            // dispatcher allows three calls per host (see BaseApplication), so three
+            // simultaneous recordings from one provider would occupy every slot and the
+            // guide, artwork and catalogue requests to that host would queue behind them
+            // until the recordings stopped. Capture gets its own dispatcher, which keeps it
+            // out of the budget that exists to protect the panel's metadata API.
+            .dispatcher(
+                okhttp3.Dispatcher().apply {
+                    maxRequests = 8
+                    maxRequestsPerHost = 8
+                }
+            )
             .build()
 
         var prepared: PreparedStream? = null

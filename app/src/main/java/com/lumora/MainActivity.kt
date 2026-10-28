@@ -2,7 +2,7 @@
 package com.lumora
 
 import android.Manifest
-import android.app.AlertDialog
+import com.lumora.ui.dialog.LumoraDialog
 import android.app.Dialog
 import android.app.DownloadManager
 import android.app.PictureInPictureParams
@@ -557,7 +557,7 @@ class MainActivity : AppCompatActivity() {
     internal var multiviewPanes: List<MultiviewPane> = emptyList()
     internal var multiviewSelectedIndex = 0
     internal val multiviewTickRunnable = Runnable { checkMultiviewPanes() }
-    internal var multiviewPickerDialog: AlertDialog? = null
+    internal var multiviewPickerDialog: LumoraDialog? = null
     /** Round-robin cursor for the per-pane black-frame sampling: one pane is sampled per
      *  tick instead of four independent watchdogs - the same verdict at a quarter of the
      *  TextureView.getBitmap cost on the sticks this runs on. */
@@ -1011,9 +1011,9 @@ class MainActivity : AppCompatActivity() {
      *  (another version, another provider) leaves this dialog up from the attempt that just
      *  failed, so without dismissing it here, the stream can end up playing fine underneath a
      *  dialog still telling the user it couldn't. */
-    internal var externalPlayerDialog: AlertDialog? = null
+    internal var externalPlayerDialog: LumoraDialog? = null
     /** The projected-display disclaimer window, if it owns input right now. */
-    private var carDisclaimerDialog: AlertDialog? = null
+    private var carDisclaimerDialog: LumoraDialog? = null
     /** Center-button release after a down event that already dismissed the disclaimer. */
     private var carDisclaimerKeyCode = android.view.KeyEvent.KEYCODE_UNKNOWN
     internal var resumePromptShown = false
@@ -1022,7 +1022,7 @@ class MainActivity : AppCompatActivity() {
      *  answers keep seeking a stream that is no longer on screen. Dismissed by
      *  hidePlayer() and beginStreamAttempt() so it can't outlive the playback it asked
      *  about - same lifecycle rule as [externalPlayerDialog] above. */
-    internal var resumePromptDialog: AlertDialog? = null
+    internal var resumePromptDialog: LumoraDialog? = null
     /** Set right before an auto-advanced episode starts so its STATE_READY does not throw a
      *  "Resume playback?" dialog at the top of a brand-new episode; consumed and cleared in
      *  maybeShowResumePrompt, and cleared again by every user-initiated play entry point so a
@@ -1468,43 +1468,59 @@ class MainActivity : AppCompatActivity() {
         applySystemBarInsets()
 
         prefs = getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
-        // Storage breakdown: the catalogue database is the usual answer to "why is Lumora
-        // taking gigabytes", and it is not obvious from the UI which file owns the space.
-        //
-        // This line has to cover *everything* the OS counts as this package's storage, or it
-        // answers the question with a number that does not match the one in Settings. It used
-        // to name only filesDir/cacheDir/databases - the three smallest parts - so an app the
-        // system reported as ~900 MB logged ~360 MB, and the ~530 MB difference (external
-        // files, WebView profile, prefs) looked like a leak in the catalogue. Everything the
-        // package can own on either volume is stated here, and the parts sum to dataDir plus
-        // the external dirs.
-        runCatching {
-            fun sizeOf(f: java.io.File?): Long {
-                if (f == null || !f.exists()) return 0L
-                return if (f.isDirectory) f.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-                else f.length()
-            }
-            val extDirs = getExternalFilesDirs(null).filterNotNull()
-            Log.i("LumoraStorage", "filesDir=${sizeOf(filesDir)} cacheDir=${sizeOf(cacheDir)} " +
-                "externalCache=${sizeOf(externalCacheDir)} " +
-                "dataDir=${sizeOf(dataDir)} " +
-                "databasesDir=${sizeOf(java.io.File(dataDir, "databases"))} " +
-                "sharedPrefs=${sizeOf(java.io.File(dataDir, "shared_prefs"))} " +
-                "webview=${sizeOf(java.io.File(dataDir, "app_webview"))} " +
-                "noBackup=${sizeOf(java.io.File(dataDir, "no_backup"))} " +
-                "lumora.db=${sizeOf(getDatabasePath("lumora.db"))} " +
-                "lumora_catalog.db=${sizeOf(getDatabasePath("lumora_catalog.db"))} " +
-                "lumora_catalog.db-wal=${sizeOf(java.io.File(getDatabasePath("lumora_catalog.db").absolutePath + "-wal"))} " +
-                "lumora_catalog.db-shm=${sizeOf(java.io.File(getDatabasePath("lumora_catalog.db").absolutePath + "-shm"))} " +
-                "derived_live=${sizeOf(java.io.File(filesDir, "derived_live.txt"))} " +
-                "derived_vod=${sizeOf(java.io.File(filesDir, "derived_vod.txt"))} " +
-                // One entry per volume, in the order the platform reports them: [primary, SD].
-                "externalFiles=${extDirs.joinToString("|") { sizeOf(it).toString() }}")
-        }
-        // Pages are the other half of the catalogue answer: file size is live pages plus the
-        // free list, and only the free list can be reclaimed. Logged off the main thread
-        // because it opens the database, which start-up already needs a moment later anyway.
+        // The search-key backfill is a whole-table pass on a six-figure catalogue, so it gets
+        // its own coroutine: sharing one with the storage breakdown and the update-installer
+        // sweep would hold the sweep behind minutes of row updates on the first start after
+        // the update. Search falls back to `name` for rows it has not reached yet.
         scope.launch(Dispatchers.IO) {
+            runCatching {
+                CatalogRepository.get(this@MainActivity).backfillSearchNames()
+            }
+        }
+        // The storage pass runs off the main thread: it walks the package's files and opens
+        // the catalogue database, neither of which belongs between the user and the first
+        // frame. Its lines are diagnostic, not start-up input.
+        scope.launch(Dispatchers.IO) {
+            // Storage breakdown: the catalogue database is the usual answer to "why is Lumora
+            // taking gigabytes", and it is not obvious from the UI which file owns the space.
+            //
+            // This line has to cover *everything* the OS counts as this package's storage, or
+            // it answers the question with a number that does not match the one in Settings. It
+            // used to name only filesDir/cacheDir/databases - the three smallest parts - so an
+            // app the system reported as ~900 MB logged ~360 MB, and the ~530 MB difference
+            // (external files, WebView profile, prefs) looked like a leak in the catalogue.
+            // Everything the package can own on either volume is stated here, and the parts sum
+            // to dataDir plus the external dirs.
+            //
+            // Off the main thread: walking a package that owns hundreds of megabytes (and can
+            // own an SD card too) is real file-system work, and doing it synchronously in
+            // onCreate put it between the user and the first frame. The line is diagnostic,
+            // not start-up input.
+            runCatching {
+                fun sizeOf(f: java.io.File?): Long {
+                    if (f == null || !f.exists()) return 0L
+                    return if (f.isDirectory) f.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                    else f.length()
+                }
+                val extDirs = getExternalFilesDirs(null).filterNotNull()
+                Log.i("LumoraStorage", "filesDir=${sizeOf(filesDir)} cacheDir=${sizeOf(cacheDir)} " +
+                    "externalCache=${sizeOf(externalCacheDir)} " +
+                    "dataDir=${sizeOf(dataDir)} " +
+                    "databasesDir=${sizeOf(java.io.File(dataDir, "databases"))} " +
+                    "sharedPrefs=${sizeOf(java.io.File(dataDir, "shared_prefs"))} " +
+                    "webview=${sizeOf(java.io.File(dataDir, "app_webview"))} " +
+                    "noBackup=${sizeOf(java.io.File(dataDir, "no_backup"))} " +
+                    "lumora.db=${sizeOf(getDatabasePath("lumora.db"))} " +
+                    "lumora_catalog.db=${sizeOf(getDatabasePath("lumora_catalog.db"))} " +
+                    "lumora_catalog.db-wal=${sizeOf(java.io.File(getDatabasePath("lumora_catalog.db").absolutePath + "-wal"))} " +
+                    "lumora_catalog.db-shm=${sizeOf(java.io.File(getDatabasePath("lumora_catalog.db").absolutePath + "-shm"))} " +
+                    "derived_live=${sizeOf(java.io.File(filesDir, "derived_live.txt"))} " +
+                    "derived_vod=${sizeOf(java.io.File(filesDir, "derived_vod.txt"))} " +
+                    // One entry per volume, in the order the platform reports them: [primary, SD].
+                    "externalFiles=${extDirs.joinToString("|") { sizeOf(it).toString() }}")
+            }
+            // Pages are the other half of the catalogue answer: file size is live pages plus
+            // the free list, and only the free list can be reclaimed.
             runCatching {
                 val db = com.lumora.data.local.CatalogDatabase.getInstance(this@MainActivity)
                     .openHelper.readableDatabase
@@ -1763,7 +1779,7 @@ class MainActivity : AppCompatActivity() {
             setMessage(getString(R.string.car_disclaimer))
             setCancelable(false)
             setButton(
-                AlertDialog.BUTTON_POSITIVE,
+                LumoraDialog.BUTTON_POSITIVE,
                 getString(R.string.ui_not_driving_continue)
             ) { d, _ -> d.dismiss() }
         }
@@ -1826,7 +1842,7 @@ class MainActivity : AppCompatActivity() {
             event.isFromSource(android.view.InputDevice.SOURCE_ROTARY_ENCODER)
 
     /** Dialog window dispatch, not a child listener: projected rotary events may have no focus yet. */
-    private inner class CarDisclaimerDialog(context: Context) : AlertDialog(context) {
+    private inner class CarDisclaimerDialog(context: Context) : LumoraDialog(context) {
         override fun dispatchTouchEvent(event: MotionEvent): Boolean {
             // Synthesized-tap hosts deliver the press to the dialog window itself (see
             // MainActivity.dispatchTouchEvent for the Activity-window route). Any tap on
@@ -1835,7 +1851,7 @@ class MainActivity : AppCompatActivity() {
                     event.actionMasked == MotionEvent.ACTION_UP)
             ) {
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                    getButton(AlertDialog.BUTTON_POSITIVE)?.performClick()
+                    getButton(LumoraDialog.BUTTON_POSITIVE)?.performClick()
                 }
                 return true
             }
@@ -1848,7 +1864,7 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             if (isCarRotaryButtonPress(event)) {
-                getButton(AlertDialog.BUTTON_POSITIVE)?.performClick()
+                getButton(LumoraDialog.BUTTON_POSITIVE)?.performClick()
                 return true
             }
             return super.dispatchGenericMotionEvent(event)
@@ -1867,19 +1883,19 @@ class MainActivity : AppCompatActivity() {
             // the click, so perform on the first edge we receive and consume both possibilities.
             if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                 carDisclaimerKeyCode = event.keyCode
-                getButton(AlertDialog.BUTTON_POSITIVE)?.performClick()
+                getButton(LumoraDialog.BUTTON_POSITIVE)?.performClick()
             } else if (event.action == android.view.KeyEvent.ACTION_UP &&
                 carDisclaimerKeyCode != event.keyCode
             ) {
-                getButton(AlertDialog.BUTTON_POSITIVE)?.performClick()
+                getButton(LumoraDialog.BUTTON_POSITIVE)?.performClick()
             }
             return true
         }
     }
 
     /** Focus the one action even when rotation arrived while the dialog was in touch mode. */
-    private fun focusCarDisclaimerButton(dialog: AlertDialog) {
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
+    private fun focusCarDisclaimerButton(dialog: LumoraDialog) {
+        dialog.getButton(LumoraDialog.BUTTON_POSITIVE)?.apply {
             isFocusable = true
             isFocusableInTouchMode = true
             requestFocus()
@@ -1948,7 +1964,7 @@ class MainActivity : AppCompatActivity() {
      * target, and shows the driver what it will do. Keys are left to flow to the focused view
      * so a dialog with more than one button can still be moved across.
      */
-    private fun AlertDialog.focusDefaultButtonForCarInput() {
+    private fun LumoraDialog.focusDefaultButtonForCarInput() {
         if (!isOnCarDisplay()) return
         setOnShowListener {
             focusCarDisclaimerButton(this)
@@ -2634,7 +2650,7 @@ class MainActivity : AppCompatActivity() {
                 ev.actionMasked == android.view.MotionEvent.ACTION_UP)
         ) {
             if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
-                carDialog.getButton(AlertDialog.BUTTON_POSITIVE)?.performClick()
+                carDialog.getButton(LumoraDialog.BUTTON_POSITIVE)?.performClick()
             }
             return true
         }
@@ -2685,7 +2701,7 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             if (isCarRotaryButtonPress(event)) {
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.performClick()
+                dialog.getButton(LumoraDialog.BUTTON_POSITIVE)?.performClick()
                 return true
             }
         }
@@ -2756,9 +2772,9 @@ class MainActivity : AppCompatActivity() {
                 isCarDisclaimerAcceptKey(event.keyCode) -> {
                     if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                         carDisclaimerKeyCode = event.keyCode
-                        disclaimer.getButton(AlertDialog.BUTTON_POSITIVE)?.performClick()
+                        disclaimer.getButton(LumoraDialog.BUTTON_POSITIVE)?.performClick()
                     } else if (event.action == android.view.KeyEvent.ACTION_UP) {
-                        disclaimer.getButton(AlertDialog.BUTTON_POSITIVE)?.performClick()
+                        disclaimer.getButton(LumoraDialog.BUTTON_POSITIVE)?.performClick()
                     }
                     return true
                 }
@@ -3232,12 +3248,12 @@ class MainActivity : AppCompatActivity() {
 
     // ── Provider Settings (QR + Manual entry) ─────
 
-    /** Lightweight stand-in for AlertDialog that mimics just what showProviderSettings()
+    /** Lightweight stand-in for a modal dialog that mimics just what showProviderSettings()
      *  needs - dismiss()/setOnDismissListener()/show() plus a close affordance and optional Save -
      *  while actually adding the content view into [container] (the same "swap the active
      *  tab's content region" slot every other tab uses), so the app toolbar stays visible
-     *  while browse tabs are hidden and Settings owns focus. A real AlertDialog rendered as a
-     *  small centered floating box with the platform's own button panel no matter what
+     *  while browse tabs are hidden and Settings owns focus. A real dialog window is a
+     *  small centered floating box with its own button panel no matter what
      *  background/size overrides were applied on its Window - not something
      *  window.setLayout(MATCH_PARENT, MATCH_PARENT) can escape - so this skips Dialog
      *  entirely instead of fighting it. */

@@ -6,7 +6,9 @@ import androidx.car.app.connection.CarConnection
 import com.lumora.data.local.LumoraDatabase
 import com.lumora.data.remote.jellyfin.JellyfinAuthInterceptor
 import com.lumora.data.remote.plex.PlexAuthInterceptor
+import com.lumora.data.remote.RequestPacingInterceptor
 import okhttp3.Cache
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -85,7 +87,20 @@ class BaseApplication : Application() {
             .writeTimeout(30, TimeUnit.SECONDS)
             .followRedirects(true)
             .followSslRedirects(true)
+            // A TV stick does not need the default 64 simultaneous calls, and a provider's
+            // API, guide and artwork all share one host: three per host keeps a grid's worth
+            // of images from turning into the burst that made panels answer HTTP 429. The
+            // queue lives in OkHttp's dispatcher, not in sleeping threads.
+            .dispatcher(
+                Dispatcher().apply {
+                    maxRequests = 24
+                    maxRequestsPerHost = 3
+                }
+            )
             .connectionPool(okhttp3.ConnectionPool(4, 30, TimeUnit.SECONDS))
+            // Ahead of the protocol clients: a 429 on the catalogue API has to park the
+            // same host the guide and the poster loader use (see RequestPacer).
+            .addInterceptor(RequestPacingInterceptor())
             .addInterceptor(JellyfinAuthInterceptor())
             .addInterceptor(PlexAuthInterceptor())
             .cache(Cache(File(cacheDir, "okhttp_cache"), 50L * 1024 * 1024))  // 50MB disk cache

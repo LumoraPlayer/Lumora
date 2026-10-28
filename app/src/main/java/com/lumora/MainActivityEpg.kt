@@ -138,7 +138,11 @@ internal suspend fun MainActivity.resolveEpgPrograms(channelId: String): List<Xt
     // guide" - the two facts that turn a round of failed questions into a definite answer.
     var sawProvider = false
     var sawEmpty = false
-    for (ch in epgCandidateChannels(channelId)) {
+    // A channel's quality/source variants can run to a dozen feeds, and every candidate costs
+    // a table request (plus a short EPG when the table is empty). Trying all of them from one
+    // visible row is how a guide screen turns into the request burst that earns a 429: the
+    // first few are the ones a panel actually files its guide under, the rest are duplicates.
+    for (ch in epgCandidateChannels(channelId).take(MAX_EPG_VARIANT_CHANNELS)) {
         val chProvider = xtreamProviderFor(ch) ?: continue
         sawProvider = true
         val programs = fetchGuidePrograms(client, chProvider, ch.id)
@@ -148,6 +152,7 @@ internal suspend fun MainActivity.resolveEpgPrograms(channelId: String): List<Xt
             continue
         }
         persistEpgPrograms(channelId, scope, programs, generation)
+        if (generation == EpgListCache.generation) EpgListCache.put(channelId, programs)
         return programs
     }
     // Nothing answered for this stream id or its quality variants. A panel attaches its guide to
@@ -166,6 +171,7 @@ internal suspend fun MainActivity.resolveEpgPrograms(channelId: String): List<Xt
             continue
         }
         persistEpgPrograms(channelId, scope, programs, generation)
+        if (generation == EpgListCache.generation) EpgListCache.put(channelId, programs)
         return programs
     }
     return when {
@@ -173,13 +179,20 @@ internal suspend fun MainActivity.resolveEpgPrograms(channelId: String): List<Xt
         // while, so the guide stops asking a channel that has no guide.
         sawEmpty -> {
             markNoGuide(channelId, scope, generation)
+            if (generation == EpgListCache.generation) EpgListCache.put(channelId, emptyList())
             emptyList()
         }
         // Nothing to ask: the channel belongs to no Xtream provider, so the stored guide
         // (written by the XMLTV sync) is all there will ever be for it.
         !sawProvider -> emptyList()
-        // Every question failed. Not remembered - the next attempt may well succeed.
-        else -> null
+        // Every question failed. Not remembered as "no guide", but remembered as a *failure*
+        // so the guide/menu/search stop re-asking this channel for a few minutes. The
+        // adapters already apply that backoff to their own fetches; resolving the same
+        // failure from search or the player's rail used to bypass it.
+        else -> {
+            if (generation == EpgListCache.generation) EpgListCache.markFailed(channelId)
+            null
+        }
     }
 }
 
@@ -215,6 +228,11 @@ private suspend fun fetchGuidePrograms(
  *  a channel with dozens of variants and no guide anywhere should not turn one visible row into
  *  dozens of requests. */
 private const val MAX_EPG_FALLBACK_CHANNELS = 3
+
+/** How many merged quality/source variants one channel's guide will try. A panel may file its
+ *  listings under any one feed of a quality group, but not under every one; the first few
+ *  cover the real cases without making a single row a request burst (see resolveEpgPrograms). */
+private const val MAX_EPG_VARIANT_CHANNELS = 4
 
 /**
  * Other channels in the lineup that are the same channel as [channelId], by the app's own

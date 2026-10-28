@@ -83,10 +83,11 @@ internal class ScraperTvShowStore(
     override fun getById(id: String): TvShow? = loaded()[id]
 
     override suspend fun searchTvShows(query: String, limit: Int, offset: Int): List<TvShow> {
-        val needle = query.lowercase()
+        val needle = com.lumora.util.normalizeForSearch(query)
+        if (needle.isEmpty()) return emptyList()
         return loaded().values
             .asSequence()
-            .filter { it.title.lowercase().contains(needle) }
+            .filter { com.lumora.util.normalizeForSearch(it.title).contains(needle) }
             .drop(offset)
             .take(limit)
             .toList()

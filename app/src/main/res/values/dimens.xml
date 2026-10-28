@@ -24,16 +24,28 @@
     <dimen name="settings_text_title">17sp</dimen>
 
     <dimen name="settings_nav_icon_size">20dp</dimen>
-    <dimen name="settings_nav_rail_width">140dp</dimen>
-    <dimen name="settings_type_card_height">46dp</dimen>
+    <!-- 168dp, not 140dp: "Recording Storage", "Backup & Restore" and "Streaming sites"
+         clipped to an ellipsis in the phone-width rail, and a nav label is the one thing
+         that must never be truncated. The rail is auto-collapsed in portrait anyway, so
+         this width is only spent while the user is actually navigating sections. -->
+    <dimen name="settings_nav_rail_width">168dp</dimen>
+    <!-- Android's 48dp touch-target floor for the rail; TVs can sit at a lower 36dp
+         because they are D-pad driven and the rail has 18 rows to fit. -->
+    <dimen name="settings_nav_row_min_height">48dp</dimen>
+    <dimen name="settings_nav_child_min_height">40dp</dimen>
+    <!-- Lines the group heading up with the row labels (row padding + icon + label gap),
+         rather than with the row's background edge. -->
+    <dimen name="settings_nav_group_indent">44dp</dimen>
+    <dimen name="settings_type_card_height">48dp</dimen>
     <!-- Overrides the content pane's uniform 24dp padding on the end edge only, so it must
          restate that 24dp as the non-TV baseline rather than being a 0dp "no inset". -->
     <dimen name="settings_content_inset">24dp</dimen>
 
     <!-- Settings card rows are wrap_content in height with this above and below the label,
          so a row is exactly as tall as its text needs rather than a fixed 44/48dp box that
-         stays the same size while the type scale around it changes. -->
-    <dimen name="settings_row_padding_vertical">14dp</dimen>
+         stays the same size while the type scale around it changes. 18dp on a phone, not
+         14dp: with the 11sp body a one-line card then clears Android's 48dp touch floor. -->
+    <dimen name="settings_row_padding_vertical">18dp</dimen>
 
     <!-- Settings spacing scale. These were literal dp values repeated ~80 times across
          activity_settings.xml, which meant the gaps between every label, field and card stayed
@@ -52,8 +64,10 @@
     <!-- Padding around the whole content pane, inside the ScrollView. -->
     <dimen name="settings_pane_padding">24dp</dimen>
     <!-- Small outline actions inside a row ("Change", "Test") - fixed height, unlike the
-         wrap_content card rows, because they sit beside a label rather than holding one. -->
-    <dimen name="settings_action_button_height">34dp</dimen>
+         wrap_content card rows, because they sit beside a label rather than holding one.
+         44dp on a phone so the button itself is comfortably tappable; the TV tier keeps a
+         shorter 38dp D-pad target. -->
+    <dimen name="settings_action_button_height">44dp</dimen>
     <dimen name="settings_qr_size">128dp</dimen>
 
     <!-- Episode list runs the full available width everywhere except TV, where a full-width

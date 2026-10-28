@@ -24,6 +24,9 @@ data class CatalogLeafRow(
     val count: Int
 )
 
+/** The two columns the search-key backfill needs. */
+data class CatalogNameRow(val uid: String, val name: String)
+
 @Dao
 interface CatalogChannelDao {
 
@@ -158,17 +161,44 @@ interface CatalogChannelDao {
     ): List<CatalogChannelEntity>
 
     /**
-     * Search. A LIKE scan over an indexed name column is the cheap, predictable option for
-     * 300k rows (tens of milliseconds); FTS would be faster on paper but adds a second
-     * table, triggers, and a migration that can silently drift from the main one.
+     * Search. A LIKE scan over the precomputed normalised key is the cheap, predictable
+     * option for 300k rows (tens of milliseconds); FTS would be faster on paper but adds a
+     * second table, triggers, and a migration that can silently drift from the main one.
+     *
+     * The caller passes [com.lumora.util.normalizeForSearch] of the user's text; matching
+     * `searchName` rather than `name` is what makes `احمد` find `أحمد`, and keeps Tashkeel
+     * and Tatweel out of the comparison. Rows written before the v2 column existed are
+     * backfilled in the background; until their turn comes, the second arm keeps them
+     * searchable by their original spelling.
      */
     @Query(
-        "SELECT * FROM catalog_channels WHERE name LIKE '%' || :query || '%' " +
+        "SELECT * FROM catalog_channels " +
+            "WHERE (searchName LIKE '%' || :query || '%' " +
+            "OR (searchName = '' AND name LIKE '%' || :legacyQuery || '%')) " +
             "AND (:mediaType IS NULL OR mediaType = :mediaType) " +
             "AND rank > -1500000000 " +
             "ORDER BY yearSort DESC, name COLLATE NOCASE ASC LIMIT :limit"
     )
-    suspend fun search(query: String, mediaType: String?, limit: Int): List<CatalogChannelEntity>
+    suspend fun search(
+        query: String,
+        legacyQuery: String,
+        mediaType: String?,
+        limit: Int
+    ): List<CatalogChannelEntity>
+
+    /** One page of rows whose `searchName` still has to be computed. Keyed by [uid] so the
+     *  backfill can resume after a process death instead of restarting from row one. */
+    @Query(
+        "SELECT uid, name FROM catalog_channels " +
+            "WHERE searchName = '' AND uid > :afterUid ORDER BY uid ASC LIMIT :limit"
+    )
+    suspend fun searchBackfillPage(afterUid: String, limit: Int): List<CatalogNameRow>
+
+    @Query(
+        "UPDATE catalog_channels SET searchName = :searchName " +
+            "WHERE uid = :uid AND name = :name AND searchName = ''"
+    )
+    suspend fun updateSearchName(uid: String, name: String, searchName: String)
 
     @Query(
         "SELECT categoryId, categoryName, COUNT(*) AS count FROM catalog_channels " +
@@ -378,11 +408,19 @@ interface CatalogChannelDao {
 
     @Query(
         "SELECT *, MAX(rank) FROM catalog_channels " +
-            "WHERE mediaType = :mediaType AND name LIKE '%' || :probe || '%' AND groupId IS NOT NULL AND rank > 0 " +
+            "WHERE mediaType = :mediaType " +
+            "AND (searchName LIKE '%' || :probe || '%' " +
+            "OR (searchName = '' AND name LIKE '%' || :legacyProbe || '%')) " +
+            "AND groupId IS NOT NULL AND rank > 0 " +
             "GROUP BY groupId " +
             "ORDER BY name COLLATE NOCASE ASC, groupId ASC LIMIT :limit"
     )
-    suspend fun vodByTitleProbe(mediaType: String, probe: String, limit: Int): List<CatalogChannelEntity>
+    suspend fun vodByTitleProbe(
+        mediaType: String,
+        probe: String,
+        legacyProbe: String,
+        limit: Int
+    ): List<CatalogChannelEntity>
 
     /** Own-library copies (every copy, not one per group), for watched-mark propagation.
      *  Parked (switched-off server) rows are filtered by the rank floor. */
@@ -397,13 +435,16 @@ interface CatalogChannelDao {
     @Query(
         "SELECT * FROM catalog_channels WHERE mediaType = 'SERIES' " +
             "AND (:providerId IS NULL OR providerId = :providerId) " +
-            "AND (categoryId = :showId OR name LIKE '%' || :probe || '%') " +
+            "AND (categoryId = :showId " +
+            "OR (:probe != '' AND searchName LIKE '%' || :probe || '%') " +
+            "OR (:legacyProbe != '' AND searchName = '' AND name LIKE '%' || :legacyProbe || '%')) " +
             "ORDER BY name COLLATE NOCASE ASC, uid ASC LIMIT :limit"
     )
     suspend fun m3uSeriesCandidates(
         providerId: String?,
         showId: String,
         probe: String,
+        legacyProbe: String,
         limit: Int
     ): List<CatalogChannelEntity>
 
@@ -419,7 +460,8 @@ interface CatalogChannelDao {
     @Query(
         "SELECT *, MAX(rank) FROM catalog_channels " +
             "WHERE mediaType = :mediaType AND groupId IS NOT NULL AND rank > 0 " +
-            "AND name LIKE '%' || :query || '%' " +
+            "AND (searchName LIKE '%' || :query || '%' " +
+            "OR (searchName = '' AND name LIKE '%' || :legacyQuery || '%')) " +
             "AND (:englishOnly = 0 OR isEnglish = 1) " +
             "AND (:hideAdult = 0 OR isAdult = 0) " +
             "GROUP BY groupId " +
@@ -428,6 +470,7 @@ interface CatalogChannelDao {
     suspend fun vodSearch(
         mediaType: String,
         query: String,
+        legacyQuery: String,
         englishOnly: Boolean,
         hideAdult: Boolean,
         limit: Int

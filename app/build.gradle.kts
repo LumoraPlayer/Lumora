@@ -355,6 +355,48 @@ val verifyLumoraIdentity by tasks.registering {
 tasks.named("preBuild") { dependsOn(verifyLumoraIdentity) }
 tasks.named("check") { dependsOn(verifyLumoraIdentity) }
 
+// Popup guard: every dialog the app draws is com.lumora.ui.dialog.LumoraDialog. The platform
+// AlertDialog renders with the ROM's own layout (Fire OS drops the choice list whenever a
+// message is set, and its buttons ignore the app's colours and type), so a platform dialog
+// is never acceptable UI here. This task fails the build if one comes back. See CLAUDE.md.
+val verifyNoPlatformDialogs by tasks.registering {
+    group = "verification"
+    description = "Fails the build if a platform AlertDialog is used instead of LumoraDialog."
+
+    val root = rootDir
+    doLast {
+        // The dialog package itself may mention AlertDialog in its own documentation; the
+        // rule is about call sites, not the component that explains why it exists.
+        val dialogPackage = File(root, "app/src/main/java/com/lumora/ui/dialog")
+        val offenders = File(root, "app/src/main/java")
+            .walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .filter { !it.path.startsWith(dialogPackage.path) }
+            .filter { file ->
+                val text = file.readText()
+                text.contains("android.app.AlertDialog") ||
+                    text.contains("androidx.appcompat.app.AlertDialog")
+            }
+            .map { it.relativeTo(root).path }
+            .sorted()
+            .toList()
+
+        if (offenders.isNotEmpty()) {
+            throw GradleException(
+                buildString {
+                    appendLine("Platform AlertDialog is not allowed - use com.lumora.ui.dialog.LumoraDialog:")
+                    offenders.forEach { appendLine("  - $it") }
+                    appendLine("The platform layout is inconsistent across ROMs and ignores the app's panel, type and focus ring.")
+                    appendLine("See ui/dialog/LumoraDialog.kt and the dialog rule in CLAUDE.md.")
+                }
+            )
+        }
+    }
+}
+
+tasks.named("preBuild") { dependsOn(verifyNoPlatformDialogs) }
+tasks.named("check") { dependsOn(verifyNoPlatformDialogs) }
+
 // Release-build guard for Gson's TypeToken. An anonymous `TypeToken<List<...>>() {}` depends on
 // the class file's generic superclass signature, and R8 rewrites that signature in release builds
 // (even under `-keep`), so Gson's constructor throws "TypeToken must be created with a type

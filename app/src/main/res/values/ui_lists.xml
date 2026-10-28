@@ -80,6 +80,13 @@
     <string name="list_no_alt_video">No alternate video quality</string>
     <string name="list_no_subtitles">No subtitles available</string>
 
+    <!-- Toolbar refresh picker (MainActivityProviders.kt) -->
+    <string name="list_refresh_title">Refresh providers</string>
+    <string name="list_refresh_message">Choose what to re-download. Sources you leave unselected keep their current catalogue.</string>
+    <string name="list_refresh_all">All providers</string>
+    <string name="list_refresh_action">Refresh</string>
+    <string name="list_refresh_none_selected">Select at least one provider</string>
+
     <!-- Continue Watching row/grid (MainActivityDiscover.kt / MainActivityCategories.kt) -->
     <string name="list_cw_remove_item">Remove from Continue Watching</string>
     <string name="list_cw_clear_all">Clear Continue Watching</string>

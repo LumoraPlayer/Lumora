@@ -218,9 +218,11 @@ class LumoraMediaService : MediaLibraryService() {
     }
 
     private fun matches(query: String): List<Channel> {
-        val needle = query.trim().lowercase()
+        val needle = com.lumora.util.normalizeForSearch(query)
         if (needle.isEmpty()) return emptyList()
-        return catalog.channels.filter { it.name.lowercase().contains(needle) }.take(50)
+        return catalog.channels
+            .filter { com.lumora.util.normalizeForSearch(it.name).contains(needle) }
+            .take(50)
     }
 
     private fun rootChildren(): List<MediaItem> {

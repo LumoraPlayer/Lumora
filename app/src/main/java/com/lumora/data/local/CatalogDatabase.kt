@@ -5,6 +5,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.lumora.data.local.dao.CatalogChannelDao
 import com.lumora.data.local.entity.CatalogChannelEntity
 
@@ -26,7 +28,7 @@ import com.lumora.data.local.entity.CatalogChannelEntity
  */
 @Database(
     entities = [CatalogChannelEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class CatalogDatabase : RoomDatabase() {
@@ -34,6 +36,25 @@ abstract class CatalogDatabase : RoomDatabase() {
 
     companion object {
         private const val NAME = "lumora_catalog.db"
+
+        /**
+         * v2 adds `searchName`, the normalised key behind Arabic-aware search.
+         *
+         * The column is added empty for existing rows and backfilled in the background (see
+         * [com.lumora.data.catalog.CatalogRepository.backfillSearchNames]). A migration is
+         * the wrong place for the per-row Kotlin fold on a six-figure catalogue: it would
+         * hold the database open for the whole scan on the first launch after the update,
+         * which is exactly when the app is already busy painting the stored catalogue.
+         * Until a row is backfilled, the DAO search falls back to `name` for that row, so
+         * nothing disappears while the pass runs.
+         */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `catalog_channels` ADD COLUMN `searchName` TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
 
         @Volatile private var instance: CatalogDatabase? = null
 
@@ -47,6 +68,7 @@ abstract class CatalogDatabase : RoomDatabase() {
                     // WAL explicitly: a bulk ingest writes while the UI reads, so readers
                     // must stay on their own snapshot rather than wait behind a write.
                     .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+                    .addMigrations(MIGRATION_1_2)
                     .build()
                     .also { instance = it }
             }

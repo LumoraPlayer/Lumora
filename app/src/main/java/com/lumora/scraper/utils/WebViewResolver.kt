@@ -2,7 +2,7 @@
 package com.lumora.scraper.utils
 
 import android.annotation.SuppressLint
-import android.app.AlertDialog
+import com.lumora.ui.dialog.LumoraDialog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -73,7 +73,7 @@ class WebViewResolver(private val context: Context) {
     )
 
     private var webView: WebView? = null
-    private var dialog: AlertDialog? = null
+    private var dialog: LumoraDialog? = null
     private val mutex = Mutex()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val TAG = "WebviewResolver"
@@ -550,8 +550,9 @@ class WebViewResolver(private val context: Context) {
                     rootContainer.addView(webView, RelativeLayout.LayoutParams(-1, -1))
                 }
 
-                dialog = AlertDialog.Builder(uiContext, android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen)
+                dialog = LumoraDialog.Builder(uiContext)
                     .setView(rootContainer)
+                    .setFullscreen(true)
                     .setCancelable(true)
                     .setOnCancelListener {
                         Log.d(TAG, "[WebView] Challenge cancelled by user")

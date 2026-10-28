@@ -16,6 +16,7 @@ import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.parser.XtreamClient
 import com.lumora.ui.attachBlinkingCursor
+import com.lumora.util.normalizeForSearch
 import kotlinx.coroutines.*
 
 // ── Search dialog, ranking & recents ──
@@ -363,7 +364,9 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
 /** Ranks a title's relevance to [query] (lower is better) - exact match first, then
  *  "starts with", then matching at a word boundary ("man" hits "Iron Man" but not
  *  "Batman"), plain substring last. Word-boundary keeps a query like "man" usable on
- *  a catalog with thousands of vaguely-matching substrings instead of it being buried. */
+ *  a catalog with thousands of vaguely-matching substrings instead of it being buried.
+ *
+ *  Both arguments are already [normalizeForSearch] keys - see the call site. */
 internal fun MainActivity.searchRankLower(lowerName: String, query: String, boundaryRegex: Regex): Int = when {
     lowerName == query -> 0
     lowerName.startsWith(query) -> 1
@@ -372,7 +375,7 @@ internal fun MainActivity.searchRankLower(lowerName: String, query: String, boun
 }
 
 internal fun MainActivity.searchRank(name: String, query: String, boundaryRegex: Regex): Int =
-    searchRankLower(name.lowercase(), query, boundaryRegex)
+    searchRankLower(normalizeForSearch(name), query, boundaryRegex)
 
 internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchResultsAdapter, statusText: TextView, resultsList: RecyclerView) {
     statusText.text = getString(R.string.search_status_searching)
@@ -381,6 +384,17 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
     searchAllResults = emptyList()
     searchDisplayedCount = 0
     scope.launch {
+        val needle = normalizeForSearch(query)
+        if (needle.isEmpty()) {
+            // A query made only of diacritics/Tatweel folds away. Treat it like a short
+            // query rather than matching every title with an empty needle.
+            statusText.text = getString(R.string.search_status_no_results, query) + "\n" +
+                getString(R.string.search_status_no_results_hint)
+            statusText.visibility = View.VISIBLE
+            resultsList.visibility = View.GONE
+            focusFirstResultOnNextPublish = false
+            return@launch
+        }
         val filter = searchFilter
         // Films and series are database-only now: query them for this term instead of
         // scanning a resident list. Both queries are capped; the UI says "N of M" from
@@ -406,8 +420,6 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
         // the player can fail over without another round trip.
         withContext(Dispatchers.IO) {
             val repo = com.lumora.data.catalog.CatalogRepository.get(this@runSearch)
-            val english = vodEnglishOnly()
-            val adult = vodHideAdult()
             for (type in listOf(com.lumora.model.MediaType.MOVIE, com.lumora.model.MediaType.SERIES)) {
                 val hits = vodResults.filter { it.mediaType == type }
                 if (hits.isEmpty()) continue
@@ -417,11 +429,14 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
             }
         }
         val mediaResults = withContext(Dispatchers.Default) {
-            val lower = query.lowercase()
             // P1-2: compiled once per query, not per comparison - the boundary regex was
             // built inside searchRank (called by the comparator), so sorting ~50k titles
             // compiled ~1.5M Patterns and cost seconds on a TV stick.
-            val boundaryRegex = Regex("\\b" + Regex.escape(lower))
+            val boundaryRegex = java.util.regex.Pattern.compile(
+                "\\b" + java.util.regex.Pattern.quote(needle),
+                java.util.regex.Pattern.UNICODE_CASE or
+                    java.util.regex.Pattern.UNICODE_CHARACTER_CLASS
+            ).toRegex()
             val liveSource = when (filter) {
                 MainActivity.SearchFilter.ALL, MainActivity.SearchFilter.LIVE -> liveChannels
                 else -> emptyList()
@@ -434,15 +449,16 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
                 inMemoryVodChannels()
             }
             val source = liveSource + vodResults + inMemoryVod
-            // Lowercase each title once: the comparator used to call searchRank (and lowercase)
-            // per comparison, allocating a fresh String per element per compare - on a
-            // six-figure series list that is seconds of GC churn for a single query.
+            // Normalise each title once: the comparator used to lowercase per comparison,
+            // allocating a fresh String per element per compare - on a six-figure series
+            // list that is seconds of GC churn for a single query. The key also folds the
+            // Arabic spelling variants the query was folded through (see SearchText.kt).
             val ranked = ArrayList<Pair<Channel, String>>(minOf(source.size, 4096))
             for (channel in source) {
-                val name = channel.name.lowercase()
-                if (name.contains(lower)) ranked.add(channel to name)
+                val name = normalizeForSearch(channel.name)
+                if (name.contains(needle)) ranked.add(channel to name)
             }
-            ranked.sortWith(compareBy({ searchRankLower(it.second, lower, boundaryRegex) }, { it.second }))
+            ranked.sortWith(compareBy({ searchRankLower(it.second, needle, boundaryRegex) }, { it.second }))
             ranked.map { SearchResultItem.Media(it.first) }
         }
         // Stale run (query changed or overlay dismissed while this was in flight) - the
@@ -502,7 +518,8 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
  *  catalog, and each fetch is a network call. */
 internal suspend fun MainActivity.buildEpgSearchResults(query: String, filter: MainActivity.SearchFilter): List<SearchResultItem.Epg> {
     if (filter == MainActivity.SearchFilter.MOVIE || filter == MainActivity.SearchFilter.SERIES) return emptyList()
-    val lower = query.lowercase()
+    val needle = normalizeForSearch(query)
+    if (needle.isEmpty()) return emptyList()
     val nowSeconds = System.currentTimeMillis() / 1000
     val results = linkedMapOf<String, SearchResultItem.Epg>()
 
@@ -517,11 +534,11 @@ internal suspend fun MainActivity.buildEpgSearchResults(query: String, filter: M
     }
 
     fun addPrograms(channel: Channel, programs: List<XtreamClient.EpgProgram>) {
-        val nameMatches = channel.name.lowercase().contains(lower)
+        val nameMatches = normalizeForSearch(channel.name).contains(needle)
         var addedUpcoming = false
         for (p in programs) {
             when {
-                p.title.lowercase().contains(lower) -> add(channel, p)
+                normalizeForSearch(p.title).contains(needle) -> add(channel, p)
                 nameMatches && p.isNowAiring(nowSeconds) -> add(channel, p)
                 nameMatches && !addedUpcoming && p.startTimestamp > nowSeconds -> {
                     add(channel, p)
@@ -550,7 +567,7 @@ internal suspend fun MainActivity.buildEpgSearchResults(query: String, filter: M
         }
         // On-demand: name-matching channels that have no guide data cached yet.
         liveChannels.asSequence()
-            .filter { it.name.lowercase().contains(lower) && !EpgListCache.has(it.id) }
+            .filter { normalizeForSearch(it.name).contains(needle) && !EpgListCache.has(it.id) }
             .distinctBy { it.id }
             .take(MAX_EPG_SEARCH_FETCHES)
             .toList()

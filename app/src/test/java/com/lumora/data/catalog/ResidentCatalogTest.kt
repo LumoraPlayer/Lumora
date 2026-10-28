@@ -2,12 +2,14 @@
 package com.lumora.data.catalog
 
 import com.lumora.data.local.entity.CatalogChannelEntity
+import com.lumora.cache.ChannelCache
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.StringWriter
 
 /**
  * The resident catalogue must answer the same queries as the Room path. These pin the
@@ -96,6 +98,25 @@ class ResidentCatalogTest {
                 .map { it.id }
         )
         assertEquals(1, state.vodCardCount(MediaType.MOVIE, null, true, true))
+    }
+
+    @Test
+    fun `search matches Arabic spelling variants without changing the card title`() {
+        val state = ResidentCatalog.buildState(
+            listOf(
+                row("ahmed", "أحمد", group = "ahmed"),
+                row("ibrahim", "إبراهيم", group = "ibrahim")
+            )
+        )
+
+        assertEquals(
+            listOf("أحمد"),
+            state.vodSearch(MediaType.MOVIE, "احمد", false, false, 10).map { it.name }
+        )
+        assertEquals(
+            listOf("إبراهيم"),
+            state.vodSearch(MediaType.MOVIE, "ابراهيم", false, false, 10).map { it.name }
+        )
     }
 
     @Test
@@ -284,5 +305,50 @@ class ResidentCatalogTest {
 
         // The insertion order is the provider's own order; the resident live list keeps it.
         assertEquals(listOf("a", "b"), state.liveChannels().map { it.id })
+    }
+
+    /**
+     * The RAM path persists through [ChannelCache] and rebuilds the resident model from it on
+     * the next cold start, so anything the cache drops is content the user loses by restarting
+     * the app without a provider refresh. This is the end-to-end check: map the channels to
+     * rows, write them through the real serialiser, parse them back, rebuild, and compare.
+     */
+    @Test
+    fun `resident catalogue survives the flat cache round trip`() {
+        fun channel(id: String, name: String, type: MediaType) = Channel(
+            id = id,
+            name = name,
+            url = "http://example/$id",
+            mediaType = type,
+            categoryId = "cat",
+            categoryName = "Category",
+            sourceProviderId = "p1"
+        )
+
+        val channels = listOf(
+            channel("live", "Live One", MediaType.LIVE),
+            channel("film", "أحمد (2026)", MediaType.MOVIE),
+            channel("show", "Show S01E01", MediaType.SERIES)
+        )
+        val before = ResidentCatalog.buildFromChannels(channels, emptySet())
+
+        val out = StringWriter()
+        ChannelCache.writeChannels(out, channels)
+        val parsed = ChannelCache.parseCache(out.toString().toByteArray(Charsets.UTF_8)).channels
+        val after = ResidentCatalog.buildFromChannels(parsed, emptySet())
+
+        assertEquals(before.count(), after.count())
+        assertEquals(
+            before.allChannels().map { it.id }.sorted(),
+            after.allChannels().map { it.id }.sorted()
+        )
+        assertEquals(listOf("live"), after.liveChannels().map { it.id })
+        // The search key is rebuilt from the cached title, so the Arabic fold still works on
+        // a cold start that never touched Room.
+        assertEquals(
+            listOf("أحمد (2026)"),
+            after.vodSearch(MediaType.MOVIE, "احمد", false, false, 10).map { it.name }
+        )
+        assertEquals(1, after.vodCardCount(MediaType.MOVIE, null, false, false))
     }
 }

@@ -2,13 +2,15 @@
 package com.lumora
 
 import android.animation.AnimatorInflater
-import android.app.AlertDialog
+import com.lumora.ui.dialog.LumoraDialog
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.ViewCompat
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.net.Uri
 import android.graphics.Typeface
+import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.text.Spanned
@@ -98,7 +100,7 @@ internal fun MainActivity.wireSportsPane(dialogView: View) {
     })
 
     if (configured.isNotEmpty()) {
-        rows.addView(sportsSectionLabel(getString(R.string.sports_settings_sports)))
+        rows.addView(settingsSectionLabel(getString(R.string.sports_settings_sports)))
         for (sport in configured) {
             val enabled = sport in com.lumora.sports.SportsConfig.enabledSports(prefs)
             rows.addView(sportsToggleRow(
@@ -116,11 +118,14 @@ internal fun MainActivity.wireSportsPane(dialogView: View) {
         }
     }
 
-    rows.addView(sportsSectionLabel(getString(R.string.sports_settings_guide)))
+    rows.addView(settingsSectionLabel(getString(R.string.sports_settings_guide)))
     val guideCaption = TextView(this).apply {
         text = getString(R.string.sports_settings_guide_caption)
         setTextColor(getColor(R.color.text_secondary))
-        textSize = 12f
+        setTextSize(
+            TypedValue.COMPLEX_UNIT_PX,
+            resources.getDimension(R.dimen.settings_text_body)
+        )
         setPadding(0, 0, 0, resources.getDimensionPixelSize(R.dimen.settings_gap_s))
     }
     rows.addView(guideCaption)
@@ -210,14 +215,24 @@ private fun MainActivity.sportsToggleRow(
     return checkBox
 }
 
-/** Small caps label between the Sports pane's row groups. */
-private fun MainActivity.sportsSectionLabel(text: String): TextView = TextView(this).apply {
+/** Small all-caps heading between row groups, shared by every pane that has groups. */
+internal fun MainActivity.settingsSectionLabel(text: String): TextView = TextView(this).apply {
     this.text = text
-    setTextColor(getColor(R.color.text_tertiary))
-    textSize = 11f
-    letterSpacing = 0.06f
+    setTextColor(getColor(R.color.text_secondary))
+    setTextSize(
+        TypedValue.COMPLEX_UNIT_PX,
+        resources.getDimension(R.dimen.settings_text_caption)
+    )
+    typeface = ResourcesCompat.getFont(this@settingsSectionLabel, R.font.inter_semibold)
+    letterSpacing = 0.08f
     isAllCaps = true
-    setPadding(0, resources.getDimensionPixelSize(R.dimen.settings_gap_l), 0, 0)
+    ViewCompat.setAccessibilityHeading(this, true)
+    setPadding(
+        0,
+        resources.getDimensionPixelSize(R.dimen.settings_gap_l),
+        0,
+        resources.getDimensionPixelSize(R.dimen.settings_gap_s)
+    )
 }
 
 /** Full-width button row in the Sports pane. */
@@ -242,7 +257,10 @@ private fun MainActivity.sportsActionRow(text: String): LinearLayout {
     row.addView(TextView(this).apply {
         this.text = text
         setTextColor(getColor(R.color.text_primary))
-        textSize = 13f
+        setTextSize(
+            TypedValue.COMPLEX_UNIT_PX,
+            resources.getDimension(R.dimen.settings_text_body)
+        )
         typeface = ResourcesCompat.getFont(this@sportsActionRow, R.font.inter_medium)
     })
     return row
@@ -267,7 +285,7 @@ internal fun MainActivity.showAddEpgSourceDialog() {
         addView(nameInput)
         addView(input)
     }
-    AlertDialog.Builder(this)
+    LumoraDialog.Builder(this)
         .setTitle(getString(R.string.sett_add_epg_source_title))
         .setView(layout)
         .setPositiveButton(getString(R.string.add)) { _, _ ->
@@ -545,7 +563,7 @@ private suspend fun MainActivity.choosePlexServer(
     val labels = servers.map { server ->
         if (server.owned) server.name else "${server.name} (shared)"
     }.toTypedArray()
-    val dialog = AlertDialog.Builder(this)
+    val dialog = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.sett_plex_choose_server))
         .setItems(labels) { _, which -> if (cont.isActive) cont.resume(servers[which]) }
         .setOnCancelListener { if (cont.isActive) cont.resume(null) }
@@ -592,7 +610,7 @@ internal fun MainActivity.languageChoiceRow(
     row.setOnClickListener {
         val codes = choices.map { it.first }
         val current = prefs.getString(key, "en") ?: "en"
-        AlertDialog.Builder(this)
+        LumoraDialog.Builder(this)
             .setTitle(title)
             .setSingleChoiceItems(
                 choices.map { it.second }.toTypedArray(),
@@ -698,7 +716,7 @@ internal fun MainActivity.startScreenChoiceRow(): TextView {
     render()
     row.setOnClickListener {
         val current = startScreenPref()
-        AlertDialog.Builder(this)
+        LumoraDialog.Builder(this)
             .setTitle(getString(R.string.sett_start_screen))
             .setSingleChoiceItems(
                 screens.map { label(it) }.toTypedArray(),
@@ -751,7 +769,7 @@ internal fun MainActivity.multiviewPanesRow(): TextView {
             getString(R.string.mv_panes_value, 4)
         )
         val current = prefs.getInt(PREF_MULTIVIEW_PANES, 0)
-        AlertDialog.Builder(this)
+        LumoraDialog.Builder(this)
             .setTitle(getString(R.string.mv_panes_title))
             .setSingleChoiceItems(labels, values.indexOf(current).coerceAtLeast(0)) { dialog, which ->
                 prefs.edit().putInt(PREF_MULTIVIEW_PANES, values[which]).apply()
@@ -799,7 +817,7 @@ internal fun MainActivity.applySettingsRailVisibility(root: View? = null) {
     )
 }
 
-/** Collapses the Settings rail from its Collapse row: the state persists (or flips the
+/** Collapses the Settings rail from its header button: the state persists (or flips the
  *  portrait transient), the rail hides, and focus moves to the re-expand pill since the
  *  focused row is about to disappear - mirrors collapseCategorySidebar(). */
 internal fun MainActivity.collapseSettingsRail() {
@@ -942,7 +960,7 @@ internal fun MainActivity.showProviderSettings() {
     val providerNameInput = dialogView.findViewById<EditText>(R.id.settingsProviderName)
 
     clearHistory.setOnClickListener {
-        AlertDialog.Builder(this)
+        LumoraDialog.Builder(this)
             .setTitle(getString(R.string.sett_clear_history_confirm))
             .setMessage(getString(R.string.sett_clear_history_message))
             .setPositiveButton(getString(R.string.search_recents_clear)) { _, _ ->
@@ -1837,7 +1855,7 @@ internal fun MainActivity.showProviderSettings() {
             row.findViewById<TextView>(R.id.rowDetail).text = detail
             row.findViewById<View>(R.id.rowEditButton).setOnClickListener { openIptvForm(cfg) }
             row.findViewById<View>(R.id.rowRemoveButton).setOnClickListener {
-                AlertDialog.Builder(this)
+                LumoraDialog.Builder(this)
                     .setTitle(getString(R.string.sett_remove_provider_confirm, cfg.name))
                     .setMessage(getString(R.string.sett_remove_provider_message))
                     .setPositiveButton(getString(R.string.remove)) { _, _ ->
@@ -1989,7 +2007,7 @@ internal fun MainActivity.showProviderSettings() {
                 }
             }
             row.findViewById<View>(R.id.rowRemoveButton).setOnClickListener {
-                AlertDialog.Builder(this)
+                LumoraDialog.Builder(this)
                     .setTitle(getString(R.string.sett_remove_provider_confirm, server.name))
                     .setMessage(
                         getString(
@@ -2190,7 +2208,7 @@ internal fun MainActivity.showProviderSettings() {
             getString(R.string.sett_suggest_external_player_on_problems, if (prefs.getBoolean(PREF_SUGGEST_EXTERNAL_PLAYER, true)) getString(R.string.sett_on) else getString(R.string.sett_off)),
             getString(R.string.legal_notice_title)
         )
-        AlertDialog.Builder(this@showProviderSettings)
+        LumoraDialog.Builder(this@showProviderSettings)
             .setTitle(getString(R.string.sett_playback_settings_title))
             .setItems(items) { _, which ->
                 when (which) {
@@ -2215,7 +2233,7 @@ internal fun MainActivity.showProviderSettings() {
         val presets = listOf("-500 ms", "-250 ms", "-100 ms", "-50 ms", "0 ms", "+50 ms", "+100 ms", "+250 ms", "+500 ms")
         val values = listOf(-500, -250, -100, -50, 0, 50, 100, 250, 500)
         val checked = values.indexOf(current).coerceAtLeast(0)
-        AlertDialog.Builder(this@showProviderSettings)
+        LumoraDialog.Builder(this@showProviderSettings)
             .setTitle(getString(R.string.sett_av_sync_offset_title))
             .setSingleChoiceItems(presets.toTypedArray(), checked) { dialog, which ->
                 avOffsetManager.save(values[which])
@@ -2415,6 +2433,7 @@ internal fun MainActivity.showProviderSettings() {
     // sideloaded subtitles on when a stream plays back with its dubbed audio track.
     // Both default off; the subtitles one is read by PlayerManager from the same prefs.
     val filtersPane = dialogView.findViewById<LinearLayout>(R.id.paneFilters)
+    filtersPane.addView(settingsSectionLabel(getString(R.string.settings_group_subtitles_audio)))
     filtersPane.addView(dubCheckBoxRow(
         getString(R.string.sett_prefer_dubbed_audio),
         getString(R.string.sett_prefer_dubbed_audio_caption),
@@ -2435,6 +2454,7 @@ internal fun MainActivity.showProviderSettings() {
     // but only while Live TV is the active tab, since rebuildCategoriesForActiveTab()
     // rebuilds whatever tab is showing and the pref means nothing on Series/Films. On those
     // tabs the toggle is picked up by the regular rebuild when the user switches to Live.
+    filtersPane.addView(settingsSectionLabel(getString(R.string.tab_live_tv)))
     filtersPane.addView(dubCheckBoxRow(
         getString(R.string.sett_categories_alphabetical),
         getString(R.string.sett_categories_alphabetical_caption),
@@ -2529,6 +2549,10 @@ internal fun MainActivity.showProviderSettings() {
         PREF_DISABLE_VOD
     ) { vodStateChanged() }
     generalPane.addView(vodCheckBox)
+    // Which screen the app opens on. Next to the other whole-app choices, and above the
+    // language rows: it is the one a new TV owner changes first.
+    generalPane.addView(startScreenChoiceRow())
+    generalPane.addView(settingsSectionLabel(getString(R.string.settings_group_language)))
     generalPane.addView(
         languageChoiceRow(
             getString(R.string.settings_ui_language),
@@ -2538,9 +2562,6 @@ internal fun MainActivity.showProviderSettings() {
             onSelect = { code -> onUiLanguageSelected(code) }
         )
     )
-    // Which screen the app opens on. Next to the other whole-app choices, and above the
-    // language rows: it is the one a new TV owner changes first.
-    generalPane.addView(startScreenChoiceRow())
     generalPane.addView(
         languageChoiceRow(
             getString(R.string.sett_audio_language),
@@ -2556,7 +2577,7 @@ internal fun MainActivity.showProviderSettings() {
         )
     )
 
-    // StreamVault-style nav rail: one section visible at a time.
+    // Settings nav rail: one section visible at a time.
     val navRows = listOf(
         R.id.navProviders to R.id.paneProviders,
         R.id.navPlayback to R.id.panePlayback,
@@ -2568,9 +2589,9 @@ internal fun MainActivity.showProviderSettings() {
         R.id.navPlugins to R.id.panePlugins,
         R.id.navGeneral to R.id.paneGeneral,
         R.id.navAbout to R.id.paneAbout,
-        // Appended rather than slotted in next to Plugins, where it sits visually: selectSection()
-        // addresses these by list index, so inserting in the middle would silently renumber every
-        // section below it - including the hardcoded selectSection(7) the plugin rail rows use.
+        // Appended rather than slotted in next to EPG Sources, where it sits visually:
+        // selectSection() addresses these by list index, so inserting in the middle would
+        // silently renumber every section below it.
         R.id.navSites to R.id.paneSites,
         // Same reason - appended, not slotted in above Sites where the rail shows it.
         R.id.navTrakt to R.id.paneTrakt,
@@ -2579,13 +2600,13 @@ internal fun MainActivity.showProviderSettings() {
         R.id.navSimkl to R.id.paneSimkl,
         R.id.navDiagnostics to R.id.paneDiagnostics,
         // Appended for the same index-stability reason as Trakt/Sites above - the rail shows
-        // it beside EPG Sources, but selectSection addresses sections by list index.
+        // it in Browsing, after Regions, but selectSection addresses sections by list index.
         R.id.navSports to R.id.paneSports,
         // Regions is appended for the same reason: the rail shows it under Filters, but
         // inserting it there would renumber every section below it.
         R.id.navRegions to R.id.paneRegions,
         // Appended too: the rail shows Recordings right under Playback, but inserting it
-        // there would renumber Plugins (and the hardcoded selectSection(7) that uses it).
+        // there would renumber every section below it.
         R.id.navRecordings to R.id.paneRecordings
     ).map { (navId, paneId) -> dialogView.findViewById<View>(navId) to dialogView.findViewById<View>(paneId) }
     wireTraktPane(dialogView)
@@ -2650,7 +2671,15 @@ internal fun MainActivity.showProviderSettings() {
     // that is about to disappear. Re-applied on rotation from onConfigurationChanged.
     // dialogView is passed because activeSettingsOverlay is not assigned until show().
     applySettingsRailVisibility(dialogView)
-    selectSection(0)
+    // Open on General for an install that already has a source; on a fresh install land on
+    // Providers instead, where adding one is the only useful first action. This also keeps
+    // the highlighted row matched to the rail's top item instead of merely the second row.
+    val hasConfiguredSource = hasIptvConfigured() || mediaServers().isNotEmpty()
+    val generalSection = navRows.indexOfFirst { it.first.id == R.id.navGeneral }
+    val providersSection = navRows.indexOfFirst { it.first.id == R.id.navProviders }
+    val pluginsSection = navRows.indexOfFirst { it.first.id == R.id.navPlugins }
+    val initialSection = if (hasConfiguredSource) generalSection else providersSection
+    selectSection(if (initialSection >= 0) initialSection else 0)
 
     // A TV box has nowhere meaningful to browse a downloaded file (same reasoning
     // as the Downloads tab being mobile-only).
@@ -2677,7 +2706,7 @@ internal fun MainActivity.showProviderSettings() {
     wirePluginsPane(dialogView)
     // After wirePluginsPane: the child rows drive the pane through revealPluginInPane,
     // with the plugin list itself left at its previous section.
-    wirePluginNavRows(dialogView) { selectSection(7) }
+    wirePluginNavRows(dialogView) { if (pluginsSection >= 0) selectSection(pluginsSection) }
 
     wireScraperSettingsPane(dialogView)
     // Exposed so applyImportedConfiguration() can re-render the pane in place after a backup
@@ -2713,7 +2742,7 @@ internal fun MainActivity.showProviderSettings() {
             when {
                 info == null -> Toast.makeText(this@showProviderSettings, getString(R.string.sett_couldnt_check_updates), Toast.LENGTH_SHORT).show()
                 info.isUpdateAvailable && info.downloadUrl.isNotBlank() -> {
-                    AlertDialog.Builder(this@showProviderSettings)
+                    LumoraDialog.Builder(this@showProviderSettings)
                         .setTitle(getString(R.string.sett_update_available))
                         .setMessage(getString(R.string.sett_update_available_message, info.latestVersion, info.currentVersion, info.releaseNotes.take(200).replace("%", "%%")))
                         .setPositiveButton(getString(R.string.update)) { _, _ -> downloadAndInstallUpdate(info.downloadUrl, info.latestVersion) }
@@ -3057,7 +3086,7 @@ internal fun MainActivity.promptForPin(title: String, onCorrect: () -> Unit) {
         inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
         filters = arrayOf(android.text.InputFilter.LengthFilter(4))
     }
-    AlertDialog.Builder(this)
+    LumoraDialog.Builder(this)
         .setTitle(title)
         .setView(input)
         .setPositiveButton(getString(R.string.sett_ok)) { _, _ ->
@@ -3098,7 +3127,7 @@ internal fun MainActivity.showSetPinDialog(label: TextView) {
         filters = arrayOf(android.text.InputFilter.LengthFilter(4))
         hint = getString(R.string.sett_pin_hint)
     }
-    AlertDialog.Builder(this)
+    LumoraDialog.Builder(this)
         .setTitle(getString(R.string.set_parental_pin))
         .setView(input)
         .setPositiveButton(getString(R.string.sett_next)) { _, _ ->
@@ -3112,7 +3141,7 @@ internal fun MainActivity.showSetPinDialog(label: TextView) {
                 filters = arrayOf(android.text.InputFilter.LengthFilter(4))
                 hint = getString(R.string.sett_confirm_pin_hint)
             }
-            AlertDialog.Builder(this)
+            LumoraDialog.Builder(this)
                 .setTitle(getString(R.string.sett_confirm_pin_title))
                 .setView(confirm)
                 .setPositiveButton(getString(R.string.save)) { _, _ ->
@@ -3134,7 +3163,7 @@ internal fun MainActivity.showSetPinDialog(label: TextView) {
 /** The full disclaimer. The car screen shows a condensed version at the start of every
  *  session (see auto/CarDisclaimerScreen.kt); this is the readable-at-leisure copy. */
 internal fun MainActivity.showLegalNotice() {
-    AlertDialog.Builder(this)
+    LumoraDialog.Builder(this)
         .setTitle(R.string.legal_notice_title)
         .setMessage(R.string.legal_notice)
         .setPositiveButton(getString(R.string.close), null)
@@ -3243,7 +3272,7 @@ internal fun MainActivity.showRecordingStorageDialog(onChanged: () -> Unit = {})
         }
 
         withContext(Dispatchers.Main) {
-            AlertDialog.Builder(this@showRecordingStorageDialog)
+            LumoraDialog.Builder(this@showRecordingStorageDialog)
                 .setTitle(getString(R.string.rec_dest_title))
                 .setMessage(
                     getString(
@@ -3273,7 +3302,7 @@ private fun MainActivity.promptRecordingNasFolder(
         inputType = android.text.InputType.TYPE_CLASS_TEXT
         setSelectAllOnFocus(true)
     }
-    AlertDialog.Builder(this)
+    LumoraDialog.Builder(this)
         .setTitle(getString(R.string.rec_dest_folder_title))
         .setView(input)
         .setPositiveButton(getString(R.string.save)) { _, _ ->
@@ -3372,7 +3401,7 @@ private fun MainActivity.showRecordingNasManualDialog(onChanged: () -> Unit = {}
     addLabel(R.string.rec_nas_manual_folder)
     addField(folderInput)
 
-    val dialog = AlertDialog.Builder(this)
+    val dialog = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.rec_nas_manual_title))
         .setView(ScrollView(this).apply { addView(layout) })
         .setPositiveButton(getString(R.string.save), null)
@@ -3380,7 +3409,7 @@ private fun MainActivity.showRecordingNasManualDialog(onChanged: () -> Unit = {}
         .create()
 
     dialog.setOnShowListener {
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+        dialog.getButton(LumoraDialog.BUTTON_POSITIVE).setOnClickListener {
             val isSmb = smbRadio.isChecked
             val raw = addressInput.text.toString().trim()
             val url = if (isSmb) {
@@ -3466,7 +3495,7 @@ private fun MainActivity.showRecordingNasQrDialog(onChanged: () -> Unit = {}) {
     layout.addView(image)
     layout.addView(timer)
 
-    val dialog = AlertDialog.Builder(this)
+    val dialog = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.rec_nas_qr_title))
         .setView(layout)
         .setNegativeButton(getString(R.string.cancel), null)

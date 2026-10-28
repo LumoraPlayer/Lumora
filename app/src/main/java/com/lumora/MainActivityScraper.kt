@@ -7,7 +7,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
+import com.lumora.ui.dialog.LumoraDialog
 import androidx.core.content.ContextCompat
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
@@ -112,7 +112,7 @@ internal fun MainActivity.showScraperSourceDialog(
     var playbackStarted = false
     lateinit var searchJob: Job
 
-    val dialog = AlertDialog.Builder(this)
+    val dialog = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.scraper_dialog_title, item.name + epTag))
         .setView(container)
         .setNegativeButton(android.R.string.cancel, null)
@@ -123,7 +123,7 @@ internal fun MainActivity.showScraperSourceDialog(
     // Escape hatch from "it is choosing for me" to "I will choose", for when the automatic order
     // gets it wrong - a specific host known to carry the right audio track, say.
     dialog.setButton(
-        AlertDialog.BUTTON_NEUTRAL,
+        LumoraDialog.BUTTON_NEUTRAL,
         getString(R.string.scraper_pick_manually)
     ) { _, _ ->
         searchJob.cancel()
@@ -250,7 +250,9 @@ private fun MainActivity.showScraperSourcePicker(
         clipChildren = false
         clipToPadding = false
     }
-    val scroll = ScrollView(this).apply {
+    val scroll = com.lumora.view.BoundedHeightScrollView(this).apply {
+        // wrap_content, capped by the view itself: a weighted 0dp child of a wrap_content
+        // dialog measures to exactly 0, so the source list never got any height.
         isFillViewport = true
         clipChildren = false
         clipToPadding = false
@@ -259,10 +261,13 @@ private fun MainActivity.showScraperSourcePicker(
     container.addView(status)
     container.addView(
         scroll,
-        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+        LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
     )
 
-    val dialog = AlertDialog.Builder(this)
+    val dialog = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.scraper_dialog_title, item.name + epTag))
         .setView(container)
         .setNegativeButton(android.R.string.cancel, null)

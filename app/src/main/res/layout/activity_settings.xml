@@ -27,7 +27,8 @@
       android:clipToPadding="false"
       android:orientation="horizontal">
 
-    <!-- Nav rail - hidden entirely until a provider is configured (see showProviderSettings()) -->
+    <!-- Nav rail - sections grouped by task; collapses to the floating re-expand pill
+         (see applySettingsRailVisibility() in MainActivitySettings.kt). -->
     <LinearLayout
         android:id="@+id/settingsNavRail"
         android:layout_width="@dimen/settings_nav_rail_width"
@@ -40,7 +41,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="18dp"
+            android:layout_marginStart="@dimen/settings_gap_l"
             android:layout_marginTop="@dimen/settings_gap_xl"
             android:layout_marginBottom="@dimen/settings_gap_l"
             android:gravity="center_vertical"
@@ -53,26 +54,31 @@
                 android:text="@string/settings"
                 android:textColor="@color/text_primary"
                 android:textSize="@dimen/settings_text_section"
+                android:accessibilityHeading="true"
+                android:maxLines="2"
+                android:ellipsize="end"
                 android:fontFamily="@font/inter_bold" />
 
             <LinearLayout
                 android:id="@+id/navCollapseRail"
                 style="@style/Widget.Lumora.SettingsNavRow"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="@dimen/settings_action_button_height"
+                android:layout_height="@dimen/settings_action_button_height"
                 android:layout_marginEnd="@dimen/settings_gap_m"
-                android:padding="@dimen/settings_gap_xs"
-                android:background="@drawable/nav_rail_item_glass">
+                android:background="@drawable/bg_outline_button"
+                android:contentDescription="@string/settings_nav_collapse"
+                android:gravity="center"
+                android:padding="0dp">
+                <!-- Icon-only: a labelled pill here left the localised "Settings" title
+                     (e.g. "Einstellungen") too little room and wrapped it mid-word. The
+                     arrow is the conventional rail-collapse affordance; the toast after
+                     collapsing still names the way back. -->
                 <ImageView
                     android:layout_width="16dp"
                     android:layout_height="16dp"
+                    android:contentDescription="@null"
                     android:src="@drawable/ic_arrow_left"
                     android:tint="@color/nav_icon_tint" />
-                <TextView
-                    style="@style/Widget.Lumora.SettingsNavLabel"
-                    android:layout_marginStart="@dimen/settings_gap_xs"
-                    android:textSize="@dimen/settings_text_caption"
-                    android:text="@string/settings_nav_collapse" />
             </LinearLayout>
         </LinearLayout>
 
@@ -88,7 +94,8 @@
             android:layout_weight="1"
             android:clipChildren="true"
             android:clipToPadding="true"
-            android:scrollbars="none">
+            android:scrollbarStyle="insideInset"
+            android:scrollbars="vertical">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -100,72 +107,75 @@
                 android:paddingTop="@dimen/settings_gap_s"
                 android:paddingBottom="@dimen/settings_gap">
 
-                <LinearLayout android:id="@+id/navGeneral" style="@style/Widget.Lumora.SettingsNavRow" android:tag="0" android:background="@drawable/nav_rail_item_glass">
+                <LinearLayout android:id="@+id/navGeneral" style="@style/Widget.Lumora.SettingsNavRow">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_settings" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/general" />
                 </LinearLayout>
 
-                <LinearLayout android:id="@+id/navProviders" style="@style/Widget.Lumora.SettingsNavRow" android:tag="1" android:background="@drawable/nav_rail_item_glass">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Widget.Lumora.SettingsNavGroup" android:text="@string/settings_nav_group_library" />
+
+                <LinearLayout android:id="@+id/navProviders" style="@style/Widget.Lumora.SettingsNavRow">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_providers" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/providers" />
                 </LinearLayout>
 
-                <LinearLayout android:id="@+id/navPlayback" style="@style/Widget.Lumora.SettingsNavRow" android:tag="2" android:background="@drawable/nav_rail_item_glass">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_playback" android:tint="@color/nav_icon_tint" />
-                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/playback" />
+                <LinearLayout android:id="@+id/navSites" style="@style/Widget.Lumora.SettingsNavRow">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_streaming" android:tint="@color/nav_icon_tint" />
+                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/scraper_settings_title" />
                 </LinearLayout>
 
-                <LinearLayout android:id="@+id/navRecordings" style="@style/Widget.Lumora.SettingsNavRow" android:background="@drawable/nav_rail_item_glass">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_downloads" android:tint="@color/nav_icon_tint" />
-                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/recording_storage" />
-                </LinearLayout>
-
-                <LinearLayout android:id="@+id/navFilters" style="@style/Widget.Lumora.SettingsNavRow" android:tag="3" android:background="@drawable/nav_rail_item_glass">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_filters" android:tint="@color/nav_icon_tint" />
-                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/filters" />
-                </LinearLayout>
-
-                <LinearLayout android:id="@+id/navRegions" style="@style/Widget.Lumora.SettingsNavRow" android:tag="regions" android:background="@drawable/nav_rail_item_glass">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_locality" android:tint="@color/nav_icon_tint" />
-                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/sett_locality_title" />
-                </LinearLayout>
-
-                <LinearLayout android:id="@+id/navPrivacy" style="@style/Widget.Lumora.SettingsNavRow" android:tag="4" android:background="@drawable/nav_rail_item_glass">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_privacy" android:tint="@color/nav_icon_tint" />
-                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/privacy" />
-                </LinearLayout>
-
-                <LinearLayout android:id="@+id/navBackup" style="@style/Widget.Lumora.SettingsNavRow" android:tag="5" android:background="@drawable/nav_rail_item_glass">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_backup" android:tint="@color/nav_icon_tint" />
-                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/backup_restore" />
-                </LinearLayout>
-
-                <LinearLayout android:id="@+id/navEpg" style="@style/Widget.Lumora.SettingsNavRow" android:tag="6" android:background="@drawable/nav_rail_item_glass">
+                <LinearLayout android:id="@+id/navEpg" style="@style/Widget.Lumora.SettingsNavRow">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_epg" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/epg_sources" />
                 </LinearLayout>
 
-                <LinearLayout android:id="@+id/navSports" style="@style/Widget.Lumora.SettingsNavRow" android:background="@drawable/nav_rail_item_glass">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Widget.Lumora.SettingsNavGroup" android:text="@string/settings_nav_group_browsing" />
+
+                <LinearLayout android:id="@+id/navFilters" style="@style/Widget.Lumora.SettingsNavRow">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_filters" android:tint="@color/nav_icon_tint" />
+                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/filters" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/navRegions" style="@style/Widget.Lumora.SettingsNavRow">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_region" android:tint="@color/nav_icon_tint" />
+                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/sett_locality_title" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/navSports" style="@style/Widget.Lumora.SettingsNavRow">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_sports" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/sports_settings_title" />
                 </LinearLayout>
 
-                <LinearLayout android:id="@+id/navDownloads" style="@style/Widget.Lumora.SettingsNavRow" android:tag="7" android:background="@drawable/nav_rail_item_glass">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Widget.Lumora.SettingsNavGroup" android:text="@string/playback" />
+
+                <LinearLayout android:id="@+id/navPlayback" style="@style/Widget.Lumora.SettingsNavRow">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_playback" android:tint="@color/nav_icon_tint" />
+                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/playback" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/navRecordings" style="@style/Widget.Lumora.SettingsNavRow">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_storage" android:tint="@color/nav_icon_tint" />
+                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/recording_storage" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/navDownloads" style="@style/Widget.Lumora.SettingsNavRow">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_downloads" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/downloads" />
                 </LinearLayout>
 
-                <LinearLayout android:id="@+id/navPlugins" style="@style/Widget.Lumora.SettingsNavRow" android:tag="8" android:background="@drawable/nav_rail_item_glass">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Widget.Lumora.SettingsNavGroup" android:text="@string/settings_nav_group_connections" />
+
+                <LinearLayout android:id="@+id/navPlugins" style="@style/Widget.Lumora.SettingsNavRow">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_plugins" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/plugins" />
-                    <TextView
+                    <ImageView
                         android:id="@+id/navPluginsCaret"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
                         android:layout_marginStart="@dimen/settings_gap_s"
-                        android:text="▸"
-                        android:textColor="@color/text_tertiary"
-                        android:textSize="@dimen/settings_text_caption" />
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_chevron_right"
+                        android:tint="@color/nav_icon_tint" />
                 </LinearLayout>
 
                 <!-- Installed plugins, as children of the Plugins row. Populated at runtime by
@@ -182,32 +192,39 @@
                     android:showDividers="middle"
                     android:visibility="gone" />
 
-                <LinearLayout android:id="@+id/navTrakt" style="@style/Widget.Lumora.SettingsNavRow" android:background="@drawable/nav_rail_item_glass">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_about" android:tint="@color/nav_icon_tint" />
+                <LinearLayout android:id="@+id/navTrakt" style="@style/Widget.Lumora.SettingsNavRow">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_history" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/trakt" />
                 </LinearLayout>
 
-                <LinearLayout android:id="@+id/navDebrid" style="@style/Widget.Lumora.SettingsNavRow" android:background="@drawable/nav_rail_item_glass">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_downloads" android:tint="@color/nav_icon_tint" />
+                <LinearLayout android:id="@+id/navDebrid" style="@style/Widget.Lumora.SettingsNavRow">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_cloud" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/debrid" />
                 </LinearLayout>
 
-                <LinearLayout android:id="@+id/navSimkl" style="@style/Widget.Lumora.SettingsNavRow" android:background="@drawable/nav_rail_item_glass">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_about" android:tint="@color/nav_icon_tint" />
+                <LinearLayout android:id="@+id/navSimkl" style="@style/Widget.Lumora.SettingsNavRow">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_bookmark" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/simkl" />
                 </LinearLayout>
 
-                <LinearLayout android:id="@+id/navDiagnostics" style="@style/Widget.Lumora.SettingsNavRow" android:background="@drawable/nav_rail_item_glass">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Widget.Lumora.SettingsNavGroup" android:text="@string/settings_nav_group_system" />
+
+                <LinearLayout android:id="@+id/navPrivacy" style="@style/Widget.Lumora.SettingsNavRow">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_privacy" android:tint="@color/nav_icon_tint" />
+                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/privacy" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/navBackup" style="@style/Widget.Lumora.SettingsNavRow">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_backup" android:tint="@color/nav_icon_tint" />
+                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/backup_restore" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/navDiagnostics" style="@style/Widget.Lumora.SettingsNavRow">
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_activity" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/diagnostics" />
                 </LinearLayout>
 
-                <LinearLayout android:id="@+id/navSites" style="@style/Widget.Lumora.SettingsNavRow" android:background="@drawable/nav_rail_item_glass">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_providers" android:tint="@color/nav_icon_tint" />
-                    <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/scraper_settings_title" />
-                </LinearLayout>
-
-                <LinearLayout android:id="@+id/navAbout" style="@style/Widget.Lumora.SettingsNavRow" android:tag="9" android:background="@drawable/nav_rail_item_glass">
+                <LinearLayout android:id="@+id/navAbout" style="@style/Widget.Lumora.SettingsNavRow">
                     <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_about" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/about" />
                 </LinearLayout>
@@ -257,6 +274,13 @@
                 android:visibility="gone">
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="@dimen/settings_gap_l" android:text="@string/general" style="@style/TextAppearance.Lumora.SettingsTitle" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/settings_gap_s"
+                    android:text="@string/settings_group_app_behaviour"
+                    style="@style/TextAppearance.Lumora.SettingsGroupLabel" />
             </LinearLayout>
 
             <!-- Pane: Streaming sites (com.lumora.scraper). Rows are built by
@@ -323,10 +347,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/settings_gap_xl"
                     android:text="@string/your_providers"
-                    android:letterSpacing="0.08"
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="@dimen/settings_text_caption"
-                    android:fontFamily="@font/inter_bold" />
+                    style="@style/TextAppearance.Lumora.SettingsGroupLabel" />
 
                 <!-- Populated at runtime from IptvProviderStore - see renderIptvProviderList()
                      in showProviderSettings(). -->
@@ -439,7 +460,7 @@
                             android:layout_height="wrap_content"
                             android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
-                            android:layout_marginEnd="5dp"
+                            android:layout_marginEnd="@dimen/settings_gap_s"
                             android:background="@drawable/card_surface_background"
                             android:clickable="true"
                             android:focusable="true"
@@ -460,7 +481,7 @@
                             android:layout_height="wrap_content"
                             android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
-                            android:layout_marginHorizontal="5dp"
+                            android:layout_marginHorizontal="@dimen/settings_gap_s"
                             android:background="@drawable/card_surface_background"
                             android:clickable="true"
                             android:focusable="true"
@@ -481,7 +502,7 @@
                             android:layout_height="wrap_content"
                             android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
-                            android:layout_marginStart="5dp"
+                            android:layout_marginStart="@dimen/settings_gap_s"
                             android:background="@drawable/card_surface_background"
                             android:clickable="true"
                             android:focusable="true"
@@ -504,7 +525,7 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_marginTop="@dimen/settings_gap_m"
                         android:clipChildren="false"
                             android:clipToPadding="false"
                         android:orientation="horizontal">
@@ -515,7 +536,7 @@
                             android:layout_height="wrap_content"
                             android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
-                            android:layout_marginEnd="5dp"
+                            android:layout_marginEnd="@dimen/settings_gap_s"
                             android:background="@drawable/card_surface_background"
                             android:clickable="true"
                             android:focusable="true"
@@ -536,7 +557,7 @@
                             android:layout_height="wrap_content"
                             android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
-                            android:layout_marginHorizontal="5dp"
+                            android:layout_marginHorizontal="@dimen/settings_gap_s"
                             android:background="@drawable/card_surface_background"
                             android:clickable="true"
                             android:focusable="true"
@@ -557,7 +578,7 @@
                             android:layout_height="wrap_content"
                             android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
-                            android:layout_marginStart="5dp"
+                            android:layout_marginStart="@dimen/settings_gap_s"
                             android:background="@drawable/card_surface_background"
                             android:clickable="true"
                             android:focusable="true"
@@ -579,7 +600,7 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_marginTop="@dimen/settings_gap_m"
                         android:clipChildren="false"
                             android:clipToPadding="false"
                         android:orientation="horizontal">
@@ -590,7 +611,7 @@
                             android:layout_height="wrap_content"
                             android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
-                            android:layout_marginEnd="5dp"
+                            android:layout_marginEnd="@dimen/settings_gap_s"
                             android:background="@drawable/card_surface_background"
                             android:clickable="true"
                             android:focusable="true"
@@ -611,7 +632,7 @@
                             android:layout_height="wrap_content"
                             android:minHeight="@dimen/settings_type_card_height"
                             android:layout_weight="1"
-                            android:layout_marginStart="5dp"
+                            android:layout_marginStart="@dimen/settings_gap_s"
                             android:background="@drawable/card_surface_background"
                             android:clickable="true"
                             android:focusable="true"
@@ -736,7 +757,7 @@
 
                         <FrameLayout
                             android:id="@+id/settingsQrFrame"
-                            android:layout_width="128dp"
+                            android:layout_width="@dimen/settings_qr_size"
                             android:layout_height="@dimen/settings_qr_size"
                             android:layout_marginTop="@dimen/settings_gap_s"
                             android:background="@drawable/bg_qr_card"
@@ -1425,7 +1446,7 @@
                             style="@style/Widget.Lumora.SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="@dimen/settings_action_button_height"
-                            android:layout_marginEnd="5dp"
+                            android:layout_marginEnd="@dimen/settings_gap_s"
                             android:layout_weight="1"
                             android:clickable="true"
                             android:focusable="true"
@@ -1448,7 +1469,7 @@
                             style="@style/Widget.Lumora.SecondaryButton"
                             android:layout_width="0dp"
                             android:layout_height="@dimen/settings_action_button_height"
-                            android:layout_marginStart="5dp"
+                            android:layout_marginStart="@dimen/settings_gap_s"
                             android:layout_weight="1"
                             android:clickable="true"
                             android:focusable="true"
@@ -1527,8 +1548,6 @@
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/playback_settings" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap" android:background="@color/divider" />
-
                 <LinearLayout
                     android:id="@+id/settingsAvOffset"
                     android:layout_width="match_parent"
@@ -1592,8 +1611,6 @@
                         android:visibility="gone" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap" android:background="@color/divider" />
-
                 <LinearLayout
                     android:id="@+id/settingsConnectNas"
                     android:layout_width="match_parent"
@@ -1619,8 +1636,6 @@
                         android:textSize="@dimen/settings_text_caption"
                         android:fontFamily="@font/inter_regular" />
                 </LinearLayout>
-
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap" android:background="@color/divider" />
 
                 <LinearLayout
                     android:id="@+id/settingsAddNasManual"
@@ -1660,6 +1675,13 @@
                 android:visibility="gone">
 
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="@dimen/settings_gap_l" android:text="@string/filters" style="@style/TextAppearance.Lumora.SettingsTitle" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/settings_gap_s"
+                    android:text="@string/settings_group_catalogue"
+                    style="@style/TextAppearance.Lumora.SettingsGroupLabel" />
 
                 <CheckBox
                     android:id="@+id/settingsHideNonEnglish"
@@ -2101,10 +2123,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/add_a_plugin"
-                    android:letterSpacing="0.08"
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="@dimen/settings_text_caption"
-                    android:fontFamily="@font/inter_bold" />
+                    style="@style/TextAppearance.Lumora.SettingsGroupLabel" />
 
                 <LinearLayout
                     android:id="@+id/settingsPluginInstallUrl"
@@ -2118,7 +2137,7 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:padding="@dimen/settings_gap_l"
-                    android:stateListAnimator="@animator/focus_scale"
+                    android:stateListAnimator="@animator/focus_scale_flat"
                     android:clipChildren="false"
                     android:clipToPadding="false">
 
@@ -2153,7 +2172,7 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:padding="@dimen/settings_gap_l"
-                    android:stateListAnimator="@animator/focus_scale"
+                    android:stateListAnimator="@animator/focus_scale_flat"
                     android:clipChildren="false"
                     android:clipToPadding="false">
 
@@ -2188,7 +2207,7 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:padding="@dimen/settings_gap_l"
-                    android:stateListAnimator="@animator/focus_scale"
+                    android:stateListAnimator="@animator/focus_scale_flat"
                     android:clipChildren="false"
                     android:clipToPadding="false">
 
@@ -2214,10 +2233,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/settings_gap_xl"
                     android:text="@string/plugin_stores"
-                    android:letterSpacing="0.08"
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="@dimen/settings_text_caption"
-                    android:fontFamily="@font/inter_bold" />
+                    style="@style/TextAppearance.Lumora.SettingsGroupLabel" />
 
                 <LinearLayout
                     android:id="@+id/settingsPluginStoreList"
@@ -2252,7 +2268,7 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:padding="@dimen/settings_gap_ml"
-                    android:stateListAnimator="@animator/focus_scale"
+                    android:stateListAnimator="@animator/focus_scale_flat"
                     android:clipChildren="false"
                     android:clipToPadding="false">
 
@@ -2269,10 +2285,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/installed"
-                    android:letterSpacing="0.08"
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="@dimen/settings_text_caption"
-                    android:fontFamily="@font/inter_bold" />
+                    style="@style/TextAppearance.Lumora.SettingsGroupLabel" />
 
                 <LinearLayout
                     android:id="@+id/settingsPluginList"
@@ -2820,8 +2833,6 @@
                     <TextView android:id="@+id/settingsAppVersion" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_regular" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap_m" android:background="@color/divider" />
-
                 <LinearLayout
                     android:id="@+id/settingsAppNameRow"
                     android:layout_width="match_parent"
@@ -2836,8 +2847,6 @@
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/app_name" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_regular" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap_m" android:background="@color/divider" />
-
                 <LinearLayout
                     android:id="@+id/settingsPlatformRow"
                     android:layout_width="match_parent"
@@ -2851,8 +2860,6 @@
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/about_platform_label" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/about_platform_value" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_regular" />
                 </LinearLayout>
-
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap_m" android:background="@color/divider" />
 
                 <LinearLayout
                     android:id="@+id/settingsGithubLink"
@@ -2873,8 +2880,6 @@
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/github_url" android:textColor="@color/primary_light" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_regular" />
                 </LinearLayout>
 
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap_m" android:background="@color/divider" />
-
                 <LinearLayout
                     android:id="@+id/settingsDiscordLink"
                     android:layout_width="match_parent"
@@ -2893,8 +2898,6 @@
                     <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/discord" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/discord_url" android:textColor="@color/primary_light" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_regular" />
                 </LinearLayout>
-
-                <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap_m" android:background="@color/divider" />
 
                 <LinearLayout
                     android:id="@+id/settingsCheckUpdate"
@@ -2942,7 +2945,7 @@
                     android:orientation="horizontal"
                     android:paddingHorizontal="@dimen/settings_gap"
                     android:paddingVertical="@dimen/settings_gap_xs"
-                    android:stateListAnimator="@animator/focus_scale">
+                    android:stateListAnimator="@animator/focus_scale_flat">
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -2988,7 +2991,7 @@
                     android:orientation="horizontal"
                     android:paddingHorizontal="@dimen/settings_gap"
                     android:paddingVertical="@dimen/settings_row_padding_vertical"
-                    android:stateListAnimator="@animator/focus_scale">
+                    android:stateListAnimator="@animator/focus_scale_flat">
 
                     <CheckBox
                         android:id="@+id/pluginDetailEnabled"
@@ -3026,7 +3029,7 @@
                         android:focusable="true"
                         android:gravity="center"
                         android:paddingHorizontal="@dimen/settings_gap"
-                        android:stateListAnimator="@animator/focus_scale"
+                        android:stateListAnimator="@animator/focus_scale_flat"
                         android:clipChildren="false"
                         android:clipToPadding="false">
                         <TextView
@@ -3049,7 +3052,7 @@
                         android:focusable="true"
                         android:gravity="center"
                         android:paddingHorizontal="@dimen/settings_gap"
-                        android:stateListAnimator="@animator/focus_scale"
+                        android:stateListAnimator="@animator/focus_scale_flat"
                         android:clipChildren="false"
                         android:clipToPadding="false">
                         <TextView
@@ -3071,7 +3074,7 @@
                         android:focusable="true"
                         android:gravity="center"
                         android:paddingHorizontal="@dimen/settings_gap"
-                        android:stateListAnimator="@animator/focus_scale"
+                        android:stateListAnimator="@animator/focus_scale_flat"
                         android:clipChildren="false"
                         android:clipToPadding="false">
                         <TextView
@@ -3098,10 +3101,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/results"
-                        android:letterSpacing="0.08"
-                        android:textColor="@color/text_tertiary"
-                        android:textSize="@dimen/settings_text_caption"
-                        android:fontFamily="@font/inter_bold" />
+                        style="@style/TextAppearance.Lumora.SettingsGroupLabel" />
 
                     <LinearLayout
                         android:layout_width="match_parent"

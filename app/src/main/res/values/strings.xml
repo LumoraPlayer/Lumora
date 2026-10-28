@@ -298,11 +298,22 @@
     <string name="categories">Categories</string>
     <string name="show_categories">Show categories</string>
     <string name="categories_hidden_hint">Categories hidden — tap “Categories” to show</string>
-    <!-- Collapsed Settings rail: the last nav row that hides it, and the pill + one-shot
+    <!-- Collapsed Settings rail: the header button that hides it, and the pill + one-shot
          hint that bring it back - mirrors the category sidebar's collapse affordances. -->
     <string name="settings_nav_collapse">Collapse</string>
     <string name="show_settings">Show settings</string>
     <string name="settings_hidden_hint">Settings hidden — tap “Settings” to show</string>
+    <!-- Nav rail section headings. Grouping turns the 18 flat rows into five short,
+         scannable clusters instead of one long list. -->
+    <string name="settings_nav_group_library">Your library</string>
+    <string name="settings_nav_group_browsing">Browsing</string>
+    <string name="settings_nav_group_connections">Connections</string>
+    <string name="settings_nav_group_system">System</string>
+    <!-- Section headings inside a settings pane. -->
+    <string name="settings_group_app_behaviour">App behaviour</string>
+    <string name="settings_group_language">Language</string>
+    <string name="settings_group_catalogue">Catalogue</string>
+    <string name="settings_group_subtitles_audio">Subtitles &amp; audio</string>
     <string name="categorize_live">Categorize live TV</string>
     <string name="categorize_vod">Categorize movies &amp; series</string>
     <string name="group_channels">Group duplicate channels</string>

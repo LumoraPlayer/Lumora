@@ -2,14 +2,17 @@
 package com.lumora.data.catalog
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.lumora.data.local.CatalogDatabase
 import com.lumora.data.local.dao.CatalogCategoryCount
 import com.lumora.data.local.dao.CatalogLeafRow
 import com.lumora.data.local.entity.CatalogChannelEntity
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import com.lumora.util.normalizeForSearch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 /**
  * Read side of the persisted catalogue.
@@ -23,12 +26,44 @@ class CatalogRepository private constructor(
     private val context: Context? = null
 ) {
 
+    /** Set once this process has walked the catalogue's missing search keys. */
+    @Volatile private var searchBackfillDone = false
+
     private val dao get() = db.catalogChannelDao()
 
     /** Resident rows when the enabled playlists are under the 40 MB cutoff, else null. */
     private suspend fun resident(): ResidentCatalog.State? =
         ResidentCatalog.current()
             ?: context?.let { ResidentCatalog.ensureLoaded(it, dao) }
+
+    /**
+     * Fills `searchName` for rows written before the v2 column existed.
+     *
+     * Runs once per process, in pages, each page in one transaction. It deliberately does
+     * not run inside the Room migration: the catalogue can be six figures of rows and the
+     * migration opens on the first launch after an update, where a full-table Kotlin pass
+     * would hold up the catalogue paint. Search falls back to the original `name` for rows
+     * still carrying the empty key, so nothing is unreachable while this runs. A process
+     * that dies midway resumes from the last uid on the next start.
+     */
+    suspend fun backfillSearchNames() = withContext(Dispatchers.IO) {
+        if (searchBackfillDone) return@withContext
+        var after = ""
+        while (true) {
+            val page = dao.searchBackfillPage(after, SEARCH_BACKFILL_PAGE)
+            if (page.isEmpty()) break
+            // One transaction per page: 2,000 single-row commits would make the pass an
+            // eMMC benchmark; the whole page's updates are one fsync in WAL mode.
+            db.withTransaction {
+                for (row in page) {
+                    dao.updateSearchName(row.uid, row.name, normalizeForSearch(row.name))
+                }
+            }
+            after = page.last().uid
+            if (page.size < SEARCH_BACKFILL_PAGE) break
+        }
+        searchBackfillDone = true
+    }
 
     /** Rebuilds (or clears) the resident read model after a catalogue write. */
     suspend fun refreshResidentCatalog() {
@@ -110,10 +145,11 @@ class CatalogRepository private constructor(
 
     suspend fun search(query: String, mediaType: MediaType? = null, limit: Int = 200): List<Channel> =
         withContext(Dispatchers.IO) {
-            val trimmed = query.trim()
-            if (trimmed.isEmpty()) return@withContext emptyList()
-            resident()?.let { return@withContext it.search(trimmed, mediaType, limit) }
-            dao.search(trimmed, mediaType?.name, limit).map(CatalogMapping::toChannel)
+            val needle = normalizeForSearch(query)
+            if (needle.isEmpty()) return@withContext emptyList()
+            val legacy = legacyNeedle(query)
+            resident()?.let { return@withContext it.search(needle, mediaType, limit) }
+            dao.search(needle, legacy, mediaType?.name, limit).map(CatalogMapping::toChannel)
         }
 
     suspend fun byUid(uid: String): Channel? = withContext(Dispatchers.IO) {
@@ -397,9 +433,11 @@ class CatalogRepository private constructor(
     /** Candidates for the Discover title fallback, pre-filtered in SQL by the longest word. */
     suspend fun vodByTitleProbe(mediaType: MediaType, probe: String, limit: Int = 200): List<Channel> =
         withContext(Dispatchers.IO) {
-            if (probe.isBlank()) return@withContext emptyList()
-            resident()?.let { return@withContext it.vodByTitleProbe(mediaType, probe, limit) }
-            dao.vodByTitleProbe(mediaType.name, probe, limit).map(CatalogMapping::toChannel)
+            val needle = normalizeForSearch(probe)
+            if (needle.isEmpty()) return@withContext emptyList()
+            resident()?.let { return@withContext it.vodByTitleProbe(mediaType, needle, limit) }
+            dao.vodByTitleProbe(mediaType.name, needle, legacyNeedle(probe), limit)
+                .map(CatalogMapping::toChannel)
         }
 
     /** Jellyfin/Plex copies of one media type, for watched-mark propagation. */
@@ -415,10 +453,12 @@ class CatalogRepository private constructor(
         probe: String,
         limit: Int = 5000
     ): List<Channel> = withContext(Dispatchers.IO) {
+        val needle = normalizeForSearch(probe)
         resident()?.let {
-            return@withContext it.m3uSeriesCandidates(providerId, showId, probe, limit)
+            return@withContext it.m3uSeriesCandidates(providerId, showId, needle, limit)
         }
-        dao.m3uSeriesCandidates(providerId, showId, probe, limit).map(CatalogMapping::toChannel)
+        dao.m3uSeriesCandidates(providerId, showId, needle, legacyNeedle(probe), limit)
+            .map(CatalogMapping::toChannel)
     }
 
     suspend fun vodSearch(
@@ -428,12 +468,12 @@ class CatalogRepository private constructor(
         hideAdult: Boolean,
         limit: Int
     ): List<Channel> = withContext(Dispatchers.IO) {
-        val trimmed = query.trim()
-        if (trimmed.isEmpty()) return@withContext emptyList()
+        val needle = normalizeForSearch(query)
+        if (needle.isEmpty()) return@withContext emptyList()
         resident()?.let {
-            return@withContext it.vodSearch(mediaType, trimmed, englishOnly, hideAdult, limit)
+            return@withContext it.vodSearch(mediaType, needle, englishOnly, hideAdult, limit)
         }
-        dao.vodSearch(mediaType.name, trimmed, englishOnly, hideAdult, limit)
+        dao.vodSearch(mediaType.name, needle, legacyNeedle(query), englishOnly, hideAdult, limit)
             .map(CatalogMapping::toChannel)
     }
 
@@ -626,3 +666,9 @@ internal fun CatalogChannelEntity.mediaTypeOrNull(): MediaType? =
 
 /** SQLite builds older than 3.32 cap bound variables at 999; stay well under it. */
 private const val SQL_VARIABLE_CHUNK = 900
+
+/** Rows per search-key backfill transaction (see [CatalogRepository.backfillSearchNames]). */
+private const val SEARCH_BACKFILL_PAGE = 2_000
+
+/** The pre-normalisation query used for rows the backfill has not reached yet. */
+private fun legacyNeedle(value: String): String = value.trim().lowercase(Locale.ROOT)

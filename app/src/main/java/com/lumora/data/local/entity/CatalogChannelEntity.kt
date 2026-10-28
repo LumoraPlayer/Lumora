@@ -2,6 +2,7 @@
 package com.lumora.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -19,10 +20,10 @@ import androidx.room.PrimaryKey
  * unique within one provider - two panels both number their streams from 1 - so it cannot
  * be the primary key once several providers are merged.
  *
- * [groupId], [filterKey], [isEnglish], [isAdult], [qualityScore] and [hasPoster] are derived
- * from the raw row once, at ingest. Every one of them used to be recomputed over the whole
- * catalogue on each cold start; storing them is what lets the VOD surfaces be answered by
- * indexed SQL instead of a full Kotlin pass.
+ * [groupId], [filterKey], [searchName], [isEnglish], [isAdult], [qualityScore] and [hasPoster]
+ * are derived from the raw row once, at ingest. Every one of them used to be recomputed over
+ * the whole catalogue on each cold start; storing them is what lets the VOD surfaces be
+ * answered by indexed SQL instead of a full Kotlin pass.
  */
 @Entity(
     tableName = "catalog_channels",
@@ -55,6 +56,11 @@ data class CatalogChannelEntity(
     val providerId: String,
 
     val name: String,
+    /** [com.lumora.util.normalizeForSearch] of [name]: the key every search matches on.
+     *  Display always uses [name]; this column exists so Arabic spelling variants, Tashkeel
+     *  and Tatweel are folded once at ingest instead of once per query row. */
+    @ColumnInfo(defaultValue = "")
+    val searchName: String = "",
     val url: String,
     val logoUrl: String? = null,
     val posterUrl: String? = null,

@@ -56,6 +56,9 @@
 
     <dimen name="settings_nav_icon_size">22dp</dimen>
     <dimen name="settings_nav_rail_width">190dp</dimen>
+    <dimen name="settings_nav_row_min_height">36dp</dimen>
+    <dimen name="settings_nav_child_min_height">32dp</dimen>
+    <dimen name="settings_nav_group_indent">38dp</dimen>
     <dimen name="settings_type_card_height">40dp</dimen>
 
     <!-- ~30% off every gap in the settings layout (see values/dimens.xml for what these are

@@ -11,6 +11,7 @@ import com.lumora.util.isAdultCategory
 import com.lumora.util.isNonEnglishTitle
 import com.lumora.util.liveQualityScore
 import com.lumora.util.normalizeTitleForGrouping
+import com.lumora.util.normalizeForSearch
 import com.lumora.util.releaseDateSortKey
 import com.lumora.util.seriesShowKey
 import com.lumora.util.vodQualityScore
@@ -74,6 +75,7 @@ object CatalogMapping {
             sourceId = resolved.id,
             providerId = resolved.sourceProviderId.orEmpty(),
             name = resolved.name,
+            searchName = normalizeForSearch(resolved.name),
             url = resolved.url,
             logoUrl = resolved.logoUrl,
             posterUrl = resolved.posterUrl,

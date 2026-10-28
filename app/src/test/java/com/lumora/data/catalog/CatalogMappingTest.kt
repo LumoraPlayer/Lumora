@@ -106,6 +106,7 @@ class CatalogMappingTest {
         val row = CatalogMapping.toEntity(channel, orderIndex = 9)
 
         assertEquals("the breadwinner", row.groupId)
+        assertEquals("4k-max - the breadwinner (2026) (us)", row.searchName)
         assertEquals("Drama", row.filterKey)
         assertEquals("2026", row.year)
         assertEquals(2026, row.yearSort)
@@ -114,6 +115,21 @@ class CatalogMappingTest {
         assertFalse(row.isAdult)
         assertFalse(row.hasPoster)
         assertTrue(row.dateSort > 0)
+    }
+
+    @Test
+    fun `search name folds Arabic variants but the display name keeps them`() {
+        val channel = Channel(
+            id = "8",
+            name = "أحمد",
+            url = "u",
+            mediaType = MediaType.MOVIE
+        )
+
+        val row = CatalogMapping.toEntity(channel, orderIndex = 0)
+
+        assertEquals("أحمد", row.name)
+        assertEquals("احمد", row.searchName)
     }
 
     @Test
