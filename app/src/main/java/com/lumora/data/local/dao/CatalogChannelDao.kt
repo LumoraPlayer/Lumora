@@ -104,6 +104,12 @@ interface CatalogChannelDao {
     @Query("SELECT COUNT(*) FROM catalog_channels")
     suspend fun count(): Int
 
+    /** Every row, for the resident (small-catalogue) read model. Only called when the
+     *  enabled providers' measured payload is under the RAM cutoff. */
+    @Query("SELECT * FROM catalog_channels")
+    suspend fun allRows(): List<CatalogChannelEntity>
+
+
     @Query("SELECT COUNT(*) FROM catalog_channels WHERE providerId = :providerId")
     suspend fun countForProvider(providerId: String): Int
 

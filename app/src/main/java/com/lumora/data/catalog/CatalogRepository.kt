@@ -18,23 +18,55 @@ import kotlinx.coroutines.withContext
  * real work (header/DRM decoding included) and the callers are UI coroutines. Pages are
  * capped by the caller; nothing here ever returns the whole VOD catalogue.
  */
-class CatalogRepository private constructor(private val db: CatalogDatabase) {
+class CatalogRepository private constructor(
+    private val db: CatalogDatabase,
+    private val context: Context? = null
+) {
 
     private val dao get() = db.catalogChannelDao()
 
+    /** Resident rows when the enabled playlists are under the 40 MB cutoff, else null. */
+    private suspend fun resident(): ResidentCatalog.State? =
+        ResidentCatalog.current()
+            ?: context?.let { ResidentCatalog.ensureLoaded(it, dao) }
+
+    /** Rebuilds (or clears) the resident read model after a catalogue write. */
+    suspend fun refreshResidentCatalog() {
+        val ctx = context ?: return
+        CatalogMode.invalidate()
+        ResidentCatalog.refresh(ctx, dao)
+    }
+
+    /** Warms the resident model before the first VOD read; no-op for a large catalogue. */
+    suspend fun preloadResidentCatalog() {
+        val ctx = context ?: return
+        ResidentCatalog.ensureLoaded(ctx, dao)
+    }
+
+    /** The resident rows when active, or null when this catalogue uses the Room path. */
+    suspend fun residentCatalog(): ResidentCatalog.State? = resident()
+
     suspend fun counts(): Map<MediaType, Int> = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.countsByType() }
         dao.countsByType().mapNotNull { row ->
             runCatching { MediaType.valueOf(row.mediaType) }.getOrNull()?.let { it to row.count }
         }.toMap()
     }
 
-    suspend fun count(): Int = withContext(Dispatchers.IO) { dao.count() }
+    suspend fun count(): Int = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.count() }
+        dao.count()
+    }
 
     suspend fun countForProvider(providerId: String): Int =
-        withContext(Dispatchers.IO) { dao.countForProvider(providerId) }
+        withContext(Dispatchers.IO) {
+            resident()?.let { return@withContext it.countForProvider(providerId) }
+            dao.countForProvider(providerId)
+        }
 
     /** The one list that stays resident for the session, read from the database in pages. */
     suspend fun live(): List<Channel> = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.liveChannels() }
         val out = ArrayList<Channel>(60_000)
         var afterOrder = Int.MIN_VALUE
         var afterUid = ""
@@ -53,6 +85,7 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
 
     suspend fun page(mediaType: MediaType, offset: Int, limit: Int): List<Channel> =
         withContext(Dispatchers.IO) {
+            resident()?.let { return@withContext it.page(mediaType, offset, limit) }
             dao.pageByType(mediaType.name, limit, offset).map(CatalogMapping::toChannel)
         }
 
@@ -62,6 +95,7 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         offset: Int,
         limit: Int
     ): List<Channel> = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.pageCategory(mediaType, categoryId, offset, limit) }
         dao.pageByCategory(mediaType.name, categoryId, limit, offset).map(CatalogMapping::toChannel)
     }
 
@@ -69,10 +103,12 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         withContext(Dispatchers.IO) {
             val trimmed = query.trim()
             if (trimmed.isEmpty()) return@withContext emptyList()
+            resident()?.let { return@withContext it.search(trimmed, mediaType, limit) }
             dao.search(trimmed, mediaType?.name, limit).map(CatalogMapping::toChannel)
         }
 
     suspend fun byUid(uid: String): Channel? = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.byUid(uid) }
         dao.byUid(uid)?.let(CatalogMapping::toChannel)
     }
 
@@ -82,12 +118,16 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         sourceId: String,
         providerId: String? = null
     ): Channel? = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.bySourceId(mediaType, sourceId, providerId) }
         dao.bySourceId(mediaType.name, sourceId, providerId)
             .firstOrNull()?.let(CatalogMapping::toChannel)
     }
 
     suspend fun categories(mediaType: MediaType): List<CatalogCategoryCount> =
-        withContext(Dispatchers.IO) { dao.categoryCounts(mediaType.name) }
+        withContext(Dispatchers.IO) {
+            resident()?.let { return@withContext it.categories(mediaType) }
+            dao.categoryCounts(mediaType.name)
+        }
 
     // ── VOD (movies / series) ───────────────────────
 
@@ -100,6 +140,9 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         offset: Int,
         limit: Int
     ): List<Channel> = withContext(Dispatchers.IO) {
+        resident()?.let {
+            return@withContext it.vodPage(mediaType, filterKeys, englishOnly, hideAdult, offset, limit)
+        }
         if (filterKeys != null && filterKeys.size > SQL_VARIABLE_CHUNK) {
             return@withContext chunkedVodPage(mediaType, filterKeys, englishOnly, hideAdult, offset, limit)
         }
@@ -151,6 +194,9 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         englishOnly: Boolean,
         hideAdult: Boolean
     ): Int = withContext(Dispatchers.IO) {
+        resident()?.let {
+            return@withContext it.vodCardCount(mediaType, filterKeys, englishOnly, hideAdult)
+        }
         if (filterKeys != null && filterKeys.size > SQL_VARIABLE_CHUNK) {
             // A title can be filed under categories from two chunks, so distinct groups are
             // unioned rather than adding the per-chunk counts (which would count it twice).
@@ -173,12 +219,14 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         englishOnly: Boolean,
         hideAdult: Boolean
     ): List<CatalogLeafRow> = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.vodLeaves(mediaType, englishOnly, hideAdult) }
         dao.vodLeaves(mediaType.name, englishOnly, hideAdult)
     }
 
     /** A title's copies, best first. Live items have no stored groups - callers keep using
      *  `liveVersions` for those. */
     suspend fun vodVersions(channel: Channel): List<Channel> = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.vodVersions(channel) }
         val group = CatalogMapping.groupIdOf(channel) ?: return@withContext listOf(channel)
         dao.vodVersions(channel.mediaType.name, group)
             .map(CatalogMapping::toChannel)
@@ -191,6 +239,7 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         mediaType: MediaType,
         channels: Collection<Channel>
     ): Map<String, List<Channel>> = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.vodVersionGroups(mediaType, channels) }
         val groups = channels.mapNotNull { CatalogMapping.groupIdOf(it) }.distinct()
         if (groups.isEmpty()) return@withContext emptyMap()
         val out = HashMap<String, MutableList<Channel>>()
@@ -213,6 +262,11 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         offset: Int,
         limit: Int
     ): List<Channel> = withContext(Dispatchers.IO) {
+        resident()?.let {
+            return@withContext it.vodPageBySourceIds(
+                mediaType, sourceIds, englishOnly, hideAdult, offset, limit
+            )
+        }
         if (sourceIds.isEmpty()) return@withContext emptyList()
         if (sourceIds.size > SQL_VARIABLE_CHUNK) {
             return@withContext chunkedVodPageBySourceIds(
@@ -230,6 +284,9 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         englishOnly: Boolean,
         hideAdult: Boolean
     ): Int = withContext(Dispatchers.IO) {
+        resident()?.let {
+            return@withContext it.vodCardCountBySourceIds(mediaType, sourceIds, englishOnly, hideAdult)
+        }
         if (sourceIds.isEmpty()) return@withContext 0
         if (sourceIds.size <= SQL_VARIABLE_CHUNK) {
             return@withContext dao.vodCardCountBySourceIds(
@@ -280,7 +337,10 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
 
     /** Cheap fingerprint for the row-builder cache. */
     suspend fun vodVersionKey(mediaType: MediaType): String =
-        withContext(Dispatchers.IO) { dao.vodVersionKey(mediaType.name) }
+        withContext(Dispatchers.IO) {
+            resident()?.let { return@withContext it.vodVersionKey(mediaType) }
+            dao.vodVersionKey(mediaType.name)
+        }
 
     /**
      * Walks every VOD title card (movies then series), one database page at a time.
@@ -290,6 +350,7 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
      * only thing that grows.
      */
     suspend fun forEachVodTitle(consumer: (Channel) -> Unit) = withContext(Dispatchers.IO) {
+        resident()?.let { it.forEachVodTitle(consumer); return@withContext }
         forEachTitle(MediaType.MOVIE, consumer)
         forEachTitle(MediaType.SERIES, consumer)
     }
@@ -297,6 +358,7 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
     /** Series-only walk. The Trakt/Simkl indexes only need shows, and walking the (usually
      *  much larger) movie half once per pull was pure waste. */
     suspend fun forEachSeriesTitle(consumer: (Channel) -> Unit) = withContext(Dispatchers.IO) {
+        resident()?.let { it.forEachSeriesTitle(consumer); return@withContext }
         forEachTitle(MediaType.SERIES, consumer)
     }
 
@@ -319,6 +381,7 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
     /** Library copies already stamped with a TMDB id - the authoritative Discover match. */
     suspend fun vodByTmdbId(mediaType: MediaType, tmdbId: String): List<Channel> =
         withContext(Dispatchers.IO) {
+            resident()?.let { return@withContext it.vodByTmdbId(mediaType, tmdbId) }
             dao.vodByTmdbId(mediaType.name, tmdbId).map(CatalogMapping::toChannel)
         }
 
@@ -326,11 +389,13 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
     suspend fun vodByTitleProbe(mediaType: MediaType, probe: String, limit: Int = 200): List<Channel> =
         withContext(Dispatchers.IO) {
             if (probe.isBlank()) return@withContext emptyList()
+            resident()?.let { return@withContext it.vodByTitleProbe(mediaType, probe, limit) }
             dao.vodByTitleProbe(mediaType.name, probe, limit).map(CatalogMapping::toChannel)
         }
 
     /** Jellyfin/Plex copies of one media type, for watched-mark propagation. */
     suspend fun ownLibrary(mediaType: MediaType): List<Channel> = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.ownLibrary(mediaType) }
         dao.ownLibrary(mediaType.name).map(CatalogMapping::toChannel)
     }
 
@@ -341,6 +406,9 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         probe: String,
         limit: Int = 5000
     ): List<Channel> = withContext(Dispatchers.IO) {
+        resident()?.let {
+            return@withContext it.m3uSeriesCandidates(providerId, showId, probe, limit)
+        }
         dao.m3uSeriesCandidates(providerId, showId, probe, limit).map(CatalogMapping::toChannel)
     }
 
@@ -353,6 +421,9 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
     ): List<Channel> = withContext(Dispatchers.IO) {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return@withContext emptyList()
+        resident()?.let {
+            return@withContext it.vodSearch(mediaType, trimmed, englishOnly, hideAdult, limit)
+        }
         dao.vodSearch(mediaType.name, trimmed, englishOnly, hideAdult, limit)
             .map(CatalogMapping::toChannel)
     }
@@ -390,6 +461,7 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
     /** Drops one provider's whole stored catalogue (provider removed, or switched off). */
     suspend fun deleteProvider(providerId: String) = withContext(Dispatchers.IO) {
         dao.deleteForProvider(providerId)
+        refreshResidentCatalog()
     }
 
     /** Hides a switched-off provider's rows in place instead of deleting them, so switching
@@ -397,21 +469,25 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
      *  filters `rank > 0`; live is gated in memory by the enabled-provider set. */
     suspend fun parkProvider(providerId: String) = withContext(Dispatchers.IO) {
         dao.parkProvider(providerId)
+        refreshResidentCatalog()
     }
 
     /** Un-hides a provider parked by [parkProvider], re-applying the backup demotion when it
      *  is a backup source (the same offset the backup set uses). */
     suspend fun restoreProvider(providerId: String, backup: Boolean) = withContext(Dispatchers.IO) {
         dao.restoreProvider(providerId, if (backup) 1_000_000_000 else 0)
+        refreshResidentCatalog()
     }
 
     /** One provider's live rows, so re-enabling it needs no network round trip. */
     suspend fun liveForProvider(providerId: String): List<Channel> = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.liveForProvider(providerId) }
         dao.liveForProvider(providerId).map(CatalogMapping::toChannel)
     }
 
     /** True when this provider still has at least one row of [mediaType] stored. */
     suspend fun hasRows(providerId: String, mediaType: MediaType): Boolean = withContext(Dispatchers.IO) {
+        resident()?.let { return@withContext it.hasRows(providerId, mediaType) }
         dao.countForProviderType(providerId, mediaType.name) > 0
     }
 
@@ -419,6 +495,7 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
     suspend fun deleteProviderType(providerId: String, mediaType: MediaType) =
         withContext(Dispatchers.IO) {
             dao.deleteForProviderType(providerId, mediaType.name)
+            refreshResidentCatalog()
         }
 
     /** Starts a streaming write for one provider/type. Call [CatalogBatchWriter.begin]. */
@@ -504,7 +581,8 @@ class CatalogRepository private constructor(private val db: CatalogDatabase) {
         fun get(context: Context): CatalogRepository =
             instance ?: synchronized(this) {
                 instance ?: CatalogRepository(
-                    CatalogDatabase.getInstance(context.applicationContext)
+                    CatalogDatabase.getInstance(context.applicationContext),
+                    context.applicationContext
                 ).also { instance = it }
             }
 

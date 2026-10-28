@@ -1199,10 +1199,21 @@ internal fun MainActivity.loadAllConfiguredProviders(
 
         allChannels = combined
         filmsSeriesDeriveJob?.cancel()
-        classifyAndShow(preserveUi = shouldPreserveUiOnLoad())
-        // Pull the ingest narration down before the summary takes the row - and record what
-        // each provider actually downloaded, so Settings can state the size from now on.
+        // Record what each provider actually downloaded before the paint, so the resident
+        // decision uses this load's sizes rather than the previous ones. A small catalogue is
+        // rebuilt in RAM before classifyAndShow() reads it; a large one drops the resident
+        // copy and keeps the Room path.
         val measuredSizes = runCatching { persistCatalogueSizes() }.getOrDefault(emptyList())
+        com.lumora.data.catalog.CatalogMode.invalidate()
+        if (com.lumora.data.catalog.CatalogMode.isRamEligible(this@loadAllConfiguredProviders)) {
+            runCatching {
+                CatalogRepository.get(this@loadAllConfiguredProviders).refreshResidentCatalog()
+            }
+        } else {
+            com.lumora.data.catalog.ResidentCatalog.clear()
+        }
+        classifyAndShow(preserveUi = shouldPreserveUiOnLoad())
+        // Pull the ingest narration down before the summary takes the row.
         resetCatalogIngest()
         // Only a load where at least one source answered resets the TTL. Looking at
         // `combined` alone was wrong twice: a VOD-only panel has an empty live half and so

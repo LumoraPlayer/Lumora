@@ -345,7 +345,10 @@ internal suspend fun MainActivity.buildVodRows(
         append("|anime=").append(anime.map { it.id to it.name }.hashCode())
     }
     val dao = CatalogDatabase.getInstance(this).catalogChannelDao()
-    val list = DbChannelList(dao, type, englishOnly, hideAdult, anime)
+    val resident = CatalogRepository.get(this).residentCatalog()
+    val list: List<Channel> = resident?.let {
+        it.cards(type, englishOnly, hideAdult) + anime
+    } ?: DbChannelList(dao, type, englishOnly, hideAdult, anime)
     val result = withContext(Dispatchers.Default) {
         buildCategoryRows(
             list = list,

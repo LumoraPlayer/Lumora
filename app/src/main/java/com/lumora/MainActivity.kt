@@ -1577,6 +1577,15 @@ class MainActivity : AppCompatActivity() {
         // main thread - the paint path takes this result instead of issuing the read when
         // it is finally reached (see catalogLivePreload).
         if (hasProviderConfigured()) {
+            // A small playlist set is read from the resident model, so warm that instead of
+            // (well, before) the DB live query; the live preload waits on the same load.
+            if (com.lumora.data.catalog.CatalogMode.isRamEligible(this)) {
+                scope.launch(Dispatchers.IO) {
+                    runCatching {
+                        CatalogRepository.get(this@MainActivity).preloadResidentCatalog()
+                    }
+                }
+            }
             catalogLivePreload = scope.async(Dispatchers.IO) {
                 runCatching { CatalogRepository.get(this@MainActivity).live() }
                     .getOrDefault(emptyList())
