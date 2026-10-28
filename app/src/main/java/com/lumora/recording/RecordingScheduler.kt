@@ -2,12 +2,14 @@
 package com.lumora.recording
 
 import android.app.AlarmManager
+import android.app.AlarmManager.AlarmClockInfo
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import com.lumora.MainActivity
 import com.lumora.data.local.LumoraDatabase
 import com.lumora.data.local.entity.RecordingEntity
 import kotlinx.coroutines.CoroutineScope
@@ -48,7 +50,7 @@ class RecordingScheduler {
             )
 
             val startTimeMs = recording.startTimeUtc * 1000 - (recording.paddingBeforeMin * 60 * 1000L)
-            armWhileIdle(alarmManager, startTimeMs, startPendingIntent)
+            armWhileIdle(alarmManager, startTimeMs, startPendingIntent, context, userVisible = true)
 
             // Stop alarm
             val stopIntent = Intent(context, RecordingAlarmReceiver::class.java).apply {
@@ -63,18 +65,55 @@ class RecordingScheduler {
             )
 
             val stopTimeMs = recording.stopTimeUtc * 1000 + (recording.paddingAfterMin * 60 * 1000L)
-            armWhileIdle(alarmManager, stopTimeMs, stopPendingIntent)
+            armWhileIdle(alarmManager, stopTimeMs, stopPendingIntent, context, userVisible = false)
         }
 
         // Exact alarms throw SecurityException on API 31+ without SCHEDULE_EXACT_ALARM /
         // USE_EXACT_ALARM; mirror ReminderScheduler.armAlarm() by falling back to an
         // inexact-while-idle alarm when canScheduleExactAlarms() is false. Below API 31
         // exact is always permitted.
-        private fun armWhileIdle(alarmManager: AlarmManager, triggerAtMs: Long, operation: PendingIntent) {
+        //
+        // A recording START is different from a reminder, though: an inexact alarm is not an
+        // exemption from the Android 12+ background foreground-service launch ban, so the
+        // capture would only start if the user happened to open the app. When exact alarms
+        // are not granted the start tries setAlarmClock(), which is the most time-critical
+        // form the platform offers (and shows in the status bar); Android 14 also refuses it
+        // without SCHEDULE_EXACT_ALARM, in which case the inexact fallback keeps the app from
+        // crashing and the stop-time/self-stop path still closes a capture that did start.
+        private fun armWhileIdle(
+            alarmManager: AlarmManager,
+            triggerAtMs: Long,
+            operation: PendingIntent,
+            context: Context,
+            userVisible: Boolean
+        ) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, operation)
+                if (userVisible) {
+                    val show = PendingIntent.getActivity(
+                        context,
+                        0,
+                        Intent(context, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        },
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    // setAlarmClock is an exact alarm too: Android 14 denies it without the
+                    // same permission, so keep the inexact fallback if the call is refused.
+                    try {
+                        alarmManager.setAlarmClock(AlarmClockInfo(triggerAtMs, show), operation)
+                    } catch (_: SecurityException) {
+                        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, operation)
+                    }
+                } else {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, operation)
+                }
             } else {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, operation)
+                try {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, operation)
+                } catch (_: SecurityException) {
+                    // The permission can be revoked between the check and the call.
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, operation)
+                }
             }
         }
 
@@ -120,9 +159,49 @@ class RecordingScheduler {
             // alarms right after reboot, flipping finished entries through RECORDING to
             // COMPLETED with fresh timestamps (same pruning idea as ReminderScheduler).
             val nowSeconds = System.currentTimeMillis() / 1000
-            db.recordingDao().getScheduled()
-                .filter { it.stopTimeUtc > nowSeconds }
-                .forEach { schedule(context, it) }
+            // A RECORDING row at boot belongs to the previous process: its capture died with
+            // it, and on a NAS the partial file is still sitting there. Mark it failed so it
+            // is not mistaken for a complete recording.
+            db.recordingDao().getAll()
+                .filter { it.status == "RECORDING" }
+                .forEach {
+                    db.recordingDao().update(
+                        it.copy(
+                            status = "FAILED",
+                            errorMessage = context.getString(com.lumora.R.string.rec_error_interrupted),
+                            completedAt = System.currentTimeMillis()
+                        )
+                    )
+                }
+            val scheduled = db.recordingDao().getScheduled()
+            // A scheduled row whose window closed while the device was off can never be
+            // recorded; fail it instead of leaving a SCHEDULED row behind forever.
+            scheduled.filter { it.stopTimeUtc <= nowSeconds }
+                .forEach {
+                    db.recordingDao().update(
+                        it.copy(
+                            status = "FAILED",
+                            errorMessage = context.getString(com.lumora.R.string.rec_error_window_passed),
+                            completedAt = System.currentTimeMillis()
+                        )
+                    )
+                }
+            scheduled.filter { it.stopTimeUtc > nowSeconds }
+                .forEach {
+                    // A row whose start already passed (the device rebooted mid-recording)
+                    // starts capture immediately: BOOT_COMPLETED is an allowed background
+                    // launch, whereas the alarm path may be refused without exact-alarm
+                    // permission. Future rows keep their alarm.
+                    val startAtMs = it.startTimeUtc * 1000 - it.paddingBeforeMin * 60_000L
+                    if (startAtMs <= System.currentTimeMillis()) {
+                        // The past start alarm is harmless (the service ignores a duplicate
+                        // id) and the stop alarm is still needed as a fallback.
+                        schedule(context, it)
+                        runCatching { RecordingService.start(context, it.id) }
+                    } else {
+                        schedule(context, it)
+                    }
+                }
         }
 
         /**
@@ -152,6 +231,12 @@ class RecordingScheduler {
 
 /**
  * Alarm receiver that handles recording start/stop actions.
+ *
+ * Deliberately thin: capture, status and file handling belong to [RecordingService], so a
+ * process death between the alarm and the service start cannot leave a row stuck in
+ * RECORDING. The start alarm only launches the foreground service; the stop alarm asks it to
+ * finish, or - when the service is no longer alive - resolves the row itself (a capture that
+ * died counts as failed, never as a completed recording).
  */
 class RecordingAlarmReceiver : BroadcastReceiver() {
     companion object {
@@ -163,34 +248,59 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
         val recordingId = intent.getStringExtra("recording_id") ?: return
         val action = intent.getStringExtra("action") ?: return
 
-        // Keep the broadcast alive until the DB write is done: returning immediately without
-        // goAsync() lets the process be killed before the status update lands.
-        val pendingResult = goAsync()
-        scope.launch {
-            try {
-                val db = LumoraDatabase.getInstance(context)
-
-                when (action) {
-                    "start" -> {
-                        val recording = db.recordingDao().getById(recordingId) ?: return@launch
-                        val updated = recording.copy(status = "RECORDING")
-                        db.recordingDao().update(updated)
-                        Log.d(TAG, "Recording started: ${recording.programTitle}")
+        when (action) {
+            "start" -> {
+                try {
+                    RecordingService.start(context, recordingId)
+                    Log.d(TAG, "Recording start requested: $recordingId")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not start recording service: ${e.message}")
+                }
+            }
+            "stop" -> {
+                if (RecordingService.isRunning) {
+                    try {
+                        RecordingService.stop(context, recordingId)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not stop recording service: ${e.message}")
                     }
-                    "stop" -> {
+                    return
+                }
+                // The service is not alive (process death, or the recording never started).
+                // Finish the row here - starting the service only to stop it would trip the
+                // foreground-service clock for a pure database write.
+                val pendingResult = goAsync()
+                scope.launch {
+                    try {
+                        val db = LumoraDatabase.getInstance(context)
                         val recording = db.recordingDao().getById(recordingId) ?: return@launch
-                        val updated = recording.copy(
-                            status = "COMPLETED",
-                            completedAt = System.currentTimeMillis()
-                        )
-                        db.recordingDao().update(updated)
-                        Log.d(TAG, "Recording completed: ${recording.programTitle}")
+                        if (recording.status == "RECORDING") {
+                            // The process died mid-capture; whatever reached the NAS is a
+                            // partial file and must not be reported as a complete recording.
+                            db.recordingDao().update(
+                                recording.copy(
+                                    status = "FAILED",
+                                    errorMessage = context.getString(com.lumora.R.string.rec_error_interrupted),
+                                    completedAt = System.currentTimeMillis()
+                                )
+                            )
+                        } else if (recording.status == "SCHEDULED") {
+                            // The start alarm never managed to begin capture (process killed,
+                            // background launch refused); the window is over.
+                            db.recordingDao().update(
+                                recording.copy(
+                                    status = "FAILED",
+                                    errorMessage = context.getString(com.lumora.R.string.rec_error_window_passed),
+                                    completedAt = System.currentTimeMillis()
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Recording stop fallback failed: ${e.message}")
+                    } finally {
+                        pendingResult.finish()
                     }
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Recording alarm failed: ${e.message}")
-            } finally {
-                pendingResult.finish()
             }
         }
     }

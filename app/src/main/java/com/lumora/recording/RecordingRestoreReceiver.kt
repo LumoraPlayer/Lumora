@@ -9,11 +9,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * Restores scheduled recordings after device reboot.
+ * Restores scheduled recordings after a reboot or an app update (both clear alarms).
  */
 class RecordingRestoreReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
+            intent.action != Intent.ACTION_MY_PACKAGE_REPLACED
+        ) {
+            return
+        }
         // BOOT_COMPLETED lands on the main thread and rescheduleAll() blocks (DB read + alarm
         // setup). Run it off the main thread and keep the broadcast alive with goAsync() so the
         // ~10s receiver window can't blow into an ANR while the process is being brought up.

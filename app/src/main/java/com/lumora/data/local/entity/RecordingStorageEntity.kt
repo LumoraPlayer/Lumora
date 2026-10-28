@@ -11,5 +11,13 @@ data class RecordingStorageEntity(
     val safTreeUri: String? = null,
     val maxSimultaneous: Int = 2,
     val retentionDays: Int = 90,
-    val fileNamePattern: String = "{title}_{date}_{time}"
+    val fileNamePattern: String = "{title}_{date}_{time}",
+    /** "local" writes into app storage; "share" writes to the SMB/WebDAV server identified
+     *  by [shareConfigId]. Kept as a string so old backups (no column) restore as local. */
+    val destinationType: String = "local",
+    /** MediaServerStore id of the SMB/WebDAV share recordings are written to. */
+    val shareConfigId: String? = null,
+    /** Folder under the share root (or under the share URL's own folder) for new recordings.
+     *  Blank means the share root. Relative, "/"-separated. */
+    val shareFolder: String? = null
 )

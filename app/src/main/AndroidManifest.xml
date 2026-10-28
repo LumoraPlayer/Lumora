@@ -12,7 +12,9 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -147,8 +149,17 @@
         <receiver android:name=".recording.RecordingRestoreReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!-- App updates clear alarms; re-arm future recordings rather than losing
+                     them until the next reboot. -->
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- DVR capture: streams a live channel to app storage or a configured NAS share. -->
+        <service
+            android:name=".recording.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- Foreground-notification holder for TorrentEngine streams (see com.lumora.torrent). -->
         <service

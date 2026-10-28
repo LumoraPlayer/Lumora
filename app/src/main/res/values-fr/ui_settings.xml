@@ -79,7 +79,41 @@
     <string name="sett_export_failed">Échec de l\'exportation</string>
     <string name="sett_no_backup_file">Aucun fichier de sauvegarde trouvé à %1$s</string>
     <string name="sett_imported_summary">Importés : %1$d fournisseurs, %2$d sources EPG, %3$d groupes, %4$d paramètres</string>
-    <string name="sett_recording_storage_path">Stockage des enregistrements : %1$s</string>
+
+    <!-- MainActivitySettings.kt - stockage des enregistrements / appairage NAS -->
+    <string name="rec_dest_title">Stockage des enregistrements</string>
+    <string name="rec_dest_current">Les nouveaux enregistrements sont sauvegardés sur : %1$s</string>
+    <string name="rec_dest_device_storage">%1$sSur cet appareil — %2$s</string>
+    <string name="rec_dest_share_row">%1$sNAS : %2$s</string>
+    <string name="rec_dest_saved_local">Les enregistrements seront sauvegardés sur cet appareil</string>
+    <string name="rec_dest_saved_share">Les enregistrements seront sauvegardés sur %1$s</string>
+    <string name="rec_dest_connect_nas">Connecter un NAS avec un QR…</string>
+    <string name="rec_dest_folder_row">Dossier sur le NAS : %1$s</string>
+    <string name="rec_dest_folder_title">Dossier sur le NAS</string>
+    <string name="rec_dest_folder_hint">Dossier des enregistrements</string>
+    <string name="rec_dest_folder_saved">Les enregistrements seront sauvegardés dans %1$s</string>
+    <string name="rec_dest_missing_share">Partage NAS introuvable — choisissez une autre destination</string>
+    <string name="rec_nas_qr_title">Connecter un NAS</string>
+    <string name="rec_nas_qr_starting">Démarrage du serveur d\'appairage…</string>
+    <string name="rec_nas_qr_scan">Scannez ce QR avec votre téléphone pour connecter le NAS</string>
+    <string name="rec_nas_qr_expired">Le lien d\'appairage a expiré — rouvrez Connecter un NAS</string>
+    <string name="rec_nas_saved">%1$s enregistré — les enregistrements vont dans %2$s</string>
+
+    <!-- RecordingService.kt - notification au premier plan -->
+    <string name="rec_notification_channel">Enregistrement</string>
+    <string name="rec_notification_channel_desc">Affichée pendant un enregistrement programmé ou manuel</string>
+    <string name="rec_notification_title">Enregistrement</string>
+    <string name="rec_notification_detail">Enregistrement · %1$.1f Mo</string>
+    <string name="rec_notification_starting">Préparation de l\'enregistrement…</string>
+    <string name="rec_notification_stop">Arrêter l\'enregistrement</string>
+    <string name="rec_notification_complete">Enregistrement sauvegardé</string>
+    <string name="rec_notification_failed">Échec de l\'enregistrement</string>
+    <string name="rec_error_window_passed">La fenêtre d\'enregistrement est déjà terminée</string>
+    <string name="rec_error_channel_missing">La chaîne n\'est plus dans le catalogue — l\'enregistrement n\'a pas pu démarrer</string>
+    <string name="rec_error_no_stream">Cette chaîne n\'a pas d\'URL de flux directe à enregistrer</string>
+    <string name="rec_error_generic">Échec de l\'enregistrement</string>
+    <string name="rec_error_interrupted">L\'enregistrement a été interrompu avant la fin</string>
+    <string name="rec_error_drm">Cette chaîne est protégée par DRM et ne peut pas être enregistrée</string>
 
     <!-- MainActivitySettings.kt - boîte de dialogue des paramètres de lecture -->
     <string name="sett_external_player_summary">Lecteur externe : %1$s</string>

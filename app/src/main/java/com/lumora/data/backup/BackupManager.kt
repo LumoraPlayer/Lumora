@@ -525,7 +525,12 @@ class BackupManager(private val context: Context) {
 
     data class RecordingStorageBackup(
         val maxSimultaneous: Int, val retentionDays: Int,
-        val fileNamePattern: String
+        val fileNamePattern: String,
+        // Added when NAS destinations landed. Defaulted so backups written before the
+        // columns existed restore as app-storage recordings.
+        val destinationType: String? = null,
+        val shareConfigId: String? = null,
+        val shareFolder: String? = null
     )
 
     data class RecordingScheduleBackup(
@@ -534,7 +539,10 @@ class BackupManager(private val context: Context) {
         val id: String? = null,
         val channelId: String, val channelName: String,
         val programTitle: String, val startTimeUtc: Long,
-        val stopTimeUtc: Long, val recurringRule: String?
+        val stopTimeUtc: Long, val recurringRule: String?,
+        // Which provider the channel came from: source ids collide across providers, so a
+        // restored schedule that loses this can record the wrong broadcaster's channel.
+        val providerId: String? = null
     )
 
     data class ImportResult(
@@ -734,14 +742,17 @@ class BackupManager(private val context: Context) {
             recordingStorage = recordingStorage?.let { RecordingStorageBackup(
                 maxSimultaneous = it.maxSimultaneous,
                 retentionDays = it.retentionDays,
-                fileNamePattern = it.fileNamePattern
+                fileNamePattern = it.fileNamePattern,
+                destinationType = it.destinationType,
+                shareConfigId = it.shareConfigId,
+                shareFolder = it.shareFolder
             )},
             recordingSchedules = recordings.filter { it.status == "SCHEDULED" }.map {
                 RecordingScheduleBackup(
                     id = it.id, channelId = it.channelId, channelName = it.channelName,
                     programTitle = it.programTitle,
                     startTimeUtc = it.startTimeUtc, stopTimeUtc = it.stopTimeUtc,
-                    recurringRule = it.recurringRule
+                    recurringRule = it.recurringRule, providerId = it.providerId
                 )
             }
         )
@@ -863,23 +874,31 @@ class BackupManager(private val context: Context) {
                     channelId = r.channelId, channelName = r.channelName,
                     programTitle = r.programTitle,
                     startTimeUtc = r.startTimeUtc, stopTimeUtc = r.stopTimeUtc,
-                    recurringRule = r.recurringRule
+                    recurringRule = r.recurringRule, providerId = r.providerId
                 )
             )
             result = result.copy(recordingSchedulesImported = result.recordingSchedulesImported + 1)
         }
 
-        // Restore the recording-storage settings row - exported but never written back until
-        // now. It is read at export time from RecordingDao.getStorageConfig(); that DAO has
-        // no write method and the dao file is outside this change's scope, so the row goes
-        // back through Room's SQLite handle directly. Only the three portable fields are
-        // restored: localPath/safTreeUri are device-specific (an absolute path or SAF tree
-        // grant cannot survive a reinstall) and were not exported either.
+        // Restore the recording-storage settings row. The destination fields are portable:
+        // the share is stored in MediaServerStore (also part of this backup) by id, and the
+        // folder is a relative path. localPath/safTreeUri stay device-specific and are not
+        // touched. Older backups leave destinationType null; those restore as local without
+        // destroying whatever destination fields the row already had.
         data.recordingStorage?.let { s ->
-            db.openHelper.writableDatabase.execSQL(
-                "INSERT OR REPLACE INTO recording_storage " +
-                    "(id, maxSimultaneous, retentionDays, fileNamePattern) VALUES (?,?,?,?)",
-                arrayOf("default", s.maxSimultaneous, s.retentionDays, s.fileNamePattern)
+            val existing = db.recordingDao().getStorageConfig()
+            db.recordingDao().upsertStorageConfig(
+                RecordingStorageEntity(
+                    id = "default",
+                    localPath = existing?.localPath,
+                    safTreeUri = existing?.safTreeUri,
+                    maxSimultaneous = s.maxSimultaneous,
+                    retentionDays = s.retentionDays,
+                    fileNamePattern = s.fileNamePattern,
+                    destinationType = s.destinationType ?: existing?.destinationType ?: "local",
+                    shareConfigId = s.shareConfigId ?: existing?.shareConfigId,
+                    shareFolder = s.shareFolder ?: existing?.shareFolder
+                )
             )
         }
 

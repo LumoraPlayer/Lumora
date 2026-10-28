@@ -1515,10 +1515,23 @@
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
+                    android:orientation="vertical"
                     android:stateListAnimator="@animator/focus_scale_flat"
                     android:clipChildren="false"
                     android:clipToPadding="false">
                     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/recording_storage" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
+                    <TextView
+                        android:id="@+id/settingsRecordingStorageValue"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/settings_gap_xs"
+                        android:gravity="center"
+                        android:maxLines="2"
+                        android:ellipsize="middle"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/settings_text_caption"
+                        android:fontFamily="@font/inter_regular"
+                        android:visibility="gone" />
                 </LinearLayout>
 
                 <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="@dimen/settings_gap" android:background="@color/divider" />

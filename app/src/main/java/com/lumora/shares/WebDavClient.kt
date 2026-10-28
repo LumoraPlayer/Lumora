@@ -9,11 +9,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
+import java.io.File
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -73,6 +75,67 @@ class WebDavClient(private val http: OkHttpClient) {
     /** The playable URL of a file, from the collection base and its relative path. */
     fun fileUrl(config: com.lumora.model.MediaServerConfig, path: String): String? =
         baseUrl(config)?.let { appendPath(it, path) }?.toString()
+
+    /**
+     * Uploads [localFile] to [path] under the configured collection, creating any missing
+     * folders first. Used by DVR capture: the recording is written to a local temp file (its
+     * final length is unknowable while a live stream is still running) and copied here when
+     * the capture ends. Returns the stored file's URL, which is what the recording row keeps.
+     */
+    suspend fun upload(
+        config: com.lumora.model.MediaServerConfig,
+        path: String,
+        localFile: File,
+        contentType: String
+    ): String = withContext(Dispatchers.IO) {
+        val base = baseUrl(config) ?: throw ShareException(ShareErrorKind.NOT_FOUND, "invalid WebDAV URL")
+        val folder = path.substringBeforeLast('/', "")
+        if (folder.isNotBlank()) ensureFolders(config, base, folder)
+        val target = appendPath(base, path)
+        val builder = Request.Builder()
+            .url(target)
+            .put(localFile.asRequestBody(contentType.toMediaType()))
+        authHeader(config)?.let { builder.header("Authorization", it) }
+        execute(builder.build()).use { r ->
+            if (!r.isSuccessful) throw statusError(r, "upload")
+        }
+        target.toString()
+    }
+
+    /** Best-effort delete of a remote file (a failed upload or a cancelled recording). */
+    suspend fun delete(config: com.lumora.model.MediaServerConfig, path: String) =
+        withContext(Dispatchers.IO) {
+            val base = baseUrl(config) ?: return@withContext
+            val target = appendPath(base, path)
+            val builder = Request.Builder().url(target).delete()
+            authHeader(config)?.let { builder.header("Authorization", it) }
+            runCatching { execute(builder.build()).use { /* 404 is fine */ } }
+        }
+
+    /**
+     * MKCOLs each missing level, in order. A server that answers 405/301 for an existing
+     * collection is treated as success; anything else that is not 2xx is a real failure (a
+     * read-only share, wrong credentials, or a URL that is not a collection).
+     */
+    private fun ensureFolders(
+        config: com.lumora.model.MediaServerConfig,
+        base: HttpUrl,
+        folder: String
+    ) {
+        var current = ""
+        for (segment in folder.split('/').filter { it.isNotEmpty() }) {
+            current = if (current.isEmpty()) segment else "$current/$segment"
+            val builder = Request.Builder()
+                .url(directoryUrl(base, current))
+                .method("MKCOL", null)
+            authHeader(config)?.let { builder.header("Authorization", it) }
+            execute(builder.build()).use { r ->
+                if (r.code !in 200..299 && r.code != 405 && r.code != 301) {
+                    throw statusError(r, "create folder")
+                }
+            }
+        }
+    }
 
     private fun baseUrl(config: com.lumora.model.MediaServerConfig): HttpUrl? {
         val raw = config.url?.trim().orEmpty()

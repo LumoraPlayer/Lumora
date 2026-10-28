@@ -85,7 +85,41 @@
     <string name="sett_no_backup_file">No backup file found at %1$s</string>
     <string name="sett_imported_summary">Imported: %1$d providers, %2$d EPG sources, %3$d groups, %4$d settings</string>
     <string name="sett_import_failed_reason">Import failed: %1$s</string>
-    <string name="sett_recording_storage_path">Recording storage: %1$s</string>
+
+    <!-- MainActivitySettings.kt - recording storage / NAS pairing -->
+    <string name="rec_dest_title">Recording Storage</string>
+    <string name="rec_dest_current">New recordings are saved to: %1$s</string>
+    <string name="rec_dest_device_storage">%1$sOn this device — %2$s</string>
+    <string name="rec_dest_share_row">%1$sNAS: %2$s</string>
+    <string name="rec_dest_saved_local">Recordings will be saved on this device</string>
+    <string name="rec_dest_saved_share">Recordings will be saved to %1$s</string>
+    <string name="rec_dest_connect_nas">Connect a NAS with QR code…</string>
+    <string name="rec_dest_folder_row">Folder on NAS: %1$s</string>
+    <string name="rec_dest_folder_title">Folder on NAS</string>
+    <string name="rec_dest_folder_hint">Folder for recordings</string>
+    <string name="rec_dest_folder_saved">Recordings will be saved in %1$s</string>
+    <string name="rec_dest_missing_share">NAS share missing — pick another destination</string>
+    <string name="rec_nas_qr_title">Connect a NAS</string>
+    <string name="rec_nas_qr_starting">Starting pairing server…</string>
+    <string name="rec_nas_qr_scan">Scan this QR with your phone to connect the NAS</string>
+    <string name="rec_nas_qr_expired">The pairing link expired — open Connect a NAS again</string>
+    <string name="rec_nas_saved">Saved %1$s — recordings go to %2$s</string>
+
+    <!-- RecordingService.kt - foreground notification -->
+    <string name="rec_notification_channel">Recording</string>
+    <string name="rec_notification_channel_desc">Shown while a scheduled or manual recording is running</string>
+    <string name="rec_notification_title">Recording</string>
+    <string name="rec_notification_detail">Recording · %1$.1f MB</string>
+    <string name="rec_notification_starting">Preparing recording…</string>
+    <string name="rec_notification_stop">Stop recording</string>
+    <string name="rec_notification_complete">Recording saved</string>
+    <string name="rec_notification_failed">Recording failed</string>
+    <string name="rec_error_window_passed">The recording window already ended</string>
+    <string name="rec_error_channel_missing">The channel is no longer in the catalogue — the recording could not start</string>
+    <string name="rec_error_no_stream">This channel has no direct stream URL to record</string>
+    <string name="rec_error_generic">Recording failed</string>
+    <string name="rec_error_interrupted">The recording was interrupted before it finished</string>
+    <string name="rec_error_drm">This channel is DRM-protected and can\'t be recorded</string>
 
     <!-- MainActivitySettings.kt - playback settings dialog -->
     <string name="sett_external_player_summary">External player: %1$s</string>

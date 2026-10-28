@@ -16,7 +16,7 @@ import com.lumora.data.local.entity.*
  *  fit Android Auto Backup's 25 MB quota, and so the catalogue's stream URLs (which carry
  *  panel credentials) never leave the device in a backup - see `backup_rules.xml`. */
 @Database(
-    version = 10,
+    version = 11,
     exportSchema = true,
     entities = [
         ProviderEntity::class,
@@ -225,6 +225,17 @@ abstract class LumoraDatabase : RoomDatabase() {
             }
         }
 
+        /** v11 lets recordings land on a NAS. `recording_storage` gains the destination kind,
+         *  the configured SMB/WebDAV share it points at, and an optional folder inside that
+         *  share. Existing rows keep writing into app storage (`local`). */
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `recording_storage` ADD COLUMN `destinationType` TEXT NOT NULL DEFAULT 'local'")
+                db.execSQL("ALTER TABLE `recording_storage` ADD COLUMN `shareConfigId` TEXT")
+                db.execSQL("ALTER TABLE `recording_storage` ADD COLUMN `shareFolder` TEXT")
+            }
+        }
+
         fun getInstance(context: Context): LumoraDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -232,7 +243,7 @@ abstract class LumoraDatabase : RoomDatabase() {
                     LumoraDatabase::class.java,
                     "lumora.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                     .build()
                     .also { instance = it }
             }

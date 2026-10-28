@@ -380,25 +380,37 @@ internal fun MainActivity.setupPlayerControls() {
             return@setOnClickListener
         }
         val channel = nowPlayingChannel ?: return@setOnClickListener
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.play_schedule_recording))
-            .setMessage(getString(R.string.play_record_confirm, channel.name))
-            .setPositiveButton(getString(R.string.play_record_for_2_hours)) { _, _ ->
-                val recEntry = com.lumora.recording.RecordingScheduler.createRecording(
-                    channelId = channel.id,
-                    channelName = channel.name,
-                    programTitle = channel.name,
-                    startTimeUtc = System.currentTimeMillis() / 1000,
-                    stopTimeUtc = (System.currentTimeMillis() / 1000) + 7200
-                )
-                com.lumora.recording.RecordingScheduler.schedule(this, recEntry)
-                scope.launch {
-                    database.recordingDao().insert(recEntry)
+        scope.launch {
+            val storage = runCatching {
+                com.lumora.recording.RecordingStorage.load(this@setupPlayerControls)
+            }.getOrDefault(com.lumora.recording.RecordingStorage.defaults())
+            val destination = com.lumora.recording.RecordingStorage.summary(this@setupPlayerControls, storage)
+            AlertDialog.Builder(this@setupPlayerControls)
+                .setTitle(getString(R.string.play_schedule_recording))
+                .setMessage(getString(R.string.play_record_confirm_dest, channel.name, destination))
+                .setPositiveButton(getString(R.string.play_record_for_2_hours)) { _, _ ->
+                    val recEntry = com.lumora.recording.RecordingScheduler.createRecording(
+                        channelId = channel.id,
+                        channelName = channel.name,
+                        programTitle = channel.name,
+                        startTimeUtc = System.currentTimeMillis() / 1000,
+                        stopTimeUtc = (System.currentTimeMillis() / 1000) + 7200,
+                        providerId = channel.sourceProviderId
+                    )
+                    com.lumora.recording.RecordingScheduler.schedule(this@setupPlayerControls, recEntry)
+                    scope.launch {
+                        database.recordingDao().insert(recEntry)
+                        // Start now instead of waiting for the exact alarm: recording is an
+                        // explicit tap, and an inexact fallback alarm can be deferred by minutes.
+                        runCatching {
+                            com.lumora.recording.RecordingService.start(this@setupPlayerControls, recEntry.id)
+                        }
+                    }
+                    Toast.makeText(this@setupPlayerControls, getString(R.string.play_recording_scheduled), Toast.LENGTH_SHORT).show()
                 }
-                Toast.makeText(this, getString(R.string.play_recording_scheduled), Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton(getString(R.string.cancel), null)
-            .show()
+                .setNegativeButton(getString(R.string.cancel), null)
+                .show()
+        }
     }
 
     binding.seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {

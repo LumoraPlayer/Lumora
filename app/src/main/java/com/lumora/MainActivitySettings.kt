@@ -45,6 +45,7 @@ import com.lumora.shares.SmbUrl
 import com.lumora.data.remote.jellyfin.JellyfinProvider
 import com.lumora.data.remote.plex.PlexProvider
 import com.lumora.model.MediaServerConfig
+import com.lumora.recording.RecordingStorage
 import com.lumora.data.update.AppUpdateChecker
 import kotlinx.coroutines.*
 import kotlin.coroutines.resume
@@ -2157,9 +2158,18 @@ internal fun MainActivity.showProviderSettings() {
     }
 
     // Recording storage
-    dialogView.findViewById<View>(R.id.settingsRecordingStorage).setOnClickListener {
-        Toast.makeText(this, getString(R.string.sett_recording_storage_path, "${filesDir}/recordings"), Toast.LENGTH_SHORT).show()
+    val recordingStorageValue = dialogView.findViewById<TextView>(R.id.settingsRecordingStorageValue)
+    fun refreshRecordingStorageValue() {
+        scope.launch {
+            val storage = RecordingStorage.load(this@showProviderSettings)
+            recordingStorageValue.text = RecordingStorage.summary(this@showProviderSettings, storage)
+            recordingStorageValue.visibility = View.VISIBLE
+        }
     }
+    dialogView.findViewById<View>(R.id.settingsRecordingStorage).setOnClickListener {
+        showRecordingStorageDialog { refreshRecordingStorageValue() }
+    }
+    refreshRecordingStorageValue()
 
     // Playback settings. Only entries that change something belong here — the Decoder /
     // Buffer / Surface / FFmpeg rows this dialog used to carry wrote prefs no part of the
@@ -3146,5 +3156,273 @@ private fun MainActivity.warnIfSelectionHidesEverything(codes: Set<String>) {
             getString(R.string.sett_locality_empty, LocalityCatalog.labelForCodes(codes)),
             Toast.LENGTH_LONG
         ).show()
+    }
+}
+
+// ── Recording storage (local / NAS) ────────────────────────
+
+/**
+ * The Recording Storage dialog: choose app storage or one of the configured SMB/WebDAV
+ * shares, change the folder new recordings are filed under, or connect a new NAS by scanning
+ * a QR with a phone.
+ */
+internal fun MainActivity.showRecordingStorageDialog(onChanged: () -> Unit = {}) {
+    scope.launch {
+        val storage = RecordingStorage.load(this@showRecordingStorageDialog)
+        val shares = mediaServers().filter { it.isShare }
+        val selectedShareId = storage.shareConfigId.takeIf {
+            storage.destinationType == RecordingStorage.DESTINATION_SHARE
+        }
+        val actions = mutableListOf<Pair<String, () -> Unit>>()
+
+        val localMark = if (selectedShareId == null) "✓  " else ""
+        actions += getString(
+            R.string.rec_dest_device_storage,
+            localMark,
+            RecordingStorage.localDirectory(this@showRecordingStorageDialog).absolutePath
+        ) to {
+            scope.launch {
+                RecordingStorage.useLocal(this@showRecordingStorageDialog)
+                onChanged()
+                Toast.makeText(
+                    this@showRecordingStorageDialog,
+                    getString(R.string.rec_dest_saved_local),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
+        for (share in shares) {
+            val mark = if (share.id == selectedShareId) "✓  " else ""
+            actions += getString(R.string.rec_dest_share_row, mark, share.name) to {
+                scope.launch {
+                    val current = RecordingStorage.load(this@showRecordingStorageDialog)
+                    val folder = if (current.shareConfigId == share.id) {
+                        current.shareFolder
+                    } else {
+                        RecordingStorage.DEFAULT_SHARE_FOLDER
+                    }
+                    RecordingStorage.useShare(this@showRecordingStorageDialog, share.id, folder)
+                    onChanged()
+                    Toast.makeText(
+                        this@showRecordingStorageDialog,
+                        getString(R.string.rec_dest_saved_share, share.name),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+
+        actions += getString(R.string.rec_dest_connect_nas) to {
+            showRecordingNasQrDialog(onChanged)
+        }
+
+        val selectedShare = shares.firstOrNull { it.id == selectedShareId }
+        if (selectedShare != null) {
+            actions += getString(
+                R.string.rec_dest_folder_row,
+                RecordingStorage.normalizeFolder(storage.shareFolder)
+                    .ifBlank { RecordingStorage.DEFAULT_SHARE_FOLDER }
+            ) to {
+                promptRecordingNasFolder(selectedShare.id, storage.shareFolder, onChanged)
+            }
+        }
+
+        withContext(Dispatchers.Main) {
+            AlertDialog.Builder(this@showRecordingStorageDialog)
+                .setTitle(getString(R.string.rec_dest_title))
+                .setMessage(
+                    getString(
+                        R.string.rec_dest_current,
+                        RecordingStorage.summary(this@showRecordingStorageDialog, storage)
+                    )
+                )
+                .setItems(actions.map { it.first }.toTypedArray()) { _, which ->
+                    actions.getOrNull(which)?.second?.invoke()
+                }
+                .setNegativeButton(getString(R.string.close), null)
+                .show()
+        }
+    }
+}
+
+/** Folder inside the selected NAS share. Kept separate so it can be changed without
+ *  re-picking the share. */
+private fun MainActivity.promptRecordingNasFolder(
+    shareId: String,
+    currentFolder: String?,
+    onChanged: () -> Unit
+) {
+    val input = EditText(this).apply {
+        setText(RecordingStorage.normalizeFolder(currentFolder).ifBlank { RecordingStorage.DEFAULT_SHARE_FOLDER })
+        hint = getString(R.string.rec_dest_folder_hint)
+        inputType = android.text.InputType.TYPE_CLASS_TEXT
+        setSelectAllOnFocus(true)
+    }
+    AlertDialog.Builder(this)
+        .setTitle(getString(R.string.rec_dest_folder_title))
+        .setView(input)
+        .setPositiveButton(getString(R.string.save)) { _, _ ->
+            val folder = RecordingStorage.normalizeFolder(input.text.toString())
+                .ifBlank { RecordingStorage.DEFAULT_SHARE_FOLDER }
+            scope.launch {
+                RecordingStorage.useShare(this@promptRecordingNasFolder, shareId, folder)
+                onChanged()
+                Toast.makeText(
+                    this@promptRecordingNasFolder,
+                    getString(R.string.rec_dest_folder_saved, folder),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+        .setNegativeButton(getString(R.string.cancel), null)
+        .show()
+}
+
+/**
+ * Phone-paired NAS setup: the TV shows a QR, the phone fills the existing SMB/WebDAV form
+ * (plus a destination folder), and the submitted share is saved and made the recording
+ * destination in one step.
+ *
+ * A dedicated [QrPairingManager] instance is used so this dialog never overwrites the provider
+ * form's callbacks if Settings is open at the same time.
+ */
+private fun MainActivity.showRecordingNasQrDialog(onChanged: () -> Unit = {}) {
+    val manager = QrPairingManager(this)
+    val density = resources.displayMetrics.density
+    val padding = (20 * density).toInt()
+
+    val layout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = android.view.Gravity.CENTER_HORIZONTAL
+        setPadding(padding, padding, padding, 0)
+    }
+    val status = TextView(this).apply {
+        text = getString(R.string.rec_nas_qr_starting)
+        setTextColor(getColor(R.color.text_secondary))
+        gravity = android.view.Gravity.CENTER
+        textSize = 13f
+    }
+    val image = ImageView(this).apply {
+        adjustViewBounds = true
+        visibility = View.GONE
+        layoutParams = LinearLayout.LayoutParams((280 * density).toInt(), (280 * density).toInt()).apply {
+            topMargin = (12 * density).toInt()
+            bottomMargin = (8 * density).toInt()
+        }
+    }
+    val timer = TextView(this).apply {
+        setTextColor(getColor(R.color.text_tertiary))
+        gravity = android.view.Gravity.CENTER
+        textSize = 12f
+    }
+    layout.addView(status)
+    layout.addView(image)
+    layout.addView(timer)
+
+    val dialog = AlertDialog.Builder(this)
+        .setTitle(getString(R.string.rec_nas_qr_title))
+        .setView(layout)
+        .setNegativeButton(getString(R.string.cancel), null)
+        .create()
+
+    var ticker: Job? = null
+
+    manager.onError = { message ->
+        runOnUiThread { status.text = message }
+    }
+
+    manager.onProviderReceived = { type, form ->
+        runOnUiThread {
+            if (type != "smb" && type != "webdav") return@runOnUiThread
+            val saved = when (type) {
+                "smb" -> {
+                    val normalized = SmbUrl.normalize(form["smbUrl"]?.trim().orEmpty())
+                    if (normalized == null) {
+                        status.text = getString(R.string.sett_share_invalid_address)
+                        return@runOnUiThread
+                    }
+                    saveShareServer(
+                        existingId = null,
+                        type = "smb",
+                        url = normalized,
+                        name = form["name"],
+                        username = form["smbUser"],
+                        password = form["smbPass"]
+                    )
+                }
+                else -> {
+                    val raw = form["webdavUrl"]?.trim().orEmpty()
+                    if (raw.isBlank()) {
+                        status.text = getString(R.string.sett_share_invalid_address)
+                        return@runOnUiThread
+                    }
+                    val url = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) {
+                        raw
+                    } else {
+                        "http://$raw"
+                    }
+                    saveShareServer(
+                        existingId = null,
+                        type = "webdav",
+                        url = url,
+                        name = form["name"],
+                        username = form["webdavUser"],
+                        password = form["webdavPass"]
+                    )
+                }
+            }
+            val folder = RecordingStorage.normalizeFolder(form["nasFolder"])
+                .ifBlank { RecordingStorage.DEFAULT_SHARE_FOLDER }
+            ticker?.cancel()
+            manager.stop()
+            dialog.dismiss()
+            refreshIptvProviderList()
+            scope.launch {
+                RecordingStorage.useShare(this@showRecordingNasQrDialog, saved.id, folder)
+                onChanged()
+                Toast.makeText(
+                    this@showRecordingNasQrDialog,
+                    getString(R.string.rec_nas_saved, saved.name, folder),
+                    Toast.LENGTH_LONG
+                ).show()
+                // The phone cannot tell whether the TV can reach the share; verify here and
+                // report it, exactly like the provider QR flow does.
+                testShareConnection(saved) { text ->
+                    Toast.makeText(this@showRecordingNasQrDialog, text, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    dialog.setOnDismissListener {
+        ticker?.cancel()
+        manager.stop()
+    }
+    dialog.show()
+
+    scope.launch {
+        val result = manager.start(providerType = "smb", purpose = "nas")
+        if (result == null) {
+            status.text = getString(R.string.sett_could_not_start_server)
+            return@launch
+        }
+        image.setImageBitmap(result.qrBitmap)
+        image.visibility = View.VISIBLE
+        status.text = getString(R.string.rec_nas_qr_scan)
+        ticker = launch {
+            while (manager.result === result) {
+                val remaining = (result.expiresAtMs - System.currentTimeMillis()) / 1000
+                if (remaining <= 0) break
+                timer.text = getString(R.string.sett_expires_in, remaining / 60, remaining % 60)
+                delay(1000)
+            }
+            if (manager.result === result) {
+                timer.text = getString(R.string.sett_expired)
+                manager.stop()
+                status.text = getString(R.string.rec_nas_qr_expired)
+                image.visibility = View.GONE
+            }
+        }
     }
 }

@@ -25,4 +25,7 @@ interface RecordingDao {
     // Storage config
     @Query("SELECT * FROM recording_storage WHERE id = 'default'")
     suspend fun getStorageConfig(): RecordingStorageEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertStorageConfig(config: RecordingStorageEntity)
 }

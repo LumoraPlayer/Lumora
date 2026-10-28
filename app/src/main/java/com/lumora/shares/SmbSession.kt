@@ -128,6 +128,64 @@ class SmbShareSession(private val config: MediaServerConfig) : Closeable {
         location.displayPath
     }
 
+    /**
+     * Opens (or creates) [location] for writing a recording. Parent folders are created as
+     * needed - a recording target is usually a folder that does not exist yet, and smbj would
+     * otherwise answer STATUS_OBJECT_PATH_NOT_FOUND on the create.
+     *
+     * The caller owns the returned handle and must close it. Writes are sequential: the
+     * stream starts at offset 0 and truncates any existing file.
+     */
+    fun openWrite(location: SmbLocation): SmbOutputFile = synchronized(this) {
+        val share = openShare(location.share)
+        val remotePath = location.path.replace('/', '\\')
+        if (remotePath.isBlank()) throw ShareException(ShareErrorKind.NOT_FOUND, "not a file")
+        try {
+            ensureFolders(share, remotePath.substringBeforeLast('\\', ""))
+            val file = share.openFile(
+                remotePath,
+                setOf(AccessMask.GENERIC_WRITE),
+                null,
+                setOf(SMB2ShareAccess.FILE_SHARE_READ, SMB2ShareAccess.FILE_SHARE_WRITE),
+                SMB2CreateDisposition.FILE_OVERWRITE_IF,
+                null
+            )
+            SmbOutputFile(file, this)
+        } catch (e: Exception) {
+            throw mapError(e, location)
+        }
+    }
+
+    /** Best-effort removal of a half-written recording. */
+    fun delete(location: SmbLocation) = synchronized(this) {
+        val share = openShare(location.share)
+        val remotePath = location.path.replace('/', '\\')
+        if (remotePath.isBlank()) return
+        try {
+            if (share.fileExists(remotePath)) share.rm(remotePath)
+        } catch (_: Exception) {
+            // A cleanup failure must not mask the recording error that led here.
+        }
+    }
+
+    /** Creates every missing level of [path] (relative to the share root), in order. */
+    private fun ensureFolders(share: DiskShare, path: String) {
+        if (path.isBlank()) return
+        var current = ""
+        for (segment in path.split('\\').filter { it.isNotBlank() }) {
+            current = if (current.isEmpty()) segment else "$current\\$segment"
+            if (!share.folderExists(current)) {
+                try {
+                    share.mkdir(current)
+                } catch (e: SMBApiException) {
+                    // Another writer may have created it between the check and the mkdir;
+                    // only rethrow when it still does not exist.
+                    if (!share.folderExists(current)) throw e
+                }
+            }
+        }
+    }
+
     private fun openShare(name: String): DiskShare = synchronized(this) {
         openShares[name]?.let { return it }
         ensureConnected()
@@ -239,6 +297,33 @@ class SmbOpenFile internal constructor(private val file: SmbFile) : Closeable {
 
     override fun close() {
         runCatching { file.close() }
+    }
+}
+
+/** A remote file opened for sequential writing (DVR capture). */
+class SmbOutputFile internal constructor(
+    private val file: SmbFile,
+    /** The owning session's monitor: smbj is not safe for two threads on one session, and
+     *  browsing the same share while a recording runs must not interleave SMB2 calls. */
+    private val lock: Any
+) : Closeable {
+
+    private val stream = file.getOutputStream()
+
+    fun write(buffer: ByteArray, offset: Int, length: Int) {
+        synchronized(lock) { stream.write(buffer, offset, length) }
+    }
+
+    fun flush() {
+        synchronized(lock) { stream.flush() }
+    }
+
+    override fun close() {
+        synchronized(lock) {
+            runCatching { stream.flush() }
+            runCatching { stream.close() }
+            runCatching { file.close() }
+        }
     }
 }
 

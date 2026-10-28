@@ -42,4 +42,9 @@
     <exclude domain="database" path="lumora_catalog.db-wal" />
     <exclude domain="database" path="lumora_catalog.db-shm" />
     <exclude domain="database" path="lumora_catalog.db-journal" />
+    <!-- Recordings and the temp file used while uploading one to WebDAV are large and
+         device-specific; a single recording would blow the 25 MB quota and silently stop the
+         rest of the app's data from being backed up. -->
+    <exclude domain="file" path="recordings" />
+    <exclude domain="file" path="recording_upload" />
 </full-backup-content>

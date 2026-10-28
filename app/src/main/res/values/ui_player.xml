@@ -31,7 +31,7 @@
     <string name="play_ok">OK</string>
     <string name="play_recording_live_only">Recording is only available for live TV</string>
     <string name="play_schedule_recording">Schedule Recording</string>
-    <string name="play_record_confirm">Record \"%1$s\"?</string>
+    <string name="play_record_confirm_dest">Record \"%1$s\"?\n\nSaving to: %2$s</string>
     <string name="play_record_for_2_hours">Record for 2 hours</string>
     <string name="play_recording_scheduled">Recording scheduled</string>
     <string name="play_playback_error">Playback error</string>

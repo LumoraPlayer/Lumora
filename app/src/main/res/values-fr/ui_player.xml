@@ -31,7 +31,7 @@
     <string name="play_ok">OK</string>
     <string name="play_recording_live_only">L\'enregistrement n\'est disponible que pour la TV en direct</string>
     <string name="play_schedule_recording">Programmer un enregistrement</string>
-    <string name="play_record_confirm">Enregistrer « %1$s » ?</string>
+    <string name="play_record_confirm_dest">Enregistrer « %1$s » ?\n\nSauvegarde vers : %2$s</string>
     <string name="play_record_for_2_hours">Enregistrer pendant 2 heures</string>
     <string name="play_recording_scheduled">Enregistrement programmé</string>
     <string name="play_playback_error">Erreur de lecture</string>
