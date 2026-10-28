@@ -542,6 +542,8 @@ internal fun MainActivity.applyProviderToggle(
     providerId: String? = null,
     belongsToProvider: (Channel) -> Boolean
 ) {
+    // The enabled set (and therefore the 40 MB RAM cutoff) is about to change.
+    com.lumora.data.catalog.CatalogMode.invalidate()
     if (enabled) {
         if (providerId == null) {
             loadAllConfiguredProviders(forceRefresh = true)
@@ -733,6 +735,10 @@ internal fun MainActivity.loadAllConfiguredProviders(
     // its fifteen indexes are skipped entirely. The decision uses the sizes measured by the
     // previous load, so the first load of a new setup still goes through Room (there is no
     // size to judge yet) and the next one uses RAM.
+    // The enabled set (and therefore the 40 MB RAM cutoff) can have changed since the last
+    // load (provider add/remove/toggle). Recompute from the persisted sizes before deciding
+    // where this load writes.
+    com.lumora.data.catalog.CatalogMode.invalidate()
     val ramLoad = com.lumora.data.catalog.CatalogMode.isRamEligible(this)
     val ramCollected: MutableList<Channel>? = if (ramLoad) {
         java.util.Collections.synchronizedList(ArrayList())
