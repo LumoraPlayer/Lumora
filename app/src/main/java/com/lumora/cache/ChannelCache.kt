@@ -30,7 +30,7 @@ private const val CARRIAGE_BYTE: Byte = 13 // '\r'
 private const val ONE_BYTE: Byte = 49 // '1'
 /** Fields written per line. Append-only: new fields go at the end so older files stay
  *  readable. */
-private const val FIELD_COUNT = 38
+private const val FIELD_COUNT = 42
 /** Fields a line must have to be usable. Held at the pre-Catch-Up count on purpose - a
  *  cache written by an older build is still perfectly good, and every field added since
  *  is read with getOrElse. Raising this to FIELD_COUNT dropped every line of an existing
@@ -163,7 +163,14 @@ object ChannelCache {
             // Per-entry request headers (User-Agent/Referer/token from KODIPROP
             // stream_headers, #EXTVLCOPT or URL suffix): without these a cached
             // ClearKey entry replays with only the provider UA and 403s.
-            sb.append(clean(ch.streamHeaders?.takeIf { it.isNotEmpty() }?.let { KodiProps.encodeHeaderMap(it) })).append('\n')
+            sb.append(clean(ch.streamHeaders?.takeIf { it.isNotEmpty() }?.let { KodiProps.encodeHeaderMap(it) })).append(FIELD_SEP)
+            // Appended for the RAM-mode cache: season/imdbRating keep media-server
+            // episode identity, and pluginToken/pluginId let a cached anime row resolve
+            // its short-lived CDN URL again instead of replaying an expired one.
+            sb.append(ch.season?.toString() ?: "").append(FIELD_SEP)
+            sb.append(clean(ch.imdbRating)).append(FIELD_SEP)
+            sb.append(clean(ch.pluginToken)).append(FIELD_SEP)
+            sb.append(clean(ch.pluginId)).append('\n')
             out.append(sb)
         }
     }
@@ -324,6 +331,7 @@ object ChannelCache {
         var avOffsetMs = 0
         var tvArchiveDays = 0
         var episodeNum: Int? = null
+        var season: Int? = null
 
         var i = start
         while (i <= end) {
@@ -338,6 +346,7 @@ object ChannelCache {
                         23 -> tvArchiveDays = parseIntOrNull(bytes, fieldStart, i) ?: 0
                         26 -> isPlex = len == 1 && bytes[fieldStart] == ONE_BYTE
                         27 -> episodeNum = parseIntOrNull(bytes, fieldStart, i)
+                        38 -> season = parseIntOrNull(bytes, fieldStart, i)
                         else -> if (len > 0) fields[field] = String(bytes, fieldStart, len, Charsets.UTF_8)
                     }
                 }
@@ -395,7 +404,11 @@ object ChannelCache {
                 drmLicenseResponse = fields[36],
                 // Appended after phase 2: older cache lines simply have no field 37
                 // and read back with null headers (provider UA still applies).
-                streamHeaders = fields[37]?.let { KodiProps.decodeHeaderMap(it) }?.takeIf { it.isNotEmpty() }
+                streamHeaders = fields[37]?.let { KodiProps.decodeHeaderMap(it) }?.takeIf { it.isNotEmpty() },
+                season = season,
+                imdbRating = fields[39],
+                pluginToken = fields[40],
+                pluginId = fields[41]
             )
         )
     }
@@ -522,7 +535,11 @@ object ChannelCache {
         drmPostData = f.getOrElse(35) { "" }.ifEmpty { null },
         drmLicenseResponse = f.getOrElse(36) { "" }.ifEmpty { null },
         streamHeaders = f.getOrElse(37) { "" }.takeIf { it.isNotEmpty() }
-            ?.let { KodiProps.decodeHeaderMap(it) }?.takeIf { it.isNotEmpty() }
+            ?.let { KodiProps.decodeHeaderMap(it) }?.takeIf { it.isNotEmpty() },
+        season = f.getOrElse(38) { "" }.toIntOrNull(),
+        imdbRating = f.getOrElse(39) { "" }.ifEmpty { null },
+        pluginToken = f.getOrElse(40) { "" }.ifEmpty { null },
+        pluginId = f.getOrElse(41) { "" }.ifEmpty { null }
     )
 
     fun clear(context: Context) {

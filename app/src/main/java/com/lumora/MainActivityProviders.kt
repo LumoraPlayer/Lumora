@@ -1249,38 +1249,70 @@ internal fun MainActivity.loadAllConfiguredProviders(
         }
 
         if (ramCollected != null) {
+            // Keep the providers that were not fetched this time (a failed provider, or
+            // the others during a one-provider load) and replace only what answered.
+            val previous = com.lumora.data.catalog.ResidentCatalog.current()
+                ?.allChannels()
+                .orEmpty()
+            val enabledSources = enabledProviderIds +
+                mediaServers().filter { it.enabled }.map { it.id }
+            val kept = previous.filterNot { channel ->
+                channel.sourceProviderId in refreshedSourceIds ||
+                    (channel.sourceProviderId != null &&
+                        channel.sourceProviderId !in enabledSources) ||
+                    channel.id.startsWith(AnimeCatalogClient.ID_PREFIX)
+            }
+            val collected = ramCollected.filter {
+                it.sourceProviderId == null || it.sourceProviderId in enabledSources
+            }
+            val merged = kept + collected
             if (com.lumora.data.catalog.CatalogMode.isRamEligible(this@loadAllConfiguredProviders)) {
-                // Keep the providers that were not fetched this time (a failed provider, or
-                // the others during a one-provider load) and replace only what answered.
-                val previous = com.lumora.data.catalog.ResidentCatalog.current()
-                    ?.allChannels()
-                    .orEmpty()
-                val enabledSources = enabledProviderIds +
-                    mediaServers().filter { it.enabled }.map { it.id }
-                val kept = previous.filterNot { channel ->
-                    channel.sourceProviderId in refreshedSourceIds ||
-                        (channel.sourceProviderId != null &&
-                            channel.sourceProviderId !in enabledSources) ||
-                        channel.id.startsWith(AnimeCatalogClient.ID_PREFIX)
-                }
-                val merged = kept + ramCollected.toList()
                 val resident = runCatching {
                     repository.ingestResidentFromChannels(merged)
                 }.getOrDefault(false)
                 if (!resident) {
-                    // Too big to hold after all (or the build OOM'd): fall back to Room.
+                    // Too big to hold after all (or the build OOM'd): fall back to Room for
+                    // this process. The resident build already marked itself failed, so a
+                    // reader will not retry it and the database path answers. Drop the flat
+                    // cache too: it is the stale/small copy we could not load.
                     persistCollectedToRoom(merged)
-                    repository.refreshResidentCatalog()
+                    com.lumora.data.catalog.ResidentCatalog.clear()
+                    runCatching {
+                        com.lumora.cache.ChannelCache.clear(this@loadAllConfiguredProviders)
+                    }
                 }
             } else {
                 // The measured payload crossed the 40 MB cutoff during this load.
-                persistCollectedToRoom(ramCollected.toList())
+                persistCollectedToRoom(merged)
                 repository.refreshResidentCatalog()
             }
         } else {
             // The normal database path (large or first load). This rebuilds the resident
             // model when the payload is under the cutoff, and clears it otherwise.
-            repository.refreshResidentCatalog()
+            if (com.lumora.data.catalog.CatalogMode.isRamEligible(this@loadAllConfiguredProviders)) {
+                val active = com.lumora.data.catalog.ResidentCatalog.current()
+                if (only != null && active != null) {
+                    // A one-provider load wrote just that source to Room. The other
+                    // providers may exist only in the resident list (a RAM-mode setup), so
+                    // a full Room read would drop them. Merge the refreshed rows in.
+                    val dbRows = withContext(Dispatchers.IO) {
+                        com.lumora.data.local.CatalogDatabase
+                            .getInstance(this@loadAllConfiguredProviders)
+                            .catalogChannelDao()
+                            .allRows()
+                    }
+                    val replaced = dbRows.filter { it.providerId in refreshedSourceIds }
+                    val merged = active.rows.filterNot { it.providerId in refreshedSourceIds } +
+                        replaced
+                    com.lumora.data.catalog.ResidentCatalog.replaceWithRows(
+                        this@loadAllConfiguredProviders, merged
+                    )
+                } else {
+                    repository.refreshResidentCatalog()
+                }
+            } else {
+                repository.refreshResidentCatalog()
+            }
         }
         classifyAndShow(preserveUi = shouldPreserveUiOnLoad())
         // Pull the ingest narration down before the summary takes the row.

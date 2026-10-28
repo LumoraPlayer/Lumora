@@ -70,7 +70,11 @@ class ChannelCacheParseTest {
         drmLicenseHeaders = mapOf("B" to "x=y"),
         drmPostData = "{SSM}",
         drmLicenseResponse = "response",
-        episodeNum = 3
+        episodeNum = 3,
+        season = 2,
+        imdbRating = "7.9",
+        pluginToken = "resolve-token",
+        pluginId = "plugin-1"
     )
 
     @Test
@@ -178,8 +182,8 @@ class ChannelCacheParseTest {
 
     @Test
     fun `a trailing separator is one empty last field, not a legacy line`() {
-        // 38 fields, the last one empty - written as 37 separators.
-        val values = MutableList(38) { "" }
+        // 42 fields, the last one empty - written as 41 separators.
+        val values = MutableList(42) { "" }
         values[1] = "Name"
         values[2] = "url"
         val raw = (values.joinToString(sep.toString())).toByteArray(Charsets.UTF_8) // ends with sep
@@ -191,15 +195,15 @@ class ChannelCacheParseTest {
 
     @Test
     fun `columns beyond the known format are ignored`() {
-        val values = MutableList(41) { "" }
+        val values = MutableList(45) { "" }
         values[0] = "id"
         values[1] = "Name"
         values[2] = "url"
         values[10] = "MOVIE"
         values[37] = "Referer=https%3A%2F%2Fex.com"
-        values[38] = "future"
-        values[39] = "future"
-        values[40] = "future"
+        values[42] = "future"
+        values[43] = "future"
+        values[44] = "future"
         val parsed = ChannelCache.parseCache(line(*values.toTypedArray()).toByteArray(Charsets.UTF_8), workers = 1)
 
         assertEquals(MediaType.MOVIE, parsed.channels.single().mediaType)

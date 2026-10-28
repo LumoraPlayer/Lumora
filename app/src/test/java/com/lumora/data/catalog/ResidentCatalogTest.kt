@@ -2,6 +2,7 @@
 package com.lumora.data.catalog
 
 import com.lumora.data.local.entity.CatalogChannelEntity
+import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -238,5 +239,50 @@ class ResidentCatalogTest {
     fun `an unknown media type has no cards`() {
         val state = ResidentCatalog.buildState(listOf(row("a", "A", type = MediaType.LIVE)))
         assertEquals(0, state.vodCardCount(MediaType.MOVIE, null, false, false))
+    }
+
+    @Test
+    fun `mapping a RAM ingest groups copies and demotes backups`() {
+        fun channel(id: String, provider: String) = Channel(
+            id = id,
+            name = "Film (2020)",
+            url = "http://example/$id",
+            mediaType = MediaType.MOVIE,
+            categoryId = "action",
+            categoryName = "Action",
+            sourceProviderId = provider
+        )
+
+        val state = ResidentCatalog.buildFromChannels(
+            channels = listOf(channel("1", "p1"), channel("2", "p2")),
+            backupIds = setOf("p2")
+        )
+
+        val page = state.vodPage(MediaType.MOVIE, null, false, false, 0, 10)
+        assertEquals(1, page.size)
+        assertEquals("1", page.single().id)
+        assertEquals(1, state.vodCardCount(MediaType.MOVIE, null, false, false))
+
+        val versions = state.vodVersionGroups(MediaType.MOVIE, page)
+        assertEquals(listOf("1", "2"), versions.getValue("1").map { it.id })
+    }
+
+    @Test
+    fun `mapping assigns provider order per type`() {
+        fun channel(id: String, name: String) = Channel(
+            id = id,
+            name = name,
+            url = "http://example/$id",
+            mediaType = MediaType.LIVE,
+            sourceProviderId = "p1"
+        )
+
+        val state = ResidentCatalog.buildFromChannels(
+            channels = listOf(channel("a", "A"), channel("b", "B")),
+            backupIds = emptySet()
+        )
+
+        // The insertion order is the provider's own order; the resident live list keeps it.
+        assertEquals(listOf("a", "b"), state.liveChannels().map { it.id })
     }
 }

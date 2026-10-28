@@ -352,6 +352,11 @@ object ResidentCatalog {
         )
     }
 
+    /** Replaces the resident rows from an already-built entity list (one-provider merge). */
+    suspend fun replaceWithRows(context: Context, rows: List<CatalogChannelEntity>) {
+        replaceRows(context, rows)
+    }
+
     private suspend fun replaceRows(context: Context, rows: List<CatalogChannelEntity>) {
         val built = try {
             withContext(Dispatchers.Default) { buildState(rows) }
@@ -428,6 +433,15 @@ object ResidentCatalog {
             .filter { it.backup }
             .map { it.id }
             .toHashSet()
+        return buildFromChannels(channels, backupIds, syncToken)
+    }
+
+    /** Test seam: the entity mapping without an Android Context. */
+    internal fun buildFromChannels(
+        channels: List<Channel>,
+        backupIds: Set<String>,
+        syncToken: Long = 0L
+    ): State {
         val orderByProviderType = HashMap<String, Int>()
         val seen = HashSet<String>()
         val rows = ArrayList<CatalogChannelEntity>(channels.size)
