@@ -50,5 +50,34 @@ data class IptvProviderConfig(
     // Bytes the last successful catalogue download actually pulled from this provider
     // (null = never measured). Written after a load so Settings can state a provider's size
     // - and flag a playlist past CATALOGUE_TOO_LARGE_BYTES - without refetching it first.
-    val catalogueBytes: Long? = null
+    val catalogueBytes: Long? = null,
+    // Narrowed import (Xtream only): the panel's own category ids to import, per content
+    // type. Empty means "no narrowing" for that type - import all of it, which is what every
+    // provider added before these fields existed must keep doing.
+    //
+    // A six-figure panel answers get_vod_streams with ~80 MB and 200k rows, and a user who
+    // watches English TV has no use for the other 87% of it. category_id is the only
+    // server-side filter Xtream has, so importing only the selected categories is a real
+    // download-size cut rather than a display filter.
+    //
+    // Category ids rather than the tag codes the picker groups by: the tags are a
+    // convenience the panel may or may not provide (of the panels checked, five had no
+    // usable tags at all and one tagged only its Live rows), while category_id works on
+    // every panel. The picker groups by tag where tags exist and lists raw categories where
+    // they do not - the stored value is the same either way.
+    //
+    // Three sets, not one: the vocabulary differs by content type on the same panel. Live
+    // rows are country-tagged ("US|", "UK|") while films and series are language-tagged
+    // ("|EN|", "|FR|"), so one shared set would either hide Live TV for someone who picked
+    // a language or hide the films for someone who picked a country.
+    val liveCategoryIds: Set<String> = emptySet(),
+    val movieCategoryIds: Set<String> = emptySet(),
+    val seriesCategoryIds: Set<String> = emptySet(),
+    // Identity of the catalogue this provider actually serves, written after a load:
+    // "<rows>:<xor>:<sum>" over every item name seen. Two entries with the same value are
+    // the same panel behind different domains - five of the eight Reddit-scanned providers
+    // checked were byte-identical (all 9,802 stream ids, 100% overlap), and importing each
+    // of them cost a full download and a full set of rows for content already stored.
+    // Null means never measured.
+    val catalogueFingerprint: String? = null
 )

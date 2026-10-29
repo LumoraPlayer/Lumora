@@ -458,7 +458,11 @@ class XtreamClient(private val client: OkHttpClient) {
         mediaType: MediaType,
         transform: (Channel) -> Channel = { it },
         onItem: (Channel) -> Unit,
-        onProgress: ((bytes: Long, total: Long?) -> Unit)? = null
+        onProgress: ((bytes: Long, total: Long?) -> Unit)? = null,
+        /** When set, only that category is requested. The bulk endpoints honour it, which is
+         *  what makes a narrowed import a real download cut rather than a client-side skip -
+         *  see IptvProviderConfig.importTags. */
+        categoryId: String? = null
     ): Int? {
         val key = when (action) {
             "get_live_streams" -> "live_streams"
@@ -470,8 +474,9 @@ class XtreamClient(private val client: OkHttpClient) {
             "get_series" -> { map, _ -> seriesFromMap(map)?.let(transform) }
             else -> { map, first -> streamFromMap(map, first, mediaType, provider)?.let(transform) }
         }
+        val params = if (categoryId.isNullOrBlank()) "action=$action" else "action=$action&category_id=$categoryId"
         return streamBulkArrayInto(
-            buildApiUrl(provider, "action=$action"), key, readItem, onItem, onProgress
+            buildApiUrl(provider, params), key, readItem, onItem, onProgress
         )
     }
 

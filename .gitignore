@@ -20,3 +20,4 @@ package.json
 
 # Windows shell redirect artifact (reserved device name) - never commit
 nul
+.gitnexus

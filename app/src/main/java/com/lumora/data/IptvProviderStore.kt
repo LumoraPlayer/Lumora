@@ -99,6 +99,20 @@ object IptvProviderStore {
 
     fun newId(): String = UUID.randomUUID().toString()
 
+    /** Records the identity of the catalogue a provider served, so a later load can tell two
+     *  domains serving the same panel apart without downloading either again. */
+    fun setCatalogueFingerprint(
+        prefs: SharedPreferences,
+        id: String,
+        fingerprint: String?
+    ): List<IptvProviderConfig> {
+        val current = load(prefs).map {
+            if (it.id == id) it.copy(catalogueFingerprint = fingerprint) else it
+        }
+        save(prefs, current)
+        return current
+    }
+
     /** One-time upgrade from the old single-provider pref scheme (provider_type, plus
      *  xtream_/stalker_/m3u_ prefixed keys) into a one-entry list - runs once, then the
      *  list pref takes over so this never runs again (an empty JSON array `[]` from then
@@ -162,7 +176,21 @@ object IptvProviderStore {
         c.discoveredBy?.let { put("discoveredBy", it) }
         if (c.maxConnections > 0) put("maxConnections", c.maxConnections)
         c.catalogueBytes?.let { put("catalogueBytes", it) }
+        if (c.liveCategoryIds.isNotEmpty()) put("liveCategoryIds", c.liveCategoryIds.toJsonArray())
+        if (c.movieCategoryIds.isNotEmpty()) put("movieCategoryIds", c.movieCategoryIds.toJsonArray())
+        if (c.seriesCategoryIds.isNotEmpty()) put("seriesCategoryIds", c.seriesCategoryIds.toJsonArray())
+        c.catalogueFingerprint?.let { put("catalogueFingerprint", it) }
     }
+
+    private fun Set<String>.toJsonArray(): JSONArray =
+        JSONArray().apply { sorted().forEach { put(it) } }
+
+    private fun JSONObject.idSet(key: String): Set<String> =
+        optJSONArray(key)?.let { arr ->
+            (0 until arr.length()).mapNotNull { i ->
+                arr.optString(i).takeIf { it.isNotBlank() }
+            }.toSet()
+        } ?: emptySet()
 
     private fun fromJson(o: JSONObject): IptvProviderConfig? {
         // An entry with no id can't be looked up again (favourites/positions key off it), and
@@ -191,7 +219,11 @@ object IptvProviderStore {
             stalkerDeviceId2 = o.optString("stalkerDeviceId2").takeIf { it.isNotBlank() },
             discoveredBy = o.optString("discoveredBy").takeIf { it.isNotBlank() },
             maxConnections = o.optInt("maxConnections", 0),
-            catalogueBytes = o.optLong("catalogueBytes", 0L).takeIf { it > 0 }
+            catalogueBytes = o.optLong("catalogueBytes", 0L).takeIf { it > 0 },
+            liveCategoryIds = o.idSet("liveCategoryIds"),
+            movieCategoryIds = o.idSet("movieCategoryIds"),
+            seriesCategoryIds = o.idSet("seriesCategoryIds"),
+            catalogueFingerprint = o.optString("catalogueFingerprint").takeIf { it.isNotBlank() }
         )
     }
 }

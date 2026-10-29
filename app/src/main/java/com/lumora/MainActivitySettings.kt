@@ -24,6 +24,8 @@ import com.lumora.download.DownloadStore
 import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.RecentlyPlayedStore
 import com.lumora.model.Provider
+import com.lumora.model.ProviderType
+import com.lumora.parser.XtreamClient
 import com.lumora.model.IptvProviderConfig
 import com.lumora.model.MediaType
 import com.lumora.data.IptvProviderStore
@@ -33,6 +35,9 @@ import com.lumora.pairing.QrPairingManager
 import com.lumora.player.PlayerManager
 import com.lumora.util.normalizeServerUrl
 import com.lumora.util.isLocalFileUrl
+import com.lumora.util.catalogueTagOf
+import com.lumora.util.duplicateProviderIds
+import com.lumora.util.catalogueTagLabel
 import com.lumora.util.Locality
 import com.lumora.util.LocalityCatalog
 import com.lumora.util.isVisibleForLocality
@@ -959,6 +964,202 @@ internal fun MainActivity.showProviderSettings() {
     val iptvFormCancel = dialogView.findViewById<View>(R.id.settingsIptvFormCancel)
     val providerNameInput = dialogView.findViewById<EditText>(R.id.settingsProviderName)
 
+    // Narrowed-import selection held by the open form. Seeded from the edited provider in
+    // openIptvForm and written back on Save - the picker itself is a dialog that authenticates
+    // and lists the panel's own tags, so nothing here is known until the user opens it.
+    var pendingLiveCategories: Set<String> = emptySet()
+    var pendingMovieCategories: Set<String> = emptySet()
+    var pendingSeriesCategories: Set<String> = emptySet()
+
+    // ── Narrowed import (Xtream) ────────────────────────────────────────────
+    // A six-figure panel answers get_vod_streams with ~80 MB and 200k rows. category_id is
+    // the only server-side filter Xtream has, so keeping only the categories a user wants is
+    // a real download cut rather than a display filter - see IptvProviderConfig.
+    //
+    // The picker is built from the panel's own categories, never a fixed country list: the
+    // vocabulary differs per panel and per content type, and of the panels checked five had
+    // no usable tags at all while one tagged only its Live rows. Where a section is mostly
+    // tagged the rows collapse to one per tag; where it is not, the categories are listed
+    // directly. Either way the stored value is the category ids the panel filters on.
+    val xtreamImportRow = dialogView.findViewById<View>(R.id.settingsXtreamImport)
+    val xtreamImportValue = dialogView.findViewById<TextView>(R.id.settingsXtreamImportValue)
+
+    fun refreshImportScopeSummary() {
+        val selected = pendingLiveCategories.size +
+            pendingMovieCategories.size + pendingSeriesCategories.size
+        xtreamImportValue.text = if (selected == 0) {
+            getString(R.string.sett_import_scope_all)
+        } else {
+            getString(R.string.sett_import_scope_selected, selected)
+        }
+    }
+    refreshImportScopeSummary()
+
+    fun importIdsFor(type: String): Set<String> = when (type) {
+        "live" -> pendingLiveCategories
+        "movie" -> pendingMovieCategories
+        else -> pendingSeriesCategories
+    }
+
+    fun setImportIdsFor(type: String, ids: Set<String>) {
+        when (type) {
+            "live" -> pendingLiveCategories = ids
+            "movie" -> pendingMovieCategories = ids
+            else -> pendingSeriesCategories = ids
+        }
+    }
+
+    fun showImportScopePicker(
+        live: List<Pair<String, String>>,
+        vod: List<Pair<String, String>>,
+        series: List<Pair<String, String>>
+    ) {
+        // Every category id per type, so "all" is representable without storing hundreds of
+        // ids: an empty selection means everything, and unticking one row materialises the
+        // rest explicitly.
+        val fullIds = mapOf(
+            "live" to live.map { it.first }.toSet(),
+            "movie" to vod.map { it.first }.toSet(),
+            "series" to series.map { it.first }.toSet()
+        )
+        val rows = ArrayList<ImportScopeRow>()
+        fun collect(type: String, sectionRes: Int, pairs: List<Pair<String, String>>) {
+            if (pairs.isEmpty()) return
+            val section = getString(sectionRes)
+            val byTag = pairs.groupBy { catalogueTagOf(it.second) }
+            val tagged = byTag.entries.filter { it.key != null }
+            val taggedCount = tagged.sumOf { it.value.size }
+            // Mostly tagged: one row per tag, which is what keeps a 368-category panel down
+            // to ~36 rows on a remote. Otherwise the categories are the only thing there is.
+            if (taggedCount * 10 >= pairs.size * 6) {
+                for ((tag, cats) in tagged) {
+                    rows.add(
+                        ImportScopeRow(
+                            type = type,
+                            label = getString(
+                                R.string.sett_import_scope_row,
+                                section,
+                                catalogueTagLabel(tag!!),
+                                cats.size,
+                                pairs.size
+                            ),
+                            ids = cats.map { it.first }.toSet()
+                        )
+                    )
+                }
+                byTag[null]?.let { untagged ->
+                    rows.add(
+                        ImportScopeRow(
+                            type = type,
+                            label = getString(
+                                R.string.sett_import_scope_row_untagged,
+                                section,
+                                untagged.size,
+                                pairs.size
+                            ),
+                            ids = untagged.map { it.first }.toSet()
+                        )
+                    )
+                }
+            } else {
+                for ((id, name) in pairs.sortedBy { it.second.lowercase() }) {
+                    rows.add(
+                        ImportScopeRow(
+                            type = type,
+                            label = getString(R.string.sett_import_scope_category, section, name),
+                            ids = setOf(id)
+                        )
+                    )
+                }
+            }
+        }
+        collect("live", R.string.sett_import_scope_live, live)
+        collect("movie", R.string.sett_import_scope_films, vod)
+        collect("series", R.string.sett_import_scope_series, series)
+        if (rows.isEmpty()) {
+            Toast.makeText(this, getString(R.string.sett_import_scope_failed), Toast.LENGTH_LONG).show()
+            return
+        }
+        val labels = rows.map { it.label }.toTypedArray()
+        // Empty selection means "everything", so everything starts ticked.
+        val checked = BooleanArray(rows.size) {
+            val selected = importIdsFor(rows[it].type)
+            selected.isEmpty() || rows[it].ids.all { id -> id in selected }
+        }
+        LumoraDialog.Builder(this)
+            .setTitle(getString(R.string.sett_import_scope_dialog_title))
+            .setMessage(getString(R.string.sett_import_scope_dialog_message))
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                val row = rows[which]
+                val full = fullIds[row.type].orEmpty()
+                val current = importIdsFor(row.type).ifEmpty { full }.toMutableSet()
+                if (isChecked) current.addAll(row.ids) else current.removeAll(row.ids)
+                // Back to "everything" is stored as empty, so a provider that was never
+                // narrowed keeps the old behaviour and the field stays small.
+                setImportIdsFor(row.type, if (current == full) emptySet() else current)
+                refreshImportScopeSummary()
+            }
+            // "Import everything" is the reset, and the only way back to an unfiltered
+            // provider without re-ticking every row.
+            .setNegativeButton(getString(R.string.sett_import_scope_all_button)) { _, _ ->
+                pendingLiveCategories = emptySet()
+                pendingMovieCategories = emptySet()
+                pendingSeriesCategories = emptySet()
+                refreshImportScopeSummary()
+            }
+            .setPositiveButton(getString(R.string.save), null)
+            .show()
+    }
+
+    xtreamImportRow.setOnClickListener {
+        val rawUrl = xtreamUrl.text.toString().trim()
+        if (rawUrl.isBlank()) {
+            Toast.makeText(this, getString(R.string.sett_enter_server_url), Toast.LENGTH_SHORT).show()
+            return@setOnClickListener
+        }
+        xtreamImportValue.text = getString(R.string.sett_import_scope_checking)
+        xtreamImportRow.isEnabled = false
+        scope.launch {
+            val provider = Provider(
+                name = providerNameInput.text.toString().trim(),
+                type = ProviderType.XTREAM,
+                serverUrl = normalizeServerUrl(rawUrl),
+                username = xtreamUser.text.toString().trim(),
+                password = xtreamPass.text.toString().trim()
+            )
+            val client = XtreamClient(BaseApplication.instance.okHttpClient)
+            val auth = withContext(Dispatchers.IO) { client.authenticate(provider) }.getOrNull()
+            // Category lists are cheap (tens of KB each) - this is the same call the ingest
+            // makes before its bulk lists, so nothing here costs more than an import would.
+            var liveCats: List<Pair<String, String>>? = null
+            var vodCats: List<Pair<String, String>>? = null
+            var seriesCats: List<Pair<String, String>>? = null
+            if (auth?.valid == true) {
+                withContext(Dispatchers.IO) {
+                    liveCats = runCatching { client.getLiveCategories(provider) }.getOrDefault(emptyList())
+                    vodCats = runCatching { client.getVodCategories(provider) }.getOrDefault(emptyList())
+                    seriesCats = runCatching { client.getSeriesCategories(provider) }.getOrDefault(emptyList())
+                }
+            }
+            xtreamImportRow.isEnabled = true
+            val live = liveCats
+            val vod = vodCats
+            val series = seriesCats
+            if (live == null || vod == null || series == null ||
+                (live.isEmpty() && vod.isEmpty() && series.isEmpty())
+            ) {
+                refreshImportScopeSummary()
+                Toast.makeText(
+                    this@showProviderSettings,
+                    getString(R.string.sett_import_scope_failed),
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                showImportScopePicker(live, vod, series)
+            }
+        }
+    }
+
     clearHistory.setOnClickListener {
         LumoraDialog.Builder(this)
             .setTitle(getString(R.string.sett_clear_history_confirm))
@@ -1557,6 +1758,12 @@ internal fun MainActivity.showProviderSettings() {
         providerNameInput.setText(existing?.name ?: "")
         backupCheckBox.isChecked = existing?.backup == true
         maxConnInput.setText(existing?.maxConnections?.takeIf { it > 0 }?.toString() ?: "")
+        // Narrowed-import selection belongs to the entry being edited; a new provider starts
+        // at "all categories" so the first load behaves exactly as it always did.
+        pendingLiveCategories = existing?.liveCategoryIds ?: emptySet()
+        pendingMovieCategories = existing?.movieCategoryIds ?: emptySet()
+        pendingSeriesCategories = existing?.seriesCategoryIds ?: emptySet()
+        refreshImportScopeSummary()
         if (existing != null) {
             iptvFormTitle.text = getString(R.string.sett_editing_provider, existing.name)
             iptvFormTitle.visibility = View.VISIBLE
@@ -1738,6 +1945,10 @@ internal fun MainActivity.showProviderSettings() {
         }
         iptvProviderListContainer.removeAllViews()
         val list = IptvProviderStore.load(prefs)
+        // A domain serving a catalogue an earlier entry already covers is fetched once and
+        // skipped after that (see duplicateProviderIds); the row says so, because an entry
+        // that silently stops importing reads as broken.
+        val duplicateIds = duplicateProviderIds(list)
         val servers = mediaServers()
         iptvProviderListEmpty.visibility =
             if (list.isEmpty() && servers.isEmpty()) View.VISIBLE else View.GONE
@@ -1846,6 +2057,7 @@ internal fun MainActivity.showProviderSettings() {
             // otherwise be the part that gets cut off.
             val badges = buildList {
                 if (cfg.backup) add(getString(R.string.sett_provider_backup_badge))
+                if (cfg.id in duplicateIds) add(getString(R.string.sett_provider_duplicate_badge))
                 cfg.catalogueBytes?.let { bytes ->
                     add(formatCatalogueSize(bytes))
                     if (bytes >= CATALOGUE_TOO_LARGE_BYTES) add(getString(R.string.sett_provider_very_large))
@@ -2926,7 +3138,10 @@ internal fun MainActivity.showProviderSettings() {
                     moviesEnabled = prevConfig?.moviesEnabled ?: true, seriesEnabled = prevConfig?.seriesEnabled ?: true,
                     url = url, username = xtreamUser.text.toString().trim(), password = xtreamPass.text.toString().trim(),
                     backup = wantBackup,
-                    maxConnections = maxConnInput.text.toString().trim().toIntOrNull()?.coerceIn(0, 20) ?: 0
+                    maxConnections = maxConnInput.text.toString().trim().toIntOrNull()?.coerceIn(0, 20) ?: 0,
+                    liveCategoryIds = pendingLiveCategories,
+                    movieCategoryIds = pendingMovieCategories,
+                    seriesCategoryIds = pendingSeriesCategories
                 ))
             }
             "stalker" -> {
@@ -3601,3 +3816,15 @@ private fun MainActivity.showRecordingNasQrDialog(onChanged: () -> Unit = {}) {
         }
     }
 }
+/**
+ * One row of the narrowed-import picker: a set of category ids that tick together.
+ *
+ * [type] is "live"/"movie"/"series" because the same panel uses different vocabularies per
+ * content type, and a tick must only narrow the section it was shown under. [ids] is what
+ * actually gets stored - one id for a category row, every id under a tag for a grouped row.
+ */
+private data class ImportScopeRow(
+    val type: String,
+    val label: String,
+    val ids: Set<String>
+)

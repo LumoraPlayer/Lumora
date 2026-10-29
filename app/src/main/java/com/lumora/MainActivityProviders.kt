@@ -24,6 +24,8 @@ import com.lumora.data.catalog.CatalogRepository
 import com.lumora.anime.AnimeCatalogClient
 import com.lumora.parser.M3uParser
 import com.lumora.parser.XtreamClient
+import com.lumora.util.CatalogueFingerprint
+import com.lumora.util.duplicateProviderIds
 import com.lumora.util.normalizeServerUrl
 import com.lumora.util.isLocalFileUrl
 import com.lumora.data.remote.stalker.StalkerProvider
@@ -1033,14 +1035,49 @@ internal fun MainActivity.loadAllConfiguredProviders(
 
         val enabledConfigs = IptvProviderStore.load(prefs)
             .filter { it.enabled && (only == null || it.id in only) }
+        // Duplicate domains: the same panel served from several hosts. Five of eight
+        // Reddit-scanned providers checked were byte-identical - same 9,802 stream ids,
+        // same names - and fetching each one bought a full download and a full set of rows
+        // for content already stored. The fingerprint is written by the previous load, so
+        // from the second load on the repeats cost nothing.
+        //
+        // Reversible by construction: if the keeper is removed or switched off it is no
+        // longer in this list, its twin has nothing to match, and imports normally again.
+        val duplicateIds = duplicateProviderIds(enabledConfigs)
+        if (duplicateIds.isNotEmpty()) {
+            val repo = CatalogRepository.get(this@loadAllConfiguredProviders)
+            withContext(Dispatchers.IO) {
+                for (id in duplicateIds) {
+                    runCatching { repo.deleteProviderType(id, MediaType.LIVE) }
+                    runCatching { repo.deleteProviderType(id, MediaType.MOVIE) }
+                    runCatching { repo.deleteProviderType(id, MediaType.SERIES) }
+                }
+            }
+            // Their channels may already be on screen from the cached read above; the
+            // keeper's copies cover the same content, so drop them rather than leave the
+            // same rows twice in the resident list.
+            allChannels = allChannels.filterNot { it.sourceProviderId in duplicateIds }
+        }
+        val fetchConfigs = if (duplicateIds.isEmpty()) {
+            enabledConfigs
+        } else {
+            enabledConfigs.filterNot { it.id in duplicateIds }
+        }
+        if (duplicateIds.isNotEmpty()) {
+            SessionLog.event(
+                "providers",
+                "skipped ${duplicateIds.size} provider(s) serving a catalogue already imported: " +
+                    enabledConfigs.filter { it.id in duplicateIds }.joinToString(", ") { it.name }
+            )
+        }
         // The global VOD switch makes every non-Xtream fetch drop films/series; do not let
         // that empty half delete the stored VOD (see replaceProvider's skipTypes).
         val globalVodOffTypes =
             if (isVodDisabled()) setOf(MediaType.MOVIE, MediaType.SERIES) else emptySet()
-        if (!uiPainted && enabledConfigs.isNotEmpty()) {
+        if (!uiPainted && fetchConfigs.isNotEmpty()) {
             setStatus(
-                if (enabledConfigs.size == 1) getString(R.string.plug_connecting_to, enabledConfigs.first().name)
-                else getString(R.string.plug_connecting_to_n, enabledConfigs.size),
+                if (fetchConfigs.size == 1) getString(R.string.plug_connecting_to, fetchConfigs.first().name)
+                else getString(R.string.plug_connecting_to_n, fetchConfigs.size),
                 visible = true
             )
         }
@@ -1114,7 +1151,7 @@ internal fun MainActivity.loadAllConfiguredProviders(
         // about to show. The user can change it mid-load by opening the other tab
         // (prioritizeIngestSection), and the provider picks it up at its next phase.
         ingestPriorityTab = activeTab
-        val fetchResults = enabledConfigs.map { config ->
+        val fetchResults = fetchConfigs.map { config ->
             async {
                 // Fetch threads report bytes/rows here; the map and the status row are
                 // main-thread state (see MainActivityIngest.kt).
@@ -1727,6 +1764,11 @@ internal suspend fun MainActivity.fetchXtreamChannels(
         val live = ArrayList<Channel>()
         val isBackup = IptvProviderStore.load(prefs).firstOrNull { it.id == config.id }?.backup == true
         var liveFailed = false
+        // Built while the lists stream past, so a duplicate domain costs nothing extra to
+        // recognise on the next load. See CatalogueFingerprint.
+        val fingerprint = CatalogueFingerprint.Builder()
+        var sectionsOk = true
+        var anyResumed = false
         withContext(Dispatchers.IO) {
             // Content-type gates: the (slow) VOD/series category+stream fetches are
             // skipped entirely for types this provider has switched off.
@@ -1785,16 +1827,28 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                 return mapped.copy(sourceProviderId = config.id)
             }
 
+            /** Category ids a narrowed import may fetch, or null when the whole list should
+             *  be read. The picker stores the panel's own category ids, so no tag parsing
+             *  happens here - the tag is only how the picker groups its rows. */
+            fun allowedIds(selected: Set<String>): Set<String>? = selected.ifEmpty { null }
+
             /** Streams one bulk list into the catalogue database. Only the live half is
              *  collected into memory; films and series are read from the database by the
              *  VOD content builder. A database problem must never fail a fetch the live
-             *  half could have served. */
+             *  half could have served.
+             *
+             *  [allowed] is the narrowed-import filter: null reads the whole list in one
+             *  request, a set reads one request per category. That is the whole point of
+             *  the feature - the bytes never leave the panel - but it trades a single
+             *  round trip for one per category, so it is only ever set from an explicit
+             *  user choice. */
             fun ingest(
                 action: String,
                 type: MediaType,
                 names: Map<String, String>,
                 uncatId: String,
-                into: MutableList<Channel>?
+                into: MutableList<Channel>?,
+                allowed: Set<String>? = null
             ): Boolean {
                 val writer = if (ramCollector == null) {
                     runCatching { repository.writer(config.id, type, isBackup) }.getOrNull()
@@ -1812,34 +1866,74 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                 var entityNanos = 0L
                 var bytesRead = 0L
                 var rows = 0
+                // One request for the whole list, or one per selected category. A selection
+                // that matches nothing at all is a failure rather than a silent empty
+                // section: importing nothing would read as "this provider has no content",
+                // and for Live TV it would replace the channels already on screen with an
+                // empty list (see the liveFailed guard below).
+                val categoryIds: List<String?> = when {
+                    allowed == null -> listOf(null)
+                    allowed.isEmpty() -> emptyList()
+                    else -> allowed.sorted()
+                }
+                if (categoryIds.isEmpty()) {
+                    Log.w(
+                        "LumoraPerf",
+                        "ingest $phase skipped: no category matched the import selection " +
+                            "(${config.liveCategoryIds.size + config.movieCategoryIds.size + config.seriesCategoryIds.size} selected)"
+                    )
+                    runCatching { writer?.abort() }
+                    return false
+                }
+                var bytesBase = 0L
+                var bytesThisCall = 0L
                 val delivered = try {
-                    client.streamBulkList(
-                        xtreamProvider, action, type,
-                        transform = { channel ->
-                            val t = System.nanoTime()
-                            withCategory(channel, names, uncatId).also { transformNanos += System.nanoTime() - t }
-                        },
-                        onItem = { channel ->
-                            val t = System.nanoTime()
-                            into?.add(channel)
-                            ramCollector?.add(channel)
-                            // Let a database error abort the stream: the writer keeps the rows
-                            // already written (updates of existing copies), and the rows this
-                            // ingest never reached remain the old ones.
-                            writer?.add(channel)
-                            entityNanos += System.nanoTime() - t
-                            rows++
-                        },
-                        onProgress = { bytes, total ->
-                            bytesRead = bytes
-                            // Rows come from the writer when there is one; the RAM collector
-                            // counts parsed rows directly.
-                            onProgress?.invoke(phase, writer?.pending ?: rows, bytes, total)
+                    var total = 0
+                    var failed = false
+                    for (categoryId in categoryIds) {
+                        bytesThisCall = 0L
+                        val deliveredHere = client.streamBulkList(
+                            xtreamProvider, action, type,
+                            transform = { channel ->
+                                val t = System.nanoTime()
+                                withCategory(channel, names, uncatId).also { transformNanos += System.nanoTime() - t }
+                            },
+                            onItem = { channel ->
+                                val t = System.nanoTime()
+                                into?.add(channel)
+                                ramCollector?.add(channel)
+                                // Let a database error abort the stream: the writer keeps the rows
+                                // already written (updates of existing copies), and the rows this
+                                // ingest never reached remain the old ones.
+                                writer?.add(channel)
+                                fingerprint.add(channel.name)
+                                entityNanos += System.nanoTime() - t
+                                rows++
+                            },
+                            onProgress = { bytes, callTotal ->
+                                bytesThisCall = bytes
+                                bytesRead = bytesBase + bytes
+                                // Rows come from the writer when there is one; the RAM collector
+                                // counts parsed rows directly. A per-category pass has no single
+                                // stated size, so the bar stays indeterminate and the counters
+                                // keep moving.
+                                onProgress?.invoke(
+                                    phase,
+                                    writer?.pending ?: rows,
+                                    bytesRead,
+                                    if (categoryIds.size == 1) callTotal else null
+                                )
+                            },
+                            categoryId = categoryId
+                        )
+                        if (deliveredHere == null) {
+                            failed = true
+                            break
                         }
-                    ) ?: run {
-                        runCatching { writer?.abort() }
-                        null
+                        total += deliveredHere
+                        bytesBase += bytesThisCall
                     }
+                    if (failed) null else total
                 } catch (e: Throwable) {
                     runCatching { writer?.abort() }
                     throw e
@@ -1854,6 +1948,7 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                 Log.i(
                     "LumoraPerf",
                     "ingest $phase wall=${wall}ms rows=$rows bytes=$bytesRead " +
+                        "categories=${if (allowed == null) "all" else categoryIds.size} " +
                         "db=${dbNanos / 1_000_000}ms entity=${entityNanos / 1_000_000}ms " +
                         "transform=${transformNanos / 1_000_000}ms " +
                         "reader=${(wall * 1_000_000 - dbNanos - entityNanos - transformNanos) / 1_000_000}ms"
@@ -1872,8 +1967,14 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                     // Already stored and current: hand the resident list the rows it would
                     // have fetched. No network, no writer, no re-ingest.
                     live.addAll(repository.liveForProvider(config.id))
-                } else if (!ingest("get_live_streams", MediaType.LIVE, liveCatNames, "uncat_live", live)) {
+                    anyResumed = true
+                } else if (!ingest(
+                        "get_live_streams", MediaType.LIVE, liveCatNames, "uncat_live", live,
+                        allowedIds(config.liveCategoryIds)
+                    )
+                ) {
                     liveFailed = true
+                    sectionsOk = false
                 }
             }
             // Live TV is usable as soon as its list has landed. Films and series are the
@@ -1894,13 +1995,35 @@ internal suspend fun MainActivity.fetchXtreamChannels(
             // for the next one, not for the one already streaming.
             val seriesFirst = ingestPriorityTab == 1
             if (!seriesFirst && !moviesOff && !resumeMovies) {
-                ingest("get_vod_streams", MediaType.MOVIE, vodCatNames, "uncat_vod", null)
-            }
+                if (!ingest(
+                        "get_vod_streams", MediaType.MOVIE, vodCatNames, "uncat_vod", null,
+                        allowedIds(config.movieCategoryIds)
+                    )
+                ) sectionsOk = false
+            } else if (resumeMovies) anyResumed = true
             if (!seriesOff && !resumeSeries) {
-                ingest("get_series", MediaType.SERIES, seriesCatNames, "uncat_series", null)
-            }
+                if (!ingest(
+                        "get_series", MediaType.SERIES, seriesCatNames, "uncat_series", null,
+                        allowedIds(config.seriesCategoryIds)
+                    )
+                ) sectionsOk = false
+            } else if (resumeSeries) anyResumed = true
             if (seriesFirst && !moviesOff && !resumeMovies) {
-                ingest("get_vod_streams", MediaType.MOVIE, vodCatNames, "uncat_vod", null)
+                if (!ingest(
+                        "get_vod_streams", MediaType.MOVIE, vodCatNames, "uncat_vod", null,
+                        allowedIds(config.movieCategoryIds)
+                    )
+                ) sectionsOk = false
+            }
+        }
+
+        // Record what this panel actually serves, so the next load can recognise another
+        // domain serving the same catalogue without downloading it (see CatalogueFingerprint).
+        // Skipped when a section was resumed or failed - the digest would be missing that
+        // half and would not match a complete twin.
+        if (sectionsOk && !anyResumed) {
+            runCatching {
+                IptvProviderStore.setCatalogueFingerprint(prefs, config.id, fingerprint.finish())
             }
         }
 

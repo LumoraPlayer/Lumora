@@ -1022,6 +1022,47 @@
                             android:textColor="@color/text_primary"
                             android:textSize="@dimen/settings_text_body" />
 
+                        <!-- Narrowed import. A six-figure panel answers get_vod_streams
+                             with ~80 MB and 200k rows; this lets the user keep only the
+                             catalogue tags they actually watch, which the panel filters
+                             server-side (category_id). Tapping it authenticates with the
+                             fields above and lists the panel's own tags - never a fixed
+                             country list, because the vocabulary differs per panel and per
+                             content type (live is country-tagged, films/series language-
+                             tagged). Empty selection = import everything. -->
+                        <LinearLayout
+                            android:id="@+id/settingsXtreamImport"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/settings_gap"
+                            android:paddingVertical="@dimen/settings_row_padding_vertical"
+                            android:background="@drawable/card_surface_background"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:orientation="vertical"
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/sett_import_scope_title"
+                                android:textColor="@color/text_primary"
+                                android:textSize="@dimen/settings_text_body"
+                                android:fontFamily="@font/inter_medium" />
+                            <TextView
+                                android:id="@+id/settingsXtreamImportValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:maxLines="2"
+                                android:ellipsize="end"
+                                android:text="@string/sett_import_scope_all"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="@dimen/settings_text_caption"
+                                android:fontFamily="@font/inter_regular" />
+                        </LinearLayout>
+
                         <TextView
                             android:id="@+id/settingsSubscriptionStatus"
                             android:layout_width="match_parent"
