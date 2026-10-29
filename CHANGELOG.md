@@ -3,6 +3,13 @@
 
 ## 6.5
 
+### Browsing
+- **The Series and Movies rows are quieter and easier to scan.** Every shelf header is now a title with a muted count, a low-key See all action, and one labelled ⋮ menu for pin/hide; the large outlined See All pill and the separate star/X glyphs are gone. Poster captions are held to two lines in the grid and three on the narrower shelf cards, grid tiles add the year and rating where the source has them, and a thin resume bar marks anything part-watched.
+- **The category rail reads the same as the content beside it.** Dynamic buckets keep the provider's Title Case instead of being forced to ALL CAPS, and the All row shows as selected whenever no category is active; switching tabs no longer leaves the previous tab's row highlighted.
+- **An empty category says so instead of rendering a blank pane.** Live TV and VOD panes now show a short explanation and one action - Show all, Show all channels, or Open settings - reachable from the rail without stealing focus.
+- **The Live TV preview is a real PiP card.** Rounded and elevated, with a LIVE badge, the channel name, what is airing now, and a progress bar, all filled from the guide already on screen. Guide rows without a schedule are ghost cells instead of fake programmes; the current block carries a red live dot, the ruler marks Now with the same dot and names the day at midnight, and long channel names shrink a step before ellipsizing.
+- **Stars are vectors now.** Favourite and pin controls in the guide, rail, shelves and detail header use one star icon set instead of font glyphs, so they render the same on every device.
+
 ### Player
 - **The play/pause menu's transport row is one matching icon set.** The four platform transport glyphs (grey, bevelled, and rendered at four different sizes) are replaced by flat icons in the same style as play/pause, all at a consistent optical size; the row now aligns with the title and timeline.
 - **Pressing a focused control shows a press state.** The focused style matched before the pressed style, so a remote's OK gave no visual feedback; play/pause and the option buttons now darken while held.
