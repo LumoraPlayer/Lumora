@@ -26,6 +26,29 @@ import kotlinx.coroutines.withContext
  *  scrolls (see maybeLoadMoreVodGrid). */
 internal const val VOD_GRID_PAGE = 120
 
+/** Recomputes the resume bars' source map, optionally rebinding the VOD panes.
+ *
+ *  The poster adapters read [MainActivity.vodProgressById] at bind time, so a plain
+ *  refresh (no rebind) is enough whenever the list itself is about to be replaced -
+ *  a tab switch, a category pick, a Home shelf rebuild. [rebind] is for the one case
+ *  where the list stays put: closing the player, when the position just saved is the
+ *  thing that changed. */
+internal fun MainActivity.refreshVodProgress(rebind: Boolean = false) {
+    vodProgressById = com.lumora.cache.PlaybackPositionStore.progressById(this)
+    if (!rebind) return
+    when (activeTab) {
+        1 -> {
+            seriesShelfAdapter.notifyItemRangeChanged(0, seriesShelfAdapter.itemCount)
+            seriesGridAdapter.notifyItemRangeChanged(0, seriesGridAdapter.itemCount)
+        }
+        2 -> {
+            filmsShelfAdapter.notifyItemRangeChanged(0, filmsShelfAdapter.itemCount)
+            filmsGridAdapter.notifyItemRangeChanged(0, filmsGridAdapter.itemCount)
+        }
+    }
+    if (showingHome) homeShelfAdapter.notifyItemRangeChanged(0, homeShelfAdapter.itemCount)
+}
+
 /** Cards a horizontal shelf previews. "See all" pages the rest from the database. */
 internal const val VOD_SHELF_PREVIEW = 30
 
@@ -517,13 +540,47 @@ internal suspend fun MainActivity.applyVodTabFilter(
     wholesale: Boolean,
     generation: Int
 ) {
+    // The cards about to be bound read the progress map; refresh it before the list is
+    // published, not after, so the first paint already carries the resume bars.
+    refreshVodProgress()
     val matchIds = selectedCategoryIds
     val sourceIds = selectedBrandChannelIds
     val rowId = selectedRowId
     val shelfItems = selectedShelfItems
+    val emptyIcon = if (tab == 1) R.drawable.ic_series else R.drawable.ic_films
+    // If the grid had focus, the empty state replaces the thing under the D-pad and the
+    // action has to take it. A category picked from the rail leaves focus in the rail.
+    val focusWasInContent = recycler.hasFocus()
+
+    fun showCategoryEmpty() {
+        showContentEmptyState(
+            iconRes = emptyIcon,
+            title = getString(R.string.empty_vod_category_title),
+            caption = getString(R.string.empty_vod_category_caption),
+            actionLabel = getString(R.string.show_all),
+            action = { showAllVodContent() },
+            focusAction = focusWasInContent
+        )
+    }
+
+    fun showTabEmpty() {
+        showContentEmptyState(
+            iconRes = emptyIcon,
+            title = getString(if (tab == 1) R.string.empty_series_title else R.string.empty_films_title),
+            caption = getString(R.string.empty_vod_caption),
+            actionLabel = getString(R.string.open_settings),
+            action = { showProviderSettings() },
+            focusAction = focusWasInContent
+        )
+    }
 
     suspend fun commitInMemory(items: List<Channel>) {
         if (generation != categoryFilterGeneration) return
+        if (items.isEmpty()) {
+            showCategoryEmpty()
+            return
+        }
+        hideContentEmptyState(restoreFocusTo = recycler)
         vodGridType = null
         setGridSpan(recycler, adapter, topTarget)
         recycler.adapter = adapter
@@ -563,6 +620,11 @@ internal suspend fun MainActivity.applyVodTabFilter(
         // No category picked: the tab's shelves.
         !hasMatchIds && !hasSourceIds && !newestAll && rowId == null && shelfItems == null -> {
             if (generation != categoryFilterGeneration) return
+            if (shelves.isEmpty()) {
+                showTabEmpty()
+                return
+            }
+            hideContentEmptyState(restoreFocusTo = recycler)
             vodGridType = null
             recycler.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
             recycler.adapter = shelfAdapter
@@ -576,6 +638,8 @@ internal suspend fun MainActivity.applyVodTabFilter(
                 sourceIds = if (hasSourceIds) sourceIds else null,
                 all = newestAll,
                 recycler = recycler, adapter = adapter, topTarget = topTarget,
+                hasShelves = shelves.isNotEmpty(),
+                focusEmptyAction = focusWasInContent,
                 generation = generation
             )
         }
@@ -594,6 +658,8 @@ private suspend fun MainActivity.openVodGrid(
     recycler: androidx.recyclerview.widget.RecyclerView,
     adapter: com.lumora.adapter.PosterGridAdapter,
     topTarget: Int,
+    hasShelves: Boolean,
+    focusEmptyAction: Boolean,
     generation: Int
 ) {
     val animeExtras = if (sourceIds != null) {
@@ -616,6 +682,38 @@ private suspend fun MainActivity.openVodGrid(
     vodGridOffset = page.size
     vodGridLoading = false
 
+    if (first.isEmpty()) {
+        // A category that matched rows in the sidebar but resolves to nothing after the
+        // filters (adult/language/hidden source) used to leave a blank pane. Clear the
+        // old grid so the empty state is the only thing on screen.
+        vodGridTotal = 0
+        adapter.replaceAll(emptyList())
+        setGridSpan(recycler, adapter, topTarget)
+        recycler.adapter = adapter
+        recycler.scrollToPosition(0)
+        if (hasShelves) {
+            showContentEmptyState(
+                iconRes = if (tab == 1) R.drawable.ic_series else R.drawable.ic_films,
+                title = getString(R.string.empty_vod_category_title),
+                caption = getString(R.string.empty_vod_category_caption),
+                actionLabel = getString(R.string.show_all),
+                action = { showAllVodContent() },
+                focusAction = focusEmptyAction
+            )
+        } else {
+            showContentEmptyState(
+                iconRes = if (tab == 1) R.drawable.ic_series else R.drawable.ic_films,
+                title = getString(if (tab == 1) R.string.empty_series_title else R.string.empty_films_title),
+                caption = getString(R.string.empty_vod_caption),
+                actionLabel = getString(R.string.open_settings),
+                action = { showProviderSettings() },
+                focusAction = focusEmptyAction
+            )
+        }
+        return
+    }
+
+    hideContentEmptyState(restoreFocusTo = recycler)
     setGridSpan(recycler, adapter, topTarget)
     recycler.adapter = adapter
     adapter.replaceAll(first)

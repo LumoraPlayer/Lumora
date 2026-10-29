@@ -801,9 +801,15 @@ class PlayerManager(
 
     /** Toggle play/pause. Keyed off [playWhenReady] rather than isPlaying: a stream that is
      *  rebuffering is not "playing", so a press meant to pause it would otherwise call play()
-     *  and leave it running. */
+     *  and leave it running. At the end of a title playWhenReady is still true, so the first
+     *  press there replays from the start instead of pausing an already-ended player. */
     fun togglePlayPause() {
         if (released) return
+        if (player.playbackState == Player.STATE_ENDED) {
+            player.seekTo(0)
+            player.play()
+            return
+        }
         if (player.playWhenReady) player.pause() else player.play()
     }
 

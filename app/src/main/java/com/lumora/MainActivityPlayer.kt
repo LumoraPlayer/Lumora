@@ -491,10 +491,14 @@ internal fun MainActivity.setupPlayerControls() {
 
     playerManager.addListener(object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
+            // The button's Play/Pause choice depends on the state, not only on playWhenReady
+            // (a rebuffer keeps Pause; the end of a title switches to Play), so refresh it
+            // for every transition rather than only READY/ENDED.
+            updatePlayPauseIcon()
             binding.bufferingSpinner.visibility = if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
             if (state == Player.STATE_BUFFERING) onBufferingStarted() else onBufferingEnded()
             if (state == Player.STATE_READY || state == Player.STATE_ENDED) {
-                updateProgress(); updatePlayPauseIcon()
+                updateProgress()
                 if (state == Player.STATE_READY) {
                     currentStreamPlayed = true
                     liveRetryAttempt = 0
@@ -635,8 +639,23 @@ internal fun MainActivity.setupPlayerControls() {
         }
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             updatePlayPauseIcon()
-            if (isPlaying) mainHandler.post(progressRunnable)
-            else mainHandler.removeCallbacks(progressRunnable)
+            if (isPlaying) {
+                mainHandler.post(progressRunnable)
+                // Pausing now leaves the bar up (see hideControlsRunnable), so resuming has
+                // to put the auto-hide countdown back instead of leaving it on screen for
+                // the rest of the title.
+                if (binding.controlsOverlay.visibility == View.VISIBLE) {
+                    mainHandler.removeCallbacks(hideControlsRunnable)
+                    mainHandler.postDelayed(hideControlsRunnable, 4000)
+                }
+            } else {
+                mainHandler.removeCallbacks(progressRunnable)
+            }
+        }
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            // Covers every path that changes intent without changing the playback state:
+            // the button press, a media remote, audio-focus handling and the media session.
+            updatePlayPauseIcon()
         }
         override fun onCues(cues: androidx.media3.common.text.CueGroup) {
             binding.playerSubtitleView.setCues(cues.cues)
@@ -2667,6 +2686,9 @@ internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
     // The debounce may still be pending; this is the last chance to get the entry on disk
     // before the process can be killed with the player closed.
     PlaybackPositionStore.flush(this)
+    // The position just saved is what the resume bars show; the VOD/Home lists stay put,
+    // so this is the one refresh that has to rebind them.
+    refreshVodProgress(rebind = true)
     com.lumora.diagnostics.SessionLog.event("play", "stopped ${nowPlayingChannel?.name ?: ""}".trim())
     // Watched state may have moved during playback - the Home up-next memo is stale.
     clearUpNextMemo()

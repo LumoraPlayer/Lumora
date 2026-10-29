@@ -312,6 +312,9 @@ internal fun MainActivity.selectTab(index: Int) {
     binding.sportsPane.visibility = View.GONE
     binding.downloadsContent.visibility = View.GONE
     binding.downloadsEmptyText.visibility = View.GONE
+    // The incoming tab owns the content slot; its own build re-shows an empty state if
+    // it needs one, so the outgoing tab's must not linger over it.
+    hideContentEmptyState()
     mainHandler.removeCallbacks(downloadsProgressRunnable)
     if (index == 0) {
         // releaseLivePreview() (called when leaving Live TV for any other tab) stops
@@ -440,6 +443,9 @@ internal fun MainActivity.buildGuideHeader() {
     val density = resources.displayMetrics.density
     val unitPx = LiveGuideAdapter.MINUTE_WIDTH_DP * density
     val timeFmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+    // A guide that crosses midnight says which day its 00:00 belongs to; "00:00" alone
+    // reads as this morning when the timeline has run past the evening.
+    val dayTimeFmt = java.text.SimpleDateFormat("EEE HH:mm", java.util.Locale.getDefault())
     // Every program row starts flush at "now" (see LiveGuideAdapter.renderPrograms), so the
     // ruler is anchored the same way: a lead cell running from now to the next half-hour
     // mark, then half-hour cells sitting on the clock's usual :00/:30 boundaries. Labelling
@@ -470,8 +476,9 @@ internal fun MainActivity.buildGuideHeader() {
     // instead of drifting a minute apart.
     val leadMinutes = ((nextHalfHourMs - nowMs) / 60_000L).toInt()
     // A clipped "Now" reads as a glitch worse than no label: only show it when the lead
-    // cell is wide enough for the word (36dp covers 14sp text plus the start padding).
-    val nowFits = leadMinutes * LiveGuideAdapter.MINUTE_WIDTH_DP >= 36f
+    // cell is wide enough for the word plus its live dot (48dp covers the dot, gap,
+    // 14sp text and the start padding).
+    val nowFits = leadMinutes * LiveGuideAdapter.MINUTE_WIDTH_DP >= 48f
 
     // The cells are reused, not rebuilt. This runs once a minute (the guide clock) and on
     // every guide rebuild, and 24 fresh TextViews per rebuild meant 24 allocations, 24
@@ -503,9 +510,25 @@ internal fun MainActivity.buildGuideHeader() {
     for (i in labels.indices) {
         val index = firstIndex + i
         val label = labels[i]
-        label.text = when {
-            index == 0 -> if (nowFits) getString(R.string.list_now) else ""
-            else -> timeFmt.format(java.util.Date(nextHalfHourMs + (index - 1) * halfHourMs))
+        if (index == 0) {
+            label.text = if (nowFits) getString(R.string.list_now) else ""
+            label.setTextColor(getColor(R.color.text_primary))
+            label.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                if (nowFits) R.drawable.ic_live_dot else 0,
+                0,
+                0,
+                0
+            )
+            label.compoundDrawablePadding = (4 * density).toInt()
+        } else {
+            val cellMs = nextHalfHourMs + (index - 1) * halfHourMs
+            val cell = java.util.Calendar.getInstance().apply { timeInMillis = cellMs }
+            val crossesMidnight = cell.get(java.util.Calendar.HOUR_OF_DAY) == 0 &&
+                cell.get(java.util.Calendar.MINUTE) == 0
+            label.text = if (crossesMidnight) dayTimeFmt.format(java.util.Date(cellMs))
+            else timeFmt.format(java.util.Date(cellMs))
+            label.setTextColor(getColor(R.color.text_tertiary))
+            label.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
         }
         val widthPx = (if (index == 0) leadMinutes * unitPx else 30 * unitPx).toInt()
         val lp = label.layoutParams as? LinearLayout.LayoutParams
@@ -1079,7 +1102,9 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     if (isSeries && item.id.isNotBlank()) {
         favoriteButton.visibility = View.VISIBLE
         fun refreshFavoriteIcon() {
-            favoriteIcon.text = if (FavoritesStore.isFavoriteSeries(this, item.id)) "★" else "☆"
+            val favorite = FavoritesStore.isFavoriteSeries(this, item.id)
+            favoriteIcon.setImageResource(if (favorite) R.drawable.ic_star_filled else R.drawable.ic_star)
+            favoriteIcon.contentDescription = getString(if (favorite) R.string.unfavourite else R.string.favourite)
         }
         refreshFavoriteIcon()
         favoriteButton.setOnClickListener {

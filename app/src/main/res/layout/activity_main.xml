@@ -1300,18 +1300,19 @@
                                 android:layout_marginTop="4dp"
                                 android:visibility="gone">
 
-                                <LinearLayout
+                                <!-- A real PiP card: rounded, elevated, with the channel
+                                     and what is airing now inside the frame instead of a
+                                     black box with a caption underneath. The overlay sits
+                                     on its own scrim so it stays legible over bright video. -->
+                                <FrameLayout
                                     android:id="@+id/livePreviewPane"
                                     android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
+                                    android:layout_height="@dimen/live_preview_height"
                                     android:layout_gravity="top"
-                                    android:background="@drawable/bg_live_preview_frame"
-                                    android:orientation="vertical"
-                                    android:padding="2dp">
-
-                                <FrameLayout
-                                    android:layout_width="match_parent"
-                                    android:layout_height="@dimen/live_preview_height">
+                                    android:background="@drawable/bg_live_preview_card"
+                                    android:clipChildren="true"
+                                    android:clipToOutline="true"
+                                    android:elevation="8dp">
 
                                     <TextureView
                                         android:id="@+id/previewSurface"
@@ -1326,20 +1327,72 @@
                                         android:indeterminate="true"
                                         android:indeterminateTint="@color/primary"
                                         android:visibility="gone" />
-                                </FrameLayout>
 
-                                <TextView
-                                    android:id="@+id/previewChannelName"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginTop="6dp"
-                                    android:ellipsize="end"
-                                    android:gravity="center"
-                                    android:maxLines="1"
-                                    android:textColor="@color/text_primary"
-                                    android:textSize="@dimen/text_body"
-                                    android:textStyle="bold" />
-                            </LinearLayout>
+                                    <LinearLayout
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:layout_gravity="bottom"
+                                        android:background="@drawable/grad_live_preview_scrim"
+                                        android:orientation="vertical"
+                                        android:paddingHorizontal="10dp"
+                                        android:paddingTop="18dp"
+                                        android:paddingBottom="9dp">
+
+                                        <LinearLayout
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:gravity="center_vertical"
+                                            android:orientation="horizontal">
+
+                                            <ImageView
+                                                android:layout_width="6dp"
+                                                android:layout_height="6dp"
+                                                android:contentDescription="@null"
+                                                android:src="@drawable/ic_live_dot" />
+
+                                            <TextView
+                                                android:layout_width="wrap_content"
+                                                android:layout_height="wrap_content"
+                                                android:layout_marginStart="4dp"
+                                                android:fontFamily="@font/inter_semibold"
+                                                android:text="@string/live_badge"
+                                                android:textAllCaps="true"
+                                                android:textColor="@color/live_red"
+                                                android:textSize="@dimen/text_tiny" />
+                                        </LinearLayout>
+
+                                        <TextView
+                                            android:id="@+id/previewChannelName"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_marginTop="2dp"
+                                            android:ellipsize="end"
+                                            android:fontFamily="@font/inter_semibold"
+                                            android:maxLines="1"
+                                            android:textColor="@color/text_primary"
+                                            android:textSize="@dimen/text_body_s" />
+
+                                        <TextView
+                                            android:id="@+id/previewProgramNow"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:ellipsize="end"
+                                            android:maxLines="1"
+                                            android:textColor="@color/text_secondary"
+                                            android:textSize="@dimen/text_tiny"
+                                            android:visibility="gone" />
+
+                                        <ProgressBar
+                                            android:id="@+id/previewProgramProgress"
+                                            style="?android:attr/progressBarStyleHorizontal"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="2dp"
+                                            android:layout_marginTop="5dp"
+                                            android:max="100"
+                                            android:progressDrawable="@drawable/progress_poster_resume"
+                                            android:visibility="gone" />
+                                    </LinearLayout>
+                                </FrameLayout>
                         </FrameLayout>
                         </FrameLayout>
                     </LinearLayout>
@@ -1675,6 +1728,76 @@
                     android:textSize="@dimen/text_body_s"
                     android:visibility="gone" />
 
+                <!-- Shared empty state for Live/VOD content panes: a category with nothing
+                     in it, or a tab whose sources carry none of that type. One action, and
+                     it never steals focus from the sidebar - RIGHT from the selected rail
+                     row lands on it. -->
+                <LinearLayout
+                    android:id="@+id/contentEmptyState"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="32dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:id="@+id/contentEmptyIcon"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_series"
+                        android:tint="@color/primary_light" />
+
+                    <TextView
+                        android:id="@+id/contentEmptyTitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:fontFamily="@font/inter_semibold"
+                        android:gravity="center"
+                        android:maxLines="2"
+                        android:textColor="@color/text_primary"
+                        android:textSize="@dimen/text_subhead_l" />
+
+                    <TextView
+                        android:id="@+id/contentEmptyCaption"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:gravity="center"
+                        android:maxLines="3"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="@dimen/text_body_s" />
+
+                    <LinearLayout
+                        android:id="@+id/contentEmptyAction"
+                        android:layout_width="wrap_content"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="18dp"
+                        android:background="@drawable/bg_play_button"
+                        android:clickable="true"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:paddingHorizontal="24dp"
+                        android:stateListAnimator="@animator/focus_scale">
+
+                        <TextView
+                            android:id="@+id/contentEmptyActionLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/inter_semibold"
+                            android:textAllCaps="true"
+                            android:textColor="@android:color/white"
+                            android:textSize="@dimen/text_body_s" />
+                    </LinearLayout>
+                </LinearLayout>
+
                 <!-- Collapse re-expand affordance (phone-only): when the category sidebar is
                      collapsed, this is the only way back to the categories, so it is a
                      labelled pill rather than a bare icon - an unlabelled grey chevron
@@ -1846,13 +1969,14 @@
                                     android:clipChildren="false"
                                     android:clipToPadding="false">
 
-                                    <TextView
+                                    <ImageView
                                         android:id="@+id/detailFavoriteIcon"
-                                        android:layout_width="wrap_content"
-                                        android:layout_height="wrap_content"
-                                        android:text="☆"
-                                        android:textColor="@color/text_primary"
-                                        android:textSize="@dimen/text_title" />
+                                        android:layout_width="24dp"
+                                        android:layout_height="24dp"
+                                        android:contentDescription="@string/favourite"
+                                        android:scaleType="centerInside"
+                                        android:src="@drawable/ic_star"
+                                        android:tint="@color/text_primary" />
                                 </LinearLayout>
                             </LinearLayout>
 
@@ -3011,7 +3135,6 @@
                         <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginHorizontal="8dp"
                             android:clipChildren="false"
                             android:clipToPadding="false"
                             android:gravity="center"
@@ -3021,15 +3144,16 @@
                                 android:id="@+id/btnPrevChannel"
                                 android:layout_width="34dp"
                                 android:layout_height="34dp"
+                                android:layout_marginEnd="4dp"
                                 android:background="@drawable/bg_toolbar_button"
                                 android:clickable="true"
                                 android:contentDescription="@string/ui_prev"
                                 android:focusable="true"
                                 android:nextFocusRight="@id/btnRewind"
                                 android:nextFocusDown="@id/seekBar"
-                                android:padding="10dp"
+                                android:padding="5dp"
                                 android:stateListAnimator="@animator/focus_scale"
-                                android:src="@android:drawable/ic_media_previous"
+                                android:src="@drawable/ic_skip_previous"
                                 android:tint="@color/text_primary"
                                 android:clipChildren="false"
     android:clipToPadding="false"/>
@@ -3045,9 +3169,9 @@
                                 android:nextFocusLeft="@id/btnPrevChannel"
                                 android:nextFocusRight="@id/btnPlayPause"
                                 android:nextFocusDown="@id/seekBar"
-                                android:padding="8dp"
+                                android:padding="5dp"
                                 android:stateListAnimator="@animator/focus_scale"
-                                android:src="@android:drawable/ic_media_rew"
+                                android:src="@drawable/ic_rewind"
                                 android:tint="@color/text_primary"
                                 android:clipChildren="false"
     android:clipToPadding="false"/>
@@ -3063,7 +3187,7 @@
                                 android:nextFocusLeft="@id/btnRewind"
                                 android:nextFocusRight="@id/btnFastForward"
                                 android:nextFocusDown="@id/seekBar"
-                                android:padding="11dp"
+                                android:padding="6dp"
                                 android:stateListAnimator="@animator/focus_scale"
                                 android:src="@drawable/ic_play"
                                 android:tint="@android:color/white"
@@ -3074,6 +3198,7 @@
                                 android:layout_width="34dp"
                                 android:layout_height="34dp"
                                 android:layout_marginStart="4dp"
+                                android:layout_marginEnd="4dp"
                                 android:background="@drawable/bg_toolbar_button"
                                 android:clickable="true"
                                 android:contentDescription="@string/play_ff_30"
@@ -3081,9 +3206,9 @@
                                 android:nextFocusLeft="@id/btnPlayPause"
                                 android:nextFocusRight="@id/btnNextChannel"
                                 android:nextFocusDown="@id/seekBar"
-                                android:padding="8dp"
+                                android:padding="5dp"
                                 android:stateListAnimator="@animator/focus_scale"
-                                android:src="@android:drawable/ic_media_ff"
+                                android:src="@drawable/ic_forward"
                                 android:tint="@color/text_primary"
                                 android:clipChildren="false"
     android:clipToPadding="false"/>
@@ -3097,9 +3222,9 @@
                                 android:focusable="true"
                                 android:nextFocusLeft="@id/btnFastForward"
                                 android:nextFocusDown="@id/seekBar"
-                                android:padding="12dp"
+                                android:padding="5dp"
                                 android:stateListAnimator="@animator/focus_scale"
-                                android:src="@android:drawable/ic_media_next"
+                                android:src="@drawable/ic_skip_next"
                                 android:tint="@color/text_primary"
                                 android:clipChildren="false"
     android:clipToPadding="false"/>

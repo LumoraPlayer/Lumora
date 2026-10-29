@@ -1339,6 +1339,10 @@ class MainActivity : AppCompatActivity() {
         internal const val UP_NEXT_COUNTDOWN_SECONDS = 15
     }
 
+    /** Resume fraction per card id, refreshed when VOD content is built and after playback.
+     *  Read by the poster adapters so binding never touches the playback store. */
+    internal var vodProgressById: Map<String, Float> = emptyMap()
+
     internal val liveAdapter = LiveGuideAdapter(
         onChannelClick = { channel -> onChannelOkPress(channel) },
         onChannelFocused = { channel -> lastFocusedLiveChannel = channel },
@@ -1357,14 +1361,16 @@ class MainActivity : AppCompatActivity() {
         onItemLongClick = { item, _ -> toggleFavoriteVodItem(item) },
         onPinClick = { shelf -> togglePinShelfCategory(1, shelf) },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenShelfCategory(1, shelf) },
-        onSeeAllClick = { shelf -> showSeeAll(shelf) }
+        onSeeAllClick = { shelf -> showSeeAll(shelf) },
+        progressFor = { item -> vodProgressById[item.id] }
     ).apply { topRowFocusUpTargetId = R.id.tabSeries }
     internal val filmsShelfAdapter = ShelfAdapter(
         onItemClick = { item -> playItem(item) },
         onItemLongClick = { item, _ -> toggleFavoriteVodItem(item) },
         onPinClick = { shelf -> togglePinShelfCategory(2, shelf) },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenShelfCategory(2, shelf) },
-        onSeeAllClick = { shelf -> showSeeAll(shelf) }
+        onSeeAllClick = { shelf -> showSeeAll(shelf) },
+        progressFor = { item -> vodProgressById[item.id] }
     ).apply { topRowFocusUpTargetId = R.id.tabFilms }
     internal val homeShelfAdapter = ShelfAdapter(
         onItemClick = { item -> onHomeItemClick(item) },
@@ -1376,16 +1382,19 @@ class MainActivity : AppCompatActivity() {
             else toggleFavoriteVodItem(item)
         },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenHomeShelf(shelf.title) },
-        showPinButton = false
+        showPinButton = false,
+        progressFor = { item -> vodProgressById[item.id] }
     ).apply { topRowFocusUpTargetId = R.id.tabHome }
     // Single-category selection swaps to these - a vertical, scrollable grid instead of
     // the shelves' horizontal strip, since one category's whole catalog doesn't fit a
     // single row.
     internal val seriesGridAdapter = com.lumora.adapter.PosterGridAdapter(
-        onItemLongClick = { item -> onGridItemLongClick(item) }
+        onItemLongClick = { item -> onGridItemLongClick(item) },
+        progressFor = { item -> vodProgressById[item.id] }
     ) { item -> onHomeItemClick(item) }
     internal val filmsGridAdapter = com.lumora.adapter.PosterGridAdapter(
-        onItemLongClick = { item -> onGridItemLongClick(item) }
+        onItemLongClick = { item -> onGridItemLongClick(item) },
+        progressFor = { item -> vodProgressById[item.id] }
     ) { item -> playItem(item) }
     internal val tmdbClient = com.lumora.data.remote.tmdb.TmdbClient()
     /** Discover tile id -> short badge naming the sources that already carry the title.
@@ -1423,7 +1432,12 @@ class MainActivity : AppCompatActivity() {
         onEventClick = { event -> onSportsEventClick(event) },
         onGuideEventClick = { channel -> playItem(channel) }
     )
-    internal val hideControlsRunnable = Runnable { hideControls() }
+    internal val hideControlsRunnable = Runnable {
+        // Keep the bar on a deliberate pause: hiding it leaves a frozen frame with no way
+        // to resume except two OK presses (the first only re-reveals the hidden bar).
+        // Explicit dismissal still goes through hideControls(force = true).
+        if (isPlayerVisible && playerManager.playWhenReady) hideControls()
+    }
     internal val progressRunnable = object : Runnable {
         override fun run() {
             if (playerManager.isPlaying) {

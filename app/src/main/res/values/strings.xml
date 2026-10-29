@@ -370,7 +370,25 @@
     <string name="add">Add</string>
 
     <!-- item_shelf.xml -->
-    <string name="see_all">See All</string>
+    <string name="see_all">See all</string>
+    <!-- Overflow on a shelf header: pin/unpin and hide live in one labelled menu now,
+         instead of three separate focus stops beside the title. -->
+    <string name="more_actions">More actions</string>
+    <string name="shelf_more_actions">More actions for %1$s</string>
+
+    <!-- Empty content pane (Series/Films category, whole VOD tab, Live category) -->
+    <string name="empty_vod_category_title">No titles in this category</string>
+    <string name="empty_vod_category_caption">Try another category or show everything.</string>
+    <string name="empty_series_title">No series in your sources yet</string>
+    <string name="empty_films_title">No films in your sources yet</string>
+    <string name="empty_vod_caption">Add a provider or refresh your catalogue.</string>
+    <string name="empty_live_category_title">No channels in this category</string>
+    <string name="empty_live_category_caption">Try another category or show all channels.</string>
+    <string name="empty_live_title">No channels in your sources yet</string>
+    <string name="empty_live_caption">Add a provider or refresh your catalogue.</string>
+    <string name="show_all">Show all</string>
+    <string name="show_all_channels">Show all channels</string>
+    <string name="open_settings">Open settings</string>
 
     <!-- item_episode.xml - episodes no source carries yet, whose air date is still ahead.
          Inside a week the countdown is what matters ("what do I come back for"); further out

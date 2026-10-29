@@ -5,6 +5,7 @@ import com.lumora.ui.dialog.LumoraDialog
 import android.content.res.Configuration
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.updateLayoutParams
+import androidx.media3.common.Player
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -294,7 +295,10 @@ internal fun MainActivity.toggleFavoriteVodItem(item: Channel) {
  *  while Home is on screen has to ask for it again or the change isn't visible until the
  *  user leaves and comes back. */
 internal fun MainActivity.refreshHomeShelvesIfShowing() {
-    if (showingHome) homeShelfAdapter.submitList(buildHomeShelves())
+    if (showingHome) {
+        refreshVodProgress()
+        homeShelfAdapter.submitList(buildHomeShelves())
+    }
 }
 
 /** Series-shelf counterpart of [refreshHomeShelvesIfShowing]: the merged lead shelf
@@ -395,9 +399,10 @@ internal fun MainActivity.submitCategories(categories: List<CategoryFilter>) {
     // Set the selected highlight only after the list is committed, otherwise
     // the diff callback can reset the adapter's selected state.
     categoryAdapter.submitList(categories) {
-        if (selectedRowId != null) {
-            categoryAdapter.setSelected(selectedRowId)
-        }
+        // Always apply, including null: null is the All row's selection, and skipping the
+        // call left the previous tab's id highlighted here (or nothing at all) whenever
+        // the new tab opened on All.
+        categoryAdapter.setSelected(selectedRowId)
     }
 }
 
@@ -1393,6 +1398,86 @@ internal fun MainActivity.buildCategoryRows(
         return built
 }
 
+/** Fills the content pane's empty state: an icon, a short reason and one action.
+ *
+ *  The pane is shared by Live and VOD, so the caller supplies the copy and what the
+ *  action does. [focusAction] is only for the case where the content the user was
+ *  already looking at disappeared (Live's "focus first channel" path) - a category pick
+ *  from the rail never yanks focus out of the rail. */
+internal fun MainActivity.showContentEmptyState(
+    iconRes: Int,
+    title: String,
+    caption: String,
+    actionLabel: String? = null,
+    action: (() -> Unit)? = null,
+    focusAction: Boolean = false
+) {
+    binding.contentEmptyIcon.setImageResource(iconRes)
+    binding.contentEmptyTitle.text = title
+    binding.contentEmptyCaption.text = caption
+    binding.contentEmptyCaption.visibility = if (caption.isBlank()) View.GONE else View.VISIBLE
+    if (action != null && !actionLabel.isNullOrBlank()) {
+        binding.contentEmptyAction.visibility = View.VISIBLE
+        binding.contentEmptyActionLabel.text = actionLabel
+        binding.contentEmptyAction.setOnClickListener { action() }
+        if (focusAction) binding.contentEmptyAction.post { binding.contentEmptyAction.requestFocus() }
+    } else {
+        binding.contentEmptyAction.visibility = View.GONE
+        binding.contentEmptyAction.setOnClickListener(null)
+    }
+    binding.contentEmptyState.visibility = View.VISIBLE
+}
+
+/** Hides the empty state and, when its action had focus, hands focus to [restoreFocusTo]'s
+ *  first row - otherwise the D-pad is left on a view that just went GONE. The row itself
+ *  is often not focusable (a shelf, a guide row), so the first focusable descendant is
+ *  what actually takes focus. */
+internal fun MainActivity.hideContentEmptyState(restoreFocusTo: RecyclerView? = null) {
+    if (binding.contentEmptyState.visibility != View.VISIBLE) return
+    val hadFocus = binding.contentEmptyAction.hasFocus()
+    binding.contentEmptyState.visibility = View.GONE
+    binding.contentEmptyAction.setOnClickListener(null)
+    if (!hadFocus || restoreFocusTo == null) return
+    restoreFocusTo.post {
+        restoreFocusTo.post {
+            val row = restoreFocusTo.findViewHolderForAdapterPosition(0)?.itemView
+            val target = row?.let(::firstFocusableDescendant)
+            if (target?.requestFocus() != true) focusFirstItemWhenReady(restoreFocusTo)
+        }
+    }
+}
+
+/** Depth-first search for the first focusable, shown view under [view]. */
+private fun firstFocusableDescendant(view: View): View? {
+    if (view.isShown && view.isFocusable) return view
+    if (view is ViewGroup) {
+        for (i in 0 until view.childCount) {
+            firstFocusableDescendant(view.getChildAt(i))?.let { return it }
+        }
+    }
+    return null
+}
+
+/** Clears a Series/Films category selection and returns to that tab's shelves. */
+internal fun MainActivity.showAllVodContent() {
+    selectedRowId = null
+    selectedCategoryIds = null
+    selectedBrandChannelIds = null
+    selectedShelfItems = null
+    categoryAdapter.setSelected(null)
+    scope.launch { applyCategoryFilter(wholesale = true) }
+}
+
+/** Clears the Live rail's category selection and repaints the full channel list. */
+internal fun MainActivity.showAllLiveChannels() {
+    selectedRowId = null
+    selectedCategoryIds = null
+    selectedBrandChannelIds = null
+    selectedShelfItems = null
+    categoryAdapter.setSelected(null)
+    scope.launch { applyCategoryFilter(focusFirstLiveChannel = true, wholesale = true) }
+}
+
 /** Column count for the single-category poster grid, sized off the RecyclerView's actual
  *  width where possible (it's already laid out by the time a category gets picked). */
 internal fun MainActivity.gridSpanCount(recyclerView: RecyclerView): Int {
@@ -1477,6 +1562,37 @@ internal suspend fun MainActivity.applyCategoryFilter(
             // A newer category switch started while this filter ran - its result is the
             // one the user is waiting for, so drop ours rather than overwrite it.
             if (generation != categoryFilterGeneration) return
+            if (filtered.isEmpty()) {
+                // Blank guide panes read as a failed render. Say why the pane is empty and
+                // give the one action that can leave it.
+                if (wholesale) liveAdapter.replaceAll(emptyList()) else liveAdapter.submitList(emptyList())
+                binding.liveContent.scrollToPosition(0)
+                updateGuideRowWrap()
+                val hasAnyChannels = liveChannels.isNotEmpty()
+                showContentEmptyState(
+                    iconRes = R.drawable.ic_live_tv,
+                    title = getString(
+                        if (hasAnyChannels) R.string.empty_live_category_title
+                        else R.string.empty_live_title
+                    ),
+                    caption = getString(
+                        if (hasAnyChannels) R.string.empty_live_category_caption
+                        else R.string.empty_live_caption
+                    ),
+                    actionLabel = getString(
+                        if (hasAnyChannels) R.string.show_all_channels
+                        else R.string.open_settings
+                    ),
+                    action = if (hasAnyChannels) {
+                        { showAllLiveChannels() }
+                    } else {
+                        { showProviderSettings() }
+                    },
+                    focusAction = focusFirstLiveChannel
+                )
+                return
+            }
+            hideContentEmptyState(restoreFocusTo = binding.liveContent)
             val commit = Runnable {
                 updateGuideRowWrap()
                 if (focusFirstLiveChannel) {
@@ -1734,6 +1850,7 @@ internal fun MainActivity.selectHome() {
     hideSports()
     hideCatchup()
     releaseLivePreview()
+    hideContentEmptyState()
     binding.discoverContent.visibility = View.GONE
     binding.contentRow.visibility = View.GONE
     binding.homeContent.visibility = View.VISIBLE
@@ -1768,6 +1885,7 @@ internal fun MainActivity.selectDownloads() {
     hideSports()
     hideCatchup()
     releaseLivePreview()
+    hideContentEmptyState()
     binding.discoverContent.visibility = View.GONE
     binding.contentRow.visibility = View.VISIBLE
     binding.homeContent.visibility = View.GONE
@@ -2161,10 +2279,13 @@ internal fun MainActivity.resolveSideMenuCategoryItems(tab: Int, category: Categ
 }
 
 internal fun MainActivity.updatePlayPauseIcon() {
-    binding.btnPlayPause.setImageResource(
-        if (playerManager.isPlaying) R.drawable.ic_pause
-        else R.drawable.ic_play
-    )
+    // Follow playWhenReady (what the toggle will actually do) rather than isPlaying: a
+    // stream that is rebuffering reports isPlaying=false while a press still means
+    // "pause". IDLE and ENDED are the exceptions - there is nothing to pause, and at the
+    // end the button has to offer a replay instead of a pause that does nothing.
+    val state = playerManager.playbackState
+    val showPlay = state == Player.STATE_IDLE || state == Player.STATE_ENDED || !playerManager.playWhenReady
+    binding.btnPlayPause.setImageResource(if (showPlay) R.drawable.ic_play else R.drawable.ic_pause)
 }
 
 internal fun MainActivity.updateProgress() {
@@ -2177,8 +2298,19 @@ internal fun MainActivity.updateProgress() {
         binding.duration.text = formatTime(dur)
         binding.seekBar.progress = ((pos.toFloat() / dur) * 100).toInt()
         binding.seekBar.keyProgressIncrement = maxOf(1, (30_000f / dur * 100).toInt())
+    } else {
+        // A live feed with no seekable window has no duration. Leaving the previous
+        // title's total (and thumb) on screen made a dead timeline look scrubbable.
+        binding.duration.text = formatTime(0)
+        binding.seekBar.progress = 0
     }
     binding.seekBar.isEnabled = dur > 0
+    // Dim the whole row when it cannot be scrubbed, so the disabled state is visible at a
+    // glance rather than looking like a normal timeline that ignores input.
+    val timelineAlpha = if (dur > 0) 1f else 0.35f
+    binding.seekBar.alpha = timelineAlpha
+    binding.currentTime.alpha = timelineAlpha
+    binding.duration.alpha = timelineAlpha
 
     // Ticks every ~1s while playing; persist progress every ~5s instead of every tick.
     progressTickCount++

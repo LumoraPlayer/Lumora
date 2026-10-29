@@ -77,6 +77,9 @@
          these were sized for a phone in the hand; values-television/ steps them up. -->
     <dimen name="category_row_text">10sp</dimen>
     <dimen name="category_row_padding_vertical">8dp</dimen>
+    <!-- Vector star/pin targets in the category rail and the guide's channel column. -->
+    <dimen name="category_star_size">22dp</dimen>
+    <dimen name="guide_star_size">22dp</dimen>
     <dimen name="guide_channel_name_text">9sp</dimen>
     <dimen name="guide_channel_number_text">8sp</dimen>
     <dimen name="guide_channel_initial_text">9sp</dimen>

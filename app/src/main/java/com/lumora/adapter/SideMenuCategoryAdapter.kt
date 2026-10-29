@@ -129,8 +129,9 @@ class SideMenuCategoryAdapter(
         fun bind(category: CategoryFilter, selected: Boolean) {
             itemView.resetFocusTransform()
             current = category
-            val rawName = if (category.isDynamic) category.name.uppercase() else category.name
-            val label = rawName.let { if (it.length > 80) it.take(79) + "…" else it }
+            // Same casing as the browse rail and the shelf headers: forcing dynamic
+            // buckets to ALL CAPS made the same category read differently in two places.
+            val label = category.name.let { if (it.length > 80) it.take(79) + "…" else it }
             val builder = SpannableStringBuilder(label)
             if (category.count >= 0) {
                 val start = builder.length

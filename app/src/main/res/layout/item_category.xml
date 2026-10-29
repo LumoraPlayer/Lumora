@@ -42,25 +42,23 @@
              its own D-pad target: LEFT from the row lands on it, OK toggles the pin. The
              adapter hides it for rows that can't be pinned (the "All" row, toggle rows) -
              a dead star reads as a broken one. -->
-        <TextView
+        <ImageView
             android:id="@+id/categoryStar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="@dimen/category_star_size"
+            android:layout_height="@dimen/category_star_size"
             android:layout_marginEnd="4dp"
             android:background="@drawable/bg_toolbar_button"
             android:clickable="true"
+            android:contentDescription="@string/pin_category"
             android:focusable="true"
-            android:fontFamily="@font/inter_medium"
-            android:gravity="center"
             android:nextFocusRight="@id/categoryRow"
-            android:paddingHorizontal="4dp"
-            android:paddingVertical="1dp"
+            android:padding="4dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_star"
             android:stateListAnimator="@animator/focus_scale_flat"
-            android:text="☆"
-            android:textColor="@color/text_secondary"
-            android:textSize="@dimen/category_row_text"
+            android:tint="@color/text_secondary"
             android:clipChildren="false"
-    android:clipToPadding="false"/>
+            android:clipToPadding="false" />
 
         <TextView
             android:id="@+id/categoryLabel"

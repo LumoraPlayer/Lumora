@@ -43,24 +43,23 @@
 
             <!-- Favourite indicator stays tappable but is not a separate D-pad stop: long-press
                  on the channel row also toggles it, so LEFT can return directly to categories. -->
-            <TextView
+            <ImageView
                 android:id="@+id/guideChannelFav"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="@dimen/guide_star_size"
+                android:layout_height="@dimen/guide_star_size"
                 android:layout_marginEnd="2dp"
                 android:background="@drawable/bg_toolbar_button"
                 android:clickable="true"
+                android:contentDescription="@string/favourite"
                 android:focusable="false"
-                android:fontFamily="@font/inter_medium"
-                android:gravity="center"
-                android:paddingHorizontal="4dp"
-                android:paddingVertical="1dp"
+                android:padding="5dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_star"
                 android:stateListAnimator="@animator/focus_scale_flat"
-                android:text="☆"
-                android:textColor="@color/text_secondary"
-                android:textSize="@dimen/guide_channel_number_text"
+                android:tint="@color/text_secondary"
+                android:visibility="invisible"
                 android:clipChildren="false"
-    android:clipToPadding="false"/>
+                android:clipToPadding="false" />
 
             <!-- Hidden (not just blank) by the adapter when the channel has no number: at
                  wrap_content with a minWidth it still reserved its column on every row, so a

@@ -157,6 +157,7 @@ internal fun MainActivity.selectCatchup() {
     showingDownloads = false
     hideSports()
     releaseLivePreview()
+    hideContentEmptyState()
     binding.discoverContent.visibility = View.GONE
     binding.homeContent.visibility = View.GONE
     binding.homeSearchBar.visibility = View.GONE

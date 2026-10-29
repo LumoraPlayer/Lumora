@@ -15,7 +15,8 @@
         android:clipChildren="false"
         android:clipToPadding="false"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:paddingEnd="8dp">
 
         <TextView
             android:id="@+id/shelfTitle"
@@ -28,13 +29,18 @@
             android:textColor="@color/text_primary"
             android:textSize="@dimen/shelf_title_text" />
 
+        <!-- Quiet at rest, focus ring only when reached: the shelf title is the row's
+             headline, not this action. -->
         <TextView
             android:id="@+id/shelfSeeAllButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
-            android:background="@drawable/bg_outline_button"
+            android:background="@drawable/bg_shelf_action"
             android:clickable="true"
+            android:drawableEnd="@drawable/ic_chevron_right"
+            android:drawablePadding="4dp"
+            android:drawableTint="@color/text_secondary"
             android:focusable="true"
             android:fontFamily="@font/inter_medium"
             android:gravity="center"
@@ -43,43 +49,29 @@
             android:paddingVertical="@dimen/shelf_action_padding_v"
             android:stateListAnimator="@animator/focus_scale"
             android:text="@string/see_all"
-            android:textAllCaps="true"
-            android:textColor="@color/text_primary"
+            android:textColor="@color/shelf_action_text"
             android:textSize="@dimen/shelf_action_text"
             android:clipChildren="false"
-    android:clipToPadding="false"/>
+            android:clipToPadding="false" />
 
-        <TextView
-            android:id="@+id/shelfPinButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
+        <!-- Pin/unpin and hide moved into one labelled overflow menu: three focus stops
+             beside the title made the header busier than the posters under it. -->
+        <ImageView
+            android:id="@+id/shelfOverflowButton"
+            android:layout_width="@dimen/shelf_action_min_height"
+            android:layout_height="@dimen/shelf_action_min_height"
+            android:layout_marginStart="8dp"
             android:background="@drawable/bg_toolbar_button"
             android:clickable="true"
+            android:contentDescription="@string/more_actions"
             android:focusable="true"
-            android:padding="8dp"
+            android:padding="6dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_more_vert"
             android:stateListAnimator="@animator/focus_scale"
-            android:text="☆"
-            android:textColor="@color/text_secondary"
-            android:textSize="@dimen/text_body_l"
+            android:tint="@color/text_secondary"
             android:clipChildren="false"
-    android:clipToPadding="false"/>
-
-        <TextView
-            android:id="@+id/shelfHideButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:background="@drawable/bg_toolbar_button"
-            android:clickable="true"
-            android:focusable="true"
-            android:padding="8dp"
-            android:stateListAnimator="@animator/focus_scale"
-            android:text="✕"
-            android:textColor="@color/text_secondary"
-            android:textSize="@dimen/text_body_l"
-            android:clipChildren="false"
-    android:clipToPadding="false"/>
+            android:clipToPadding="false" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

@@ -35,6 +35,17 @@
             android:layout_gravity="bottom"
             android:background="@drawable/grad_poster_scrim" />
 
+        <!-- Resume position for Continue Watching / partially-watched titles. -->
+        <ProgressBar
+            android:id="@+id/itemProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:layout_gravity="bottom"
+            android:max="100"
+            android:progressDrawable="@drawable/progress_poster_resume"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/itemTypeBadge"
             android:layout_width="wrap_content"
@@ -50,24 +61,48 @@
             android:textSize="@dimen/poster_badge_text"
             android:visibility="gone" />
 
-        <com.lumora.ui.OutlineTextView
-            android:id="@+id/itemTitle"
+        <!-- Caption block: a quiet year/rating line above the title, so the grid can show
+             the metadata that makes a remake distinguishable without moving titles off the
+             artwork (which costs a row of visible posters). -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
-            android:padding="8dp"
-            android:autoSizeMaxTextSize="@dimen/poster_title_text"
-            android:autoSizeMinTextSize="@dimen/poster_title_text_min"
-            android:autoSizeStepGranularity="1sp"
-            android:autoSizeTextType="uniform"
-            android:breakStrategy="simple"
-            android:ellipsize="end"
-            android:fontFamily="@font/inter_medium"
-            android:lineSpacingExtra="1dp"
-            android:maxLines="4"
-            android:textColor="@color/text_primary"
-            android:textSize="@dimen/poster_title_text"
-            app:outlineColor="@color/poster_title_outline"
-            app:outlineWidth="@dimen/poster_title_outline_width" />
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <TextView
+                android:id="@+id/itemMeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="@font/inter_medium"
+                android:maxLines="1"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="3"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/poster_badge_text"
+                android:visibility="gone" />
+
+            <com.lumora.ui.OutlineTextView
+                android:id="@+id/itemTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:autoSizeMaxTextSize="@dimen/poster_title_text"
+                android:autoSizeMinTextSize="@dimen/poster_title_text_min"
+                android:autoSizeStepGranularity="1sp"
+                android:autoSizeTextType="uniform"
+                android:breakStrategy="simple"
+                android:ellipsize="end"
+                android:fontFamily="@font/inter_medium"
+                android:lineSpacingExtra="1dp"
+                android:maxLines="2"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/poster_title_text"
+                app:outlineColor="@color/poster_title_outline"
+                app:outlineWidth="@dimen/poster_title_outline_width" />
+        </LinearLayout>
     </FrameLayout>
 </FrameLayout>

@@ -101,6 +101,8 @@
          larger) label rather than sit in a box sized for 10sp text. -->
     <dimen name="category_row_padding_vertical">6dp</dimen>
     <dimen name="category_row_padding_horizontal">9dp</dimen>
+    <dimen name="category_star_size">26dp</dimen>
+    <dimen name="guide_star_size">26dp</dimen>
     <dimen name="guide_channel_name_text">13sp</dimen>
     <dimen name="guide_channel_number_text">12sp</dimen>
     <dimen name="guide_channel_initial_text">13sp</dimen>

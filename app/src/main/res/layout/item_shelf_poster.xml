@@ -33,6 +33,22 @@
             android:layout_gravity="bottom"
             android:background="@drawable/grad_poster_scrim" />
 
+        <!-- Resume position, when the title has one. Sits on the artwork's bottom edge so
+             Continue Watching and partially-watched titles read at a glance. -->
+        <ProgressBar
+            android:id="@+id/itemProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:layout_gravity="bottom"
+            android:max="100"
+            android:progressDrawable="@drawable/progress_poster_resume"
+            android:visibility="gone" />
+
+        <!-- Three lines, not four: the overlay is a caption, not a synopsis. Four lines
+             swallowed the bottom half of the artwork and forced the auto-sizer down to
+             the floor on almost every long title; two clipped titles like
+             "Another Movie (2025)" that the narrow shelf card genuinely needs. -->
         <com.lumora.ui.OutlineTextView
             android:id="@+id/itemTitle"
             android:layout_width="match_parent"
@@ -47,7 +63,7 @@
             android:ellipsize="end"
             android:fontFamily="@font/inter_medium"
             android:lineSpacingExtra="1dp"
-            android:maxLines="4"
+            android:maxLines="3"
             android:textColor="@color/text_primary"
             android:textSize="@dimen/poster_title_text"
             app:outlineColor="@color/poster_title_outline"

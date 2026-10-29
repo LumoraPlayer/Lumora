@@ -250,6 +250,7 @@ internal fun MainActivity.selectDiscover() {
     hideSports()
     showingDiscover = true
     releaseLivePreview()
+    hideContentEmptyState()
     binding.contentRow.visibility = View.GONE
     binding.homeContent.visibility = View.GONE
     binding.homeSearchBar.visibility = View.GONE

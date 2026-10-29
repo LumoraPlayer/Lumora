@@ -179,6 +179,37 @@ object PlaybackPositionStore {
         ensureLoaded(context).entries
             .mapNotNull { entry -> entry.value.channel?.let { entry.key to it } }
 
+    /**
+     * Resume position per card id, 0..1, for the poster progress bars.
+     *
+     * Keyed by the played item's own id *and* its parent series id: a series card in the
+     * grid carries the show's id, while the saved entry belongs to the episode that was
+     * played (its `categoryId` points back at the show). The highest fraction wins, so a
+     * show with several partially-watched episodes shows the furthest-along one.
+     * Near-complete entries are omitted - a finished title does not need a resume bar.
+     */
+    fun progressById(context: Context): Map<String, Float> {
+        val out = HashMap<String, Float>()
+        for ((key, pos) in ensureLoaded(context)) {
+            if (pos.isNearComplete) continue
+            val pct = pos.progressPercent
+            val fraction = when {
+                pos.durationMs > 0L -> pos.positionMs.toFloat() / pos.durationMs
+                pct != null && pct > 0.0 -> (pct / 100.0).toFloat()
+                else -> continue
+            }.coerceIn(0f, 1f)
+            if (fraction <= 0.01f) continue
+            val ch = pos.channel ?: continue
+            fun put(id: String?) {
+                if (!id.isNullOrBlank()) out[id] = maxOf(out[id] ?: 0f, fraction)
+            }
+            put(key)
+            put(ch.id)
+            if (ch.mediaType == MediaType.SERIES) put(ch.categoryId)
+        }
+        return out
+    }
+
     fun clearAll(context: Context) {
         cache = ConcurrentHashMap()
         // Route the disk wipe through the same single-thread executor as every other write:

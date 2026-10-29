@@ -6,6 +6,7 @@ import android.graphics.Rect
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
@@ -39,6 +40,8 @@ class PosterGridAdapter(
      *  Declared before [onItemClick] so the click handler stays the trailing lambda every
      *  call site passes it as. */
     private val onItemLongClick: ((Channel) -> Unit)? = null,
+    /** 0..1 resume position per card, or null when the title has no saved progress. */
+    private val progressFor: ((Channel) -> Float?)? = null,
     private val onItemClick: (Channel) -> Unit
 ) : ListAdapter<Channel, PosterGridAdapter.ViewHolder>(DiffCallback()) {
 
@@ -124,7 +127,9 @@ class PosterGridAdapter(
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val posterImage: ImageView = itemView.findViewById(R.id.itemPoster)
         private val titleText: TextView = itemView.findViewById(R.id.itemTitle)
+        private val metaText: TextView = itemView.findViewById(R.id.itemMeta)
         private val typeBadge: TextView = itemView.findViewById(R.id.itemTypeBadge)
+        private val progressBar: ProgressBar = itemView.findViewById(R.id.itemProgress)
         private var current: Channel? = null
         private var imageJob: Job? = null
 
@@ -204,6 +209,26 @@ class PosterGridAdapter(
                 cleanVodTitle(channel.name)
             } else channel.name
 
+            // A quiet year/rating line where the source has one - enough to tell a remake
+            // from the original without opening the detail page, and hidden entirely when
+            // the panel shipped neither.
+            val meta = buildList {
+                channel.year?.takeIf { it.isNotBlank() }?.let(::add)
+                (channel.rating ?: channel.imdbRating)?.takeIf { it.isNotBlank() }?.let(::add)
+            }
+            metaText.text = meta.joinToString(" · ")
+            metaText.visibility = if (meta.isEmpty()) View.GONE else View.VISIBLE
+
+            // Resume progress at the artwork's bottom edge; a missing poster must not hide
+            // the position, so this is set before the image path's early returns.
+            val progress = progressFor?.invoke(channel)
+            if (progress != null && progress > 0.01f) {
+                progressBar.visibility = View.VISIBLE
+                progressBar.progress = (progress * 100f).toInt().coerceIn(0, 100)
+            } else {
+                progressBar.visibility = View.GONE
+            }
+
             val custom = badgeFor?.invoke(channel)
             if (custom != null) {
                 typeBadge.visibility = View.VISIBLE
@@ -250,8 +275,8 @@ class PosterGridAdapter(
          *  match - which is the common case in a diff. This compares only what a rebind
          *  would actually change, so an equal pair costs a handful of reference compares.
          *
-         *  The first four are what [ViewHolder.bind] draws. The rest are not drawn, but the
-         *  holder caches the whole Channel in `current` and hands that instance to
+         *  Name, artwork, type and the year/rating line are what [ViewHolder.bind] draws.
+         *  The rest are not drawn, but the holder caches the whole Channel in `current` and hands that instance to
          *  onItemClick/onItemLongClick: skipping a rebind keeps the *old* instance, so any
          *  field the click path plays from has to count as content. Xtream URLs carry
          *  credentials and Stalker/plugin items resolve through a token, so a catalog
@@ -261,6 +286,9 @@ class PosterGridAdapter(
                 old.posterUrl == new.posterUrl &&
                 old.logoUrl == new.logoUrl &&
                 old.mediaType == new.mediaType &&
+                old.year == new.year &&
+                old.rating == new.rating &&
+                old.imdbRating == new.imdbRating &&
                 old.url == new.url &&
                 old.stalkerCmd == new.stalkerCmd &&
                 old.pluginToken == new.pluginToken &&
