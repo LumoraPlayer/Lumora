@@ -432,11 +432,13 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
             // P1-2: compiled once per query, not per comparison - the boundary regex was
             // built inside searchRank (called by the comparator), so sorting ~50k titles
             // compiled ~1.5M Patterns and cost seconds on a TV stick.
-            val boundaryRegex = java.util.regex.Pattern.compile(
-                "\\b" + java.util.regex.Pattern.quote(needle),
-                java.util.regex.Pattern.UNICODE_CASE or
-                    java.util.regex.Pattern.UNICODE_CHARACTER_CLASS
-            ).toRegex()
+            // No flags on purpose: Android's regex engine declares
+            // Pattern.UNICODE_CHARACTER_CLASS but does not implement it, so passing it throws
+            // IllegalArgumentException("Unsupported flags: 256") - that crashed every search
+            // on Fire OS 7 (API 28). Dropping it costs nothing because Android's ICU-backed
+            // matcher already treats \b and \w as Unicode; the flag is only needed on a JVM,
+            // where those classes default to ASCII.
+            val boundaryRegex = Regex("\\b" + Regex.escape(needle))
             val liveSource = when (filter) {
                 MainActivity.SearchFilter.ALL, MainActivity.SearchFilter.LIVE -> liveChannels
                 else -> emptyList()

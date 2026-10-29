@@ -632,7 +632,13 @@ internal suspend fun MainActivity.loadSeriesContent(
             // Watched/resume state for these episodes comes from the same UserData the
             // catalog fetch reads, so an episode list opened here shows progress made in
             // any other client (EpisodeAdapter reads it out of PlaybackPositionStore).
-            if (cfg != null) importJellyfinUserState(episodes, cfg, includePlayed = true)
+            if (cfg != null) {
+                importJellyfinUserState(episodes, cfg, includePlayed = true)
+                // And back the other way: anything this install watched on another provider's
+                // copy (an IPTV panel, say) is marked played here too, so Jellyfin's own clients
+                // agree. Only for episodes the server actually carries.
+                if (jellyfin != null) pushLocalWatchedMarksToJellyfin(episodes, jellyfin, cfg.id)
+            }
             // Season *names* come from the server - grouping on ParentIndexNumber alone
             // can only ever produce "Season 0" for specials, which is not what any
             // Jellyfin library calls that row.
@@ -660,7 +666,11 @@ internal suspend fun MainActivity.loadSeriesContent(
             // Watched/resume state for these episodes comes from the same fields the catalog
             // crawl reads, so an episode list opened here shows progress made in any other
             // Plex client (EpisodeAdapter reads it out of PlaybackPositionStore).
-            if (cfg != null) importPlexUserState(episodes, cfg, includePlayed = true)
+            if (cfg != null) {
+                importPlexUserState(episodes, cfg, includePlayed = true)
+                // Same backfill as Jellyfin's - see pushLocalWatchedMarksToJellyfin.
+                if (plex != null) pushLocalWatchedMarksToPlex(episodes, plex, cfg.id)
+            }
             // Season *names* come from the server - grouping on parentIndex alone can only
             // ever produce "Season 0" for specials, which is not what any Plex library calls
             // that row.
@@ -1532,6 +1542,10 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             val client = XtreamClient(BaseApplication.instance.okHttpClient)
             if (isSeries) {
                 sectionLabel.text = getString(R.string.list_episodes)
+                // The other copies of this show are fetched *beside* the opened one, not
+                // after it. Awaiting them in sequence put every sibling's round trip on the
+                // critical path, which is what made opening a series feel slow.
+                val siblingFetch = async { siblingSeasons(item, seriesGroup) }
                 val (details, librarySeasons) = loadSeriesContent(item)
                 if (nowShowingDetailId != requestedItemId) return@launch
                 applyDetails(details)
@@ -1550,8 +1564,13 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 // part of it, and choosing the library wholesale showed those seasons as
                 // complete when they were one episode of eight. Merged, so what the provider
                 // has plays directly and what it is missing routes to Find Stream.
-                val seasons = if (librarySeasons.all { it.second.isEmpty() }) tmdbSeasonsFor(item)
-                    else mergeMissingEpisodesFromTmdb(item, librarySeasons)
+                //
+                // Other providers' copies of the same show are merged first, so their episodes
+                // arrive with real streams - a show with seasons 1-4 on a panel and season 5 on
+                // Jellyfin reads as one complete list - and TMDB only fills what no provider has.
+                val fromVersions = mergeSeasonsFromVersions(siblingFetch.await(), librarySeasons)
+                val seasons = if (fromVersions.all { it.second.isEmpty() }) tmdbSeasonsFor(item)
+                    else mergeMissingEpisodesFromTmdb(item, fromVersions)
                 if (nowShowingDetailId != requestedItemId) return@launch
                 detailSeasons = seasons
                 if (seasons.all { it.second.isEmpty() }) {

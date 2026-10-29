@@ -4,6 +4,7 @@ package com.lumora
 import android.util.Log
 import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.WatchedStore
+import com.lumora.data.MediaServerStore
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.util.cleanVodTitle
@@ -168,10 +169,20 @@ private fun normalizeForWatchedKey(title: String): String? {
  */
 internal fun seriesTitleFromEpisodeName(name: String): String? {
     val cleaned = cleanVodTitle(name)
-    val marker = ANY_SEASON_MARKER_REGEX.find(cleaned) ?: return null
-    val prefix = cleaned.substring(0, marker.range.first).trim().trim('-', '·', ':').trim()
+    // A row's name normally opens with the very marker the row displays ("S01E04 · EN - Show -
+    // S01E04"), and reading the *first* marker as "the show is what precedes this" made the
+    // title empty and the answer null. Null is not a cosmetic miss here: it means the row has
+    // no shared watched key at all, so it never ticks, and setItemWatched can never push it to
+    // a media server or tracker either. Skip that leading marker and read what follows it.
+    val withoutLeadingMarker = cleaned.replaceFirst(LEADING_EPISODE_MARKER_REGEX, "")
+    val marker = ANY_SEASON_MARKER_REGEX.find(withoutLeadingMarker) ?: return null
+    val prefix = withoutLeadingMarker.substring(0, marker.range.first).trim().trim('-', '·', ':').trim()
     return prefix.ifBlank { null }
 }
+
+/** The "S01E04 · " / "S01E04 - " marker a row name starts with, before any show title. */
+private val LEADING_EPISODE_MARKER_REGEX =
+    Regex("""^\s*S\d{1,3}\s*E\d{1,4}\s*[·:|/-]?\s*""", RegexOption.IGNORE_CASE)
 
 /**
  * The show an episode belongs to, by name.
@@ -292,10 +303,13 @@ internal fun MainActivity.clearSiblingCopyPositions(item: Channel, sharedKeys: L
  * over the network. That is one request per server per mark, in the background, and a failure
  * is silent - the local shared mark has already made every copy read as watched, and this is
  * only about agreeing with other clients.
+ *
+ * A server that has not been opened this session is connected on demand rather than skipped:
+ * bailing out when the client map was empty meant a mark made while watching an IPTV copy
+ * never reached the server at all, so the episode stayed unwatched in every other client.
  */
 private fun MainActivity.pushWatchedToMediaServers(item: Channel, watched: Boolean) {
     val shared = watchedKeyFor(item) ?: return
-    if (jellyfinClients.isEmpty() && plexClients.isEmpty()) return
     val normalizedTitle = shared.substringAfter('|').substringBefore('|')
     scope.launch {
         val ownCopies = com.lumora.data.catalog.CatalogRepository.get(this@pushWatchedToMediaServers)
@@ -347,11 +361,20 @@ private suspend fun MainActivity.serverEpisodeId(
     episodeNum: Int
 ): String? = withContext(Dispatchers.IO) {
     if (isJellyfin) {
-        jellyfinClients[sourceId]?.getEpisodes(seriesRawId)?.firstOrNull {
+        // Connect when the session has no client yet: a mark made while watching an IPTV
+        // copy used to find an empty map and quietly go nowhere, which is exactly the case
+        // this is for - the server has not been opened, but it still has to be told.
+        val client = jellyfinClients[sourceId]
+            ?: jellyfinClientOrConnect(MediaServerStore.get(prefs, sourceId))
+            ?: return@withContext null
+        client.getEpisodes(seriesRawId)?.firstOrNull {
             it.episodeNumber == episodeNum && (season == null || it.seasonNumber == season)
         }?.id
     } else {
-        plexClients[sourceId]?.getEpisodes(seriesRawId)?.firstOrNull {
+        val client = plexClients[sourceId]
+            ?: plexClientOrConnect(MediaServerStore.get(prefs, sourceId))
+            ?: return@withContext null
+        client.getEpisodes(seriesRawId)?.firstOrNull {
             it.episodeNumber == episodeNum && (season == null || it.seasonNumber == season)
         }?.id
     }
@@ -368,12 +391,76 @@ private suspend fun MainActivity.markOnServer(
 ) {
     val ok = withContext(Dispatchers.IO) {
         if (isJellyfin) {
-            jellyfinClients[sourceId]?.setPlayed(rawId, watched)
+            (jellyfinClients[sourceId] ?: jellyfinClientOrConnect(MediaServerStore.get(prefs, sourceId)))
+                ?.setPlayed(rawId, watched)
         } else {
-            plexClients[sourceId]?.let {
-                if (watched) it.markWatched(rawId) else it.clearUserData(rawId)
-            }
+            (plexClients[sourceId] ?: plexClientOrConnect(MediaServerStore.get(prefs, sourceId)))
+                ?.let { if (watched) it.markWatched(rawId) else it.clearUserData(rawId) }
         }
     }
     if (ok != true) Log.d("LumoraWatched", "server mark failed for $label (watched=$watched)")
+}
+
+// ── Backfill: local marks → media servers ──
+//
+// pushWatchedToMediaServers above only fires for the item that was just finished, at the
+// instant it crossed the threshold. Anything watched before the server was configured, watched
+// while its client happened to be disconnected, or watched on a copy whose push failed stayed
+// local: the mark was in WatchedStore, nothing ever replayed it, and the server kept saying
+// "unwatched" in every other client. Trakt and Simkl have had a backfill for exactly this
+// (pushExistingWatchedToTrakt/Simkl); the media servers had none.
+//
+// The episode list a series screen already fetches is the cheap place to reconcile: those items
+// are in hand, and one POST per episode that disagrees is the whole cost. Only ever marks
+// *played* - a local store with no mark is not evidence an episode is unwatched, because it only
+// knows what this install has seen.
+
+/**
+ * Marks [items] played on the Jellyfin server when a local watched key says they were seen.
+ *
+ * Runs after [importJellyfinUserState] rather than instead of it: the import is what brings the
+ * server's own marks the other way, so opening a show converges both sides in one visit.
+ */
+internal fun MainActivity.pushLocalWatchedMarksToJellyfin(
+    items: List<com.lumora.data.remote.jellyfin.JellyfinProvider.JellyfinItem>,
+    client: com.lumora.data.remote.jellyfin.JellyfinProvider,
+    label: String
+) {
+    val pending = items.filter { item ->
+        !item.played && item.mediaType != "Series" &&
+            sharedWatchedKeysFor(item).any { WatchedStore.isWatched(this, it) }
+    }
+    if (pending.isEmpty()) return
+    scope.launch {
+        withContext(Dispatchers.IO) {
+            var pushed = 0
+            for (item in pending) {
+                if (runCatching { client.setPlayed(item.id, true) }.getOrDefault(false)) pushed++
+            }
+            if (pushed > 0) Log.d("LumoraWatched", "backfilled $pushed mark(s) to $label")
+        }
+    }
+}
+
+/** [pushLocalWatchedMarksToJellyfin] for a Plex server, which spells the same operation
+ *  markWatched. */
+internal fun MainActivity.pushLocalWatchedMarksToPlex(
+    items: List<com.lumora.data.remote.plex.PlexProvider.PlexItem>,
+    client: com.lumora.data.remote.plex.PlexProvider,
+    label: String
+) {
+    val pending = items.filter { item ->
+        !item.played && item.mediaType != "Series" &&
+            sharedWatchedKeysFor(item).any { WatchedStore.isWatched(this, it) }
+    }
+    if (pending.isEmpty()) return
+    scope.launch {
+        withContext(Dispatchers.IO) {
+            var pushed = 0
+            for (item in pending) {
+                if (runCatching { client.markWatched(item.id) }.getOrDefault(false)) pushed++
+            }
+            if (pushed > 0) Log.d("LumoraWatched", "backfilled $pushed mark(s) to $label")
+        }
+    }
 }

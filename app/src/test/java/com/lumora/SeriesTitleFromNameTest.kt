@@ -51,6 +51,22 @@ class SeriesTitleFromNameTest {
     }
 
     @Test
+    fun `a leading marker does not hide the show that follows it`() {
+        // The "S01E04 · " marker is what the episode row itself displays, and it is what the
+        // provider bakes onto the stored name. Reading it as "the show is whatever precedes
+        // the marker" made the title empty, so the row had no watched key at all: it never
+        // ticked, and a finished episode could never be pushed to a server or tracker.
+        assertEquals(
+            "2 Broke Girls",
+            seriesTitleFromEpisodeName("S01E01 · EN - 2 Broke Girls - S01E01")
+        )
+        assertEquals(
+            "Ilusão Mortal (2026)",
+            seriesTitleFromEpisodeName("S01E02 · Ilusão Mortal (2026) S01E02")
+        )
+    }
+
+    @Test
     fun `the year and the source decoration come off with the marker`() {
         // The show card an m3u_plus panel produces is named after this prefix, and the
         // watched key normalises both to the same thing.

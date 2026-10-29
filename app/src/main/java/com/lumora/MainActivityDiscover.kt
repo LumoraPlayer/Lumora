@@ -11,6 +11,7 @@ import android.widget.*
 import com.lumora.cache.FavoritesStore
 import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.RecentlyPlayedStore
+import com.lumora.cache.WatchedStore
 import com.lumora.data.IptvProviderStore
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
@@ -18,6 +19,7 @@ import com.lumora.model.MediaType
 import com.lumora.plugin.js.PluginScript
 import com.lumora.ui.attachBlinkingCursor
 import com.lumora.util.cleanVodTitle
+import com.lumora.util.isUnreleasedEpisode
 import com.lumora.util.normalizeTitleForGrouping
 import com.lumora.util.seriesTileIndex
 import com.lumora.util.versionGroupContaining
@@ -989,6 +991,22 @@ internal fun MainActivity.removeFromContinueWatching(item: Channel) {
             streamKey(sibling).takeIf { it != ownKey }?.let { PlaybackPositionStore.clear(this, it) }
         }
     }
+    // A Continue Watching card stands for its show, not just the episode it names (see
+    // continueWatchingTiles), so the show's *other* in-progress episodes have to go too:
+    // clearing only the named one left the same card to rebuild on the next frame under the
+    // next episode's number, which reads as the removal having been ignored.
+    if (item.mediaType == MediaType.SERIES) {
+        val showId = item.categoryId?.takeIf { it.isNotBlank() }
+        val showTitle = normalizeTitleForGrouping(cleanVodTitle(item.name).substringBefore('·'))
+        val ownKey = streamKey(item)
+        for ((key, snapshot) in PlaybackPositionStore.getAllWithSnapshots(this).toMap()) {
+            if (key == ownKey || snapshot.mediaType != MediaType.SERIES) continue
+            val sameShow = (showId != null && snapshot.categoryId == showId) ||
+                (showTitle.isNotBlank() &&
+                    watchedKeysFor(snapshot).any { it.startsWith("e|$showTitle|") })
+            if (sameShow) PlaybackPositionStore.clear(this, key)
+        }
+    }
     // Continue Watching tiles are re-labelled copies (continueWatchingTiles) that keep the
     // original id, so this matches the entry the server list actually holds. A sibling copy
     // on another server or account has its own id and would hand the tile straight back, so
@@ -1211,9 +1229,51 @@ internal fun MainActivity.isAdultHomeItem(item: Channel): Boolean {
 /** First unwatched episode of a series in play order (season-major, then episode
  *  number) - the same ordering the detail page and auto-advance use. Null when the
  *  whole series is watched: a completed series gets no up-next tile. */
-internal fun MainActivity.nextEpisodeFor(seasons: List<Pair<String, List<Channel>>>): Channel? {
+/**
+ * The episode after the furthest one watched, or null when the series is finished.
+ *
+ * Cheap on purpose. This runs once per in-flight series every time the up-next rows are
+ * rebuilt, over episode lists that can run to hundreds of entries, so the watched test is a
+ * hash lookup against one snapshot of the marks plus the per-copy position entry - not
+ * [isItemWatched], whose catalogue fallback scans every channel on the device when an
+ * episode's name does not state its show (Jellyfin names them "Pilot"). Doing that per
+ * episode made navigating the Series tab take seconds.
+ *
+ * The returned candidate is still confirmed with [isItemWatched], one item, so a mark stored
+ * under a spelling the fast test missed can never come back as "next".
+ */
+internal fun MainActivity.nextEpisodeFor(
+    series: Channel,
+    seasons: List<Pair<String, List<Channel>>>
+): Channel? {
     val ordered = seasons.flatMap { (_, eps) -> eps.sortedBy { it.episodeNum ?: Int.MAX_VALUE } }
-    return ordered.firstOrNull { !isItemWatched(it) }
+    if (ordered.isEmpty()) return null
+    val marks = WatchedStore.allKeys(this)
+    val title = cleanVodTitle(series.name)
+    fun seen(episode: Channel): Boolean {
+        val number = episode.episodeNum ?: return false
+        val position = PlaybackPositionStore.get(this, episode.id.ifBlank { episode.url })
+        if (position?.isNearComplete == true) return true
+        return episodeWatchedKeys(title, tileSeasonNumber(episode), number).any { it in marks }
+    }
+    // "Next" is the episode *after* the furthest one watched - not the first gap in the list.
+    // Taking the first gap meant a series whose trail ended anywhere but season 1 proposed
+    // S01E01 again, and a series watched to the finale proposed the pilot: a rewatch offered
+    // as "next up". Walking from the furthest watched episode also gets the finishing case
+    // right (nothing after the last episode means no tile), and skips an episode that is
+    // already watched between the two.
+    var lastWatched = -1
+    for (index in ordered.indices) if (seen(ordered[index])) lastWatched = index
+    if (lastWatched < 0) return null
+    for (index in lastWatched + 1 until ordered.size) {
+        val candidate = ordered[index]
+        // An unaired episode cannot be played, so a queue must not stop on it - the same
+        // rule episodeChain and the detail list use.
+        if (isUnreleasedEpisode(candidate)) continue
+        if (seen(candidate)) continue
+        return candidate.takeIf { !isItemWatched(it) }
+    }
+    return null
 }
 
 /** Builds an up-next tile's display name: "Series · S01E05 · Title". Episode titles often
@@ -1310,7 +1370,7 @@ internal fun MainActivity.fetchUpNextSeries(seriesIds: List<Pair<String, String?
             val seasons = withContext(Dispatchers.IO) {
                 runCatching { loadSeriesContent(series).second }.getOrNull()
             } ?: continue // network failure - leave unresolved, retry next build
-            val next = nextEpisodeFor(seasons)
+            val next = nextEpisodeFor(series, seasons)
             if (next == null) {
                 // Resolved: fully watched (or no playable episodes) - no tile, ever.
                 resolved[seriesId] = null
@@ -1482,8 +1542,15 @@ internal fun MainActivity.restoreRemovedUpNext() {
 internal fun MainActivity.seriesPosterLeadShelfItems(favourites: List<Channel>): List<Channel> {
     val claimed = HashSet<String>()
     return (seriesContinueItems() + seriesUpNextItems() + favourites).filter { item ->
-        val show = item.categoryId?.takeIf { it.isNotBlank() && item.episodeNum != null }
-            ?: item.id.ifBlank { item.url }
+        // Keyed on the *name* the tiles are labelled with ("Show · S01E04"), not on the parent
+        // id: the same show reached through two providers carries two different series ids, so
+        // an id-keyed dedupe let "Neagley S01E01" (part-watched) and "Neagley S01E02" (next up)
+        // sit side by side on one row.
+        val named = normalizeTitleForGrouping(cleanVodTitle(item.name).substringBefore('·'))
+        val show = named.ifBlank {
+            item.categoryId?.takeIf { it.isNotBlank() && item.episodeNum != null }
+                ?: item.id.ifBlank { item.url }
+        }
         show.isNotBlank() && claimed.add(show)
     }
 }
@@ -1498,14 +1565,19 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     val localContinue = PlaybackPositionStore.getAllInProgress(this)
     val serverContinue = jellyfinResumeItems + plexResumeItems
     // Up-next series tiles: series whose watched trail ends at a completed episode have
-    // no in-progress entry, so they'd otherwise drop out of Continue Watching entirely.
+    // no in-progress entry, so they'd otherwise drop out of the rows entirely.
     // buildUpNextSeriesTiles returns what's already resolved and kicks the async fetch
     // for the rest - the row fills in as episodes arrive.
+    //
+    // These belong to Next Up, not Continue Watching. They are episodes that were never
+    // *started*, so putting them in "Continue Watching" filled the row with shows the user
+    // had finished (a completed series offers its first unwatched episode, which can be S1E01
+    // of a show whose finale was the last thing watched).
     val upNext = buildUpNextSeriesTiles().filterNot(::isAdultHomeItem)
     // Labelled and postered from the parent series - see continueWatchingTiles. Applied after
     // the dedupe so the catalogue pass runs over the final row, not the raw merge.
     val continueItems = continueWatchingTiles(
-        (serverContinue + localContinue + upNext)
+        (serverContinue + localContinue)
             .distinctBy { it.id.ifBlank { it.url } }
             .filterNot(::isAdultHomeItem)
     )
@@ -1516,7 +1588,7 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     // servers hide (see disabledSourceIds); their lists are only re-pulled on catalog
     // loads, so the filter has to run here at render time, not where they are stored.
     val off = disabledSourceIds()
-    val nextUpItems = (jellyfinNextUpItems + plexNextUpItems)
+    val nextUpItems = (jellyfinNextUpItems + plexNextUpItems + upNext)
         .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
         .distinctBy { it.id.ifBlank { it.url } }
         .filterNot(::isAdultHomeItem)
@@ -1683,6 +1755,13 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
     // copy agrees on; the incoming list is most-recently-watched first (the store's own
     // order), so the first copy that claims an episode is the one that kept playing last.
     val seenEpisodes = HashSet<String>()
+    // One card per *show*, not per episode. The row is a "where was I" list, and a show with
+    // three half-watched episodes was three cards saying the same thing - with a watched
+    // history of any size that pushed everything else off the row. Keyed by the show's
+    // normalised title rather than by series id, because the same show on a panel and on a
+    // media server is two different ids; the list is most-recent-first, so the card that
+    // survives is the copy of the episode that was watched last.
+    val seenShows = HashSet<String>()
     // Claims an episode for a tile that cannot be decorated (no series resolved, or the
     // series' own name is blank): still dedupes it by the same shared keys, so two
     // unresolvable copies of one episode don't both render - removal matches these keys
@@ -1710,6 +1789,11 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
             ?: resolveHomeTileSeries(item)
             ?: return@mapNotNull if (claimEpisode(item)) item else null
         val seriesName = cleanVodTitle(series.name).ifBlank { return@mapNotNull if (claimEpisode(item)) item else null }
+        // The show this card stands for. A blank normalisation falls back to the series id, so
+        // a title that normalises away still yields one card per copy rather than none.
+        val showKey = normalizeTitleForGrouping(seriesName)
+            .ifBlank { series.id.ifBlank { seriesName } }
+        if (!seenShows.add(showKey)) return@mapNotNull null
         val season = tileSeasonNumber(item)
         // Null-season and season-1 spellings name the same episode (see episodeWatchedKeys) -
         // once either spelling has claimed an episode, a copy using the other is dropped too.
@@ -1810,6 +1894,85 @@ internal suspend fun MainActivity.tmdbSeasonsFor(item: Channel): List<Pair<Strin
             else getString(R.string.list_season_number, season.number)
         label to episodes
     }
+}
+
+/**
+ * How many copies of one show are fetched to fill a season list. A show that exists on two
+ * providers needs exactly one; the ceiling is for the pathological case - an m3u_plus panel
+ * groups every episode under its own series row, so a "group" of the same title can be dozens
+ * of entries, and each one costs a round trip.
+ */
+private const val MAX_MERGED_VERSIONS = 3
+
+/**
+ * The other copies' episode lists for one show - the input to [mergeSeasonsFromVersions].
+ *
+ * A title that exists on several providers - an Xtream panel, a Jellyfin library, a Plex
+ * server - is one show to the person watching it, but each provider carries its own, usually
+ * partial, episode list. Jellyfin holding only season 5 of a show whose first four seasons live
+ * on the panel meant opening that show in Jellyfin showed season 5 alone, with no sign the rest
+ * existed and no way to reach it from there.
+ *
+ * Fetched as its own step so the caller can run it *beside* the opened copy's own load: the
+ * detail screen used to await one list and then the others, which put three round trips on the
+ * critical path of every series screen.
+ *
+ * Network failures are per-sibling and silent: a copy that cannot be reached contributes
+ * nothing, and the ones that answered are still merged.
+ */
+internal suspend fun MainActivity.siblingSeasons(
+    item: Channel,
+    versionGroup: List<Channel>?
+): List<List<Pair<String, List<Channel>>>> {
+    if (versionGroup == null || versionGroup.size <= 1) return emptyList()
+
+    // Sibling *shows*, not sibling episodes: a panel that lists one episode per series row
+    // would otherwise be fetched once per episode.
+    val siblings = versionGroup
+        .filter { it.id != item.id && it.mediaType == MediaType.SERIES && it.episodeNum == null }
+        .take(MAX_MERGED_VERSIONS)
+    if (siblings.isEmpty()) return emptyList()
+
+    return coroutineScope {
+        siblings.map { sibling ->
+            async(Dispatchers.IO) {
+                runCatching { loadSeriesContent(sibling).second }.getOrDefault(emptyList())
+            }
+        }.awaitAll()
+    }
+}
+
+/** [siblingSeasons] merged into [librarySeasons] - see [mergeMissingEpisodesFromVersions]. */
+internal fun mergeSeasonsFromVersions(
+    siblingSeasons: List<List<Pair<String, List<Channel>>>>,
+    librarySeasons: List<Pair<String, List<Channel>>>
+): List<Pair<String, List<Channel>>> {
+    if (siblingSeasons.all { it.isEmpty() }) return librarySeasons
+
+    /** "Season 2" / "S2" / "2" all have to line up with the opened copy's labels. */
+    fun seasonNumber(label: String): Int? = Regex("""\d+""").find(label)?.value?.toIntOrNull()
+
+    val merged = librarySeasons.map { (label, eps) -> label to eps.toMutableList() }.toMutableList()
+    val indexByNumber = HashMap<Int?, Int>()
+    merged.forEachIndexed { index, (label, _) -> indexByNumber.putIfAbsent(seasonNumber(label), index) }
+
+    for (seasons in siblingSeasons) {
+        for ((label, episodes) in seasons) {
+            val number = seasonNumber(label)
+            val slot = indexByNumber[number]
+            if (slot == null) {
+                indexByNumber[number] = merged.size
+                merged.add(label to episodes.toMutableList())
+                continue
+            }
+            val existing = merged[slot].second
+            val have = existing.mapNotNullTo(HashSet()) { it.episodeNum }
+            existing.addAll(episodes.filter { it.episodeNum != null && it.episodeNum !in have })
+        }
+    }
+    return merged
+        .map { (label, eps) -> label to eps.sortedBy { it.episodeNum ?: Int.MAX_VALUE } }
+        .sortedBy { seasonNumber(it.first) ?: Int.MAX_VALUE }
 }
 
 /**
