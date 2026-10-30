@@ -368,29 +368,49 @@ object ResidentCatalog {
             return
         }
         state = built
+        CatalogMode.rememberCatalogueRows(context, built.count())
         withContext(Dispatchers.IO) {
             runCatching { ChannelCache.save(context, built.allChannels()) }
         }
     }
 
-    /** Reloads the resident rows if the catalogue is still under the RAM cutoff; clears it otherwise. */
-    suspend fun refresh(context: Context, dao: CatalogChannelDao) {
+    /** Reloads the resident rows if the catalogue is still under the RAM cutoff; clears it otherwise.
+     *
+     *  Returns whether the resident model is now in use - callers use it to decide whether the
+     *  flat [ChannelCache] copy on disk is still worth keeping. */
+    suspend fun refresh(context: Context, dao: CatalogChannelDao): Boolean {
         if (!CatalogMode.isRamEligible(context)) {
             clear()
             failed = false
-            return
+            return false
         }
         failed = false
+        // The stored row count can be missing (first launch after a big refresh) or stale, so
+        // the real count decides before a single row is built. Building 372k rows is what took
+        // a 3 GB TV five minutes and ~600 MB on the way to an ANR; the Room path answers.
+        val rows = withContext(Dispatchers.IO) { runCatching { dao.count() }.getOrNull() }
+        if (rows != null && !CatalogMode.fitsResident(context, rows)) {
+            Log.i(
+                TAG,
+                "resident catalogue skipped: $rows rows > ${CatalogMode.ramRowCap(context)} cap"
+            )
+            CatalogMode.rememberCatalogueRows(context, rows)
+            failed = true
+            clear()
+            return false
+        }
         val built = buildFrom(dao) ?: run {
             failed = true
             clear()
-            return
+            return false
         }
         state = built
+        CatalogMode.rememberCatalogueRows(context, built.count())
         withContext(Dispatchers.IO) {
             runCatching { ChannelCache.save(context, built.allChannels()) }
         }
         Log.i(TAG, "resident catalogue rows=${built.count()}")
+        return true
     }
 
     /**
@@ -398,8 +418,22 @@ object ResidentCatalog {
      * Room. Used when the playlist's measured payload is under the cutoff: the flat
      * [ChannelCache] file is the persistence, and the next cold start reads it instead of
      * running the database scan.
+     *
+     * Refused (returning false, so the caller persists to Room instead) when the ingest would
+     * produce more rows than the heap budget allows - see [CatalogMode.ramRowCap].
      */
     suspend fun refreshFromChannels(context: Context, channels: List<Channel>): Boolean {
+        if (!CatalogMode.fitsResident(context, channels.size)) {
+            Log.i(
+                TAG,
+                "resident ingest refused: ${channels.size} rows > " +
+                    "${CatalogMode.ramRowCap(context)} cap; using Room"
+            )
+            CatalogMode.rememberCatalogueRows(context, channels.size)
+            failed = true
+            clear()
+            return false
+        }
         val built = try {
             withContext(Dispatchers.Default) {
                 buildFromChannels(context, channels, System.currentTimeMillis())
@@ -417,6 +451,7 @@ object ResidentCatalog {
         }
         state = built
         failed = false
+        CatalogMode.rememberCatalogueRows(context, built.count())
         withContext(Dispatchers.IO) {
             runCatching { ChannelCache.save(context, channels) }
         }
@@ -471,6 +506,22 @@ object ResidentCatalog {
         loadMutex.withLock {
             state?.let { return it }
             if (failed) return null
+            // Same authoritative gate as refresh(): the flat cache below materialises the
+            // whole catalogue too, so a catalogue past the heap budget must not be loaded
+            // from it either. The cache is the copy that could not fit - drop it.
+            val rows = withContext(Dispatchers.IO) { runCatching { dao.count() }.getOrNull() }
+            if (rows != null && !CatalogMode.fitsResident(context, rows)) {
+                Log.i(
+                    TAG,
+                    "resident catalogue skipped: $rows rows > ${CatalogMode.ramRowCap(context)} cap"
+                )
+                CatalogMode.rememberCatalogueRows(context, rows)
+                failed = true
+                withContext(Dispatchers.IO) {
+                    runCatching { ChannelCache.clear(context) }
+                }
+                return null
+            }
             // A RAM-mode ingest persists only the flat cache; prefer it over a database
             // scan. If there is no cache (first switch from the DB path), the rows are in
             // Room and the build below seeds the cache for the next start.
@@ -486,6 +537,7 @@ object ResidentCatalog {
                 }
                 if (built != null) {
                     state = built
+                    CatalogMode.rememberCatalogueRows(context, built.count())
                     Log.i(TAG, "resident catalogue loaded from cache rows=${built.count()}")
                     return built
                 }
@@ -497,6 +549,7 @@ object ResidentCatalog {
                 return null
             }
             state = built
+            CatalogMode.rememberCatalogueRows(context, built.count())
             withContext(Dispatchers.IO) {
                 runCatching { ChannelCache.save(context, built.allChannels()) }
             }

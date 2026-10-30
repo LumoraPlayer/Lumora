@@ -4,6 +4,7 @@ package com.lumora.data.catalog
 import com.lumora.model.IptvProviderConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CatalogModeTest {
@@ -75,5 +76,22 @@ class CatalogModeTest {
             CatalogMode.Mode.RAM,
             CatalogMode.modeFor(CatalogMode.totalPlaylistBytes(configs))
         )
+    }
+
+    @Test
+    fun `the row cap is a quarter of the heap at 15 hundred bytes a row`() {
+        // 512 MB heap -> 128 MB budget -> ~89k rows.
+        assertEquals(89_478, CatalogMode.ramRowCapFor(512L * 1024 * 1024))
+        // The 1 GB sticks this app still supports have a 192 MB heap -> ~33k rows.
+        assertEquals(33_554, CatalogMode.ramRowCapFor(192L * 1024 * 1024))
+    }
+
+    @Test
+    fun `a six-figure panel is past the row cap on a tv heap`() {
+        val cap = CatalogMode.ramRowCapFor(512L * 1024 * 1024)
+        // The 40 MB panel that took five minutes and ~600 MB to load resident.
+        assertTrue(372_042 > cap)
+        // A normal panel is not pushed off the resident path by this gate.
+        assertTrue(60_000 <= cap)
     }
 }

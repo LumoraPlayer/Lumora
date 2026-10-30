@@ -71,10 +71,13 @@ class CatalogRepository private constructor(
     suspend fun refreshResidentCatalog() {
         val ctx = context ?: return
         CatalogMode.invalidate()
-        if (!CatalogMode.isRamEligible(ctx)) {
+        // refresh() decides for itself - payload size, then the real row count against the
+        // heap budget - and returns false when this catalogue stays in Room. The flat cache
+        // is only the resident model's persistence, so it goes when that model does.
+        val resident = ResidentCatalog.refresh(ctx, dao)
+        if (!resident) {
             com.lumora.cache.ChannelCache.clear(ctx)
         }
-        ResidentCatalog.refresh(ctx, dao)
     }
 
     /** Warms the resident model before the first VOD read; no-op for a large catalogue. */
