@@ -53,33 +53,34 @@
          The controls now come down another 25% (rail, gaps, card padding, targets), and the
          type with them but not as far: 8-10sp body text is not readable from a sofa, so the
          labels give up ~15% while the air around them gives up 25%. -->
-    <dimen name="settings_text_micro">8sp</dimen>
-    <dimen name="settings_text_caption">9sp</dimen>
-    <dimen name="settings_text_body">10sp</dimen>
-    <dimen name="settings_text_subtitle">11sp</dimen>
-    <dimen name="settings_text_section">13sp</dimen>
-    <dimen name="settings_text_title">15sp</dimen>
+    <dimen name="settings_text_micro">9sp</dimen>
+    <dimen name="settings_text_caption">10sp</dimen>
+    <dimen name="settings_text_body">11sp</dimen>
+    <dimen name="settings_text_subtitle">12sp</dimen>
+    <dimen name="settings_text_section">14sp</dimen>
+    <dimen name="settings_text_title">16sp</dimen>
 
     <dimen name="settings_nav_icon_size">16dp</dimen>
     <dimen name="settings_nav_rail_width">142dp</dimen>
-    <dimen name="settings_nav_row_min_height">27dp</dimen>
-    <dimen name="settings_nav_child_min_height">24dp</dimen>
-    <dimen name="settings_nav_group_indent">28dp</dimen>
-    <dimen name="settings_type_card_height">30dp</dimen>
+    <dimen name="settings_nav_row_min_height">26dp</dimen>
+    <dimen name="settings_nav_child_min_height">23dp</dimen>
+    <dimen name="settings_nav_group_indent">27dp</dimen>
+    <dimen name="settings_type_card_height">28dp</dimen>
 
     <dimen name="settings_gap_xs">2dp</dimen>
     <dimen name="settings_gap_s">3dp</dimen>
-    <dimen name="settings_gap_m">5dp</dimen>
-    <dimen name="settings_gap">6dp</dimen>
-    <dimen name="settings_gap_ml">7dp</dimen>
-    <dimen name="settings_gap_l">8dp</dimen>
-    <dimen name="settings_gap_xl">10dp</dimen>
-    <dimen name="settings_pane_padding">12dp</dimen>
+    <dimen name="settings_gap_m">4dp</dimen>
+    <dimen name="settings_gap">5dp</dimen>
+    <dimen name="settings_gap_ml">6dp</dimen>
+    <dimen name="settings_gap_l">7dp</dimen>
+    <dimen name="settings_gap_xl">9dp</dimen>
+    <dimen name="settings_column_gap">14dp</dimen>
+    <dimen name="settings_pane_padding">10dp</dimen>
     <!-- A focusable D-pad target, so it stops at 28dp rather than the 0.75 of 38dp (28.5)
          being rounded down: below this the focus ring is harder to spot than the label it
          surrounds. -->
-    <dimen name="settings_action_button_height">28dp</dimen>
-    <dimen name="settings_qr_size">78dp</dimen>
+    <dimen name="settings_action_button_height">26dp</dimen>
+    <dimen name="settings_qr_size">76dp</dimen>
 
     <!-- Holds the options column to a readable width. The pane spans the full panel now that
          the 660dp pop-out cap is gone, which left every card and input running ~700dp wide -
@@ -91,11 +92,11 @@
          width as dead space on the right, and it squeezed every provider row so hard that the
          name and URL were crushed under the row's own buttons. A margin this size still keeps
          lines off the bezel while letting the settings screen look like a TV screen. -->
-    <dimen name="settings_content_inset">30dp</dimen>
+    <dimen name="settings_content_inset">24dp</dimen>
 
     <!-- Vertical padding on settings card rows, which are wrap_content so their height is
          whatever the label needs plus this - see values/dimens.xml. -->
-    <dimen name="settings_row_padding_vertical">9dp</dimen>
+    <dimen name="settings_row_padding_vertical">7dp</dimen>
 
     <!-- Episode rows spanning the full width of a TV panel left the title stranded next to
          its thumbnail with a huge empty gap - inset the list so a row is a readable block. -->

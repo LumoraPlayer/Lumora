@@ -61,6 +61,9 @@
     <dimen name="settings_gap_ml">14dp</dimen>
     <dimen name="settings_gap_l">16dp</dimen>
     <dimen name="settings_gap_xl">20dp</dimen>
+    <!-- Gap between side-by-side settings cards. Wider than the row spacing because the
+         focused card scales to 1.06 and its ring would otherwise cross into its neighbour. -->
+    <dimen name="settings_column_gap">12dp</dimen>
     <!-- Padding around the whole content pane, inside the ScrollView. -->
     <dimen name="settings_pane_padding">24dp</dimen>
     <!-- Small outline actions inside a row ("Change", "Test") - fixed height, unlike the

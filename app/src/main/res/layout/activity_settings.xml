@@ -1036,36 +1036,63 @@
                             android:textColor="@color/text_primary"
                             android:textSize="@dimen/settings_text_body" />
 
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/xtream_username" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
-                        <EditText
-                            android:id="@+id/settingsXtreamUser"
+                        <!-- Username and password side by side: both are short, and stacked
+                             they doubled the height of the one part of this form everyone
+                             fills in. -->
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:paddingVertical="@dimen/settings_row_padding_vertical"
-                            android:layout_marginTop="@dimen/settings_gap_xs"
-                            android:background="@drawable/bg_input"
-                            android:textColorHint="@color/text_tertiary"
-                            android:hint="@string/xtream_username"
-                            android:importantForAutofill="no"
-                            android:inputType="text"
-                            android:padding="@dimen/settings_gap"
-                            android:textColor="@color/text_primary"
-                            android:textSize="@dimen/settings_text_body" />
+                            android:baselineAligned="false"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:orientation="horizontal">
 
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/xtream_password" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
-                        <EditText
-                            android:id="@+id/settingsXtreamPass"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:paddingVertical="@dimen/settings_row_padding_vertical"
-                            android:layout_marginTop="@dimen/settings_gap_xs"
-                            android:background="@drawable/bg_input"
-                            android:hint="@string/xtream_password"
-                            android:importantForAutofill="no"
-                            android:inputType="textPassword"
-                            android:padding="@dimen/settings_gap"
-                            android:textColor="@color/text_primary"
-                            android:textSize="@dimen/settings_text_body" />
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/xtream_username" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
+                                <EditText
+                                    android:id="@+id/settingsXtreamUser"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                                    android:layout_marginTop="@dimen/settings_gap_xs"
+                                    android:background="@drawable/bg_input"
+                                    android:textColorHint="@color/text_tertiary"
+                                    android:hint="@string/xtream_username"
+                                    android:importantForAutofill="no"
+                                    android:inputType="text"
+                                    android:padding="@dimen/settings_gap"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="@dimen/settings_text_body" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="@dimen/settings_column_gap"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/xtream_password" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
+                                <EditText
+                                    android:id="@+id/settingsXtreamPass"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                                    android:layout_marginTop="@dimen/settings_gap_xs"
+                                    android:background="@drawable/bg_input"
+                                    android:hint="@string/xtream_password"
+                                    android:importantForAutofill="no"
+                                    android:inputType="textPassword"
+                                    android:padding="@dimen/settings_gap"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="@dimen/settings_text_body" />
+                            </LinearLayout>
+                        </LinearLayout>
 
                         <TextView
                             android:id="@+id/settingsSubscriptionStatus"
@@ -1130,53 +1157,87 @@
                             android:textSize="@dimen/settings_text_caption"
                             android:fontFamily="@font/inter_regular" />
 
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/stalker_serial_number" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
-                        <EditText
-                            android:id="@+id/settingsStalkerSerial"
+                        <!-- The three identity fields are one thought ("this box"), so they
+                             sit on one line instead of three. -->
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:paddingVertical="@dimen/settings_row_padding_vertical"
-                            android:layout_marginTop="@dimen/settings_gap_xs"
-                            android:background="@drawable/bg_input"
-                            android:textColorHint="@color/text_tertiary"
-                            android:hint="@string/stalker_serial_number_hint"
-                            android:importantForAutofill="no"
-                            android:inputType="text"
-                            android:padding="@dimen/settings_gap"
-                            android:textColor="@color/text_primary"
-                            android:textSize="@dimen/settings_text_body" />
+                            android:baselineAligned="false"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:orientation="horizontal">
 
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/stalker_device_id" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
-                        <EditText
-                            android:id="@+id/settingsStalkerDeviceId"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:paddingVertical="@dimen/settings_row_padding_vertical"
-                            android:layout_marginTop="@dimen/settings_gap_xs"
-                            android:background="@drawable/bg_input"
-                            android:textColorHint="@color/text_tertiary"
-                            android:hint="@string/stalker_device_id_hint"
-                            android:importantForAutofill="no"
-                            android:inputType="text"
-                            android:padding="@dimen/settings_gap"
-                            android:textColor="@color/text_primary"
-                            android:textSize="@dimen/settings_text_body" />
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
 
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/stalker_device_id2" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
-                        <EditText
-                            android:id="@+id/settingsStalkerDeviceId2"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:paddingVertical="@dimen/settings_row_padding_vertical"
-                            android:layout_marginTop="@dimen/settings_gap_xs"
-                            android:background="@drawable/bg_input"
-                            android:textColorHint="@color/text_tertiary"
-                            android:hint="@string/stalker_device_id2_hint"
-                            android:importantForAutofill="no"
-                            android:inputType="text"
-                            android:padding="@dimen/settings_gap"
-                            android:textColor="@color/text_primary"
-                            android:textSize="@dimen/settings_text_body" />
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/stalker_serial_number" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
+                                <EditText
+                                    android:id="@+id/settingsStalkerSerial"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                                    android:layout_marginTop="@dimen/settings_gap_xs"
+                                    android:background="@drawable/bg_input"
+                                    android:textColorHint="@color/text_tertiary"
+                                    android:hint="@string/stalker_serial_number_hint"
+                                    android:importantForAutofill="no"
+                                    android:inputType="text"
+                                    android:padding="@dimen/settings_gap"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="@dimen/settings_text_body" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_marginStart="@dimen/settings_column_gap"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/stalker_device_id" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
+                                <EditText
+                                    android:id="@+id/settingsStalkerDeviceId"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                                    android:layout_marginTop="@dimen/settings_gap_xs"
+                                    android:background="@drawable/bg_input"
+                                    android:textColorHint="@color/text_tertiary"
+                                    android:hint="@string/stalker_device_id_hint"
+                                    android:importantForAutofill="no"
+                                    android:inputType="text"
+                                    android:padding="@dimen/settings_gap"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="@dimen/settings_text_body" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_marginStart="@dimen/settings_column_gap"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/settings_gap" android:text="@string/stalker_device_id2" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_caption" />
+                                <EditText
+                                    android:id="@+id/settingsStalkerDeviceId2"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                                    android:layout_marginTop="@dimen/settings_gap_xs"
+                                    android:background="@drawable/bg_input"
+                                    android:textColorHint="@color/text_tertiary"
+                                    android:hint="@string/stalker_device_id2_hint"
+                                    android:importantForAutofill="no"
+                                    android:inputType="text"
+                                    android:padding="@dimen/settings_gap"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="@dimen/settings_text_body" />
+                            </LinearLayout>
+                        </LinearLayout>
                     </LinearLayout>
 
                     <!-- Jellyfin / Silo fields - one group for both Jellyfin-protocol types.

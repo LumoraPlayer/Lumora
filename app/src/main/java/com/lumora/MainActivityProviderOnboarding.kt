@@ -2,6 +2,7 @@
 package com.lumora
 
 import android.view.View
+import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -268,16 +269,59 @@ private fun MainActivity.promptOnboardingRegions(config: IptvProviderConfig, onD
     val picked = selectedLocalities().toMutableSet()
     var syncing = false
 
+    // Two per row: this dialog is three quarters of the panel's size, so a third column
+    // would start wrapping "United Kingdom". A section header always starts a fresh row.
+    val columns = 2
+    val columnGap = resources.getDimensionPixelSize(R.dimen.settings_column_gap)
+    var checkRow: LinearLayout? = null
+    var checkRowUsed = 0
+
     fun addHeader(text: String) {
+        checkRow = null
+        checkRowUsed = 0
         val header = layoutInflater.inflate(R.layout.item_locality_header, container, false) as TextView
         header.text = text
         container.addView(header)
     }
 
-    fun addCheck(label: String): CheckBox {
+    fun addCheck(label: String, fullWidth: Boolean = false): CheckBox {
         val box = layoutInflater.inflate(R.layout.item_locality_check, container, false) as CheckBox
         box.text = label
-        container.addView(box)
+        if (fullWidth) {
+            checkRow = null
+            checkRowUsed = 0
+            box.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            container.addView(box)
+            return box
+        }
+        if (checkRow == null || checkRowUsed == columns) {
+            checkRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                isBaselineAligned = false
+                clipChildren = false
+                clipToPadding = false
+            }
+            container.addView(
+                checkRow,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+            checkRowUsed = 0
+        }
+        box.layoutParams = LinearLayout.LayoutParams(
+            0,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            1f
+        ).apply {
+            if (checkRowUsed < columns - 1) marginEnd = columnGap
+        }
+        checkRow?.addView(box)
+        checkRowUsed++
         return box
     }
 
@@ -292,7 +336,7 @@ private fun MainActivity.promptOnboardingRegions(config: IptvProviderConfig, onD
         syncing = false
     }
 
-    allBox = addCheck(getString(R.string.sett_locality_all))
+    allBox = addCheck(getString(R.string.sett_locality_all), fullWidth = true)
     allBox.setOnCheckedChangeListener { _, isChecked ->
         if (syncing) return@setOnCheckedChangeListener
         // Empty and "All" mean the same thing, so unticking All with nothing else picked

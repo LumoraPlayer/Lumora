@@ -661,6 +661,72 @@ internal fun MainActivity.twoLineSettingsText(title: String, subtitle: String): 
     return text
 }
 
+/**
+ * Puts two settings rows side by side instead of stacking them.
+ *
+ * On a TV the pane is ~800dp wide and most of these cards hold one line of label plus one
+ * line of caption, so a full-width row leaves most of its background empty. Two columns halve
+ * the scrolling without shrinking anything that has to be read.
+ *
+ * The pair takes the first row's own top margin, so it sits exactly where the first of the two
+ * used to; both children are weighted to half the width and levelled to the taller one, since
+ * two captions of different lengths would otherwise leave one card floating short.
+ */
+internal fun LinearLayout.addSettingsRowGroup(rows: List<View>) {
+    if (rows.isEmpty()) return
+    if (rows.size == 1) {
+        addView(rows.first())
+        return
+    }
+    // A wider gap than the row spacing: the focused card scales to 1.06, so ~3% of its width
+    // hangs over each edge - at the normal gap the focus ring visibly overlapped the card
+    // beside it.
+    val gap = resources.getDimensionPixelSize(R.dimen.settings_column_gap)
+    val topMargin = (rows.first().layoutParams as? LinearLayout.LayoutParams)?.topMargin
+        ?: resources.getDimensionPixelSize(R.dimen.settings_gap_m)
+    val row = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        isBaselineAligned = false
+        clipChildren = false
+        clipToPadding = false
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            this.topMargin = topMargin
+        }
+    }
+    rows.forEachIndexed { index, view ->
+        view.layoutParams = LinearLayout.LayoutParams(
+            0,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            1f
+        ).apply {
+            if (index < rows.lastIndex) marginEnd = gap
+        }
+        row.addView(view)
+    }
+    addView(row)
+    // Equal heights: captions of different lengths would otherwise leave the shorter cards
+    // floating above the bottom edge of the tallest one.
+    row.post {
+        val tallest = rows.maxOf { it.height }
+        if (tallest > 0) {
+            rows.forEach { view ->
+                (view.layoutParams as? LinearLayout.LayoutParams)?.let {
+                    if (it.height != tallest) {
+                        it.height = tallest
+                        view.layoutParams = it
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal fun LinearLayout.addSettingsRowPair(first: View, second: View) =
+    addSettingsRowGroup(listOf(first, second))
+
 internal fun MainActivity.dubCheckBoxRow(title: String, subtitle: String, key: String, default: Boolean = false, onToggle: ((Boolean) -> Unit)? = null): CheckBox {
     val checkBox = CheckBox(this)
     checkBox.text = twoLineSettingsText(title, subtitle)
@@ -2481,19 +2547,63 @@ internal fun MainActivity.showProviderSettings() {
     var syncingLocalityChecks = false
     val localityBoxes = LinkedHashMap<String, CheckBox>()
 
+    // Countries are 50+ short rows; one per line spent the whole pane on them and scrolled for
+    // the ones people actually tick. Three per row keeps every label whole at this pane width.
+    // A section header always starts a fresh row.
+    val localityColumns = 3
+    val localityGap = resources.getDimensionPixelSize(R.dimen.settings_column_gap)
+    var localityRowContainer: LinearLayout? = null
+    var localityRowUsed = 0
+
     fun addLocalityHeader(text: String) {
+        localityRowContainer = null
+        localityRowUsed = 0
         val header = layoutInflater.inflate(R.layout.item_locality_header, regionsList, false) as TextView
         header.text = text
         regionsList.addView(header)
     }
-    fun addLocalityCheck(label: String): CheckBox {
+    fun addLocalityCheck(label: String, fullWidth: Boolean = false): CheckBox {
         val box = layoutInflater.inflate(R.layout.item_locality_check, regionsList, false) as CheckBox
         box.text = label
-        regionsList.addView(box)
+        if (fullWidth) {
+            localityRowContainer = null
+            localityRowUsed = 0
+            box.layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            regionsList.addView(box)
+            return box
+        }
+        if (localityRowContainer == null || localityRowUsed == localityColumns) {
+            localityRowContainer = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                isBaselineAligned = false
+                clipChildren = false
+                clipToPadding = false
+            }
+            regionsList.addView(
+                localityRowContainer,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+            localityRowUsed = 0
+        }
+        box.layoutParams = LinearLayout.LayoutParams(
+            0,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            1f
+        ).apply {
+            if (localityRowUsed < localityColumns - 1) marginEnd = localityGap
+        }
+        localityRowContainer?.addView(box)
+        localityRowUsed++
         return box
     }
 
-    val allLocalityBox = addLocalityCheck(getString(R.string.sett_locality_all))
+    val allLocalityBox = addLocalityCheck(getString(R.string.sett_locality_all), fullWidth = true)
 
     fun syncLocalityChecks() {
         syncingLocalityChecks = true
@@ -2712,22 +2822,24 @@ internal fun MainActivity.showProviderSettings() {
     // declared in XML and this keeps the IntroDB feature self-contained - one place that
     // knows its two prefs.
     val playbackPane = dialogView.findViewById<LinearLayout>(R.id.panePlayback)
-    playbackPane.addView(dubCheckBoxRow(
-        getString(R.string.sett_skip_segments),
-        getString(R.string.sett_skip_segments_caption),
-        PREF_SKIP_SEGMENTS
-    ))
-    playbackPane.addView(dubCheckBoxRow(
-        getString(R.string.sett_skip_auto),
-        getString(R.string.sett_skip_auto_caption),
-        PREF_SKIP_AUTO
-    ))
+    playbackPane.addSettingsRowPair(
+        dubCheckBoxRow(
+            getString(R.string.sett_skip_segments),
+            getString(R.string.sett_skip_segments_caption),
+            PREF_SKIP_SEGMENTS
+        ),
+        dubCheckBoxRow(
+            getString(R.string.sett_skip_auto),
+            getString(R.string.sett_skip_auto_caption),
+            PREF_SKIP_AUTO
+        )
+    )
 
     // General pane: Simple mode + Disable VOD live here, not under Filters - they shape
     // the whole app (which tabs exist, what gets fetched), not the catalogue filters.
     val generalPane = dialogView.findViewById<LinearLayout>(R.id.paneGeneral)
     lateinit var vodCheckBox: CheckBox
-    generalPane.addView(dubCheckBoxRow(
+    val simpleModeBox = dubCheckBoxRow(
         getString(R.string.sett_simple_mode),
         getString(R.string.sett_simple_mode_caption),
         PREF_SIMPLE_MODE
@@ -2739,38 +2851,36 @@ internal fun MainActivity.showProviderSettings() {
         applySimpleModeUi()
         // Simple mode forces VOD off, so its effective state changed with the toggle.
         vodStateChanged()
-    })
+    }
     vodCheckBox = dubCheckBoxRow(
         getString(R.string.sett_disable_vod),
         getString(R.string.sett_disable_vod_caption),
         PREF_DISABLE_VOD
     ) { vodStateChanged() }
-    generalPane.addView(vodCheckBox)
+    generalPane.addSettingsRowPair(simpleModeBox, vodCheckBox)
     // Which screen the app opens on. Next to the other whole-app choices, and above the
     // language rows: it is the one a new TV owner changes first.
     generalPane.addView(startScreenChoiceRow())
     generalPane.addView(settingsSectionLabel(getString(R.string.settings_group_language)))
-    generalPane.addView(
-        languageChoiceRow(
-            getString(R.string.settings_ui_language),
-            PREF_UI_LANGUAGE,
-            getString(R.string.settings_ui_language_caption),
-            choices = UI_LANGUAGES,
-            onSelect = { code -> onUiLanguageSelected(code) }
-        )
-    )
-    generalPane.addView(
-        languageChoiceRow(
-            getString(R.string.sett_audio_language),
-            PREF_AUDIO_LANGUAGE,
-            getString(R.string.sett_audio_language_caption)
-        )
-    )
-    generalPane.addView(
-        languageChoiceRow(
-            getString(R.string.sett_subtitle_language),
-            PREF_SUBTITLE_LANGUAGE,
-            getString(R.string.sett_subtitle_language_caption)
+    generalPane.addSettingsRowGroup(
+        listOf(
+            languageChoiceRow(
+                getString(R.string.settings_ui_language),
+                PREF_UI_LANGUAGE,
+                getString(R.string.settings_ui_language_caption),
+                choices = UI_LANGUAGES,
+                onSelect = { code -> onUiLanguageSelected(code) }
+            ),
+            languageChoiceRow(
+                getString(R.string.sett_audio_language),
+                PREF_AUDIO_LANGUAGE,
+                getString(R.string.sett_audio_language_caption)
+            ),
+            languageChoiceRow(
+                getString(R.string.sett_subtitle_language),
+                PREF_SUBTITLE_LANGUAGE,
+                getString(R.string.sett_subtitle_language_caption)
+            )
         )
     )
 
