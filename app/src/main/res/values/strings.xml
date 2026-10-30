@@ -695,28 +695,32 @@
          the catalogue tags to keep and the rest is never downloaded (the panel filters on
          category_id). The picker is built from the panel's own tags, which is why the row
          has to authenticate first - see MainActivitySettings' settingsXtreamImport. -->
-    <string name="sett_import_scope_title">Import</string>
+    <string name="sett_import_scope_title">Category Selection</string>
     <string name="sett_import_scope_all">All categories</string>
     <string name="sett_import_scope_selected">%1$d categories only</string>
     <string name="sett_import_scope_checking">Reading this panel\u2019s categories\u2026</string>
-    <string name="sett_import_scope_dialog_title">What should Lumora import?</string>
-    <string name="sett_import_scope_dialog_message">Untick anything you do not want. The panel filters on category, so anything left out is never downloaded \u2014 but it also will not appear until you change this.</string>
+    <string name="sett_import_scope_dialog_title">Category Selection</string>
     <!-- "%1$s" is the section (Live TV / Films / Series), "%2$s" the tag with its readable
          name, "%3$d" how many categories carry it and "%4$d" the section's total. -->
     <string name="sett_import_scope_row">%1$s · %2$s (%3$d of %4$d)</string>
     <string name="sett_import_scope_row_untagged">%1$s · Untagged (%2$d of %3$d)</string>
     <string name="sett_import_scope_category">%1$s · %2$s</string>
     <string name="sett_import_scope_failed">Couldn\u2019t read this panel\u2019s categories. Check the server URL and login.</string>
-    <string name="sett_import_scope_all_button">Import everything</string>
     <string name="sett_import_scope_live">Live TV</string>
     <string name="sett_import_scope_films">Films</string>
     <string name="sett_import_scope_series">Series</string>
     <!-- Add-provider wizard: regions -> categories -> import. The category step reuses the
-         import-scope title, message and row labels above - it is the same question. -->
+         import-scope title and row labels above - it is the same question. -->
     <string name="onboard_regions_title">Which regions does this provider carry?</string>
     <string name="onboard_regions_message">Live TV is filtered to these regions. Nothing ticked means every region.</string>
     <string name="onboard_continue">Continue</string>
     <string name="onboard_skip">Skip</string>
     <string name="onboard_import">Import</string>
+    <string name="sett_import_select_all">Select all</string>
+    <string name="sett_import_unselect_all">Unselect all</string>
+    <string name="sett_import_scope_none">No categories</string>
+    <!-- "%1$s" is the summary ("All categories" / "210 categories only"), "%2$s" the regions
+         the Live tab is filtered to. -->
+    <string name="sett_import_scope_regions">%1$s \u00b7 %2$s</string>
     <string name="sett_provider_duplicate_badge">duplicate</string>
 </resources>

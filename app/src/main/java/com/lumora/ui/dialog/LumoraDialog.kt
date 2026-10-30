@@ -203,6 +203,20 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
     fun getButton(which: Int): TextView =
         buttonViews[which] ?: buttonViews.getValue(BUTTON_POSITIVE)
 
+    /**
+     * Renders the whole panel at [scale] of its laid-out size.
+     *
+     * A uniform scale rather than per-view sizes: the panel, its type and its spacing are the
+     * design system's, and a caller that needs a smaller dialog should not be re-deriving
+     * font sizes for it. Scaling down leaves the window at its measured size, so the panel
+     * stays centred with the extra room around it. Focus and touch are mapped through the
+     * transform, so the D-pad keeps working on the smaller rows.
+     */
+    fun setPanelScale(scale: Float) {
+        panel.scaleX = scale
+        panel.scaleY = scale
+    }
+
     /** Full-screen mode for a caller-built surface (the WebView challenge page): no panel,
      *  no title, no buttons - the custom view owns the whole window. */
     fun setFullscreen(enabled: Boolean) {

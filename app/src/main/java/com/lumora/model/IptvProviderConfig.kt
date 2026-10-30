@@ -80,4 +80,18 @@ data class IptvProviderConfig(
     // of them cost a full download and a full set of rows for content already stored.
     // Null means never measured.
     val catalogueFingerprint: String? = null
-)
+) {
+    companion object {
+        /**
+         * Stored in a `*CategoryIds` set to mean "import nothing from this section".
+         *
+         * An empty set already means "no narrowing - import all of it", which is what every
+         * provider added before narrowing existed keeps doing, so a section the user unticked
+         * completely needs a value of its own. Without this it silently became "all": untick
+         * every Live row on a movies-only setup and Live still came down in full. Panels use
+         * numeric category ids, so this can never collide with a real one, and the ingest
+         * turns it into an empty allowed set - the branch that already skips a section.
+         */
+        const val NO_CATEGORIES = "\u0000none"
+    }
+}

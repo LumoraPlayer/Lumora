@@ -48,7 +48,13 @@ class DialogChoiceList @JvmOverloads constructor(
         const val MAX_SCREEN_HEIGHT_FRACTION = 0.56f
         const val MAX_HEIGHT_DP = 430
 
-        /** Title + message + button row + panel padding, in dp. */
-        const val RESERVED_DP = 180
+        /** Title + message + button row + panel padding, in dp.
+         *
+         * 180dp was enough for a title and a button row but not for a dialog that also carries
+         * a message: a four-line message plus a 56%-tall list made the panel taller than the
+         * window, and the buttons - which the panel does not scroll to - were clipped off the
+         * bottom edge. The import picker (message + a long list) was the first dialog to hit
+         * it. */
+        const val RESERVED_DP = 300
     }
 }

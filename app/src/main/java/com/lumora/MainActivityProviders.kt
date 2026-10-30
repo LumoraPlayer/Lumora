@@ -1759,6 +1759,19 @@ private const val RATE_LIMIT_RETRY_MAX_WAIT_MS = 60_000L
 internal fun shouldFetchWholeSection(allowed: Set<String>?, categoryCount: Int): Boolean =
     allowed != null && categoryCount > 0 && allowed.size * 2 >= categoryCount
 
+/**
+ * The category ids a narrowed import may fetch, or null when the whole list should be read.
+ *
+ * An empty selection means "no narrowing", which is what a provider added before the picker
+ * existed has, and must keep meaning that. [IptvProviderConfig.NO_CATEGORIES] is the opposite
+ * answer - the user unticked every row of this section - and becomes an empty allowed set,
+ * which the ingest already treats as "skip this section" rather than a request.
+ */
+internal fun allowedCategoryIds(selected: Set<String>): Set<String>? = when {
+    IptvProviderConfig.NO_CATEGORIES in selected -> emptySet()
+    else -> selected.ifEmpty { null }
+}
+
 /** Pause before retrying a category the panel's brake just parked, with a small buffer. */
 internal fun brakeRetryWaitMs(remainingMs: Long): Long =
     remainingMs.coerceIn(0L, RATE_LIMIT_RETRY_MAX_WAIT_MS) + 250L
@@ -1876,7 +1889,8 @@ internal suspend fun MainActivity.fetchXtreamChannels(
             /** Category ids a narrowed import may fetch, or null when the whole list should
              *  be read. The picker stores the panel's own category ids, so no tag parsing
              *  happens here - the tag is only how the picker groups its rows. */
-            fun allowedIds(selected: Set<String>): Set<String>? = selected.ifEmpty { null }
+            fun allowedIds(selected: Set<String>): Set<String>? =
+                allowedCategoryIds(selected)
 
             /** Streams one bulk list into the catalogue database. Only the live half is
              *  collected into memory; films and series are read from the database by the

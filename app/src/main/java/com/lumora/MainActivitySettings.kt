@@ -993,29 +993,34 @@ internal fun MainActivity.showProviderSettings() {
     val xtreamImportValue = dialogView.findViewById<TextView>(R.id.settingsXtreamImportValue)
 
     fun refreshImportScopeSummary() {
-        val selected = pendingLiveCategories.size +
-            pendingMovieCategories.size + pendingSeriesCategories.size
-        xtreamImportValue.text = if (selected == 0) {
-            getString(R.string.sett_import_scope_all)
+        // The "nothing from this section" marker is not a category, so it must not be
+        // counted as one - a section the user unticked completely would otherwise read as
+        // "1 categories only".
+        fun realIds(ids: Set<String>) = ids.count { it != IptvProviderConfig.NO_CATEGORIES }
+        val selected = realIds(pendingLiveCategories) +
+            realIds(pendingMovieCategories) + realIds(pendingSeriesCategories)
+        val anySectionOff = IptvProviderConfig.NO_CATEGORIES in pendingLiveCategories ||
+            IptvProviderConfig.NO_CATEGORIES in pendingMovieCategories ||
+            IptvProviderConfig.NO_CATEGORIES in pendingSeriesCategories
+        val summary = when {
+            selected > 0 -> getString(R.string.sett_import_scope_selected, selected)
+            anySectionOff -> getString(R.string.sett_import_scope_none)
+            else -> getString(R.string.sett_import_scope_all)
+        }
+        // The region filter decides the default ticks inside the picker, so say so here -
+        // the picker itself carries no message line (see showImportScopeDialog).
+        val regions = selectedLocalities()
+        xtreamImportValue.text = if (regions.isEmpty()) {
+            summary
         } else {
-            getString(R.string.sett_import_scope_selected, selected)
+            getString(
+                R.string.sett_import_scope_regions,
+                summary,
+                LocalityCatalog.labelForCodes(regions)
+            )
         }
     }
     refreshImportScopeSummary()
-
-    fun importIdsFor(type: String): Set<String> = when (type) {
-        "live" -> pendingLiveCategories
-        "movie" -> pendingMovieCategories
-        else -> pendingSeriesCategories
-    }
-
-    fun setImportIdsFor(type: String, ids: Set<String>) {
-        when (type) {
-            "live" -> pendingLiveCategories = ids
-            "movie" -> pendingMovieCategories = ids
-            else -> pendingSeriesCategories = ids
-        }
-    }
 
     fun showImportScopePicker(
         live: List<Pair<String, String>>,
@@ -1030,20 +1035,28 @@ internal fun MainActivity.showProviderSettings() {
             Toast.makeText(this, getString(R.string.sett_import_scope_failed), Toast.LENGTH_LONG).show()
             return
         }
+        // A provider that was never narrowed starts from the region filter: a UK-only
+        // selection must not quietly download every US category. A provider with an explicit
+        // selection keeps it exactly - re-opening this dialog must never re-decide for it.
+        val regions = selectedLocalities()
         showImportScopeDialog(
             rows = rows,
-            currentIds = { type -> importIdsFor(type) },
-            onChanged = { type, ids ->
-                setImportIdsFor(type, ids)
+            checkedAtStart = importScopeChecks(
+                rows,
+                mapOf(
+                    "live" to pendingLiveCategories,
+                    "movie" to pendingMovieCategories,
+                    "series" to pendingSeriesCategories
+                ),
+                regions
+            ),
+            positiveLabel = getString(R.string.save),
+            onConfirmed = { chosen ->
+                pendingLiveCategories = chosen["live"].orEmpty()
+                pendingMovieCategories = chosen["movie"].orEmpty()
+                pendingSeriesCategories = chosen["series"].orEmpty()
                 refreshImportScopeSummary()
-            },
-            onAll = {
-                pendingLiveCategories = emptySet()
-                pendingMovieCategories = emptySet()
-                pendingSeriesCategories = emptySet()
-                refreshImportScopeSummary()
-            },
-            positiveLabel = getString(R.string.save)
+            }
         )
     }
 
@@ -1290,6 +1303,9 @@ internal fun MainActivity.showProviderSettings() {
         nameSection.visibility = if (type == "plex") View.GONE else View.VISIBLE
         m3uGroup.visibility = if (type == "m3u") View.VISIBLE else View.GONE
         xtreamGroup.visibility = if (type == "xtream") View.VISIBLE else View.GONE
+        // Category Selection sits with the name rather than inside the Xtream group (it is
+        // the second thing that decides what this provider is), so it needs its own gate.
+        xtreamImportRow.visibility = if (type == "xtream") View.VISIBLE else View.GONE
         stalkerGroup.visibility = if (type == "stalker") View.VISIBLE else View.GONE
         jellyfinGroup.visibility = if (type == "jellyfin" || type == "silo") View.VISIBLE else View.GONE
         plexGroup.visibility = if (type == "plex") View.VISIBLE else View.GONE

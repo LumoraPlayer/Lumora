@@ -58,13 +58,27 @@
             android:layout_height="wrap_content" />
     </com.lumora.view.BoundedHeightScrollView>
 
-    <com.lumora.ui.dialog.DialogChoiceList
-        android:id="@+id/lumoraDialogChoices"
+    <!-- The list lives inside a clipping frame: a RecyclerView that is scrolled draws its
+         first visible row from its own top edge upwards (the row carries a focus-scale
+         transform), and with the panel's clipChildren=false that row painted over the title
+         above the list. The frame clips the whole list subtree to the list's bounds. It has
+         no height of its own, so dialogs without a list are unaffected. -->
+    <FrameLayout
+        android:id="@+id/lumoraDialogChoiceFrame"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:clipToPadding="false"
-        android:visibility="gone" />
+        android:clipChildren="true"
+        android:clipToPadding="true">
+
+        <com.lumora.ui.dialog.DialogChoiceList
+            android:id="@+id/lumoraDialogChoices"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:clipChildren="true"
+            android:clipToPadding="true"
+            android:visibility="gone" />
+    </FrameLayout>
 
     <LinearLayout
         android:id="@+id/lumoraDialogButtons"
