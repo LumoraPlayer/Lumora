@@ -18,15 +18,32 @@
     android:paddingVertical="10dp"
     android:stateListAnimator="@animator/focus_scale_flat">
 
-    <TextView
-        android:id="@+id/lumoraChoiceText"
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:ellipsize="end"
-        android:maxLines="2"
-        android:textColor="@color/text_primary"
-        android:textSize="@dimen/text_subhead" />
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/lumoraChoiceText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_subhead" />
+
+        <TextView
+            android:id="@+id/lumoraChoiceDetail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/text_secondary"
+            android:textSize="@dimen/text_caption"
+            android:visibility="gone" />
+    </LinearLayout>
 
     <ImageView
         android:id="@+id/lumoraChoiceCheck"

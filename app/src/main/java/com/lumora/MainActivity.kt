@@ -503,6 +503,8 @@ class MainActivity : AppCompatActivity() {
     internal lateinit var speedController: com.lumora.player.playback.PlaybackSpeedController
     internal var displayFrameRateController: com.lumora.player.DisplayFrameRateController? = null
     internal lateinit var sleepTimer: com.lumora.player.playback.SleepTimer
+    /** The countdown shown by the sleep-timer row, or null when no timer is armed. */
+    internal var sleepTimerDisplay: String? = null
     internal val trackController = PlayerTrackController()
     internal val qrManager by lazy { QrPairingManager(this) }
     internal var activeSettingsOverlay: FullScreenOverlay? = null
@@ -2369,6 +2371,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        applyPlayerControlLayout()
         if (isTv) return
         if (newConfig.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
             portraitSidebarExpanded = false

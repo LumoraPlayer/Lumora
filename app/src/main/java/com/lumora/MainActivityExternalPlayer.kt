@@ -39,7 +39,10 @@ private val LICENCED_AUDIO_MIMES = mapOf(
  * two decoders on one live stream is both an audio mess and, on a provider that counts
  * connections, a second connection.
  */
-internal fun MainActivity.openInExternalPlayer(preselectedPackage: String? = null) {
+internal fun MainActivity.openInExternalPlayer(
+    preselectedPackage: String? = null,
+    returnFocus: View? = null,
+) {
     // DRM cannot be handed off (no KODIPROP to VLC) - refuse with a clear message
     // instead of a silent failure on the other side.
     if (nowPlayingChannel?.hasClearKey == true) {
@@ -89,7 +92,7 @@ internal fun MainActivity.openInExternalPlayer(preselectedPackage: String? = nul
         return
     }
     val labels = installed.map { it.label } + listOf(getString(R.string.play_other_app), getString(R.string.play_always_use))
-    LumoraDialog.Builder(this)
+    val builder = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.play_play_in))
         .setItems(labels.toTypedArray()) { _, which ->
             when (which) {
@@ -99,7 +102,7 @@ internal fun MainActivity.openInExternalPlayer(preselectedPackage: String? = nul
             }
         }
         .setNegativeButton(getString(R.string.cancel), null)
-        .show()
+    if (isPlayerVisible) showControlsDialog(builder, returnFocus) else builder.show()
 }
 
 /** Picks the app that external playback always uses, so the picker stops appearing. */
@@ -108,7 +111,7 @@ internal fun MainActivity.chooseDefaultExternalPlayer() {
     val labels = installed.map { it.label } + listOf(getString(R.string.play_ask_every_time))
     val current = prefs.getString(PREF_EXTERNAL_PLAYER_PACKAGE, null)
     val checked = installed.indexOfFirst { it.packageName == current }.takeIf { it >= 0 } ?: installed.size
-    LumoraDialog.Builder(this)
+    val builder = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.play_default_external_player))
         .setSingleChoiceItems(labels.toTypedArray(), checked) { dialog, which ->
             dialog.dismiss()
@@ -121,7 +124,7 @@ internal fun MainActivity.chooseDefaultExternalPlayer() {
             }
         }
         .setNegativeButton(getString(R.string.cancel), null)
-        .show()
+    if (isPlayerVisible) showControlsDialog(builder) else builder.show()
 }
 
 /**

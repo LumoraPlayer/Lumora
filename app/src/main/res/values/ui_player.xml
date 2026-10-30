@@ -4,6 +4,13 @@
     <!-- MainActivityPlayer -->
     <string name="play_no_provider_enabled">No provider is enabled - turn one on in Settings</string>
     <string name="play_refreshing_providers">Refreshing providers…</string>
+    <string name="player_options_title">Player options</string>
+    <string name="player_more">More</string>
+    <string name="player_back">Back</string>
+    <string name="player_all_options">Options</string>
+    <string name="player_speed">Speed</string>
+    <string name="player_aspect">Aspect</string>
+    <string name="player_default">Default</string>
     <string name="play_playback_speed">Playback Speed</string>
     <string name="play_speed_0_5">0.5x</string>
     <string name="play_speed_0_75">0.75x</string>

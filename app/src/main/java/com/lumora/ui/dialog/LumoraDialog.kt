@@ -51,6 +51,13 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
         fun onClick(dialog: LumoraDialog, which: Int, isChecked: Boolean)
     }
 
+    /** One row in a choice list. [detail] adds a quieter second line (a language/codec pair,
+     *  or what an action does) without changing the shape of every other dialog's rows. */
+    data class ChoiceOption(
+        val label: CharSequence,
+        val detail: CharSequence? = null,
+    )
+
     private lateinit var panel: LinearLayout
     private lateinit var titleView: TextView
     private lateinit var messageScroll: View
@@ -123,7 +130,7 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
      *  dismiss itself or open the next popup; the dismiss here is idempotent either way. */
     fun setItems(items: Array<out CharSequence>, listener: OnChoiceClickListener?) {
         val adapter = ChoiceAdapter(
-            items = items.toList(),
+            items = items.map { ChoiceOption(it) },
             multiChecked = null,
             selected = -1,
             onSingle = { position ->
@@ -141,6 +148,16 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
     /** One-of-many list. The checked row is marked and the listener is called on pick. */
     fun setChoiceItems(
         items: Array<out CharSequence>,
+        checkedItem: Int,
+        listener: OnChoiceClickListener?
+    ) {
+        setChoiceItems(items.map { ChoiceOption(it) }.toTypedArray(), checkedItem, listener)
+    }
+
+    /** One-of-many list with an optional supporting line per row. Used by the player's
+     *  track pickers so a language and its codec/flags are readable without a second popup. */
+    fun setChoiceItems(
+        items: Array<ChoiceOption>,
         checkedItem: Int,
         listener: OnChoiceClickListener?
     ) {
@@ -164,7 +181,7 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
             "checkedItems must have one entry per item (${items.size} != ${checkedItems.size})"
         }
         val adapter = ChoiceAdapter(
-            items = items.toList(),
+            items = items.map { ChoiceOption(it) },
             multiChecked = checkedItems,
             selected = -1,
             onSingle = null,
@@ -346,24 +363,37 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
 
     /** Rows for both the one-of-many and many-of-many lists. */
     private class ChoiceAdapter(
-        private val items: List<CharSequence>,
+        private val items: List<ChoiceOption>,
         private val multiChecked: BooleanArray?,
         private var selected: Int,
         private val onSingle: ((Int) -> Unit)?,
         private val onMulti: ((Int, Boolean) -> Unit)?
     ) : RecyclerView.Adapter<ChoiceAdapter.Holder>() {
 
-        class Holder(val row: View, val text: TextView, val check: View) : RecyclerView.ViewHolder(row)
+        class Holder(
+            val row: View,
+            val text: TextView,
+            val detail: TextView,
+            val check: View,
+        ) : RecyclerView.ViewHolder(row)
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
             val row = LayoutInflater.from(parent.context)
                 .inflate(R.layout.item_lumora_dialog_choice, parent, false)
-            return Holder(row, row.findViewById(R.id.lumoraChoiceText), row.findViewById(R.id.lumoraChoiceCheck))
+            return Holder(
+                row,
+                row.findViewById(R.id.lumoraChoiceText),
+                row.findViewById(R.id.lumoraChoiceDetail),
+                row.findViewById(R.id.lumoraChoiceCheck),
+            )
         }
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val checked = isChecked(position)
-            holder.text.text = items[position]
+            val option = items[position]
+            holder.text.text = option.label
+            holder.detail.text = option.detail ?: ""
+            holder.detail.visibility = if (option.detail.isNullOrBlank()) View.GONE else View.VISIBLE
             holder.row.isSelected = checked
             holder.check.visibility = if (checked) View.VISIBLE else View.INVISIBLE
             holder.row.setOnClickListener {
@@ -417,6 +447,12 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
 
         fun setSingleChoiceItems(
             items: Array<out CharSequence>,
+            checkedItem: Int,
+            listener: OnChoiceClickListener?
+        ) = apply { dialog.setChoiceItems(items, checkedItem, listener) }
+
+        fun setSingleChoiceItems(
+            items: Array<ChoiceOption>,
             checkedItem: Int,
             listener: OnChoiceClickListener?
         ) = apply { dialog.setChoiceItems(items, checkedItem, listener) }

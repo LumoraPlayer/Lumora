@@ -48,6 +48,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
+        android:clipChildren="true"
+        android:clipToPadding="false"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
         android:fadeScrollbars="true"
         android:scrollbars="vertical"
         android:visibility="gone">
@@ -55,7 +59,9 @@
         <FrameLayout
             android:id="@+id/lumoraDialogContent"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:clipChildren="true"
+            android:clipToPadding="true" />
     </com.lumora.view.BoundedHeightScrollView>
 
     <!-- The list lives inside a clipping frame: a RecyclerView that is scrolled draws its
@@ -75,8 +81,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:clipChildren="true"
-            android:clipToPadding="true"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
             android:visibility="gone" />
     </FrameLayout>
 

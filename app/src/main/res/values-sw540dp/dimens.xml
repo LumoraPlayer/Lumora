@@ -98,8 +98,21 @@
          whatever the label needs plus this - see values/dimens.xml. -->
     <dimen name="settings_row_padding_vertical">7dp</dimen>
 
-    <!-- Episode rows spanning the full width of a TV panel left the title stranded next to
-         its thumbnail with a huge empty gap - inset the list so a row is a readable block. -->
+    <!-- Detail screen at sofa distance: the season chip is the list's primary selector, so
+         it grows with the episode rows rather than staying at phone size; the 16:9 still and
+         its play affordance grow with the type around them. -->
+    <dimen name="season_chip_padding_horizontal">16dp</dimen>
+    <dimen name="season_chip_padding_vertical">10dp</dimen>
+    <dimen name="season_chip_gap">8dp</dimen>
+    <dimen name="season_chip_check_size">38dp</dimen>
+    <dimen name="season_chip_max_width">240dp</dimen>
+
+    <dimen name="episode_row_min_height">112dp</dimen>
+    <dimen name="episode_row_padding">12dp</dimen>
+    <dimen name="episode_row_gap">10dp</dimen>
+    <dimen name="episode_thumb_width">160dp</dimen>
+    <dimen name="episode_thumb_height">90dp</dimen>
+    <dimen name="episode_play_icon_size">40dp</dimen>
 
     <!-- Live TV. Channel names and numbers stay legible at couch distance while the channel
          column grows only enough to keep a common long label readable. -->
@@ -184,12 +197,18 @@
     <dimen name="shelf_poster_image_height">153dp</dimen>
     <!-- Cast row / person page at TV scale - see values/dimens.xml for the role of each.
          The face fills the cell; the name/role sit underneath. -->
-    <dimen name="cast_photo_size">56dp</dimen>
-    <dimen name="cast_cell_width">56dp</dimen>
-    <dimen name="cast_name_text">8sp</dimen>
-    <dimen name="cast_role_text">7sp</dimen>
+    <dimen name="cast_photo_size">64dp</dimen>
+    <dimen name="cast_cell_width">64dp</dimen>
+    <dimen name="cast_name_text">11sp</dimen>
+    <dimen name="cast_role_text">9sp</dimen>
     <dimen name="poster_image_corner_radius">18dp</dimen>
     <dimen name="detail_image_corner_radius">14dp</dimen>
+    <!-- Detail header at sofa distance: the poster is a real cover card beside the title,
+         not a thumbnail, and the title is the page's largest piece of type. -->
+    <dimen name="detail_poster_width">120dp</dimen>
+    <dimen name="detail_poster_height">180dp</dimen>
+    <dimen name="detail_poster_elevation">8dp</dimen>
+    <dimen name="detail_title_text">26sp</dimen>
     <dimen name="small_image_corner_radius">8dp</dimen>
     <dimen name="detail_actions_start_margin">16dp</dimen>
     <dimen name="person_photo_width">140dp</dimen>
@@ -272,6 +291,21 @@
     <dimen name="player_controls_safe_horizontal_inset">28dp</dimen>
     <dimen name="player_controls_safe_vertical_inset">16dp</dimen>
     <dimen name="player_controls_safe_margin">28dp</dimen>
+    <!-- TV step of the player deck. The transport keeps a 48dp D-pad target and the play
+         button grows to sofa-distance weight; quick actions use the same 56dp height so the
+         deck's two rows never look like different components. -->
+    <dimen name="player_transport_button_size">48dp</dimen>
+    <dimen name="player_play_button_size">60dp</dimen>
+    <dimen name="player_transport_gap">6dp</dimen>
+    <dimen name="player_seek_height">36dp</dimen>
+    <dimen name="player_quick_action_height">56dp</dimen>
+    <dimen name="player_quick_action_gap">6dp</dimen>
+    <dimen name="player_quick_action_icon_size">22dp</dimen>
+    <dimen name="player_quick_action_title_text">12sp</dimen>
+    <dimen name="player_quick_action_value_text">13sp</dimen>
+    <dimen name="player_option_tile_min_height">60dp</dimen>
+    <dimen name="player_option_title_text">16sp</dimen>
+    <dimen name="player_option_value_text">13sp</dimen>
     <!-- TV tier of the toolbar cluster spacing - see values/dimens.xml. Slightly wider than
          phone: the buttons are aimed at a remote across a room, and the panel has room to
          spare at 960dp wide. -->

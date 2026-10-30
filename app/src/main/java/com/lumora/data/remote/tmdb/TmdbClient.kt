@@ -596,7 +596,9 @@ class TmdbClient {
 
         private const val BASE = "https://api.themoviedb.org/3"
         private const val IMG = "https://image.tmdb.org/t/p/w342"
-        private const val BACKDROP = "https://image.tmdb.org/t/p/w780"
+        // w780 was fine while a backdrop was only a small detail-screen thumbnail; the
+        // full-bleed hero needs the w1280 still or it visibly softens on a 1080p panel.
+        private const val BACKDROP = "https://image.tmdb.org/t/p/w1280"
         private const val STILL = "https://image.tmdb.org/t/p/w300"
         /** Cast faces render at ~96dp; a w185 headshot is ample and a fraction of w342. */
         private const val PROFILE = "https://image.tmdb.org/t/p/w185"

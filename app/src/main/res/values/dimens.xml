@@ -73,8 +73,21 @@
     <dimen name="settings_action_button_height">44dp</dimen>
     <dimen name="settings_qr_size">128dp</dimen>
 
-    <!-- Episode list runs the full available width everywhere except TV, where a full-width
-         row is far wider than the content in it. -->
+    <!-- Detail screen: the season selector and its episode rows. The chip selects the whole
+         list below it, so it needs a real D-pad target at both tiers; the episode row sizes
+         its 16:9 still and its action icon here rather than hardcoding phone dp in the layout. -->
+    <dimen name="season_chip_padding_horizontal">12dp</dimen>
+    <dimen name="season_chip_padding_vertical">8dp</dimen>
+    <dimen name="season_chip_gap">6dp</dimen>
+    <dimen name="season_chip_check_size">32dp</dimen>
+    <dimen name="season_chip_max_width">180dp</dimen>
+
+    <dimen name="episode_row_min_height">96dp</dimen>
+    <dimen name="episode_row_padding">12dp</dimen>
+    <dimen name="episode_row_gap">8dp</dimen>
+    <dimen name="episode_thumb_width">128dp</dimen>
+    <dimen name="episode_thumb_height">72dp</dimen>
+    <dimen name="episode_play_icon_size">34dp</dimen>
 
     <!-- Live TV: category sidebar and the EPG guide grid. Same story as the settings scale -
          these were sized for a phone in the hand; values-television/ steps them up. -->
@@ -152,12 +165,18 @@
          face shot and now fills the cell width; the card chrome and inset were removed, so
          the face is the tile and the focus ring is drawn over it. The person page's own
          portrait is 2:3, the shape TMDB profile shots are taken in. -->
-    <dimen name="cast_photo_size">48dp</dimen>
-    <dimen name="cast_cell_width">48dp</dimen>
-    <dimen name="cast_name_text">8sp</dimen>
-    <dimen name="cast_role_text">7sp</dimen>
+    <dimen name="cast_photo_size">56dp</dimen>
+    <dimen name="cast_cell_width">56dp</dimen>
+    <dimen name="cast_name_text">9sp</dimen>
+    <dimen name="cast_role_text">8sp</dimen>
     <dimen name="poster_image_corner_radius">12dp</dimen>
     <dimen name="detail_image_corner_radius">10dp</dimen>
+    <!-- Detail header: the poster sits on the title's own backdrop now, so it carries a
+         little more weight than the old 88x132 thumb; the title is the page's headline. -->
+    <dimen name="detail_poster_width">88dp</dimen>
+    <dimen name="detail_poster_height">132dp</dimen>
+    <dimen name="detail_poster_elevation">4dp</dimen>
+    <dimen name="detail_title_text">20sp</dimen>
     <dimen name="small_image_corner_radius">6dp</dimen>
     <!-- Detail screen action row (Play / Find & Play / trailer): shifted right of the
          title column's edge on large screens, where TV overscan was slicing the left
@@ -250,6 +269,22 @@
     <dimen name="player_controls_safe_horizontal_inset">16dp</dimen>
     <dimen name="player_controls_safe_vertical_inset">8dp</dimen>
     <dimen name="player_controls_safe_margin">6dp</dimen>
+    <!-- Player control deck: the first row is the transport, the second the stateful quick
+         actions. 48dp is Android's touch floor; the play button is larger because it is the
+         one control a thumb reaches for with the screen already moving. -->
+    <dimen name="player_transport_button_size">44dp</dimen>
+    <dimen name="player_play_button_size">56dp</dimen>
+    <dimen name="player_transport_gap">4dp</dimen>
+    <dimen name="player_seek_height">32dp</dimen>
+    <dimen name="player_quick_action_height">56dp</dimen>
+    <dimen name="player_quick_action_gap">4dp</dimen>
+    <dimen name="player_quick_action_icon_size">20dp</dimen>
+    <dimen name="player_quick_action_title_text">10sp</dimen>
+    <dimen name="player_quick_action_value_text">11sp</dimen>
+    <!-- Two-line tiles in the options panel: title plus the current value. -->
+    <dimen name="player_option_tile_min_height">56dp</dimen>
+    <dimen name="player_option_title_text">14sp</dimen>
+    <dimen name="player_option_value_text">12sp</dimen>
     <!-- Multiview bar: how far the action bar floats above the screen edge. It used to sit
          flush on the last pixels, half-cut and under the bottom pane labels; a floating
          rounded panel reads as the chrome it is. -->

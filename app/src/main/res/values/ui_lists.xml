@@ -42,6 +42,10 @@
     <string name="list_version">Version %1$d</string>
     <string name="list_resume">Resume</string>
     <string name="list_episodes">Episodes</string>
+    <plurals name="list_season_episode_count">
+        <item quantity="one">%1$s · %2$d episode</item>
+        <item quantity="other">%1$s · %2$d episodes</item>
+    </plurals>
     <string name="list_no_episodes">No episodes found</string>
     <string name="list_released">Released: %1$s</string>
     <string name="list_genre">Genre: %1$s</string>

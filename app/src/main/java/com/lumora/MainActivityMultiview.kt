@@ -129,22 +129,24 @@ internal class MultiviewPane(
     var released = false
 }
 
-/** Wires the grid's entry button (player controls) and the grid action bar. Called once from
- *  onCreate, like the other player control wiring. */
+/** Wires the grid's action bar. The entry point now lives in the player's More panel
+ *  (see [openMultiviewFromPlayer]); called once from onCreate, like the other player
+ *  control wiring. */
 internal fun MainActivity.setupMultiviewControls() {
-    binding.btnMultiview.setOnClickListener {
-        val channel = nowPlayingChannel
-        if (channel == null || channel.mediaType != MediaType.LIVE) {
-            Toast.makeText(this, getString(R.string.mv_toast_no_live), Toast.LENGTH_SHORT).show()
-            return@setOnClickListener
-        }
-        openMultiview(channel)
-    }
     binding.btnMvAdd.setOnClickListener { enterMultiviewAddMode() }
     binding.btnMvChange.setOnClickListener { promptChangeSelectedMultiviewPane() }
     binding.btnMvFullscreen.setOnClickListener { activateSelectedMultiviewPane() }
     binding.btnMvClose.setOnClickListener { closeMultiviewPane(multiviewSelectedIndex) }
     binding.btnMvExit.setOnClickListener { exitMultiview() }
+}
+
+internal fun MainActivity.openMultiviewFromPlayer() {
+    val channel = nowPlayingChannel
+    if (channel == null || channel.mediaType != MediaType.LIVE) {
+        Toast.makeText(this, getString(R.string.mv_toast_no_live), Toast.LENGTH_SHORT).show()
+        return
+    }
+    openMultiview(channel)
 }
 
 internal fun MainActivity.isMultiviewEnabled(): Boolean =

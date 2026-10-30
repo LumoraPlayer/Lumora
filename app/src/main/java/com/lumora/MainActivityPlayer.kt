@@ -159,116 +159,45 @@ internal fun MainActivity.setupPlayerControls() {
     }
     binding.sideMenuCategoryList.layoutManager = LinearLayoutManager(this)
     binding.sideMenuCategoryList.adapter = sideMenuCategoryAdapter
-    binding.btnAudioTrack.setOnClickListener { showTrackPicker(isAudio = true) }
-    binding.btnVideoQuality.setOnClickListener { showVideoQualityPicker() }
-    binding.btnSubtitleTrack.setOnClickListener { showTrackPicker(isAudio = false) }
     binding.btnSkipSegment.setOnClickListener { skipActiveSegment() }
-    binding.btnChapters.setOnClickListener { showChapterPicker() }
     // Persisted subtitle text size (Small/Medium/Large, see MainActivitySubs) - applied at
     // setup so the very first subtitle this session renders at the chosen size.
     applySubtitleStyle()
-    binding.btnLiveVersions.setOnClickListener { showVersionPicker() }
     binding.btnRewind.setOnClickListener { playerManager.seekBy(-15_000); showControls() }
     binding.btnFastForward.setOnClickListener { playerManager.seekBy(30_000); showControls() }
     applyAspectMode(loadSavedAspectMode())
-    binding.btnAspectRatio.setOnClickListener { cycleAspectMode() }
 
     // Speed control
     speedController = com.lumora.player.playback.PlaybackSpeedController(playerManager.getExoPlayer())
+    // The quick actions need the speed controller for their live value, and the track-change
+    // listener below refreshes them, so wire them before that listener is attached.
+    setupPlayerOptionsControls()
     // Display refresh-rate matching: opt-in on phones, on by default on TV (see the controller).
     displayFrameRateController?.release()
     displayFrameRateController = com.lumora.player.DisplayFrameRateController(binding.playerSurface)
     playerManager.getExoPlayer().addListener(object : Player.Listener {
-        override fun onTracksChanged(tracks: androidx.media3.common.Tracks) = updateDisplayFrameRate()
+        override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+            updateDisplayFrameRate()
+            updatePlayerOptionLabels()
+        }
         override fun onPlaybackStateChanged(playbackState: Int) = updateDisplayFrameRate()
     })
-    binding.btnSpeed.setOnClickListener {
-        val speeds = arrayOf(
-            getString(R.string.play_speed_0_5),
-            getString(R.string.play_speed_0_75),
-            getString(R.string.speed_default),
-            getString(R.string.play_speed_1_25),
-            getString(R.string.play_speed_1_5),
-            getString(R.string.play_speed_2_0),
-        )
-        val currentSpeed = speedController.currentSpeed
-        val checkedIndex = when {
-            currentSpeed <= 0.5f -> 0; currentSpeed <= 0.75f -> 1; currentSpeed <= 1.0f -> 2
-            currentSpeed <= 1.25f -> 3; currentSpeed <= 1.5f -> 4; else -> 5
-        }
-        LumoraDialog.Builder(this)
-            .setTitle(getString(R.string.play_playback_speed))
-            .setSingleChoiceItems(speeds, checkedIndex) { dialog, which ->
-                val speed = when (which) { 0 -> 0.5f; 1 -> 0.75f; 2 -> 1.0f; 3 -> 1.25f; 4 -> 1.5f; else -> 2.0f }
-                speedController.setSpeed(speed)
-                binding.btnSpeed.text = getString(R.string.play_speed_label, speed)
-                dialog.dismiss()
-            }
-            .setNegativeButton(getString(R.string.cancel), null)
-            .let(::showControlsDialog)
-    }
-
-    // Audio offset control - see AvOffsetRenderersFactory for how the shift is actually
-    // applied. Global only (matches Speed/Sleep Timer): a viewer's HDMI/speaker lag is a
-    // property of their setup, not of any one channel.
-    val avOffsetManager = com.lumora.player.playback.AvOffsetManager(this)
-    binding.btnAudioOffset.text = getString(R.string.play_audio_offset_label, playerManager.getAvOffsetMs())
-    binding.btnAudioOffset.setOnClickListener {
-        val offsets = intArrayOf(-1000, -500, -250, -100, -50, 0, 50, 100, 250, 500, 1000)
-        val labels = offsets.map { getString(R.string.play_audio_offset_label, it) }.toTypedArray()
-        val current = playerManager.getAvOffsetMs()
-        var checkedIndex = offsets.indexOf(current)
-        if (checkedIndex == -1) {
-            // A value that isn't one of the presets (never set through this dialog before)
-            // still needs a visible selection - nearest preset by absolute distance.
-            checkedIndex = offsets.indices.minByOrNull { kotlin.math.abs(offsets[it] - current) } ?: 5
-        }
-        LumoraDialog.Builder(this)
-            .setTitle(getString(R.string.play_audio_offset))
-            .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
-                val offsetMs = offsets[which]
-                playerManager.setAvOffsetMs(offsetMs)
-                avOffsetManager.save(offsetMs)
-                binding.btnAudioOffset.text = getString(R.string.play_audio_offset_label, offsetMs)
-                dialog.dismiss()
-            }
-            .setNegativeButton(getString(R.string.cancel), null)
-            .let(::showControlsDialog)
-    }
 
     // Sleep timer
     sleepTimer = com.lumora.player.playback.SleepTimer(playerManager.getExoPlayer()).apply {
-        onTickCallback = { display -> binding.btnSleepTimer.text = display }
+        onTickCallback = { display ->
+            sleepTimerDisplay = display
+            updatePlayerOptionLabels()
+        }
         // The timer's own onFinish stops the player, which leaves a frozen frame behind with
-        // no sign playback ended - surface the controls and say so, and reset the button label
+        // no sign playback ended - surface the controls and say so, and clear the countdown
         // (the timer does not reset its own preset state on finish).
         onSleep = {
-            binding.btnSleepTimer.text = getString(R.string.sleep_timer_button)
+            sleepTimerDisplay = null
+            updatePlayerOptionLabels()
             showControls()
             Toast.makeText(this@setupPlayerControls, getString(R.string.play_sleep_timer_ended), Toast.LENGTH_SHORT).show()
         }
-    }
-    binding.btnSleepTimer.setOnClickListener {
-        val presets = arrayOf(
-            getString(R.string.play_sleep_off),
-            getString(R.string.play_sleep_15_min),
-            getString(R.string.play_sleep_30_min),
-            getString(R.string.play_sleep_45_min),
-            getString(R.string.play_sleep_60_min),
-            getString(R.string.play_sleep_90_min),
-            getString(R.string.play_sleep_120_min),
-        )
-        val checkedIndex = sleepTimer.currentPreset.ordinal
-        LumoraDialog.Builder(this)
-            .setTitle(getString(R.string.play_sleep_timer))
-            .setSingleChoiceItems(presets, checkedIndex) { dialog, which ->
-                val preset = com.lumora.player.playback.SleepTimer.Preset.entries[which]
-                sleepTimer.start(preset)
-                binding.btnSleepTimer.text = if (preset == com.lumora.player.playback.SleepTimer.Preset.OFF) getString(R.string.sleep_timer_button) else presets[which]
-                dialog.dismiss()
-            }
-            .setNegativeButton(getString(R.string.cancel), null)
-            .let(::showControlsDialog)
     }
 
     // Up Next pill — press advances now; Back cancels the offer (handleBackNavigation).
@@ -335,73 +264,11 @@ internal fun MainActivity.setupPlayerControls() {
         }
     }
 
-    // Hand-off to another video app - the answer for audio this device has no decoder for.
-    setupExternalPlayerButton(binding.btnExternalPlayer)
-    relinkPlayerButtonRowFocus()
-    // The EPG rail's four-card width is measured from its viewport. Orientation changes,
+    // The EPG rail's card width is measured from its viewport. Orientation changes,
     // insets or a re-laid-out bar can all change that width without rebuilding the cards.
     binding.playerEpgScroll.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
         if (right - left != oldRight - oldLeft && binding.playerEpgRail.childCount > 0) {
             sizePlayerEpgCards()
-        }
-    }
-
-    // Diagnostics
-    binding.btnDiagnostics.setOnClickListener {
-        val snapshot = playerDiagnostics.getSnapshot()
-        val diag = getString(
-            R.string.play_diag_body,
-            snapshot.videoDecoder,
-            snapshot.videoFormat,
-            snapshot.audioFormat,
-            snapshot.stallCount,
-            snapshot.totalStallDuration / 1000,
-            snapshot.playbackState
-        )
-        LumoraDialog.Builder(this)
-            .setTitle(getString(R.string.play_diag_title))
-            .setMessage(diag)
-            .setPositiveButton(getString(R.string.play_ok), null)
-            .show()
-    }
-
-    // Record button
-    binding.btnRecord.setOnClickListener {
-        if (nowPlayingChannel?.mediaType != MediaType.LIVE) {
-            Toast.makeText(this, getString(R.string.play_recording_live_only), Toast.LENGTH_SHORT).show()
-            return@setOnClickListener
-        }
-        val channel = nowPlayingChannel ?: return@setOnClickListener
-        scope.launch {
-            val storage = runCatching {
-                com.lumora.recording.RecordingStorage.load(this@setupPlayerControls)
-            }.getOrDefault(com.lumora.recording.RecordingStorage.defaults())
-            val destination = com.lumora.recording.RecordingStorage.summary(this@setupPlayerControls, storage)
-            LumoraDialog.Builder(this@setupPlayerControls)
-                .setTitle(getString(R.string.play_schedule_recording))
-                .setMessage(getString(R.string.play_record_confirm_dest, channel.name, destination))
-                .setPositiveButton(getString(R.string.play_record_for_2_hours)) { _, _ ->
-                    val recEntry = com.lumora.recording.RecordingScheduler.createRecording(
-                        channelId = channel.id,
-                        channelName = channel.name,
-                        programTitle = channel.name,
-                        startTimeUtc = System.currentTimeMillis() / 1000,
-                        stopTimeUtc = (System.currentTimeMillis() / 1000) + 7200,
-                        providerId = channel.sourceProviderId
-                    )
-                    com.lumora.recording.RecordingScheduler.schedule(this@setupPlayerControls, recEntry)
-                    scope.launch {
-                        database.recordingDao().insert(recEntry)
-                        // Start now instead of waiting for the exact alarm: recording is an
-                        // explicit tap, and an inexact fallback alarm can be deferred by minutes.
-                        runCatching {
-                            com.lumora.recording.RecordingService.start(this@setupPlayerControls, recEntry.id)
-                        }
-                    }
-                    Toast.makeText(this@setupPlayerControls, getString(R.string.play_recording_scheduled), Toast.LENGTH_SHORT).show()
-                }
-                .setNegativeButton(getString(R.string.cancel), null)
-                .show()
         }
     }
 
@@ -766,11 +633,6 @@ internal fun MainActivity.loadSavedAspectMode(): VideoAspectFrameLayout.Mode =
 
 internal fun MainActivity.applyAspectMode(mode: VideoAspectFrameLayout.Mode) {
     binding.playerAspectContainer.resizeMode = mode
-    binding.btnAspectRatio.text = when (mode) {
-        VideoAspectFrameLayout.Mode.FIT -> getString(R.string.fit)
-        VideoAspectFrameLayout.Mode.ZOOM -> getString(R.string.play_aspect_zoom)
-        VideoAspectFrameLayout.Mode.FILL -> getString(R.string.play_aspect_stretch)
-    }
     prefs.edit().putString(PREF_ASPECT_MODE, mode.name).apply()
 }
 
@@ -778,7 +640,12 @@ internal fun MainActivity.cycleAspectMode() {
     val modes = VideoAspectFrameLayout.Mode.entries
     val next = modes[(modes.indexOf(binding.playerAspectContainer.resizeMode) + 1) % modes.size]
     applyAspectMode(next)
-    Toast.makeText(this, getString(R.string.play_video_label, binding.btnAspectRatio.text), Toast.LENGTH_SHORT).show()
+    val label = when (next) {
+        VideoAspectFrameLayout.Mode.FIT -> getString(R.string.fit)
+        VideoAspectFrameLayout.Mode.ZOOM -> getString(R.string.play_aspect_zoom)
+        VideoAspectFrameLayout.Mode.FILL -> getString(R.string.play_aspect_stretch)
+    }
+    Toast.makeText(this, getString(R.string.play_video_label, label), Toast.LENGTH_SHORT).show()
 }
 
 /** [resumeFromMs] carries the position across a version switch (see showVersionPicker):
@@ -893,19 +760,17 @@ internal fun MainActivity.showPlayerFor(
     binding.playerSubtitle.visibility = View.GONE
     binding.playerLiveBadge.visibility = if (channel.mediaType == MediaType.LIVE) View.VISIBLE else View.GONE
     // Multiview is a live-only feature and can be switched off entirely in Settings; the
-    // button is hidden rather than disabled so a VOD session's button row stays uncluttered.
-    binding.btnMultiview.visibility =
-        if (channel.mediaType == MediaType.LIVE && isMultiviewEnabled()) View.VISIBLE else View.GONE
+    // More panel decides whether to offer it when it opens.
     if (channel.mediaType == MediaType.LIVE) {
         // Don't add adult channels to recently played.
         if (!isAdultCategory(channel.categoryName, channel.group)) {
             RecentlyPlayedStore.recordPlayed(this, channel.id)
         }
         speedController.resetSpeed()
-        // The button label is otherwise only ever written by the speed dialog, so it kept
-        // showing a stale rate ("2.0x") while playback had been reset to 1x.
-        binding.btnSpeed.text = getString(R.string.play_speed_label, speedController.currentSpeed)
     }
+    // The deck's labels are otherwise only refreshed on track changes; a new title must not
+    // keep showing the previous one's audio/subtitle/quality state.
+    updatePlayerOptionLabels()
 
     // Keep the logo/poster alongside the title without increasing the transport row's
     // height. On narrow screens, hide the artwork so the channel/content name has room.
@@ -1007,8 +872,6 @@ internal fun MainActivity.showPlayerFor(
     playbackChapters = emptyList()
     jellyfinTrickplay = null
     trickplayTileCache = null
-    updateChaptersButtonVisibility()
-    updateVersionsButtonVisibility()
     hideTrickplayPreview()
 
     when {
@@ -1589,16 +1452,14 @@ internal fun MainActivity.reportUnsupportedDrmScheme(channel: Channel) {
     Toast.makeText(this, getString(R.string.play_drm_scheme_unsupported, scheme), Toast.LENGTH_LONG).show()
 }
 
-/** Rebuilds the track-button row's left/right focus chain across only the buttons that are
+/** Rebuilds the control deck's left/right focus chain across the quick actions that are
  *  actually visible right now.
  *
- *  The XML chain is static and links straight through buttons that get hidden at runtime:
- *  btnCast is GONE on TV (the TV is a Cast receiver, not a sender) and btnChapters is GONE
- *  unless a Jellyfin item has chapters. From API 26 FocusFinder walks a GONE link onward to
- *  that view's own nextFocus target, so the chain self-heals; on API 25 and below (Fire TV
- *  7.1) it hands the GONE view straight back and requestFocus() on it fails - RIGHT out of
- *  Sleep did nothing at all and every button past it (External, Diag, Rec, Versions, Fit,
- *  Audio, Subs) was unreachable on those sticks. */
+ *  The deck changes composition by width (Speed and Quality move into the More panel on
+ *  smaller windows) and a quick action can be hidden while the bar is up. Rebuilding the
+ *  chain from the visible children is what keeps LEFT/RIGHT from landing on a GONE view -
+ *  API 25 and below (Fire TV 7.1) hand a GONE nextFocus target straight back and the key
+ *  does nothing. */
 /** Moves focus one step along the controls bar in [direction] (a `View.FOCUS_*`), returning
  *  whether it landed anywhere.
  *
@@ -1612,10 +1473,20 @@ internal fun MainActivity.reportUnsupportedDrmScheme(channel: Channel) {
  *  window and the browse screen behind the player is still focusable. */
 /** Shows a controls-bar picker dialog with the bar's 4s auto-hide suspended: left running,
  *  the timer hid the bar (and the focused button) while the picker was still open, and on
- *  dismiss the D-pad had nothing to return to. Dismissing re-shows the bar. */
-internal fun MainActivity.showControlsDialog(builder: LumoraDialog.Builder) {
+ *  dismiss the D-pad had nothing to return to. Dismissing re-shows the bar and returns focus
+ *  to [returnFocus] (or whatever opened the dialog) instead of resetting to play/pause. */
+internal fun MainActivity.showControlsDialog(
+    builder: LumoraDialog.Builder,
+    returnFocus: View? = null,
+) {
+    val opener = returnFocus ?: currentFocus?.takeIf { it.isShown }
     mainHandler.removeCallbacks(hideControlsRunnable)
-    builder.setOnDismissListener { if (isPlayerVisible) showControls() }.show()
+    builder.setOnDismissListener {
+        if (isPlayerVisible) {
+            showControls()
+            opener?.takeIf { view -> view.isShown && view.isFocusable }?.post { opener.requestFocus() }
+        }
+    }.show()
 }
 
 internal fun MainActivity.focusOverlayNeighbour(direction: Int): Boolean {
@@ -1632,69 +1503,57 @@ internal fun MainActivity.focusOverlayNeighbour(direction: Int): Boolean {
     return target.requestFocus(direction)
 }
 
-/** Whether [showVersionPicker] would actually find something to list, mirroring its own
- *  three-way check without opening the dialog - so the button can be hidden rather than
- *  opening only to toast "nothing else to switch to". Series playback sets
- *  currentSeriesVersionContext AFTER its showPlayerFor call returns (see the Lists.kt/
- *  showSeriesVersionPicker call sites), so callers there re-invoke this once it's set
- *  rather than relying on the one inside showPlayerFor. */
-internal fun MainActivity.updateVersionsButtonVisibility() {
-    val playing = nowPlayingChannel
-    val hasVersions = when {
-        playing == null -> false
-        // A game from the Sports board can have other broadcasts even when this channel itself
-        // has only the one stream.
-        playing.mediaType == MediaType.LIVE ->
-            currentVersionGroup.size > 1 || liveGameOtherChannels.isNotEmpty()
-        currentSeriesVersionContext != null -> {
-            val (series, group) = currentSeriesVersionContext!!
-            group.size > 1 || canFindStream(series)
-        }
-        else -> {
-            val group = versionGroupContaining(filmVersions, playing.id).orEmpty()
-            group.size > 1 || canFindStream(playing)
-        }
-    }
-    binding.btnLiveVersions.visibility = if (hasVersions) View.VISIBLE else View.GONE
-    relinkPlayerButtonRowFocus()
-}
-
 internal fun MainActivity.relinkPlayerButtonRowFocus() {
-    // The options are two rows now (a 2x7 grid under/next to the transport), so left/right
-    // has to stop at each row's own ends instead of walking straight into the next row.
-    val rows = (0 until binding.playerTrackButtons.childCount)
-        .mapNotNull { binding.playerTrackButtons.getChildAt(it) as? ViewGroup }
-        .map { row ->
-            (0 until row.childCount)
-                .map { row.getChildAt(it) }
-                .filter { it.visibility == View.VISIBLE && it.isFocusable && it.id != View.NO_ID }
+    val actions = (0 until binding.playerQuickActions.childCount)
+        .map { binding.playerQuickActions.getChildAt(it) }
+        .filter { it.visibility == View.VISIBLE && it.isFocusable && it.id != View.NO_ID }
+    val oneRow = binding.playerControlDeck.orientation == LinearLayout.HORIZONTAL
+    val epgTarget = if (binding.playerEpgSection.visibility == View.VISIBLE) {
+        (0 until binding.playerEpgRail.childCount)
+            .map { binding.playerEpgRail.getChildAt(it) }
+            .firstOrNull { it.isSelected && it.visibility == View.VISIBLE }
+            ?.id
+            ?: (0 until binding.playerEpgRail.childCount)
+                .map { binding.playerEpgRail.getChildAt(it) }
+                .firstOrNull { it.visibility == View.VISIBLE }
+                ?.id
+    } else {
+        null
+    }
+
+    actions.forEachIndexed { index, view ->
+        view.nextFocusLeftId = when {
+            index > 0 -> actions[index - 1].id
+            oneRow -> binding.btnNextChannel.id
+            else -> View.NO_ID
         }
-    rows.forEachIndexed { rowIndex, visible ->
-        val lastRow = rowIndex == rows.lastIndex
-        visible.forEachIndexed { index, view ->
-            view.nextFocusLeftId = visible.getOrNull(index - 1)?.id ?: View.NO_ID
-            view.nextFocusRightId = visible.getOrNull(index + 1)?.id ?: View.NO_ID
-            // Only the bottom row has the seek bar directly beneath it. The top row leaves
-            // DOWN implicit so focus search can walk into the second row.
-            view.nextFocusDownId = if (lastRow) binding.seekBar.id else View.NO_ID
-            // UP from the lower row returns to the matching option above. The top row's UP
-            // is the EPG rail (or the normal upward search when no guide is on screen), set
-            // by relinkPlayerEpgFocus - do not clear it here, which would undo that link
-            // every time the bar was revealed.
-            if (rowIndex > 0) {
-                val above = rows.getOrNull(rowIndex - 1).orEmpty()
-                view.nextFocusUpId = above.getOrNull(index)?.id
-                    ?: above.firstOrNull()?.id
-                    ?: View.NO_ID
-            }
+        view.nextFocusRightId = actions.getOrNull(index + 1)?.id ?: View.NO_ID
+        view.nextFocusDownId = binding.seekBar.id
+        // UP from the deck is the guide when one is on screen; otherwise portrait returns to
+        // the transport and wide leaves it unset so the framework's upward search applies.
+        view.nextFocusUpId = epgTarget
+            ?: if (!oneRow) binding.btnPlayPause.id else View.NO_ID
+    }
+
+    val transport = listOf(
+        binding.btnPrevChannel,
+        binding.btnRewind,
+        binding.btnPlayPause,
+        binding.btnFastForward,
+        binding.btnNextChannel,
+    )
+    transport.forEach { button ->
+        button.nextFocusUpId = epgTarget ?: View.NO_ID
+        // On portrait the quick actions are directly below the transport; on wide the seek
+        // bar is the next row down.
+        button.nextFocusDownId = if (oneRow) {
+            binding.seekBar.id
+        } else {
+            actions.firstOrNull()?.id ?: binding.seekBar.id
         }
     }
-    // The transport and the first option share the row physically: RIGHT off Next Channel
-    // walks into the grid, and LEFT off the first option comes back. Without the bridge,
-    // RIGHT at the transport's end ran off to the still-focusable screen behind the player.
-    val first = rows.firstOrNull()?.firstOrNull()
-    first?.nextFocusLeftId = binding.btnNextChannel.id
-    binding.btnNextChannel.nextFocusRightId = first?.id ?: View.NO_ID
+    binding.btnNextChannel.nextFocusRightId =
+        if (oneRow) actions.firstOrNull()?.id ?: View.NO_ID else View.NO_ID
 }
 
 /** Lets the user manually pick a specific version of whatever's playing - the auto-picked
@@ -1708,12 +1567,12 @@ internal fun MainActivity.relinkPlayerButtonRowFocus() {
  *  are alternate streams of the same item, swapped in place; a series episode's alternatives
  *  live in another provider's separate episode list, which has to be fetched and matched by
  *  season/episode before there's anything to play. */
-internal fun MainActivity.showVersionPicker() {
+internal fun MainActivity.showVersionPicker(returnFocus: View? = null) {
     val playing = nowPlayingChannel ?: return
     when {
-        playing.mediaType == MediaType.LIVE -> showLiveVersionPicker(playing)
-        currentSeriesVersionContext != null -> showSeriesVersionPicker(playing)
-        else -> showFilmVersionPicker(playing)
+        playing.mediaType == MediaType.LIVE -> showLiveVersionPicker(playing, returnFocus)
+        currentSeriesVersionContext != null -> showSeriesVersionPicker(playing, returnFocus)
+        else -> showFilmVersionPicker(playing, returnFocus)
     }
 }
 
@@ -1727,7 +1586,7 @@ internal fun MainActivity.showVersionPicker() {
  * the others say what they are. The board hands the list over when it starts the game (see
  * [playItem]); a channel picked from Live TV has nothing after its own variants.
  */
-private fun MainActivity.showLiveVersionPicker(playing: Channel) {
+private fun MainActivity.showLiveVersionPicker(playing: Channel, returnFocus: View? = null) {
     val others = liveGameOtherChannels.filterNot { alt ->
         alt.id == playing.id || currentVersionGroup.any { it.id == alt.id }
     }
@@ -1739,7 +1598,7 @@ private fun MainActivity.showLiveVersionPicker(playing: Channel) {
         currentVersionGroup.map { it.name } +
             others.map { getString(R.string.play_channel_other_broadcast, it.name) }
         ).toTypedArray()
-    LumoraDialog.Builder(this)
+    val builder = LumoraDialog.Builder(this)
         .setTitle(
             getString(if (others.isEmpty()) R.string.play_channel_version_title else R.string.versions)
         )
@@ -1752,7 +1611,7 @@ private fun MainActivity.showLiveVersionPicker(playing: Channel) {
             dialog.dismiss()
         }
         .setNegativeButton(getString(R.string.cancel), null)
-        .show()
+    showControlsDialog(builder, returnFocus)
 }
 
 /**
@@ -1850,7 +1709,7 @@ private fun MainActivity.torrentTransportLabel(source: FoundSource): String? {
 /** Alternate sources for the film that's playing. filmVersions is keyed by the group's
  *  representative, and the thing playing may itself be a non-representative version
  *  (picked from the detail screen's chips), so the group is found by membership. */
-internal fun MainActivity.showFilmVersionPicker(playing: Channel) {
+internal fun MainActivity.showFilmVersionPicker(playing: Channel, returnFocus: View? = null) {
     val group = versionGroupContaining(filmVersions, playing.id).orEmpty()
     // One copy in the library is not "no versions": searching for another source is itself a
     // version of this title, and it's the only route left when the one copy is the one that
@@ -1901,7 +1760,7 @@ internal fun MainActivity.showFilmVersionPicker(playing: Channel) {
     // The replacement is a different item with its own saved-position key, so the current
     // position is carried across by hand - otherwise switching source mid-film restarts it.
     val resumeMs = playerManager.currentPosition.takeIf { it > 0 }
-    LumoraDialog.Builder(this)
+    val builder = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.play_version_title))
         .setSingleChoiceItems(labels, currentIndex) { dialog, which ->
             dialog.dismiss()
@@ -1937,7 +1796,7 @@ internal fun MainActivity.showFilmVersionPicker(playing: Channel) {
             }
         }
         .setNegativeButton(getString(R.string.cancel), null)
-        .show()
+    showControlsDialog(builder, returnFocus)
 }
 
 /**
@@ -2007,7 +1866,7 @@ private fun MainActivity.torrentMenuLabel(torrents: List<FoundSource>): String {
  *  catalog entry with its own episode list, so switching means fetching that list and
  *  finding the same season/episode in it - which can legitimately fail (a provider may
  *  simply not carry that episode), hence the explicit message rather than a silent no-op. */
-internal fun MainActivity.showSeriesVersionPicker(playing: Channel) {
+internal fun MainActivity.showSeriesVersionPicker(playing: Channel, returnFocus: View? = null) {
     val (series, group) = currentSeriesVersionContext ?: return
     // As with films: other providers' copies when there are any, plus Find & Play whenever
     // something can search for this episode - a show carried by one provider still has
@@ -2059,7 +1918,7 @@ internal fun MainActivity.showSeriesVersionPicker(playing: Channel) {
     // at all from the Play button (whose queue is the whole cross-season chain).
     val seasonNum = seasonNumberOf(playing)
     val queueSeasonSize = currentEpisodeQueue.size.takeIf { it > 0 }
-    LumoraDialog.Builder(this)
+    val builder = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.play_series_version_title))
         .setSingleChoiceItems(labels, currentIndex) { dialog, which ->
             dialog.dismiss()
@@ -2100,7 +1959,7 @@ internal fun MainActivity.showSeriesVersionPicker(playing: Channel) {
             }
         }
         .setNegativeButton(getString(R.string.cancel), null)
-        .show()
+    showControlsDialog(builder, returnFocus)
 }
 
 /**
@@ -2156,7 +2015,6 @@ internal suspend fun MainActivity.switchToSeriesVersion(
     currentEpisodeQueue = newQueue
     currentEpisodeQueueIndex = newQueue.indexOfFirst { it.id == match.id }
     currentSeriesVersionContext = target to group
-    updateVersionsButtonVisibility()
     return true
 }
 

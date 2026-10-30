@@ -462,19 +462,12 @@ internal fun MainActivity.loadJellyfinPlaybackExtras(itemId: String) {
             com.lumora.model.MediaChapter(it.name, it.positionMs, it.imageUrl)
         }
         jellyfinTrickplay = trickplay
-        updateChaptersButtonVisibility()
     }
 }
 
-internal fun MainActivity.updateChaptersButtonVisibility() {
-    binding.btnChapters.visibility = if (playbackChapters.size > 1) View.VISIBLE else View.GONE
-    // Row's focus chain must skip it while it's hidden - see relinkPlayerButtonRowFocus.
-    relinkPlayerButtonRowFocus()
-}
-
 /** Chapter picker - jumps straight to a chapter's start. Only reachable when the item
- *  actually has chapters (see updateChaptersButtonVisibility). */
-internal fun MainActivity.showChapterPicker() {
+ *  actually has chapters (the More panel hides the tile otherwise). */
+internal fun MainActivity.showChapterPicker(returnFocus: View? = null) {
     val chapters = playbackChapters
     if (chapters.isEmpty()) return
     val position = playerManager.currentPosition
@@ -483,13 +476,13 @@ internal fun MainActivity.showChapterPicker() {
         val marker = if (index == currentIdx) "▶ " else ""
         "$marker${chapter.name}  ·  ${formatTime(chapter.positionMs)}"
     }.toTypedArray()
-    LumoraDialog.Builder(this)
+    val builder = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.chapters))
         .setItems(labels) { _, which ->
             playerManager.seekTo(chapters[which].positionMs)
             showControls()
         }
-        .show()
+    showControlsDialog(builder, returnFocus)
 }
 
 /** Seek-preview thumbnail from the trickplay sprite sheets, shown while scrubbing a

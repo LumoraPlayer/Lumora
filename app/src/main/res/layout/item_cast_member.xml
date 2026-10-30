@@ -68,6 +68,6 @@
         android:fontFamily="@font/inter_regular"
         android:gravity="center"
         android:maxLines="1"
-        android:textColor="@color/text_tertiary"
+        android:textColor="@color/text_secondary"
         android:textSize="@dimen/cast_role_text" />
 </LinearLayout>

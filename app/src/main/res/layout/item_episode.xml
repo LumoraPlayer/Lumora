@@ -9,23 +9,24 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
+    android:layout_marginBottom="@dimen/episode_row_gap"
     android:background="@drawable/bg_channel_row"
     android:clickable="true"
     android:clipChildren="false"
     android:clipToPadding="false"
     android:focusable="true"
     android:gravity="center_vertical"
-    android:minHeight="96dp"
+    android:minHeight="@dimen/episode_row_min_height"
     android:orientation="horizontal"
-    android:padding="12dp"
+    android:padding="@dimen/episode_row_padding"
     android:stateListAnimator="@animator/focus_scale_row">
 
     <!-- 16:9, matching the aspect the providers' episode stills actually come in, so
-         centerCrop isn't shaving the sides off every thumbnail. -->
+         centerCrop isn't shaving the sides off every thumbnail. The size is a dimen so
+         the still can grow with the TV type scale instead of staying at phone size. -->
     <FrameLayout
-        android:layout_width="128dp"
-        android:layout_height="72dp"
+        android:layout_width="@dimen/episode_thumb_width"
+        android:layout_height="@dimen/episode_thumb_height"
         android:background="@drawable/bg_rounded_poster"
         android:clipToOutline="true">
 
@@ -42,8 +43,8 @@
              to register as one). -->
         <ImageView
             android:id="@+id/episodePlayIcon"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="@dimen/episode_play_icon_size"
+            android:layout_height="@dimen/episode_play_icon_size"
             android:layout_gravity="center"
             android:background="@drawable/bg_play_circle_overlay"
             android:padding="8dp"
@@ -88,7 +89,7 @@
 
         <!-- Episode number leads the title line as its own coloured token rather than
              sitting in a corner badge on the thumbnail, where it fought the play icon
-             for the same 128x72 space and was too small to read across a room. -->
+             for the same small still and was too small to read across a room. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -119,34 +120,54 @@
                 android:maxLines="1"
                 android:textColor="@color/text_primary"
                 android:textSize="@dimen/text_subhead_l" />
+        </LinearLayout>
 
-            <!-- Air date, on the title's baseline at caption size: ambient detail, so it
-                 reads as a subordinate note next to the title rather than competing with
-                 it. wrap_content with the title taking the weight, so a long title is the
-                 thing that ellipsizes and the date always survives. -->
+        <!-- Air date and resume position share one quiet meta line under the title. The
+             date used to sit at the far right of the title line, hundreds of dp away from
+             the title it described; the resume label used to get a whole line of its own.
+             One line keeps both attached to the title and leaves more width for it. -->
+        <LinearLayout
+            android:id="@+id/episodeMetaRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
             <TextView
                 android:id="@+id/episodeDate"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
                 android:fontFamily="@font/inter_medium"
                 android:maxLines="1"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_caption" />
+
+            <TextView
+                android:id="@+id/episodeMetaDot"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:importantForAccessibility="no"
+                android:text="·"
                 android:textColor="@color/text_tertiary"
-                android:textSize="@dimen/text_caption"
+                android:textSize="@dimen/text_body"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/episodeResumeLabel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:fontFamily="@font/inter_medium"
+                android:maxLines="1"
+                android:textColor="@color/primary_light"
+                android:textSize="@dimen/text_body"
                 android:visibility="gone" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/episodeResumeLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
-            android:ellipsize="end"
-            android:fontFamily="@font/inter_medium"
-            android:maxLines="1"
-            android:textColor="@color/primary_light"
-            android:textSize="@dimen/text_body"
-            android:visibility="gone" />
 
         <TextView
             android:id="@+id/episodePlot"
@@ -157,7 +178,7 @@
             android:fontFamily="@font/inter_regular"
             android:lineSpacingExtra="2dp"
             android:maxLines="2"
-            android:textColor="@color/text_tertiary"
+            android:textColor="@color/text_secondary"
             android:textSize="@dimen/text_body"
             android:visibility="gone" />
     </LinearLayout>

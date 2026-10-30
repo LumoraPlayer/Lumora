@@ -8,7 +8,13 @@ import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import java.util.Locale
 
-data class PlayerTrack(val id: String, val name: String, val isSelected: Boolean)
+data class PlayerTrack(
+    val id: String,
+    val name: String,
+    val isSelected: Boolean,
+    /** Quieter second line for the picker: language, codec/channels, forced/SDH. */
+    val detail: String? = null,
+)
 
 /** Bitrate label for the video picker. Locale.ROOT (see [PlayerTrackController]'s
  *  buildVideoTrackName) so the decimal separator is always "." - the display name doubles
@@ -97,16 +103,29 @@ class PlayerTrackController {
         for (group in tracks.groups) {
             if (group.type != trackType) continue
             for (i in 0 until group.length) {
+                val format = group.getTrackFormat(i)
+                val name = buildTrackName(format, i)
                 result.add(
                     PlayerTrack(
                         id = trackKey(group.mediaTrackGroup.id, i),
-                        name = buildTrackName(group.getTrackFormat(i), i),
-                        isSelected = group.isTrackSelected(i)
+                        name = name,
+                        isSelected = group.isTrackSelected(i),
+                        detail = detailWithoutName(
+                            name,
+                            buildTrackDetail(format, trackType),
+                        ),
                     )
                 )
             }
         }
         return result
+    }
+
+    /** "English" + "English · AAC · 2.0" would repeat the name the picker already shows. */
+    private fun detailWithoutName(name: String, detail: String?): String? {
+        if (detail == null || detail == name) return null
+        val prefix = "$name · "
+        return if (detail.startsWith(prefix)) detail.removePrefix(prefix) else detail
     }
 
     private fun collectVideo(tracks: Tracks): List<PlayerTrack> {
@@ -122,7 +141,8 @@ class PlayerTrackController {
                     PlayerTrack(
                         id = trackKey(group.mediaTrackGroup.id, i),
                         name = buildVideoTrackName(format, i),
-                        isSelected = group.isTrackSelected(i)
+                        isSelected = group.isTrackSelected(i),
+                        detail = buildVideoTrackDetail(format),
                     )
                 )
             }
@@ -146,6 +166,77 @@ class PlayerTrackController {
         Regex("""([\d.]+)\s*Mbps""").find(track.name)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
 
     private fun trackKey(groupId: String, index: Int) = "$groupId:$index"
+
+    /** Quieter line under an audio/subtitle track's name. The picker already shows the name,
+     *  so this only carries what the name does not: language, codec/channels, and the
+     *  forced/caption flags that make two same-language tracks distinguishable. */
+    private fun buildTrackDetail(format: Format, trackType: Int): String? {
+        val parts = mutableListOf<String>()
+        val language = format.language
+            ?.takeIf { it.isNotBlank() && it != "und" }
+            ?.let { tag ->
+                runCatching { Locale.forLanguageTag(tag).displayLanguage }
+                    .getOrNull()?.takeIf { it.isNotBlank() } ?: tag
+            }
+        if (language != null) parts.add(language)
+        if (trackType == C.TRACK_TYPE_AUDIO) {
+            codecLabel(format.sampleMimeType)?.let(parts::add)
+            channelLabel(format.channelCount)?.let(parts::add)
+        } else if (trackType == C.TRACK_TYPE_TEXT) {
+            if (format.selectionFlags and C.SELECTION_FLAG_FORCED != 0) parts.add("Forced")
+            if (format.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND != 0) {
+                parts.add("SDH")
+            } else if (format.roleFlags and C.ROLE_FLAG_CAPTION != 0) {
+                parts.add("CC")
+            }
+        }
+        return parts.joinToString(" · ").takeIf { it.isNotBlank() }
+    }
+
+    private fun buildVideoTrackDetail(format: Format): String? {
+        val codec = videoCodecLabel(format.codecs)
+        val fps = format.frameRate.takeIf { it > 0f }
+            ?.let { "%.0f fps".format(Locale.ROOT, it) }
+        return listOfNotNull(codec, fps).joinToString(" · ").takeIf { it.isNotBlank() }
+    }
+
+    private fun videoCodecLabel(codecs: String?): String? {
+        if (codecs.isNullOrBlank()) return null
+        val value = codecs.lowercase(Locale.ROOT)
+        return when {
+            value.contains("avc") || value.contains("h264") -> "H.264"
+            value.contains("hev") || value.contains("hvc") || value.contains("h265") -> "H.265"
+            value.contains("av01") || value.contains("av1") -> "AV1"
+            value.contains("vp9") -> "VP9"
+            value.contains("vp8") -> "VP8"
+            else -> null
+        }
+    }
+
+    private fun codecLabel(mime: String?): String? {
+        if (mime.isNullOrBlank()) return null
+        return when {
+            mime.contains("eac3") -> "E-AC3"
+            mime.contains("ac3") -> "AC3"
+            mime.contains("truehd") -> "TrueHD"
+            mime.contains("dts") -> "DTS"
+            mime.contains("opus") -> "Opus"
+            mime.contains("vorbis") -> "Vorbis"
+            mime.contains("flac") -> "FLAC"
+            mime.contains("mp4a") || mime.contains("aac") -> "AAC"
+            mime.contains("mpeg") -> "MP3"
+            else -> null
+        }
+    }
+
+    private fun channelLabel(channels: Int): String? = when {
+        channels <= 0 -> null
+        channels == 1 -> "Mono"
+        channels == 2 -> "2.0"
+        channels == 6 -> "5.1"
+        channels == 8 -> "7.1"
+        else -> "${channels}ch"
+    }
 
     /** Human label for an in-manifest video rendition: `1080p`, optionally with bitrate
      *  (`1080p · 4.5 Mbps`) so two encodes at one height stay distinguishable. Falls back

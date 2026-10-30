@@ -5,6 +5,7 @@ import com.lumora.ui.dialog.LumoraDialog
 import android.app.DownloadManager
 import androidx.core.content.ContextCompat
 import android.util.TypedValue
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.View
 import android.view.ViewGroup
@@ -25,6 +26,7 @@ import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.anime.AnimeCatalogClient
 import com.lumora.parser.XtreamClient
+import com.lumora.util.BackdropLoader
 import com.lumora.util.M3U_SHOW_ID_PREFIX
 import com.lumora.util.cleanVodTitle
 import com.lumora.util.extractLeadingTag
@@ -867,6 +869,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     applyStatus()
 
     val backdrop = binding.detailBackdrop
+    val heroBackdrop = binding.detailBackdropImage
     val titleText = binding.detailTitle
     val metaText = binding.detailMeta
     val plotText = binding.detailPlot
@@ -876,6 +879,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     val castLabel = binding.detailCastLabel
     val releaseDateText = binding.detailReleaseDate
     val sectionLabel = binding.detailSectionLabel
+    val episodesDivider = binding.detailEpisodesDivider
     val statusText = binding.detailStatus
     val itemsList = binding.detailItemsList
     val seasonScroll = binding.detailSeasonScroll
@@ -890,10 +894,15 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     val castScroll = binding.detailCastScroll
     val castRow = binding.detailCastRow
     // On a portrait phone the poster leaves too little room for two text columns; stack
-    // metadata then Overview in the same right-hand area. On TV (sw540dp and up) keep them
-    // side-by-side so the synopsis uses the otherwise-empty upper-right space.
-    if (resources.configuration.smallestScreenWidthDp < 540) {
-        binding.detailHeaderColumns.orientation = LinearLayout.VERTICAL
+    // metadata, Overview and the action band in the same right-hand area. On TV (sw540dp
+    // and up) keep the two text columns side by side so the synopsis uses the otherwise
+    // empty upper-right space, and keep the action row on one line.
+    val compactHeader = resources.configuration.smallestScreenWidthDp < 540
+    if (compactHeader) {
+        // The two text columns are children of this horizontal band, not of
+        // detailHeaderColumns (which is already vertical). Stacking the band is what
+        // actually puts the synopsis under the title instead of off the right edge.
+        binding.detailHeaderBand.orientation = LinearLayout.VERTICAL
         fun stackColumn(view: View, topMarginDp: Int) {
             val params = view.layoutParams as LinearLayout.LayoutParams
             params.width = ViewGroup.LayoutParams.MATCH_PARENT
@@ -904,6 +913,16 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         }
         stackColumn(binding.detailTitleColumn, 0)
         stackColumn(binding.detailOverviewColumn, 12)
+        // The actions share a line with the cast on TV; a phone has neither the width for
+        // three buttons beside the cast nor for a fixed single line, so stack the band and
+        // let FlowRow wrap the buttons inside it.
+        binding.detailInfoBand.orientation = LinearLayout.VERTICAL
+        stackColumn(binding.detailActionsColumn, 0)
+        stackColumn(binding.detailCastColumn, 12)
+        // The three action buttons share one line on TV; a phone column has no room
+        // for them side by side, so they stack. LinearLayout keeps the row RTL-aware -
+        // a wrapping FlowRow would have laid the buttons out left-to-right everywhere.
+        binding.detailActionsRow.orientation = LinearLayout.VERTICAL
     }
     // The faces currently on the row. Held here (not passed through ContentDetails) because
     // they only ever come from TMDB - the provider details interfaces have no shape for a
@@ -978,6 +997,14 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // scroll position the previous title was left at.
     binding.detailScroll.scrollTo(0, 0)
     backdrop.setImageDrawable(null)
+    // The hero is reused across titles: drop the previous item's artwork (and any fade
+    // still running) before the new one starts loading, or it would linger behind a
+    // title that has no backdrop of its own.
+    heroBackdrop.animate().cancel()
+    heroBackdrop.tag = null
+    heroBackdrop.setImageDrawable(null)
+    heroBackdrop.visibility = View.GONE
+    heroBackdrop.alpha = 0f
     plotText.visibility = View.GONE
     overviewMetaText.visibility = View.GONE
     castText.visibility = View.GONE
@@ -1011,6 +1038,8 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     binding.detailFindStreamButton.nextFocusUpId = binding.detailBackButton.id
     binding.detailTrailerButton.nextFocusUpId = binding.detailBackButton.id
     sectionLabel.text = ""
+    sectionLabel.visibility = View.GONE
+    episodesDivider.visibility = View.GONE
     itemsList.visibility = View.GONE
     itemsList.adapter = null
     statusText.text = getString(R.string.loading)
@@ -1042,7 +1071,16 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     titleText.text = item.name
     metaText.text = detailMetaLine(item, item.imdbRating)
     itemsList.layoutManager = LinearLayoutManager(this)
-    loadDetailImage(item.posterUrl ?: item.logoUrl, backdrop, item.id)
+    // The small cover card prefers a real poster. A provider that only carries a landscape
+    // backdrop still gets a card, cropped, rather than an empty frame - but a logo is the
+    // last resort, not the first.
+    loadDetailImage(item.posterUrl ?: item.backdropUrl ?: item.logoUrl, backdrop, item.id)
+    // The full-bleed hero is landscape artwork: a backdrop when the source has one, a
+    // poster only as a fallback (centerCrop crops it). No logo: a channel mark blown up
+    // across the panel is worse than the plain surface.
+    val heroUrl = item.backdropUrl?.takeIf { it.isNotBlank() }
+        ?: item.posterUrl?.takeIf { it.isNotBlank() }
+    loadDetailBackdrop(heroUrl, heroBackdrop, item.id)
     wireFindStreamButton(item)
     wireTrailerButton(item)
 
@@ -1220,7 +1258,6 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                     currentEpisodeQueue = queue
                     currentEpisodeQueueIndex = queue.indexOfFirst { it.id.ifBlank { it.url } == chosenKey }
                     currentSeriesVersionContext = item to (seriesGroup ?: listOf(item))
-                    updateVersionsButtonVisibility()
                 }
             }
         },
@@ -1309,7 +1346,12 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         if (providerCast != null || castMembers.isNotEmpty()) {
             castLabel.visibility = View.VISIBLE
         }
-        if (!details.backdropUrl.isNullOrBlank()) loadDetailImage(details.backdropUrl, backdrop, item.id)
+        // The landscape still is the hero, never the cover card. The cover keeps the
+        // poster the detail opened with; a provider/TMDB backdrop only replaces the
+        // full-bleed artwork behind the header.
+        if (!details.backdropUrl.isNullOrBlank()) {
+            loadDetailBackdrop(details.backdropUrl, heroBackdrop, item.id)
+        }
     }
 
     /**
@@ -1454,9 +1496,32 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         // UP escaping the episode list's first row jumps straight to this chip rather
         // than through default focus search - see dispatchKeyEvent's episode-list block.
         // The chip is the focusable label inside the cell, not the cell itself.
-        selectedSeasonChip = (seasonRow.getChildAt(index) as? ViewGroup)
-            ?.findViewById<View>(R.id.seasonChipLabel)
-        itemAdapter.submitList(seasons[index].second)
+        val selectedCell = seasonRow.getChildAt(index) as? ViewGroup
+        selectedSeasonChip = selectedCell?.findViewById<View>(R.id.seasonChipLabel)
+        // A show opened from Continue Watching can land on season 18 while the scroller
+        // still sits at season 1. Bring the selected chip into view (centred when it is
+        // off-screen) so the selector agrees with the episode list below it.
+        seasonScroll.post {
+            val cell = selectedCell ?: return@post
+            // A different title can have reset seasonRow before this frame lands.
+            if (!cell.isAttachedToWindow) return@post
+            val viewport = seasonScroll.width
+            if (viewport <= 0) return@post
+            val left = cell.left
+            val right = left + cell.width
+            if (left < seasonScroll.scrollX || right > seasonScroll.scrollX + viewport) {
+                seasonScroll.scrollTo((left - (viewport - cell.width) / 2).coerceAtLeast(0), 0)
+            }
+        }
+        val (seasonLabel, episodes) = seasons[index]
+        sectionLabel.text = resources.getQuantityString(
+            R.plurals.list_season_episode_count,
+            episodes.size,
+            seasonLabel,
+            episodes.size
+        )
+        sectionLabel.visibility = View.VISIBLE
+        itemAdapter.submitList(episodes)
         enrichSeasonFromTmdb(seasons, index)
     }
 
@@ -1551,7 +1616,6 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 currentEpisodeQueue = ordered
                 currentEpisodeQueueIndex = ordered.indexOfChannel(target)
                 currentSeriesVersionContext = item to (seriesGroup ?: listOf(item))
-                updateVersionsButtonVisibility()
             }
         }
     }
@@ -1602,6 +1666,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                     statusText.text = getString(R.string.list_no_episodes)
                 } else {
                     statusText.visibility = View.GONE
+                    episodesDivider.visibility = View.VISIBLE
                     itemsList.visibility = View.VISIBLE
                     // Built for a single-season show too, not just multi-season ones. The
                     // row was the only place the whole-season watched check lives, so a
@@ -1617,7 +1682,9 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                             chip.text = label
                             cell.layoutParams = LinearLayout.LayoutParams(
                                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                            ).apply { marginEnd = (8 * resources.displayMetrics.density).toInt() }
+                            ).apply {
+                                marginEnd = resources.getDimensionPixelSize(R.dimen.season_chip_gap)
+                            }
                             // Chip click still selects the season - unchanged.
                             chip.setOnClickListener { showSeason(seasons, index) }
                             // The check click only toggles the whole season's watched state.
@@ -1854,6 +1921,13 @@ internal fun MainActivity.hideContentDetail(restoreMain: Boolean = true) {
     applyStatus()
     nowShowingDetailId = null
     binding.contentDetailLayout.visibility = View.GONE
+    // Drop the full-screen bitmap from the view when the page closes. The BackdropLoader
+    // LRU still has it, so reopening reads memory rather than the network; keeping it here
+    // would pin the last title's still for the rest of the activity's life.
+    binding.detailBackdropImage.animate().cancel()
+    binding.detailBackdropImage.setImageDrawable(null)
+    binding.detailBackdropImage.visibility = View.GONE
+    binding.detailBackdropImage.tag = null
     // [restoreMain] false when the person page is about to take over the screen (Back out
     // of a title opened from a filmography): there is nothing to show behind it yet, and
     // focusing the grid about to be covered is what would make the D-pad jump.
@@ -1968,9 +2042,44 @@ internal fun MainActivity.loadDetailImage(url: String?, imageView: ImageView, re
     }
 }
 
+/** The hero backdrop is one large image, so it loads through [BackdropLoader] rather than
+ *  the small-poster path above; [imageView]'s tag is the URL currently requested, which
+ *  keeps a slow item-level fallback from overwriting a provider/TMDB backdrop that landed
+ *  after it. */
+private fun MainActivity.loadDetailBackdrop(url: String?, imageView: ImageView, requestedItemId: String) {
+    if (url.isNullOrBlank()) return
+    imageView.tag = url
+    BackdropLoader.getCached(url)?.let { bitmap ->
+        applyDetailBackdrop(imageView, bitmap)
+        return
+    }
+    scope.launch {
+        val bitmap = BackdropLoader.fetch(url) ?: return@launch
+        if (!isActive || nowShowingDetailId != requestedItemId || imageView.tag != url) return@launch
+        applyDetailBackdrop(imageView, bitmap)
+    }
+}
+
+private const val DETAIL_BACKDROP_ALPHA = 0.55f
+
+private fun applyDetailBackdrop(imageView: ImageView, bitmap: Bitmap) {
+    val hadArtwork = imageView.drawable != null
+    imageView.setImageBitmap(bitmap)
+    imageView.visibility = View.VISIBLE
+    imageView.animate().cancel()
+    if (hadArtwork) {
+        // A provider backdrop replacing the poster fallback should land instantly; a
+        // cross-fade there reads as a flash rather than a reveal.
+        imageView.alpha = DETAIL_BACKDROP_ALPHA
+    } else {
+        imageView.alpha = 0f
+        imageView.animate().alpha(DETAIL_BACKDROP_ALPHA).setDuration(280L).start()
+    }
+}
+
 // ── Track selection ─────────────────────────────
 
-internal fun MainActivity.showTrackPicker(isAudio: Boolean) {
+internal fun MainActivity.showTrackPicker(isAudio: Boolean, returnFocus: View? = null) {
     val player = playerManager.getExoPlayer()
     // A transcoded Jellyfin source is handed over with exactly one audio track, unnamed -
     // hence the lone "Track 1" the picker used to show for an item that has three
@@ -1982,14 +2091,18 @@ internal fun MainActivity.showTrackPicker(isAudio: Boolean) {
     if (jellyfinAudio != null) {
         val streams = jellyfinAudio.audioStreams
         val current = streams.indexOfFirst { it.index == jellyfinAudio.audioStreamIndex }
-        LumoraDialog.Builder(this)
+        val options = streams.map { stream ->
+            LumoraDialog.ChoiceOption(jellyfinAudioLabel(stream))
+        }.toTypedArray()
+        val builder = LumoraDialog.Builder(this)
             .setTitle(getString(R.string.list_audio_track))
-            .setSingleChoiceItems(streams.map(::jellyfinAudioLabel).toTypedArray(), current) { dialog, which ->
+            .setSingleChoiceItems(options, current) { dialog, which ->
                 dialog.dismiss()
                 if (which != current) switchJellyfinAudioStream(streams[which].index)
+                updatePlayerOptionLabels()
             }
             .setNegativeButton(getString(R.string.cancel), null)
-            .show()
+        showControlsDialog(builder, returnFocus)
         return
     }
     // Same story on the Plex side: a transcode carries the one track the server picked, and
@@ -1999,27 +2112,31 @@ internal fun MainActivity.showTrackPicker(isAudio: Boolean) {
     if (plexAudio != null) {
         val streams = plexAudio.audioStreams
         val current = streams.indexOfFirst { it.id == plexAudio.audioStreamId }
-        LumoraDialog.Builder(this)
+        val options = streams.map { stream ->
+            LumoraDialog.ChoiceOption(plexAudioLabel(stream))
+        }.toTypedArray()
+        val builder = LumoraDialog.Builder(this)
             .setTitle(getString(R.string.list_audio_track))
-            .setSingleChoiceItems(streams.map(::plexAudioLabel).toTypedArray(), current) { dialog, which ->
+            .setSingleChoiceItems(options, current) { dialog, which ->
                 dialog.dismiss()
                 if (which != current) switchPlexAudioStream(streams[which].id)
+                updatePlayerOptionLabels()
             }
             .setNegativeButton(getString(R.string.cancel), null)
-            .show()
+        showControlsDialog(builder, returnFocus)
         return
     }
     val tracks = if (isAudio) trackController.audioTracks(player) else trackController.subtitleTracks(player)
 
-    val labels = mutableListOf<String>()
+    val options = mutableListOf<LumoraDialog.ChoiceOption>()
     val actions = mutableListOf<() -> Unit>()
 
     if (!isAudio) {
-        labels.add(getString(R.string.list_off))
+        options.add(LumoraDialog.ChoiceOption(getString(R.string.list_off)))
         actions.add { trackController.selectSubtitleTrack(player, null) }
     }
     tracks.forEach { track ->
-        labels.add(track.name)
+        options.add(LumoraDialog.ChoiceOption(track.name, track.detail))
         actions.add {
             if (isAudio) trackController.selectAudioTrack(player, track.id)
             else trackController.selectSubtitleTrack(player, track.id)
@@ -2031,7 +2148,7 @@ internal fun MainActivity.showTrackPicker(isAudio: Boolean) {
     // The picker is therefore never empty for subtitles, whatever the stream carries.
     if (!isAudio) {
         val (extraLabels, extraActions) = subtitlePickerExtras()
-        labels.addAll(extraLabels)
+        extraLabels.forEach { options.add(LumoraDialog.ChoiceOption(it)) }
         actions.addAll(extraActions)
     }
 
@@ -2047,21 +2164,22 @@ internal fun MainActivity.showTrackPicker(isAudio: Boolean) {
         if (selected >= 0) selected + 1 else 0
     }
 
-    LumoraDialog.Builder(this)
+    val builder = LumoraDialog.Builder(this)
         .setTitle(if (isAudio) getString(R.string.list_audio_track) else getString(R.string.subtitles))
-        .setSingleChoiceItems(labels.toTypedArray(), checkedIndex) { dialog, which ->
+        .setSingleChoiceItems(options.toTypedArray(), checkedIndex) { dialog, which ->
             actions[which]()
+            updatePlayerOptionLabels()
             dialog.dismiss()
         }
         .setNegativeButton(getString(R.string.cancel), null)
-        .show()
+    showControlsDialog(builder, returnFocus)
 }
 
 /** In-manifest video rendition picker (DASH AdaptationSets / HLS variants): Auto (adaptive,
  *  the default - ExoPlayer follows bandwidth) plus one fixed rendition per entry. A manual
  *  choice is a per-playback override: starting another title resets to Auto (see
  *  PlayerManager.playUrl). */
-internal fun MainActivity.showVideoQualityPicker() {
+internal fun MainActivity.showVideoQualityPicker(returnFocus: View? = null) {
     val player = playerManager.getExoPlayer()
     val tracks = trackController.videoTracks(player)
     if (tracks.isEmpty()) {
@@ -2069,10 +2187,10 @@ internal fun MainActivity.showVideoQualityPicker() {
         return
     }
     val isAuto = trackController.isVideoAuto(player)
-    val labels = mutableListOf(getString(R.string.list_auto))
+    val options = mutableListOf(LumoraDialog.ChoiceOption(getString(R.string.list_auto)))
     val actions = mutableListOf<() -> Unit>({ trackController.selectVideoTrack(player, null) })
     tracks.forEach { track ->
-        labels.add(track.name)
+        options.add(LumoraDialog.ChoiceOption(track.name, track.detail))
         actions.add { trackController.selectVideoTrack(player, track.id) }
     }
     // In Auto the adaptive selector still marks its current rendition selected, so the
@@ -2082,14 +2200,15 @@ internal fun MainActivity.showVideoQualityPicker() {
         val selected = tracks.indexOfFirst { it.isSelected }
         if (selected >= 0) selected + 1 else 0
     }
-    LumoraDialog.Builder(this)
+    val builder = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.list_video_quality))
-        .setSingleChoiceItems(labels.toTypedArray(), checkedIndex) { dialog, which ->
+        .setSingleChoiceItems(options.toTypedArray(), checkedIndex) { dialog, which ->
             actions[which]()
+            updatePlayerOptionLabels()
             dialog.dismiss()
         }
         .setNegativeButton(getString(R.string.cancel), null)
-        .show()
+    showControlsDialog(builder, returnFocus)
 }
 
 // ── Toolbar ────────────────────────────────────

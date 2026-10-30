@@ -419,7 +419,6 @@ internal fun MainActivity.reportPlexStopped(): Boolean {
     // playing clears it - so this has to, or a Plex-only session leaves the chapter button
     // pointing into a film that is no longer on screen.
     playbackChapters = emptyList()
-    updateChaptersButtonVisibility()
     if (client == null) return false
     scope.launch(Dispatchers.IO) {
         runCatching { client.reportPlaybackStopped(itemId, session?.playSessionId, position, duration) }
@@ -461,7 +460,6 @@ internal fun MainActivity.loadPlexPlaybackExtras(itemId: String) {
         }
         if (plexPlayingItemId != itemId) return@launch
         playbackChapters = chapters.map { MediaChapter(it.name, it.positionMs, it.imageUrl) }
-        updateChaptersButtonVisibility()
     }
 }
 

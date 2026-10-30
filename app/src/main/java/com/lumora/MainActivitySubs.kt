@@ -130,7 +130,13 @@ internal fun MainActivity.showSubtitleSearchDialog() {
         dialog.getButton(LumoraDialog.BUTTON_NEUTRAL).setOnClickListener { showSubtitleProviderSettingsDialog() }
     }
     mainHandler.removeCallbacks(hideControlsRunnable)
-    dialog.setOnDismissListener { if (isPlayerVisible) showControls() }
+    val opener = currentFocus
+    dialog.setOnDismissListener {
+        if (isPlayerVisible) {
+            showControls()
+            opener?.takeIf { it.isShown && it.isFocusable }?.post { opener.requestFocus() }
+        }
+    }
     dialog.show()
 
     val playKey = channel.id.ifBlank { channel.url }

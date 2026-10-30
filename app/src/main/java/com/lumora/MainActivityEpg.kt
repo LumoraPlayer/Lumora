@@ -1133,7 +1133,7 @@ internal fun MainActivity.renderPlayerEpg() {
     binding.playerEpgSection.visibility = View.VISIBLE
     relinkPlayerEpgFocus()
     playerEpgRenderedAt = nowMs
-    // The rail is exactly four cards wide - not "four and a sliver of the fifth". The
+    // The rail is sized to whole cards - not "three and a sliver of the next". The
     // viewport isn't measured until the section is visible, so size after this pass; the
     // layout listener in setupPlayerControls redoes it when the bar's width changes.
     binding.playerEpgScroll.post { sizePlayerEpgCards() }
@@ -1151,20 +1151,18 @@ internal fun MainActivity.renderPlayerEpg() {
     }
 }
 
-/** How many listings are visible in the rail at once. */
-private const val PLAYER_EPG_VISIBLE_CARDS = 4
-
 /**
- * Sizes the rail's cards to exactly [PLAYER_EPG_VISIBLE_CARDS] across the viewport.
+ * Sizes the rail's cards to fill the viewport exactly: two on a portrait phone, three on a
+ * medium window, four on TV.
  *
  * A fixed card width leaves a sliver of the next card showing at the right edge on most
  * screens - the "four and a bit" look - and makes the gap between cards depend on the
- * panel's width. Dividing the measured viewport by four (minus the gaps) means four cards
- * fill the strip exactly, the fifth starts at its right edge, and the D-pad's focus scale
- * has the declared gap to grow into instead of overlapping its neighbour.
+ * panel's width. Dividing the measured viewport by the visible count (minus the gaps) means
+ * that many cards fill the strip exactly, the next starts at its right edge, and the D-pad's
+ * focus scale has the declared gap to grow into instead of overlapping its neighbour.
  *
- * The last of the four carries the division's leftover pixels in its trailing margin, so
- * rounding cannot leak a few pixels of the fifth card back in.
+ * The last card carries the division's leftover pixels in its trailing margin, so rounding
+ * cannot leak a few pixels of the next card back in.
  */
 internal fun MainActivity.sizePlayerEpgCards() {
     val rail = binding.playerEpgRail
@@ -1172,15 +1170,19 @@ internal fun MainActivity.sizePlayerEpgCards() {
     val scroll = binding.playerEpgScroll
     val viewport = scroll.width - scroll.paddingLeft - scroll.paddingRight
     if (viewport <= 0) return
+    val visibleCards = when {
+        resources.configuration.screenWidthDp < 600 -> 2
+        resources.configuration.screenWidthDp < 900 -> 3
+        else -> 4
+    }
     val gap = resources.getDimensionPixelSize(R.dimen.player_epg_card_gap)
-    val width = ((viewport - gap * PLAYER_EPG_VISIBLE_CARDS) / PLAYER_EPG_VISIBLE_CARDS)
-        .coerceAtLeast(1)
-    // Spread the division's sub-pixel remainder across all four gaps rather than dumping it
-    // on the last one: the padding between cards then stays equal to the eye, and the fifth
+    val width = ((viewport - gap * visibleCards) / visibleCards).coerceAtLeast(1)
+    // Spread the division's sub-pixel remainder across all gaps rather than dumping it on
+    // the last one: the padding between cards then stays equal to the eye, and the next card
     // still starts exactly at the viewport's right edge.
-    val leftover = (viewport - (width + gap) * PLAYER_EPG_VISIBLE_CARDS).coerceAtLeast(0)
-    val extraPerGap = leftover / PLAYER_EPG_VISIBLE_CARDS
-    val extraRemainder = leftover % PLAYER_EPG_VISIBLE_CARDS
+    val leftover = (viewport - (width + gap) * visibleCards).coerceAtLeast(0)
+    val extraPerGap = leftover / visibleCards
+    val extraRemainder = leftover % visibleCards
     for (index in 0 until rail.childCount) {
         val card = rail.getChildAt(index)
         val lp = card.layoutParams as? ViewGroup.MarginLayoutParams ?: continue
@@ -1210,10 +1212,8 @@ internal fun MainActivity.relinkPlayerEpgFocus() {
         View.NO_ID
     }
     // The whole transport row leads into the guide: whichever button the viewer opened the
-    // bar on, UP is "what am I watching and what's next". DOWN keeps the old chain to the
-    // seek bar, so nothing that was reachable before is lost. The top option row shares this
-    // row physically, so UP from it does the same. The lower option row's UP belongs to the
-    // row above (see relinkPlayerButtonRowFocus), not to the guide.
+    // bar on, UP is "what am I watching and what's next". The quick actions follow the same
+    // rule; on portrait, where there is no guide, UP returns to the transport instead.
     listOf(
         binding.btnPrevChannel,
         binding.btnRewind,
@@ -1221,12 +1221,16 @@ internal fun MainActivity.relinkPlayerEpgFocus() {
         binding.btnFastForward,
         binding.btnNextChannel
     ).forEach { it.nextFocusUpId = targetId }
-    val optionRow = binding.playerTrackButtons.getChildAt(0) as? ViewGroup
-    if (optionRow != null) {
-        (0 until optionRow.childCount)
-            .map { optionRow.getChildAt(it) }
-            .forEach { it.nextFocusUpId = targetId }
+    val deckUpTarget = if (targetId != View.NO_ID) {
+        targetId
+    } else if (binding.playerControlDeck.orientation == LinearLayout.VERTICAL) {
+        binding.btnPlayPause.id
+    } else {
+        View.NO_ID
     }
+    (0 until binding.playerQuickActions.childCount)
+        .map { binding.playerQuickActions.getChildAt(it) }
+        .forEach { it.nextFocusUpId = deckUpTarget }
 }
 
 /** Whether the viewer is deliberately reading the rail - so the auto-hide must stand down. */

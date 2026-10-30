@@ -136,9 +136,10 @@ class BaseApplication : Application() {
     }
 
     /**
-     * Posters are the one cache that is cheap to rebuild and expensive to keep under memory
-     * pressure: the memory LRU holds decoded bitmaps, the disk cache still has the bytes, so
-     * dropping the memory half on a low-memory callback costs a disk read at worst.
+     * Posters and detail backdrops are the caches that are cheap to rebuild and expensive
+     * to keep under memory pressure: the memory LRUs hold decoded bitmaps, the disk cache
+     * still has the bytes, so dropping the memory half on a low-memory callback costs a
+     * disk read at worst.
      */
     @Suppress("DEPRECATION")
     override fun onTrimMemory(level: Int) {
@@ -146,7 +147,10 @@ class BaseApplication : Application() {
         when (level) {
             ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
             ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
-            ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> com.lumora.util.PosterLoader.trimMemory()
+            ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
+                com.lumora.util.PosterLoader.trimMemory()
+                com.lumora.util.BackdropLoader.trimMemory()
+            }
         }
     }
 

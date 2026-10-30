@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
@@ -101,6 +102,8 @@ class EpisodeAdapter(
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val titleText: TextView = itemView.findViewById(R.id.episodeTitle)
         private val dateText: TextView = itemView.findViewById(R.id.episodeDate)
+        private val metaRow: LinearLayout = itemView.findViewById(R.id.episodeMetaRow)
+        private val metaDot: TextView = itemView.findViewById(R.id.episodeMetaDot)
         private val plotText: TextView = itemView.findViewById(R.id.episodePlot)
         private val resumeLabel: TextView = itemView.findViewById(R.id.episodeResumeLabel)
         private val numberBadge: TextView = itemView.findViewById(R.id.episodeNumberBadge)
@@ -235,7 +238,7 @@ class EpisodeAdapter(
             dateText.text = dateLine.orEmpty()
             dateText.visibility = if (dateLine != null) View.VISIBLE else View.GONE
             dateText.setTextColor(
-                itemView.context.getColor(if (unreleased) R.color.primary_light else R.color.text_tertiary)
+                itemView.context.getColor(if (unreleased) R.color.primary_light else R.color.text_secondary)
             )
 
             val plot = episode.description?.takeIf { it.isNotBlank() }
@@ -249,6 +252,7 @@ class EpisodeAdapter(
             val key = episode.id.ifBlank { episode.url }
             val saved = if (key.isNotBlank()) PlaybackPositionStore.get(itemView.context, key) else null
             val isWatched = watched(itemView.context, episode)
+            var hasResume = false
             when {
                 isWatched -> {
                     watchedBadge.visibility = View.VISIBLE
@@ -262,6 +266,7 @@ class EpisodeAdapter(
                     val remainingMin = TimeUnit.MILLISECONDS.toMinutes(saved.durationMs - saved.positionMs).coerceAtLeast(1)
                     resumeLabel.text = itemView.context.getString(R.string.list_resume_remaining, remainingMin)
                     resumeLabel.visibility = View.VISIBLE
+                    hasResume = true
                 }
                 else -> {
                     watchedBadge.visibility = View.GONE
@@ -269,6 +274,11 @@ class EpisodeAdapter(
                     resumeLabel.visibility = View.GONE
                 }
             }
+            // One meta line under the title: air date, then the resume note when there is
+            // one. Toggling the row (not the two labels separately) keeps the line from
+            // leaving an empty 4dp gap on episodes that carry neither.
+            metaDot.visibility = if (dateLine != null && hasResume) View.VISIBLE else View.GONE
+            metaRow.visibility = if (dateLine != null || hasResume) View.VISIBLE else View.GONE
             // A tiny corner badge alone doesn't read at TV viewing distance when scanning
             // a long episode list for "what's left to watch" - dim the thumbnail and drop
             // the title to secondary emphasis so watched rows visibly recede, same pattern
