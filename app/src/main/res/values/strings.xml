@@ -711,5 +711,12 @@
     <string name="sett_import_scope_live">Live TV</string>
     <string name="sett_import_scope_films">Films</string>
     <string name="sett_import_scope_series">Series</string>
+    <!-- Add-provider wizard: regions -> categories -> import. The category step reuses the
+         import-scope title, message and row labels above - it is the same question. -->
+    <string name="onboard_regions_title">Which regions does this provider carry?</string>
+    <string name="onboard_regions_message">Live TV is filtered to these regions. Nothing ticked means every region.</string>
+    <string name="onboard_continue">Continue</string>
+    <string name="onboard_skip">Skip</string>
+    <string name="onboard_import">Import</string>
     <string name="sett_provider_duplicate_badge">duplicate</string>
 </resources>

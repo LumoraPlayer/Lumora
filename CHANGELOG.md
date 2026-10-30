@@ -3,6 +3,9 @@
 
 ## Unreleased
 
+### Setup
+- **Adding a provider now asks the two questions that decide what it imports.** Saving a new panel opens a **Regions** popup and then a **Categories** popup built from the panel's own categories, and only then starts the import. The region step appears only while this is the first catalogue provider, since that selection is one global Live-tab filter; category narrowing is per provider, so it is asked on every add. Both steps are skippable and the import always runs, so a panel that will not authenticate (or a user who wants the lot) is never blocked - it says so and imports unfiltered. Nothing new is stored: the region picker writes the same preference as Settings > Regions, and the category picker the same per-provider narrowing the form's Import row uses. Editing an existing provider saves exactly as before, with no popups.
+
 ### Live TV
 - **The Live TV tab opens on Live TV, not Multiview.** Pressing the tab while already in the Live section opens its dropdown with the Live TV row focused, so a second OK returns to plain browsing; Multiview and Catch Up are one D-pad press down. Previously the menu focused Multiview (the first row after Live), so pressing the tab and then OK launched Multiview instead of selecting Live TV.
 - **The player's guide rail respects a failed channel's backoff.** The new controls-bar rail asked for a guide on every channel change even while the guide's five-minute failure backoff was running, so zapping through a panel that was refusing requests spent a fresh round of variant, table and short-EPG calls per channel. A fresh in-memory guide now opens the rail with no request at all, and a channel that just failed is left alone until its backoff expires - the same rule the guide rows already followed.

@@ -278,6 +278,11 @@ private fun MainActivity.sportsActionRow(text: String): LinearLayout {
  *  catalogue-based, so every "does this type fetch content?" question can ask once. */
 internal fun isShareType(type: String?): Boolean = type == "smb" || type == "webdav"
 
+/** True for the catalogue-bearing IPTV types - the ones the add-provider wizard applies to.
+ *  Media servers and shares are excluded: neither is a panel with regions or categories. */
+internal fun isCatalogueProviderType(type: String?): Boolean =
+    type == "m3u" || type == "xtream" || type == "stalker"
+
 internal fun MainActivity.showAddEpgSourceDialog() {
     val input = EditText(this).apply {
         hint = getString(R.string.sett_epg_source_url_hint)
@@ -1017,101 +1022,29 @@ internal fun MainActivity.showProviderSettings() {
         vod: List<Pair<String, String>>,
         series: List<Pair<String, String>>
     ) {
-        // Every category id per type, so "all" is representable without storing hundreds of
-        // ids: an empty selection means everything, and unticking one row materialises the
-        // rest explicitly.
-        val fullIds = mapOf(
-            "live" to live.map { it.first }.toSet(),
-            "movie" to vod.map { it.first }.toSet(),
-            "series" to series.map { it.first }.toSet()
-        )
-        val rows = ArrayList<ImportScopeRow>()
-        fun collect(type: String, sectionRes: Int, pairs: List<Pair<String, String>>) {
-            if (pairs.isEmpty()) return
-            val section = getString(sectionRes)
-            val byTag = pairs.groupBy { catalogueTagOf(it.second) }
-            val tagged = byTag.entries.filter { it.key != null }
-            val taggedCount = tagged.sumOf { it.value.size }
-            // Mostly tagged: one row per tag, which is what keeps a 368-category panel down
-            // to ~36 rows on a remote. Otherwise the categories are the only thing there is.
-            if (taggedCount * 10 >= pairs.size * 6) {
-                for ((tag, cats) in tagged) {
-                    rows.add(
-                        ImportScopeRow(
-                            type = type,
-                            label = getString(
-                                R.string.sett_import_scope_row,
-                                section,
-                                catalogueTagLabel(tag!!),
-                                cats.size,
-                                pairs.size
-                            ),
-                            ids = cats.map { it.first }.toSet()
-                        )
-                    )
-                }
-                byTag[null]?.let { untagged ->
-                    rows.add(
-                        ImportScopeRow(
-                            type = type,
-                            label = getString(
-                                R.string.sett_import_scope_row_untagged,
-                                section,
-                                untagged.size,
-                                pairs.size
-                            ),
-                            ids = untagged.map { it.first }.toSet()
-                        )
-                    )
-                }
-            } else {
-                for ((id, name) in pairs.sortedBy { it.second.lowercase() }) {
-                    rows.add(
-                        ImportScopeRow(
-                            type = type,
-                            label = getString(R.string.sett_import_scope_category, section, name),
-                            ids = setOf(id)
-                        )
-                    )
-                }
-            }
-        }
-        collect("live", R.string.sett_import_scope_live, live)
-        collect("movie", R.string.sett_import_scope_films, vod)
-        collect("series", R.string.sett_import_scope_series, series)
+        // The rows and the dialog live in MainActivityProviderOnboarding: the add-provider
+        // wizard asks the same question with the same panel data, and two copies of the
+        // tag-collapsing rules would drift the moment a panel tags something new.
+        val rows = buildImportScopeRows(live, vod, series)
         if (rows.isEmpty()) {
             Toast.makeText(this, getString(R.string.sett_import_scope_failed), Toast.LENGTH_LONG).show()
             return
         }
-        val labels = rows.map { it.label }.toTypedArray()
-        // Empty selection means "everything", so everything starts ticked.
-        val checked = BooleanArray(rows.size) {
-            val selected = importIdsFor(rows[it].type)
-            selected.isEmpty() || rows[it].ids.all { id -> id in selected }
-        }
-        LumoraDialog.Builder(this)
-            .setTitle(getString(R.string.sett_import_scope_dialog_title))
-            .setMessage(getString(R.string.sett_import_scope_dialog_message))
-            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
-                val row = rows[which]
-                val full = fullIds[row.type].orEmpty()
-                val current = importIdsFor(row.type).ifEmpty { full }.toMutableSet()
-                if (isChecked) current.addAll(row.ids) else current.removeAll(row.ids)
-                // Back to "everything" is stored as empty, so a provider that was never
-                // narrowed keeps the old behaviour and the field stays small.
-                setImportIdsFor(row.type, if (current == full) emptySet() else current)
+        showImportScopeDialog(
+            rows = rows,
+            currentIds = { type -> importIdsFor(type) },
+            onChanged = { type, ids ->
+                setImportIdsFor(type, ids)
                 refreshImportScopeSummary()
-            }
-            // "Import everything" is the reset, and the only way back to an unfiltered
-            // provider without re-ticking every row.
-            .setNegativeButton(getString(R.string.sett_import_scope_all_button)) { _, _ ->
+            },
+            onAll = {
                 pendingLiveCategories = emptySet()
                 pendingMovieCategories = emptySet()
                 pendingSeriesCategories = emptySet()
                 refreshImportScopeSummary()
-            }
-            .setPositiveButton(getString(R.string.save), null)
-            .show()
+            },
+            positiveLabel = getString(R.string.save)
+        )
     }
 
     xtreamImportRow.setOnClickListener {
@@ -3158,6 +3091,10 @@ internal fun MainActivity.showProviderSettings() {
         }
         val name = providerNameInput.text.toString().trim()
         val id = editingProviderId ?: IptvProviderStore.newId()
+        // Read before the upsert below: the region step of the add-provider wizard is only
+        // worth asking while this is the first catalogue provider, because the selection is
+        // one global Live-tab filter (see promptProviderOnboarding).
+        val firstCatalogueProvider = IptvProviderStore.load(prefs).none { isCatalogueProviderType(it.type) }
         // Backup sources hide but keep playing: the flag only exists on IPTV types (the
         // checkbox is hidden for everything else), and turning the last visible source
         // into one is refused - an empty catalogue with configured providers reads as broken,
@@ -3308,6 +3245,7 @@ internal fun MainActivity.showProviderSettings() {
         }
 
         val savedShare = isShareType(currentType)
+        val isNewProvider = editingProviderId == null
         closeIptvForm()
         renderIptvProviderList()
         // The tab bar and search are gated on there being an enabled provider, and saving
@@ -3320,15 +3258,43 @@ internal fun MainActivity.showProviderSettings() {
             // a full provider refresh under a "Loading..." toast for it would be busywork.
             Toast.makeText(this, getString(R.string.sett_share_saved), Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(
-                this,
-                getString(
-                    if (savedAsXtream) R.string.sett_provider_saved_as_xtream
-                    else R.string.sett_provider_saved_loading
-                ),
-                Toast.LENGTH_SHORT
-            ).show()
-            loadAllConfiguredProviders(forceRefresh = true)
+            // Adding asks the two questions that decide what the import will look like -
+            // which regions the Live tab keeps, and which of the panel's own categories to
+            // download - before anything is fetched (see promptProviderOnboarding). Editing
+            // keeps the plain save: both answers are already on screen in Settings, and
+            // re-asking on every save would be noise.
+            val saved = if (isNewProvider) {
+                IptvProviderStore.load(prefs).firstOrNull { it.id == id }
+            } else {
+                null
+            }
+            if (saved != null && isCatalogueProviderType(saved.type)) {
+                promptProviderOnboarding(saved, askRegions = firstCatalogueProvider) {
+                    Toast.makeText(
+                        this,
+                        getString(
+                            if (savedAsXtream) R.string.sett_provider_saved_as_xtream
+                            else R.string.sett_provider_saved_loading
+                        ),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    // Load first, then close: the overlay's dismiss handler reads
+                    // providerLoadJob to tell "still fetching" from "returned nothing", and
+                    // closing first would put the no-provider empty state up for the gap.
+                    loadAllConfiguredProviders(forceRefresh = true)
+                    activeSettingsOverlay?.dismiss()
+                }
+            } else {
+                Toast.makeText(
+                    this,
+                    getString(
+                        if (savedAsXtream) R.string.sett_provider_saved_as_xtream
+                        else R.string.sett_provider_saved_loading
+                    ),
+                    Toast.LENGTH_SHORT
+                ).show()
+                loadAllConfiguredProviders(forceRefresh = true)
+            }
         }
     }
 }
@@ -3893,12 +3859,5 @@ private fun MainActivity.showRecordingNasQrDialog(onChanged: () -> Unit = {}) {
 /**
  * One row of the narrowed-import picker: a set of category ids that tick together.
  *
- * [type] is "live"/"movie"/"series" because the same panel uses different vocabularies per
- * content type, and a tick must only narrow the section it was shown under. [ids] is what
- * actually gets stored - one id for a category row, every id under a tag for a grouped row.
+ * Declared in MainActivityProviderOnboarding, next to the builder both pickers share.
  */
-private data class ImportScopeRow(
-    val type: String,
-    val label: String,
-    val ids: Set<String>
-)
