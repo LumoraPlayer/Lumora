@@ -4,6 +4,7 @@ package com.lumora.player
 import android.content.Context
 import android.net.Uri
 import android.view.SurfaceView
+import androidx.tracing.Trace
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -16,11 +17,12 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.TransferListener
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import com.lumora.BaseApplication
 import com.lumora.player.playback.AvOffsetManager
 import com.lumora.player.playback.AvOffsetRenderersFactory
 import java.util.concurrent.CopyOnWriteArrayList
@@ -92,12 +94,38 @@ class PlayerManager(
                         )
                         .build()
                 )
+            } else if (isFastZapEnabled(context)) {
+                // Live zapping: the default asks for 2.5s of media before the first frame, which
+                // is most of the perceived channel-change time on a stick. 1.5s is enough for
+                // the panels this app targets; the 5s re-buffer threshold stays Media3's
+                // default so a flaky stream does not start stuttering immediately.
+                setLoadControl(
+                    DefaultLoadControl.Builder()
+                        .setBufferDurationsMs(
+                            15_000,
+                            50_000,
+                            1_500,
+                            5_000,
+                        )
+                        .build()
+                )
             }
         }
         .build()
-        .also { it.setHandleAudioBecomingNoisy(true) }
+        .also {
+            it.setHandleAudioBecomingNoisy(true)
+            // One trace section per playUrl, closed by the first rendered frame (or an error).
+            // Macrobenchmark's TraceSectionMetric reads it; normal playback pays only the
+            // cost of a disabled atrace call.
+            it.addListener(object : Player.Listener {
+                override fun onRenderedFirstFrame() = endZapTrace()
+                override fun onPlayerError(error: PlaybackException) = endZapTrace()
+            })
+        }
     private val listeners = CopyOnWriteArrayList<Player.Listener>()
     private var released = false
+    private var zapTraceOpen = false
+    private var zapTraceCookie = 0
 
     // The one-shot audio/forced-subtitle track overrides (see attachOneShot*) stay attached
     // until onTracksChanged hands over a real track list - a dead stream or endless buffering
@@ -140,6 +168,13 @@ class PlayerManager(
         return true
     }
 
+    /** Closes the zap trace exactly once, so a new playUrl cannot leak an open section. */
+    private fun endZapTrace() {
+        if (!zapTraceOpen) return
+        zapTraceOpen = false
+        runCatching { Trace.endAsyncSection("LumoraZap", zapTraceCookie) }
+    }
+
     /** Set only for the duration of a [replayLast] call, so the replay starts where the failed
      *  play had reached rather than where it originally began. */
     private var pendingReplayPositionMs: Long? = null
@@ -171,12 +206,12 @@ class PlayerManager(
         manifestHeaders: Map<String, String>? = null,
         manifestUrl: String? = null
     ): DataSource.Factory {
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            // 60s read: slow remote Jellyfin/Plex/transcode servers can take a while to start
-            // sending the stream - 20s made a cold server start read as "Playback error".
-            .setReadTimeoutMs(60_000)
+        // The shared OkHttp stack (connection pool, DoH, auth, pacing) instead of a private
+        // HTTP client per player. Redirects are already followed by the shared client, so the
+        // DefaultHttpDataSource-only cross-protocol flag has no equivalent here. Timeouts come
+        // from BaseApplication.playbackOkHttpClient; OkHttpDataSource 1.4 has no per-factory
+        // timeout setters.
+        val httpFactory = OkHttpDataSource.Factory(BaseApplication.instance.playbackOkHttpClient)
 
         // Entry-level UA (KODIPROP stream_headers / EXTVLCOPT) wins over the provider UA:
         // fetchM3uChannels stamps the provider UA via copy(streamUserAgent=...), so the
@@ -365,6 +400,12 @@ class PlayerManager(
         // A pending coroutine can outlive the activity (release() only runs at suspension
         // points); calling into a released ExoPlayer throws. Refuse rather than crash.
         if (released) return
+        endZapTrace()
+        // Async section: the start and the first-frame callback are not guaranteed to be on
+        // the same thread, and atrace's sync sections are thread-local.
+        zapTraceCookie++
+        Trace.beginAsyncSection("LumoraZap", zapTraceCookie)
+        zapTraceOpen = true
         lastResolvedStream = ResolvedStream(url, userAgent, headers)
         // Recorded before the position is overridden below, so a replay of a replay still
         // carries the original arguments and only the position changes.
@@ -510,10 +551,7 @@ class PlayerManager(
             if (drm?.useHostedLicense == true && dataSourceOverride == null) {
                 // License requests carry the UA but not the content headers - the wrapping's
                 // own headers ride as key-request properties (see ClearKeyDrm).
-                DefaultHttpDataSource.Factory()
-                    .setAllowCrossProtocolRedirects(true)
-                    .setConnectTimeoutMs(15_000)
-                    .setReadTimeoutMs(30_000)
+                OkHttpDataSource.Factory(BaseApplication.instance.playbackOkHttpClient)
                     .apply { if (!licenseUa.isNullOrBlank()) setUserAgent(licenseUa) }
             } else {
                 null
@@ -860,6 +898,7 @@ class PlayerManager(
     fun release() {
         if (released) return
         released = true
+        endZapTrace()
         listeners.forEach { player.removeListener(it) }
         listeners.clear()
         player.release()
@@ -896,6 +935,9 @@ class PlayerManager(
         /** Pref key for the extra-buffering toggle, shared with the scraper settings screen. */
         const val PREF_EXTRA_BUFFERING = "player_extra_buffering"
 
+        /** Pref key for the fast channel-change load control. */
+        const val PREF_FAST_ZAP = "player_fast_zap"
+
         /**
          * 5 minutes, matching what the upstream scraper app used. Deliberately far above
          * Media3's 50s default: this exists for hosts that deliver in bursts, and a ceiling
@@ -914,6 +956,11 @@ class PlayerManager(
         fun isExtraBufferingEnabled(context: Context): Boolean =
             context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
                 .getBoolean(PREF_EXTRA_BUFFERING, false)
+
+        /** Defaults on: a channel change is the interaction this app is judged on. */
+        fun isFastZapEnabled(context: Context): Boolean =
+            context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+                .getBoolean(PREF_FAST_ZAP, true)
 
         /** Track labels that say the track is forced, in the forms sources actually write it
          *  ("Forced", "English [Forced]", "en-forced"). Word-bounded so "unforced" and

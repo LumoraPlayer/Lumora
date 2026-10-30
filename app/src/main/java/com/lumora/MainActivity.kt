@@ -501,6 +501,7 @@ class MainActivity : AppCompatActivity() {
     internal lateinit var playerDiagnostics: PlayerDiagnostics
     internal lateinit var database: LumoraDatabase
     internal lateinit var speedController: com.lumora.player.playback.PlaybackSpeedController
+    internal var displayFrameRateController: com.lumora.player.DisplayFrameRateController? = null
     internal lateinit var sleepTimer: com.lumora.player.playback.SleepTimer
     internal val trackController = PlayerTrackController()
     internal val qrManager by lazy { QrPairingManager(this) }
@@ -1482,15 +1483,6 @@ class MainActivity : AppCompatActivity() {
         applySystemBarInsets()
 
         prefs = getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
-        // The search-key backfill is a whole-table pass on a six-figure catalogue, so it gets
-        // its own coroutine: sharing one with the storage breakdown and the update-installer
-        // sweep would hold the sweep behind minutes of row updates on the first start after
-        // the update. Search falls back to `name` for rows it has not reached yet.
-        scope.launch(Dispatchers.IO) {
-            runCatching {
-                CatalogRepository.get(this@MainActivity).backfillSearchNames()
-            }
-        }
         // The storage pass runs off the main thread: it walks the package's files and opens
         // the catalogue database, neither of which belongs between the user and the first
         // frame. Its lines are diagnostic, not start-up input.
@@ -1607,6 +1599,10 @@ class MainActivity : AppCompatActivity() {
         // main thread - the paint path takes this result instead of issuing the read when
         // it is finally reached (see catalogLivePreload).
         if (hasProviderConfigured()) {
+            // Only the owners that are actually switched on: rows for a removed/disabled
+            // provider may still be in the table until the deferred prune runs, and reading
+            // them here is what could exhaust the heap before the first paint.
+            val liveSourceIds = com.lumora.data.catalog.liveSourceIds(this)
             // A small playlist set is read from the resident model, so warm that instead of
             // (well, before) the DB live query; the live preload waits on the same load.
             if (com.lumora.data.catalog.CatalogMode.isRamEligible(this)) {
@@ -1617,8 +1613,18 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             catalogLivePreload = scope.async(Dispatchers.IO) {
-                runCatching { CatalogRepository.get(this@MainActivity).live() }
+                runCatching { CatalogRepository.get(this@MainActivity).live(liveSourceIds) }
                     .getOrDefault(emptyList())
+            }
+        }
+        // The search-key backfill is a whole-table write and can run for minutes on a legacy
+        // catalogue. Let the live read (and the paint that awaits it) have the database
+        // first; search keeps falling back to `name` for rows it has not reached yet.
+        val livePreload = catalogLivePreload
+        scope.launch(Dispatchers.IO) {
+            runCatching { livePreload?.await() }
+            runCatching {
+                CatalogRepository.get(this@MainActivity).backfillSearchNames()
             }
         }
         // Which screen the app opens on (Settings → General). Read here, before anything
@@ -1682,6 +1688,9 @@ class MainActivity : AppCompatActivity() {
         // so re-asserting it on every start is free; WorkManager keeps the timer across process
         // death.
         EpgSyncWorker.schedulePeriodic(this)
+        // Local SQLite housekeeping (planner stats, WAL checkpoint, conditional VACUUM).
+        // WorkManager runs it when charging; it never blocks the launch path.
+        com.lumora.data.maintenance.MaintenanceWorker.schedule(this)
         // The periodic work's first run is a whole period away, so on a fresh install the
         // guide had nothing until then. This asks for the sources now if none of them has
         // succeeded recently - and afterwards only when the last success is older than a
@@ -2371,6 +2380,19 @@ class MainActivity : AppCompatActivity() {
         applyChromeWrap()
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Re-assert the vote after a stop cleared it, when playback is still ready.
+        if (::playerManager.isInitialized) updateDisplayFrameRate()
+    }
+
+    override fun onStop() {
+        // A stopped player must not keep voting for an HDMI mode; the host reverts to the
+        // panel default when the vote is released.
+        displayFrameRateController?.clear()
+        super.onStop()
+    }
+
     override fun onDestroy() {
         carDisclaimerDialog?.let {
             it.setOnDismissListener(null)
@@ -2386,6 +2408,8 @@ class MainActivity : AppCompatActivity() {
         scope.cancel()
         mainHandler.removeCallbacksAndMessages(null)
         qrManager.stop()
+        displayFrameRateController?.release()
+        displayFrameRateController = null
         playerManager.release()
         if (::sleepTimer.isInitialized) sleepTimer.stop()
         if (::castManager.isInitialized) castManager.release()

@@ -88,4 +88,14 @@ class RequestPacerTest {
         RequestPacer.record("panel.example", 429, "1", now)
         assertEquals(5_000L, RequestPacer.cooldownRemainingMs("panel.example", now))
     }
+
+    @Test
+    fun `the clockless accessor reports the live cooldown`() {
+        RequestPacer.record("panel.example", 429, "45", System.currentTimeMillis())
+
+        val remaining = RequestPacer.cooldownRemainingMs("panel.example")
+
+        assertTrue(remaining in 44_000L..45_000L)
+        assertEquals(0L, RequestPacer.cooldownRemainingMs("other.example"))
+    }
 }

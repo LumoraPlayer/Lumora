@@ -2,6 +2,7 @@
 package com.lumora
 
 import android.app.Application
+import android.content.ComponentCallbacks2
 import androidx.car.app.connection.CarConnection
 import com.lumora.data.local.LumoraDatabase
 import com.lumora.data.remote.jellyfin.JellyfinAuthInterceptor
@@ -107,6 +108,46 @@ class BaseApplication : Application() {
             .build()
 
         database = LumoraDatabase.getInstance(this)
+    }
+
+    /**
+     * A second view of [okHttpClient] for Media3.
+     *
+     * It deliberately drops the 50 MB disk cache: video segments would evict the metadata and
+     * artwork the cache exists for, and a range-requested media response is not something to
+     * serve from a shared HTTP cache. Everything else is shared - connection pool, DNS/DoH,
+     * auth interceptors, pacing - so zapping between two channels on the same panel reuses the
+     * TLS connection instead of paying for a new handshake. The dispatcher is separate because
+     * the metadata client's three-per-host limit is right for a grid of logos and wrong for a
+     * DASH/HLS segment fan-out.
+     */
+    val playbackOkHttpClient: OkHttpClient by lazy {
+        okHttpClient.newBuilder()
+            .cache(null)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .dispatcher(
+                Dispatcher().apply {
+                    maxRequests = 32
+                    maxRequestsPerHost = 6
+                }
+            )
+            .build()
+    }
+
+    /**
+     * Posters are the one cache that is cheap to rebuild and expensive to keep under memory
+     * pressure: the memory LRU holds decoded bitmaps, the disk cache still has the bytes, so
+     * dropping the memory half on a low-memory callback costs a disk read at worst.
+     */
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        when (level) {
+            ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
+            ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
+            ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> com.lumora.util.PosterLoader.trimMemory()
+        }
     }
 
     companion object {

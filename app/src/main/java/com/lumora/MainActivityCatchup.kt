@@ -132,15 +132,12 @@ internal fun MainActivity.showLiveTabMenu() {
     }
     liveTabMenu = popup
     popup.showAsDropDown(binding.tabLive, 0, 0)
-    // Landing on the pane you are already in is the no-op choice; open on the first other
-    // row that exists (Multiview above Catch Up), falling back to Live TV.
-    val initial = when {
-        showingCatchup || isMultiviewAddMode -> liveRow
-        hasMultiview -> multiviewRow
-        hasArchive -> catchupRow
-        else -> liveRow
-    }
-    initial.requestFocus()
+    // The tab's own press opens this menu, so it must land on the row that names the tab:
+    // pressing Live TV again is the way back to plain browsing, not a jump into Multiview.
+    // The other rows are one D-pad DOWN (or a click) away. This also covers opening the
+    // menu from Catch Up or from Multiview add mode, where Live TV is the row that leaves
+    // the current pane.
+    liveRow.requestFocus()
 }
 
 internal fun MainActivity.dismissLiveTabMenu() {

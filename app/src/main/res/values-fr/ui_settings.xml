@@ -65,6 +65,7 @@
     <string name="sett_enter_server_url">Entrez une URL de serveur</string>
     <string name="sett_enter_username_password">Saisissez un nom d\'utilisateur et un mot de passe</string>
     <string name="sett_provider_saved_loading">Fournisseur enregistré. Chargement...</string>
+    <string name="sett_provider_saved_as_xtream">Enregistré en Xtream. Chargement...</string>
 
     <!-- MainActivitySettings.kt - serveur de jumelage QR -->
     <string name="sett_starting_server">Démarrage du serveur...</string>

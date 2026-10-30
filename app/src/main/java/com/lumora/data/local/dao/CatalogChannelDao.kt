@@ -65,12 +65,13 @@ interface CatalogChannelDao {
     @Query("UPDATE catalog_channels SET rank = baseRank - :demotion WHERE providerId = :providerId")
     suspend fun restoreProvider(providerId: String, demotion: Int): Int
 
-    /** One provider's live rows, so re-enabling it does not need a network round trip. */
+    /** One provider's live rows, so re-enabling it does not need a network round trip.
+     *  [limit] is the same resident-list safety cap the session live read uses. */
     @Query(
         "SELECT * FROM catalog_channels WHERE mediaType = 'LIVE' AND providerId = :providerId " +
-            "ORDER BY orderIndex ASC, uid ASC"
+            "ORDER BY orderIndex ASC, uid ASC LIMIT :limit"
     )
-    suspend fun liveForProvider(providerId: String): List<CatalogChannelEntity>
+    suspend fun liveForProvider(providerId: String, limit: Int): List<CatalogChannelEntity>
 
     /** Replaces one provider's catalogue of one type - the streaming ingest path writes
      *  live, movies and series separately and must not delete the half it has not
@@ -206,15 +207,27 @@ interface CatalogChannelDao {
     )
     suspend fun categoryCounts(mediaType: String): List<CatalogCategoryCount>
 
-    /** Every live row - the one list that stays resident, walked one keyset page at a time
-     *  so the transient entity list never becomes the whole catalogue. `orderIndex` resets
-     *  per provider, so `uid` is the tiebreak. */
+    /** Every live row the session should hold, walked one keyset page at a time so the
+     *  transient entity list never becomes the whole catalogue. `orderIndex` resets per
+     *  provider, so `uid` is the tiebreak.
+     *
+     *  [sourceIds] is the enabled-owner set: a removed or switched-off provider's rows stay
+     *  in the table until the deferred prune deletes them, and reading them here let a
+     *  catalogue accumulate months of stale rows and exhaust a TV stick's heap on start-up.
+     *  Provider-less rows (anime/plugin) are always included. Pass a single blank id when
+     *  nothing is enabled so the `IN` never reaches SQLite as an empty list. */
     @Query(
         "SELECT * FROM catalog_channels WHERE mediaType = 'LIVE' " +
+            "AND (providerId = '' OR providerId IN (:sourceIds)) " +
             "AND (orderIndex > :afterOrder OR (orderIndex = :afterOrder AND uid > :afterUid)) " +
             "ORDER BY orderIndex ASC, uid ASC LIMIT :limit"
     )
-    suspend fun liveScanPage(afterOrder: Int, afterUid: String, limit: Int): List<CatalogChannelEntity>
+    suspend fun liveScanPage(
+        sourceIds: List<String>,
+        afterOrder: Int,
+        afterUid: String,
+        limit: Int
+    ): List<CatalogChannelEntity>
 
     // ── VOD representatives ─────────────────────────
     //

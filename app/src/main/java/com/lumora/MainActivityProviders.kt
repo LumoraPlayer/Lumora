@@ -28,6 +28,7 @@ import com.lumora.util.CatalogueFingerprint
 import com.lumora.util.duplicateProviderIds
 import com.lumora.util.normalizeServerUrl
 import com.lumora.util.isLocalFileUrl
+import com.lumora.data.remote.RequestPacer
 import com.lumora.data.remote.stalker.StalkerProvider
 import com.lumora.data.remote.stalker.stalkerIdentity
 import com.lumora.diagnostics.SessionLog
@@ -925,7 +926,8 @@ internal fun MainActivity.loadAllConfiguredProviders(
             val loaded = withContext(Dispatchers.IO) {
                 runCatching {
                     preload?.await()
-                        ?: CatalogRepository.get(this@loadAllConfiguredProviders).live()
+                        ?: CatalogRepository.get(this@loadAllConfiguredProviders)
+                            .live(com.lumora.data.catalog.liveSourceIds(this@loadAllConfiguredProviders))
                 }.getOrDefault(emptyList())
             }
             perf("catalog live read", readStartedAt, "${loaded.size} rows")
@@ -1322,7 +1324,8 @@ internal fun MainActivity.loadAllConfiguredProviders(
         if (!catalogRefreshSucceeded) {
             val storedLive = withContext(Dispatchers.IO) {
                 runCatching {
-                    CatalogRepository.get(this@loadAllConfiguredProviders).live()
+                    CatalogRepository.get(this@loadAllConfiguredProviders)
+                        .live(com.lumora.data.catalog.liveSourceIds(this@loadAllConfiguredProviders))
                 }.getOrDefault(emptyList())
             }
             val fallback = filterResidentCatalog(
@@ -1731,6 +1734,49 @@ private fun MainActivity.parseLocalPlaylist(
     }
 }
 
+/**
+ * Gap between the one-request-per-category passes of a narrowed Xtream import.
+ *
+ * `category_id` is the only server-side filter Xtream offers, so importing 200 categories is
+ * 200 HTTP requests to one origin no matter how small the payload. Without a gap the loop runs
+ * at the pacer's floor (10 starts a second) for minutes, which is a request-rate pattern most
+ * panels answer with 429 - and the 429 then parks the whole host, including the guide and
+ * artwork. The gap turns that into a few requests a second.
+ */
+private const val CATEGORY_REQUEST_GAP_MS = 200L
+
+/** Longest a narrowed import waits for a parked host before giving up on the section. */
+private const val RATE_LIMIT_RETRY_MAX_WAIT_MS = 60_000L
+
+/**
+ * Whether a narrowed import should read the whole section in one request and filter the rows
+ * client-side, rather than one request per selected category.
+ *
+ * The picker stores every remaining category when a user unticks a row, so "all but one" is a
+ * set of hundreds - one bulk list per category, all to one origin. Past the halfway mark the
+ * few unwanted categories are cheaper to download than to ask for separately.
+ */
+internal fun shouldFetchWholeSection(allowed: Set<String>?, categoryCount: Int): Boolean =
+    allowed != null && categoryCount > 0 && allowed.size * 2 >= categoryCount
+
+/** Pause before retrying a category the panel's brake just parked, with a small buffer. */
+internal fun brakeRetryWaitMs(remainingMs: Long): Long =
+    remainingMs.coerceIn(0L, RATE_LIMIT_RETRY_MAX_WAIT_MS) + 250L
+
+/**
+ * How long to pause before retrying a category request the panel's brake just parked, or null
+ * when the host is unknown and no safe wait can be computed.
+ *
+ * The answer comes from [RequestPacer] itself, so a `Retry-After` the panel stated is honoured
+ * rather than guessed at. Capped: a panel that asks for half an hour must not hold the load
+ * open (the whole provider fetch has its own six-minute ceiling), and after the cap the retry
+ * simply fails the section as before.
+ */
+private fun rateLimitWaitMs(client: XtreamClient, provider: Provider): Long? {
+    val host = client.apiHost(provider) ?: return null
+    return brakeRetryWaitMs(RequestPacer.cooldownRemainingMs(host))
+}
+
 internal suspend fun MainActivity.fetchXtreamChannels(
     config: IptvProviderConfig,
     onExpiry: (String?) -> Unit,
@@ -1842,7 +1888,7 @@ internal suspend fun MainActivity.fetchXtreamChannels(
              *  the feature - the bytes never leave the panel - but it trades a single
              *  round trip for one per category, so it is only ever set from an explicit
              *  user choice. */
-            fun ingest(
+            suspend fun ingest(
                 action: String,
                 type: MediaType,
                 names: Map<String, String>,
@@ -1871,8 +1917,17 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                 // section: importing nothing would read as "this provider has no content",
                 // and for Live TV it would replace the channels already on screen with an
                 // empty list (see the liveFailed guard below).
+                //
+                // A selection that covers half or more of the section is fetched whole and
+                // filtered here instead. One request that downloads some unwanted
+                // categories is far cheaper for the panel than one request per category
+                // (the picker stores every remaining category when a user unticks a row, so
+                // "all but one" would otherwise turn a single bulk list into hundreds of
+                // round trips).
+                val fullFetch = shouldFetchWholeSection(allowed, names.size)
+                val keepIds = if (fullFetch) allowed else null
                 val categoryIds: List<String?> = when {
-                    allowed == null -> listOf(null)
+                    allowed == null || fullFetch -> listOf(null)
                     allowed.isEmpty() -> emptyList()
                     else -> allowed.sorted()
                 }
@@ -1887,45 +1942,85 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                 }
                 var bytesBase = 0L
                 var bytesThisCall = 0L
+                // The per-category request, in one place so a paused category can be retried
+                // without duplicating the whole writer/progress callback block.
+                suspend fun fetchCategory(categoryId: String?): Int? = client.streamBulkList(
+                    xtreamProvider, action, type,
+                    transform = { channel ->
+                        val t = System.nanoTime()
+                        // Whole-list fetch for a selection that covers most of the section:
+                        // drop the unwanted categories here, after the bytes are paid for
+                        // but before they reach the writer.
+                        if (keepIds != null && channel.categoryId !in keepIds) {
+                            null
+                        } else {
+                            withCategory(channel, names, uncatId)
+                                .also { transformNanos += System.nanoTime() - t }
+                        }
+                    },
+                    onItem = { channel ->
+                        val t = System.nanoTime()
+                        into?.add(channel)
+                        ramCollector?.add(channel)
+                        // Let a database error abort the stream: the writer keeps the rows
+                        // already written (updates of existing copies), and the rows this
+                        // ingest never reached remain the old ones.
+                        writer?.add(channel)
+                        fingerprint.add(channel.name)
+                        entityNanos += System.nanoTime() - t
+                        rows++
+                    },
+                    onProgress = { bytes, callTotal ->
+                        bytesThisCall = bytes
+                        bytesRead = bytesBase + bytes
+                        // Rows come from the writer when there is one; the RAM collector
+                        // counts parsed rows directly. A per-category pass has no single
+                        // stated size, so the bar stays indeterminate and the counters
+                        // keep moving.
+                        onProgress?.invoke(
+                            phase,
+                            writer?.pending ?: rows,
+                            bytesRead,
+                            if (categoryIds.size == 1) callTotal else null
+                        )
+                    },
+                    categoryId = categoryId
+                )
                 val delivered = try {
                     var total = 0
                     var failed = false
-                    for (categoryId in categoryIds) {
+                    for ((index, categoryId) in categoryIds.withIndex()) {
+                        // One request per category is hundreds of round trips to one host on
+                        // a large panel. A gap keeps a narrowed import a polite stream rather
+                        // than the burst that earns the 429 the pacer then has to brake.
+                        if (index > 0) {
+                            delay(CATEGORY_REQUEST_GAP_MS)
+                        }
+                        // The provider fetch has its own six-minute ceiling. The loop is the
+                        // only place a blocking request runs without a suspension point, so
+                        // this is where a cancelled/timed-out load actually stops reaching
+                        // the panel.
+                        coroutineContext.ensureActive()
                         bytesThisCall = 0L
-                        val deliveredHere = client.streamBulkList(
-                            xtreamProvider, action, type,
-                            transform = { channel ->
-                                val t = System.nanoTime()
-                                withCategory(channel, names, uncatId).also { transformNanos += System.nanoTime() - t }
-                            },
-                            onItem = { channel ->
-                                val t = System.nanoTime()
-                                into?.add(channel)
-                                ramCollector?.add(channel)
-                                // Let a database error abort the stream: the writer keeps the rows
-                                // already written (updates of existing copies), and the rows this
-                                // ingest never reached remain the old ones.
-                                writer?.add(channel)
-                                fingerprint.add(channel.name)
-                                entityNanos += System.nanoTime() - t
-                                rows++
-                            },
-                            onProgress = { bytes, callTotal ->
-                                bytesThisCall = bytes
-                                bytesRead = bytesBase + bytes
-                                // Rows come from the writer when there is one; the RAM collector
-                                // counts parsed rows directly. A per-category pass has no single
-                                // stated size, so the bar stays indeterminate and the counters
-                                // keep moving.
-                                onProgress?.invoke(
-                                    phase,
-                                    writer?.pending ?: rows,
-                                    bytesRead,
-                                    if (categoryIds.size == 1) callTotal else null
-                                )
-                            },
-                            categoryId = categoryId
-                        )
+                        val rowsBefore = rows
+                        var deliveredHere = fetchCategory(categoryId)
+                        // The host is parked after a 429/503. Waiting out the panel's own
+                        // pause and retrying this one category is what keeps the section
+                        // complete: a failed section is re-downloaded from scratch on the
+                        // next load, which is the request loop this brake exists to stop.
+                        // Only safe when the failed attempt delivered no rows - otherwise a
+                        // retry would double-add them to the live list and the fingerprint.
+                        val brakeWait = if (deliveredHere == null && rows == rowsBefore &&
+                            client.lastFailureWasRateLimit()
+                        ) {
+                            rateLimitWaitMs(client, xtreamProvider)
+                        } else null
+                        if (brakeWait != null) {
+                            delay(brakeWait)
+                            coroutineContext.ensureActive()
+                            bytesThisCall = 0L
+                            deliveredHere = fetchCategory(categoryId)
+                        }
                         if (deliveredHere == null) {
                             failed = true
                             break
@@ -2029,8 +2124,15 @@ internal suspend fun MainActivity.fetchXtreamChannels(
 
         // A provider that could not deliver its live list must not be reported as a
         // successful empty one: the loader's failure branch keeps the live channels it
-        // already has instead of replacing them with nothing.
-        if (liveFailed) return FetchResult.Failure("live channels failed to load")
+        // already has instead of replacing them with nothing. The panel's own words are
+        // carried through when there are any ("Provider is rate-limiting requests; try
+        // again in 45s") so a block names itself instead of reading as a generic failure.
+        if (liveFailed) {
+            val why = client.lastErrorSummary()?.take(60)
+            return FetchResult.Failure(
+                if (why.isNullOrBlank()) "live channels failed to load" else "live channels failed: $why"
+            )
+        }
 
         // Persist the subscription expiry so Settings' "Active until / Expired" line can
         // display - xtream_exp_date / xtream_is_trial were never written anywhere before,

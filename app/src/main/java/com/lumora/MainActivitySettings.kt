@@ -25,6 +25,7 @@ import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.RecentlyPlayedStore
 import com.lumora.model.Provider
 import com.lumora.model.ProviderType
+import com.lumora.parser.M3uXtreamConverter
 import com.lumora.parser.XtreamClient
 import com.lumora.model.IptvProviderConfig
 import com.lumora.model.MediaType
@@ -53,6 +54,8 @@ import com.lumora.data.remote.jellyfin.JellyfinProvider
 import com.lumora.data.remote.plex.PlexProvider
 import com.lumora.model.MediaServerConfig
 import com.lumora.recording.RecordingStorage
+import com.lumora.storage.StorageManager
+import com.lumora.storage.formatStorageSize
 import com.lumora.data.update.AppUpdateChecker
 import kotlinx.coroutines.*
 import kotlin.coroutines.resume
@@ -1475,10 +1478,24 @@ internal fun MainActivity.showProviderSettings() {
                 "m3u" -> {
                     val rawM3u = form["m3uUrl"] ?: return@runOnUiThread
                     val url = rawM3u.trim().let { if (isLocalFileUrl(it)) it else normalizeServerUrl(it) }
-                    IptvProviderStore.upsert(prefs, IptvProviderConfig(
+                    // An Xtream panel handed out as an M3U link is stored as the Xtream
+                    // provider it really is (see M3uXtreamConverter), on the QR path too.
+                    val m3uConfig = IptvProviderConfig(
                         id = IptvProviderStore.newId(), type = "m3u", name = form["name"]?.takeIf { it.isNotBlank() } ?: "QR M3U",
                         enabled = true, url = url, userAgent = form["userAgent"]
-                    ))
+                    )
+                    val xtreamConfig = M3uXtreamConverter.convert(m3uConfig)
+                        ?.let { converted ->
+                            if (form["name"].isNullOrBlank()) converted.copy(name = "QR Xtream") else converted
+                        }
+                    IptvProviderStore.upsert(prefs, xtreamConfig ?: m3uConfig)
+                    if (xtreamConfig != null) {
+                        Toast.makeText(
+                            this@showProviderSettings,
+                            getString(R.string.sett_provider_saved_as_xtream),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                     
                     stopQrServer()
                     dialog.dismiss()
@@ -2418,6 +2435,8 @@ internal fun MainActivity.showProviderSettings() {
         val items = arrayOf(
             getString(R.string.sett_external_player_summary, externalPlayerSummary(this)),
             getString(R.string.sett_suggest_external_player_on_problems, if (prefs.getBoolean(PREF_SUGGEST_EXTERNAL_PLAYER, true)) getString(R.string.sett_on) else getString(R.string.sett_off)),
+            getString(R.string.sett_fast_zap, if (com.lumora.player.PlayerManager.isFastZapEnabled(this)) getString(R.string.sett_on) else getString(R.string.sett_off)),
+            getString(R.string.sett_frame_rate_match, if (com.lumora.player.DisplayFrameRateController.isEnabled(this)) getString(R.string.sett_on) else getString(R.string.sett_off)),
             getString(R.string.legal_notice_title)
         )
         LumoraDialog.Builder(this@showProviderSettings)
@@ -2430,9 +2449,26 @@ internal fun MainActivity.showProviderSettings() {
                         prefs.edit().putBoolean(PREF_SUGGEST_EXTERNAL_PLAYER, on).apply()
                         Toast.makeText(this@showProviderSettings, getString(R.string.sett_suggest_external_player, if (on) getString(R.string.sett_on) else getString(R.string.sett_off)), Toast.LENGTH_SHORT).show()
                     }
+                    2 -> {
+                        val on = !com.lumora.player.PlayerManager.isFastZapEnabled(this)
+                        // LoadControl is fixed when the player is built; tell the user rather
+                        // than pretending the current stream changed.
+                        prefs.edit().putBoolean(com.lumora.player.PlayerManager.PREF_FAST_ZAP, on).apply()
+                        Toast.makeText(
+                            this@showProviderSettings,
+                            getString(R.string.sett_fast_zap, if (on) getString(R.string.sett_on) else getString(R.string.sett_off)) + " - applies to the next playback",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                    3 -> {
+                        val on = !com.lumora.player.DisplayFrameRateController.isEnabled(this)
+                        prefs.edit().putBoolean(com.lumora.player.DisplayFrameRateController.PREF_MATCH_FRAME_RATE, on).apply()
+                        displayFrameRateController?.clear()
+                        updateDisplayFrameRate()
+                    }
                     // Live channel preview moved to Filters as a proper checkbox row - one
                     // control per preference.
-                    2 -> showLegalNotice()
+                    4 -> showLegalNotice()
                 }
             }
             .setPositiveButton(getString(R.string.close), null)
@@ -2829,12 +2865,16 @@ internal fun MainActivity.showProviderSettings() {
     // Last section chosen - the rail's re-expand pill refocuses it (mirrors the category
     // rail refocusing the previously selected row).
     var activeSection = 0
+    // Walking the package's files is real work, and About is not the screen Settings opens
+    // on, so the size is calculated the first time the About pane is actually shown.
+    var refreshStorageSummary: (() -> Unit)? = null
     fun selectSection(index: Int) {
         activeSection = index
         navRows.forEachIndexed { i, (row, pane) ->
             row.isSelected = i == index
             pane.visibility = if (i == index) View.VISIBLE else View.GONE
         }
+        if (navRows[index].second.id == R.id.paneAbout) refreshStorageSummary?.invoke()
         // The Save action belongs to the provider form only. Keep it hidden when another pane
         // is selected even if the form remains open underneath, and restore it on return.
         settingsFooter.visibility = if (index == 0 && iptvFormSection.visibility == View.VISIBLE) {
@@ -2930,6 +2970,26 @@ internal fun MainActivity.showProviderSettings() {
         val info = packageManager.getPackageInfo(packageName, 0)
         "${info.versionName} (${info.versionCode})"
     } catch (e: Exception) { getString(R.string.sett_unknown) }
+    val storageValue = dialogView.findViewById<TextView>(R.id.settingsStorageValue)
+    fun loadStorageSummary() {
+        storageValue.text = getString(R.string.sett_storage_calculating)
+        scope.launch {
+            val report = withContext(Dispatchers.IO) {
+                StorageManager.report(this@showProviderSettings)
+            }
+            // The panel may have been closed while a large download directory was walked.
+            if (dialog.view.isShown) {
+                storageValue.text = getString(
+                    R.string.sett_storage_used,
+                    formatStorageSize(report.totalBytes)
+                )
+            }
+        }
+    }
+    refreshStorageSummary = { loadStorageSummary() }
+    dialogView.findViewById<View>(R.id.settingsStorage).setOnClickListener {
+        showStorageDialog { loadStorageSummary() }
+    }
     dialogView.findViewById<View>(R.id.settingsGithubLink).setOnClickListener {
         try {
             startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse("https://github.com/LumoraPlayer/Lumora")))
@@ -3111,6 +3171,7 @@ internal fun MainActivity.showProviderSettings() {
         // The form has no per-type controls; preserve the provider's existing content
         // flags so saving the form never silently resets a movies/series split.
         val prevConfig = editingProviderId?.let { pid -> IptvProviderStore.load(prefs).firstOrNull { it.id == pid } }
+        var savedAsXtream = false
         when (currentType) {
             "m3u" -> {
                 val raw = m3uUrl.text.toString().trim()
@@ -3120,14 +3181,20 @@ internal fun MainActivity.showProviderSettings() {
                 // A picked local file saves as-is - normalizeServerUrl would prepend
                 // http:// to a path or URI that is already complete.
                 val url = if (isLocalFileUrl(raw)) raw else normalizeServerUrl(raw)
-                IptvProviderStore.upsert(prefs, IptvProviderConfig(
+                val m3uConfig = IptvProviderConfig(
                     id = id, type = "m3u", name = name.ifBlank { "M3U/M3U8 Playlist" }, enabled = true,
                     liveEnabled = prevConfig?.liveEnabled ?: true,
                     moviesEnabled = prevConfig?.moviesEnabled ?: true, seriesEnabled = prevConfig?.seriesEnabled ?: true,
                     url = url, userAgent = uaInput.text.toString().trim().ifBlank { null },
                     backup = wantBackup,
                     maxConnections = maxConnInput.text.toString().trim().toIntOrNull()?.coerceIn(0, 20) ?: 0
-                ))
+                )
+                // An Xtream panel's playlist link is saved as the Xtream provider behind it,
+                // so the catalogue comes from player_api.php instead of a full M3U download.
+                val xtreamConfig = M3uXtreamConverter.convert(m3uConfig)
+                    ?.let { converted -> if (name.isBlank()) converted.copy(name = "Xtream") else converted }
+                savedAsXtream = xtreamConfig != null
+                IptvProviderStore.upsert(prefs, xtreamConfig ?: m3uConfig)
             }
             "xtream" -> {
                 val url = xtreamUrl.text.toString().trim().let { if (it.isBlank()) it else normalizeServerUrl(it) }
@@ -3253,7 +3320,14 @@ internal fun MainActivity.showProviderSettings() {
             // a full provider refresh under a "Loading..." toast for it would be busywork.
             Toast.makeText(this, getString(R.string.sett_share_saved), Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, getString(R.string.sett_provider_saved_loading), Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this,
+                getString(
+                    if (savedAsXtream) R.string.sett_provider_saved_as_xtream
+                    else R.string.sett_provider_saved_loading
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
             loadAllConfiguredProviders(forceRefresh = true)
         }
     }

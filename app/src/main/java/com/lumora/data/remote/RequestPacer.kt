@@ -128,6 +128,17 @@ object RequestPacer {
         }
     }
 
+    /**
+     * Milliseconds left in [host]'s cooldown right now, or 0.
+     *
+     * Public because a caller that owns a long, multi-request job (a narrowed import reads
+     * one category per request) is better off waiting out the panel's own pause than failing
+     * the whole job - a failed job is retried from scratch later, which is the request loop
+     * this brake exists to stop.
+     */
+    fun cooldownRemainingMs(host: String): Long =
+        cooldownRemainingMs(host, System.currentTimeMillis())
+
     /** Milliseconds left in [host]'s cooldown at [nowMs], or 0. */
     internal fun cooldownRemainingMs(host: String, nowMs: Long): Long {
         val state = hosts[host] ?: return 0L

@@ -3,6 +3,7 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    id("androidx.baselineprofile")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp") version "1.9.22-1.0.17"
     id("org.jetbrains.kotlin.plugin.parcelize")
@@ -38,6 +39,13 @@ android {
         targetSdk = 36
         versionCode = 65
         versionName = "6.5"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Benchmark builds seed a synthetic catalogue instead of talking to a provider. The
+        // flag is false in every shipping build; the seed activity lives only in the
+        // `benchmark` source set, so release cannot reach it even if the flag were flipped.
+        buildConfigField("boolean", "BENCHMARK_SEED", "false")
 
         ksp {
             arg("room.schemaLocation", "$projectDir/schemas")
@@ -117,8 +125,25 @@ android {
             // label override lives in src/debug/res/values/strings.xml.
             applicationIdSuffix = ".debug"
         }
+        // Release-like, non-minified target for macrobenchmarks and baseline-profile
+        // generation. Not debuggable (a debuggable process runs interpreted and is not a fair
+        // measurement), but not R8'd either, so the generated profile names match the source.
+        // Never shipped: applicationIdSuffix installs it beside the real app.
+        create("benchmark") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".benchmark"
+            isDebuggable = false
+            isMinifyEnabled = false
+            isShrinkResources = false
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "BENCHMARK_SEED", "true")
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -132,6 +157,14 @@ android {
     buildFeatures {
         viewBinding = true
         buildConfig = true
+    }
+
+    baselineProfile {
+        // Profiles are generated on demand (a device is required) and committed; release
+        // builds merge the committed files rather than regenerating them in CI.
+        mergeIntoMain = true
+        saveInSrc = true
+        automaticGenerationDuringBuild = false
     }
 
     compileOptions {
@@ -171,6 +204,10 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.4.1")
     implementation("androidx.media3:media3-exoplayer-rtsp:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    // Playback shares the app's OkHttp connection pool/interceptors instead of opening its
+    // own HTTP stack (see PlaybackHttpDataSource / BaseApplication.playbackOkHttpClient).
+    implementation("androidx.media3:media3-datasource-okhttp:1.4.1")
+    implementation("androidx.tracing:tracing:1.2.0")
 
     // UI
     implementation("androidx.recyclerview:recyclerview:1.3.2")
@@ -259,6 +296,11 @@ dependencies {
     // Cast
     implementation("androidx.mediarouter:mediarouter:1.7.0")
     implementation("com.google.android.gms:play-services-cast-framework:21.5.0")
+
+    // Baseline profiles: the installer applies the committed profile on first run, and the
+    // benchmark module is the collector (baselineProfile configuration, not a runtime dep).
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
+    baselineProfile(project(":benchmark"))
 
     // Media session / browse tree - what Android Auto's media category binds to (auto/).
     implementation("androidx.media3:media3-session:1.4.1")

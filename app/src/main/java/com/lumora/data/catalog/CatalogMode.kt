@@ -4,22 +4,26 @@ package com.lumora.data.catalog
 import android.content.Context
 import com.lumora.data.IptvProviderStore
 import com.lumora.model.IptvProviderConfig
+import com.lumora.util.DeviceProfile
 
 /**
  * Whether the catalogue should be held in RAM or read from Room.
  *
  * The cutoff is the **measured download size of the enabled playlists** - the bytes the
  * provider actually sent, which is what the import banner/Settings already record as
- * [IptvProviderConfig.catalogueBytes]. A catalogue under [RAM_MAX_BYTES] is small enough to
+ * [IptvProviderConfig.catalogueBytes]. A catalogue under the device's cap is small enough to
  * keep resident and browse without a SQL query; a larger one stays in the Room catalogue so
  * a six-figure panel cannot exhaust the heap (the reason the database path exists).
+ *
+ * The cap comes from [DeviceProfile]: 40 MB on a high-tier device (the historical value),
+ * lower on the 1 GB sticks this app still supports.
  *
  * Media-server rows (Jellyfin/Plex) join the resident set when it is active but are not
  * counted in the cutoff: they are not playlists and their size is not measured.
  */
 object CatalogMode {
 
-    /** 40 MB of provider payload is the RAM limit; above it the catalogue lives in Room. */
+    /** High-tier default: 40 MB of provider payload; above it the catalogue lives in Room. */
     const val RAM_MAX_BYTES: Long = 40L * 1024 * 1024
 
     enum class Mode { RAM, DATABASE }
@@ -45,13 +49,16 @@ object CatalogMode {
         return total
     }
 
-    fun modeFor(playlistBytes: Long?): Mode =
-        if (playlistBytes != null && playlistBytes in 1..RAM_MAX_BYTES) Mode.RAM else Mode.DATABASE
+    fun modeFor(playlistBytes: Long?, maxRamBytes: Long = RAM_MAX_BYTES): Mode =
+        if (playlistBytes != null && playlistBytes in 1..maxRamBytes) Mode.RAM else Mode.DATABASE
 
-    /** The mode the next read should use, from the persisted provider sizes. */
+    /** The mode the next read should use, from the persisted provider sizes and this device. */
     fun mode(context: Context): Mode {
         val prefs = context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
-        return modeFor(totalPlaylistBytes(IptvProviderStore.load(prefs)))
+        return modeFor(
+            totalPlaylistBytes(IptvProviderStore.load(prefs)),
+            DeviceProfile.ramCatalogMaxBytes(context),
+        )
     }
 
     fun isRamEligible(context: Context): Boolean {

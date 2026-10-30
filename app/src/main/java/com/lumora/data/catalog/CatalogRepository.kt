@@ -2,6 +2,7 @@
 package com.lumora.data.catalog
 
 import android.content.Context
+import android.util.Log
 import androidx.room.withTransaction
 import com.lumora.data.local.CatalogDatabase
 import com.lumora.data.local.dao.CatalogCategoryCount
@@ -9,6 +10,7 @@ import com.lumora.data.local.dao.CatalogLeafRow
 import com.lumora.data.local.entity.CatalogChannelEntity
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import com.lumora.util.DeviceProfile
 import com.lumora.util.normalizeForSearch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -108,21 +110,42 @@ class CatalogRepository private constructor(
             dao.countForProvider(providerId)
         }
 
-    /** The one list that stays resident for the session, read from the database in pages. */
-    suspend fun live(): List<Channel> = withContext(Dispatchers.IO) {
+    /**
+     * The one list that stays resident for the session, read from the database in pages.
+     *
+     * [sourceIds] is the set of owners the session may show. Rows belonging to a provider
+     * that was removed or switched off remain in the table until the post-paint prune
+     * deletes them, and loading them here is what let a catalogue that had accumulated
+     * months of stale rows exhaust a TV stick's heap before the prune could run. Rows with
+     * no owner (anime/plugin channels) are always read.
+     *
+     * The result is capped at [residentLiveLimit] even when the table holds more. Live is
+     * the one catalogue half the app materialises as `Channel` objects; the cap is the
+     * safety valve for a genuinely oversized panel, not the normal path.
+     */
+    suspend fun live(sourceIds: Collection<String>): List<Channel> = withContext(Dispatchers.IO) {
         resident()?.let { return@withContext it.liveChannels() }
-        val out = ArrayList<Channel>(60_000)
+        val ids = sourceIds.toList().ifEmpty { listOf("") }
+        val cap = residentLiveLimit(context)
+        val out = ArrayList<Channel>(minOf(60_000, cap))
         var afterOrder = Int.MIN_VALUE
         var afterUid = ""
-        while (true) {
-            val page = dao.liveScanPage(afterOrder, afterUid, 2_000)
+        while (out.size < cap) {
+            val pageSize = minOf(2_000, cap - out.size)
+            val page = dao.liveScanPage(ids, afterOrder, afterUid, pageSize)
             if (page.isEmpty()) break
             for (row in page) {
                 out.add(CatalogMapping.toChannel(row))
                 afterOrder = row.orderIndex
                 afterUid = row.uid
             }
-            if (page.size < 2_000) break
+            if (page.size < pageSize) break
+        }
+        if (out.size >= cap) {
+            Log.w(
+                "LumoraCatalog",
+                "live list capped at $cap rows (${ids.size} source id(s)); stored catalogue is oversized"
+            )
         }
         out
     }
@@ -543,10 +566,17 @@ class CatalogRepository private constructor(
         // caller sees countForProvider == 0 and fetches just that provider.
     }
 
-    /** One provider's live rows, so re-enabling it needs no network round trip. */
+    /** One provider's live rows, so re-enabling it needs no network round trip. Capped like
+     *  the session read in [live]; a provider with an implausible live list must not be able
+     *  to exhaust the heap through the toggle path either. */
     suspend fun liveForProvider(providerId: String): List<Channel> = withContext(Dispatchers.IO) {
         resident()?.let { return@withContext it.liveForProvider(providerId) }
-        dao.liveForProvider(providerId).map(CatalogMapping::toChannel)
+        val cap = residentLiveLimit(context)
+        val rows = dao.liveForProvider(providerId, cap)
+        if (rows.size >= cap) {
+            Log.w("LumoraCatalog", "provider $providerId live list capped at $cap rows")
+        }
+        rows.map(CatalogMapping::toChannel)
     }
 
     /** True when this provider still has at least one row of [mediaType] stored. */
@@ -570,7 +600,9 @@ class CatalogRepository private constructor(
     /** Starts a streaming write for one provider/type. Call [CatalogBatchWriter.begin]. */
     fun writer(providerId: String, mediaType: MediaType, backup: Boolean = false): CatalogBatchWriter {
         tuneForBulkWrite()
-        return CatalogBatchWriter(dao, providerId, mediaType, backup)
+        val batchSize = context?.let { DeviceProfile.syncBatchSize(it) }
+            ?: CatalogBatchWriter.DEFAULT_BATCH_SIZE
+        return CatalogBatchWriter(dao, providerId, mediaType, backup, batchSize)
     }
 
     /**
@@ -669,6 +701,21 @@ private const val SQL_VARIABLE_CHUNK = 900
 
 /** Rows per search-key backfill transaction (see [CatalogRepository.backfillSearchNames]). */
 private const val SEARCH_BACKFILL_PAGE = 2_000
+
+/**
+ * The live rows the app is willing to hold resident. A `Channel` costs roughly 800-900
+ * bytes on the heap, and the live list is built while the rest of the catalogue paints, so
+ * spend at most a quarter of the process heap on it and leave the rest for VOD, artwork and
+ * the UI. The tier cap stops a 1 GB stick from being handed the same 200k-row ceiling a 4 GB
+ * phone can afford; the floor keeps a normal panel intact on a small-heap phone.
+ */
+private fun residentLiveLimit(context: Context?): Int {
+    val budget = Runtime.getRuntime().maxMemory() / 4
+    val heapCap = (budget / 900L).toInt()
+    val tierCap = context?.let { DeviceProfile.liveRowLimit(it) } ?: 200_000
+    val floor = context?.let { DeviceProfile.liveRowFloor(it) } ?: 40_000
+    return minOf(heapCap, tierCap).coerceAtLeast(floor)
+}
 
 /** The pre-normalisation query used for rows the backfill has not reached yet. */
 private fun legacyNeedle(value: String): String = value.trim().lowercase(Locale.ROOT)

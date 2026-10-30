@@ -8,7 +8,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.LibraryResult
@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
+import com.lumora.BaseApplication
 import com.lumora.model.Channel
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
@@ -84,10 +85,7 @@ class LumoraMediaService : MediaLibraryService() {
      * rather than fixed when the factory is built.
      */
     private fun dataSourceFactory(): DataSource.Factory {
-        val http = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(60_000)
+        val http = OkHttpDataSource.Factory(BaseApplication.instance.playbackOkHttpClient)
         return DefaultDataSource.Factory(this, http)
     }
 

@@ -271,4 +271,23 @@ object HlsDownloads {
     fun remove(context: Context, id: String) {
         manager(context).removeDownload(id)
     }
+
+    /**
+     * Drops every segment still held by the offline cache.
+     *
+     * [remove] deletes the download index entry, but Media3's SimpleCache is not obliged to
+     * reclaim every span it wrote immediately - and a process killed mid-download can leave
+     * spans no index entry knows about. Iterating [SimpleCache.keys] is the only supported way
+     * to remove them without deleting the directory out from under an open cache.
+     */
+    @Synchronized
+    fun clearCachedSegments(context: Context) {
+        val app = context.applicationContext
+        val dir = File(app.getExternalFilesDir(null) ?: app.filesDir, CACHE_DIR)
+        if (!dir.exists()) return
+        val cache = cache(app)
+        runCatching { cache.keys.toList() }
+            .getOrDefault(emptyList())
+            .forEach { key -> runCatching { cache.removeResource(key) } }
+    }
 }

@@ -2875,6 +2875,25 @@
                 </LinearLayout>
 
                 <LinearLayout
+                    android:id="@+id/settingsStorage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingVertical="@dimen/settings_row_padding_vertical"
+                    android:layout_marginTop="@dimen/settings_gap_m"
+                    android:background="@drawable/card_surface_background"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="@dimen/settings_gap_l"
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/sett_storage" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_medium" />
+                    <TextView android:id="@+id/settingsStorageValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/sett_storage_calculating" android:textColor="@color/text_secondary" android:textSize="@dimen/settings_text_body" android:fontFamily="@font/inter_regular" />
+                </LinearLayout>
+
+                <LinearLayout
                     android:id="@+id/settingsAppNameRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

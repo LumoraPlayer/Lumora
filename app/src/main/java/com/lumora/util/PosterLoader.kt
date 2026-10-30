@@ -45,13 +45,39 @@ object PosterLoader {
 
     fun getCached(url: String): Bitmap? = cache.get(url)
 
+    /** Drops the memory cache only; the disk cache survives a trim. */
+    fun trimMemory() {
+        cache.evictAll()
+    }
+
     suspend fun fetch(url: String): Bitmap? {
         getCached(url)?.let { return it }
         val job = inFlight.computeIfAbsent(url) {
             scope.async {
                 try {
+                    // A decoded hit is the point of the disk cache: no HTTP, no bounds pass,
+                    // no second downsample on the second cold start.
+                    val fromDisk = PosterDiskCache.get(
+                        BaseApplication.instance,
+                        url,
+                        TARGET_POSTER_WIDTH_PX,
+                        TARGET_POSTER_HEIGHT_PX,
+                    )
+                    if (fromDisk != null) {
+                        cache.put(url, fromDisk)
+                        return@async fromDisk
+                    }
                     val bitmap = download(url)
-                    if (bitmap != null) cache.put(url, bitmap)
+                    if (bitmap != null) {
+                        cache.put(url, bitmap)
+                        PosterDiskCache.put(
+                            BaseApplication.instance,
+                            url,
+                            TARGET_POSTER_WIDTH_PX,
+                            TARGET_POSTER_HEIGHT_PX,
+                            bitmap,
+                        )
+                    }
                     bitmap
                 } finally {
                     inFlight.remove(url)

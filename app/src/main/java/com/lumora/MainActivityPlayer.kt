@@ -16,6 +16,7 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.lumora.adapter.SideMenuCategoryAdapter
 import com.lumora.cache.PlaybackPositionStore
@@ -174,6 +175,13 @@ internal fun MainActivity.setupPlayerControls() {
 
     // Speed control
     speedController = com.lumora.player.playback.PlaybackSpeedController(playerManager.getExoPlayer())
+    // Display refresh-rate matching: opt-in on phones, on by default on TV (see the controller).
+    displayFrameRateController?.release()
+    displayFrameRateController = com.lumora.player.DisplayFrameRateController(binding.playerSurface)
+    playerManager.getExoPlayer().addListener(object : Player.Listener {
+        override fun onTracksChanged(tracks: androidx.media3.common.Tracks) = updateDisplayFrameRate()
+        override fun onPlaybackStateChanged(playbackState: Int) = updateDisplayFrameRate()
+    })
     binding.btnSpeed.setOnClickListener {
         val speeds = arrayOf(
             getString(R.string.play_speed_0_5),
@@ -2826,4 +2834,32 @@ internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
         return
     }
     restoreTabFocus()
+}
+
+/**
+ * Votes the current stream's frame rate to the display when the fullscreen player is actually
+ * showing a ready picture. Called from track/state changes, the speed dialog and the settings
+ * toggle; the controller debounces the actual HDMI switch.
+ */
+internal fun MainActivity.updateDisplayFrameRate() {
+    val controller = displayFrameRateController ?: return
+    if (!com.lumora.player.DisplayFrameRateController.isEnabled(this)) {
+        controller.clear()
+        return
+    }
+    if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+        controller.clear()
+        return
+    }
+    val player = playerManager.getExoPlayer()
+    val active = player.playbackState == Player.STATE_READY &&
+        !isInPictureInPictureMode &&
+        binding.playerSurface.visibility == View.VISIBLE
+    if (!active) {
+        controller.clear()
+        return
+    }
+    val rate = player.videoFormat?.frameRate?.takeIf { it > 0f }
+    val speed = runCatching { speedController.currentSpeed }.getOrDefault(1f)
+    controller.request(rate?.times(speed))
 }

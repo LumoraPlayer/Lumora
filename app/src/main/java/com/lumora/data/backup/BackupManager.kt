@@ -235,6 +235,9 @@ internal val BACKED_UP_SETTINGS: Map<String, SettingType> = mapOf(
     SessionLog.PREF_SESSION_LOG to SettingType.BOOLEAN,
     // Streaming sites
     PlayerManager.PREF_EXTRA_BUFFERING to SettingType.BOOLEAN,
+    PlayerManager.PREF_FAST_ZAP to SettingType.BOOLEAN,
+    // Playback
+    com.lumora.player.DisplayFrameRateController.PREF_MATCH_FRAME_RATE to SettingType.BOOLEAN,
     // Updates
     PREF_UPDATE_CHECKS to SettingType.BOOLEAN
 )

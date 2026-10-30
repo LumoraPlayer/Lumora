@@ -10,6 +10,7 @@ import com.lumora.model.Provider
 import com.lumora.util.normalizeServerUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -44,6 +45,30 @@ class XtreamClient(private val client: OkHttpClient) {
     // into a useless generic "Empty response" message for authenticate(). Stash the real
     // cause here so authenticate() can surface it instead.
     private var lastFetchError: String? = null
+
+    /**
+     * True when the last failed request was the panel's rate limit speaking, not a dead
+     * connection: either the 429/503 answer itself, or RequestPacingInterceptor refusing
+     * to open a connection while a previous 429 is still cooling down (its message names
+     * "rate-limiting"). Callers that own a long multi-request job use this to wait out the
+     * pause and retry the one request instead of abandoning the whole job.
+     */
+    fun lastFailureWasRateLimit(): Boolean {
+        val error = lastFetchError ?: return false
+        return error.contains("HTTP 429") ||
+            error.contains("HTTP 503") ||
+            error.contains("rate-limiting", ignoreCase = true)
+    }
+
+    /** The last failure in its own words, for a caller that surfaces it to the user. */
+    fun lastErrorSummary(): String? = lastFetchError
+
+    /**
+     * The host [RequestPacer] keys this provider's brake on - the same host every request
+     * for this panel (categories, bulk lists, guide, artwork) belongs to.
+     */
+    fun apiHost(provider: Provider): String? =
+        runCatching { buildApiUrl(provider, "").toHttpUrlOrNull()?.host }.getOrNull()
 
     data class ServerInfo(
         val version: String? = null,
@@ -446,7 +471,9 @@ class XtreamClient(private val client: OkHttpClient) {
      * caller's batch writer, so the resident peak is one item plus the writer's batch.
      *
      * [transform] runs on each mapped item before it is emitted - the fetch stamps the
-     * resolved category name and provider id there.
+     * resolved category name and provider id there, and may return null to drop an item the
+     * caller does not want (a narrowed import that fetched the whole list in one request
+     * rather than one request per category).
      *
      * Blocking (OkHttp + a synchronous JSON pull); call from Dispatchers.IO. Returns the
      * number of items delivered, or null when the request itself failed
@@ -456,12 +483,12 @@ class XtreamClient(private val client: OkHttpClient) {
         provider: Provider,
         action: String,
         mediaType: MediaType,
-        transform: (Channel) -> Channel = { it },
+        transform: (Channel) -> Channel? = { it },
         onItem: (Channel) -> Unit,
         onProgress: ((bytes: Long, total: Long?) -> Unit)? = null,
         /** When set, only that category is requested. The bulk endpoints honour it, which is
          *  what makes a narrowed import a real download cut rather than a client-side skip -
-         *  see IptvProviderConfig.importTags. */
+         *  see IptvProviderConfig.liveCategoryIds. */
         categoryId: String? = null
     ): Int? {
         val key = when (action) {

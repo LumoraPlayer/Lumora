@@ -47,7 +47,8 @@ class CarPlayback(private val context: Context) {
     @Synchronized
     fun loadCatalog(): List<Channel> {
         val stored = kotlinx.coroutines.runBlocking {
-            com.lumora.data.catalog.CatalogRepository.get(context).live()
+            com.lumora.data.catalog.CatalogRepository.get(context)
+                .live(com.lumora.data.catalog.liveSourceIds(context))
         }
         channels = stored.filter {
             it.mediaType == MediaType.LIVE && it.url.isNotBlank() &&

@@ -21,6 +21,7 @@ import com.lumora.model.MediaType
 import com.lumora.model.Provider
 import com.lumora.model.IptvProviderConfig
 import com.lumora.data.IptvProviderStore
+import com.lumora.parser.M3uXtreamConverter
 import com.lumora.plugin.DiscoveredProvider
 import com.lumora.util.cleanVodTitle
 import com.lumora.util.extractYearFromName
@@ -1071,7 +1072,7 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
                     getString(R.string.plug_add_candidate_message, plugin.label, typeLabel, candidate.url)
                 )
                 .setPositiveButton(getString(R.string.add)) { _, _ ->
-                    val added = IptvProviderConfig(
+                    val proposed = IptvProviderConfig(
                         id = IptvProviderStore.newId(),
                         type = candidate.type,
                         name = candidate.label,
@@ -1087,6 +1088,9 @@ internal fun MainActivity.wirePluginsPane(dialogView: View) {
                         // entries and drops the ones that stopped working.
                         discoveredBy = plugin.id
                     )
+                    // A scanner can propose an Xtream panel as an M3U candidate; store the
+                    // panel as Xtream like every other add path does.
+                    val added = M3uXtreamConverter.convert(proposed) ?: proposed
                     IptvProviderStore.upsert(prefs, added)
                     // The scan's acceptance test is already minutes old by the time this tap
                     // lands, and the launch-time check won't look at the entry until the next

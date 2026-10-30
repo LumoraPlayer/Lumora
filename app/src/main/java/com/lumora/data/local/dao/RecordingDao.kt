@@ -13,6 +13,11 @@ interface RecordingDao {
     @Query("SELECT * FROM recordings WHERE status = 'SCHEDULED' ORDER BY startTimeUtc ASC")
     suspend fun getScheduled(): List<RecordingEntity>
 
+    /** Recording rows whose file is currently being written. Clearing local recordings must
+     *  not pull the directory out from under one of these. */
+    @Query("SELECT COUNT(*) FROM recordings WHERE status = 'RECORDING'")
+    suspend fun countActive(): Int
+
     @Query("SELECT * FROM recordings WHERE id = :id")
     suspend fun getById(id: String): RecordingEntity?
 

@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "Lumora"
 include(":app")
+include(":benchmark")

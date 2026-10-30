@@ -20,6 +20,7 @@ import com.lumora.data.local.entity.guideDescription
 import com.lumora.data.parser.XmltvParser
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import com.lumora.util.DeviceProfile
 import com.lumora.util.groupLiveQualityVersions
 import com.lumora.util.isAdultCategory
 import com.lumora.util.normalizeLiveChannelKey
@@ -41,6 +42,10 @@ class EpgSyncWorker(
     private val TAG = "EpgSync"
 
     override suspend fun doWork(): Result {
+        if (DeviceProfile.shouldDeferBackgroundWork(applicationContext)) {
+            Log.i(TAG, "device is low on memory; deferring guide sync")
+            return Result.retry()
+        }
         val db = LumoraDatabase.getInstance(applicationContext)
         val sources = db.epgSourceDao().getEnabled()
 
@@ -51,7 +56,8 @@ class EpgSyncWorker(
         // cache wrote rows for VOD items and non-representative variants that the reader
         // never asks for, and a feed matching only a variant was invisible. Load the same
         // representative list the app derives.
-        val cachedChannels = com.lumora.data.catalog.CatalogRepository.get(applicationContext).live()
+        val cachedChannels = com.lumora.data.catalog.CatalogRepository.get(applicationContext)
+            .live(com.lumora.data.catalog.liveSourceIds(applicationContext))
         // No catalogue yet (a fresh install, or a run that beat the first load) means no
         // programme in any feed can match anything. Nothing about that is the sources' fault,
         // and charging them a failure each would retire every EPG source on a device that had
@@ -273,6 +279,8 @@ class EpgSyncWorker(
                 .setConstraints(
                     Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .setRequiresBatteryNotLow(true)
+                        .setRequiresStorageNotLow(true)
                         .build()
                 )
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
@@ -305,6 +313,8 @@ class EpgSyncWorker(
                 .setConstraints(
                     Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .setRequiresBatteryNotLow(true)
+                        .setRequiresStorageNotLow(true)
                         .build()
                 )
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.MINUTES)

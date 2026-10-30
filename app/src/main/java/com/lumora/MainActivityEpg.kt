@@ -134,6 +134,12 @@ internal suspend fun MainActivity.resolveEpgPrograms(channelId: String): List<Xt
         return emptyList()
     }
 
+    // A failed question whose backoff is still running is not asked again from here. The
+    // guide and side-menu adapters already check this, but the player rail and search call
+    // this directly: without the check a channel zap spends a fresh round of candidate
+    // requests for every channel while the panel is refusing them.
+    if (EpgListCache.isFailed(channelId)) return null
+
     val generation = EpgListCache.generation
     val client = XtreamClient(BaseApplication.instance.okHttpClient)
     // Whether any candidate had a provider to ask, and whether any of them answered "no
@@ -939,6 +945,22 @@ internal fun MainActivity.loadPlayerEpg(channel: Channel, force: Boolean = false
     ) {
         return
     }
+    // A fresh in-memory guide is served without touching disk or the provider. The rail is
+    // asked again on every channel change (the player's channel up/down is exactly a zap
+    // through the lineup), so the cheap path has to come first.
+    if (!force) {
+        EpgListCache.get(channel.id)?.let { cached ->
+            playerEpgLoadedAt = now
+            playerEpgPrograms = playerEpgTimeline(cached, now / 1000)
+            renderPlayerEpg()
+            return
+        }
+    }
+    // Failed and still inside its backoff: keep whatever is painted instead of spending
+    // another full round of variant/table/short-EPG requests on a panel that just refused.
+    // This mirrors the guard in LiveGuideAdapter/SideMenuCategoryAdapter; the rail is the
+    // caller that used to bypass it.
+    if (EpgListCache.isFailed(channel.id)) return
     playerEpgJob?.cancel()
     playerEpgJob = scope.launch {
         // Cancellation must not be mistaken for a failed fetch: runCatching would swallow
