@@ -3212,10 +3212,6 @@ class MainActivity : AppCompatActivity() {
         return index
     }
 
-    internal val previewGlobalRect = android.graphics.Rect()
-    /** The guide list's own on-screen band - see updateGuideRowWrap, which reads it once
-     *  per scroll event instead of asking every row for its own global rect. */
-    internal val listGlobalRect = android.graphics.Rect()
     /** The guide ruler's cells, kept between rebuilds - see buildGuideHeader, which updates
      *  their labels and widths instead of recreating them once a minute. */
     internal val guideHeaderLabels = mutableListOf<android.widget.TextView>()

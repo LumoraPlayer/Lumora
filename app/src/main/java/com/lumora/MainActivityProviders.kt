@@ -207,8 +207,8 @@ internal fun MainActivity.setBrowseTabsVisible(visible: Boolean) {
  *  so it can't be left to the XML default. */
 internal fun MainActivity.updateChromeFocusChain() {
     binding.btnSettings.nextFocusLeftId = when {
-        binding.tabDownloads.visibility == View.VISIBLE -> R.id.tabDownloads
         binding.btnSearch.visibility == View.VISIBLE -> R.id.btnSearch
+        binding.tabDownloads.visibility == View.VISIBLE -> R.id.tabDownloads
         binding.tabDiscover.visibility == View.VISIBLE -> R.id.tabDiscover
         binding.tabHome.visibility == View.VISIBLE -> R.id.tabHome
         binding.tabFilms.visibility == View.VISIBLE -> R.id.tabFilms
@@ -216,20 +216,33 @@ internal fun MainActivity.updateChromeFocusChain() {
         binding.tabLive.visibility == View.VISIBLE -> R.id.tabLive
         else -> R.id.btnSettings
     }
-    // Search can be hidden with Discover and/or Downloads still on screen (its own gate is
-    // the provider, theirs is the plugin), so both neighbours' links into it have to be
-    // re-pointed at whatever is actually next along the row.
+    // Row order is now ... Discover -> Downloads -> Search -> Settings -> Refresh. Each
+    // neighbour points at the first visible action in that order, so hiding Search or
+    // Downloads cannot leave a link into a GONE view (API 25 eats those).
     binding.tabDiscover.nextFocusRightId = when {
-        binding.btnSearch.visibility == View.VISIBLE -> R.id.btnSearch
         binding.tabDownloads.visibility == View.VISIBLE -> R.id.tabDownloads
+        binding.btnSearch.visibility == View.VISIBLE -> R.id.btnSearch
         else -> R.id.btnSettings
     }
     binding.tabDownloads.nextFocusLeftId = when {
-        binding.btnSearch.visibility == View.VISIBLE -> R.id.btnSearch
         binding.tabDiscover.visibility == View.VISIBLE -> R.id.tabDiscover
         binding.tabHome.visibility == View.VISIBLE -> R.id.tabHome
+        binding.tabFilms.visibility == View.VISIBLE -> R.id.tabFilms
+        binding.tabSeries.visibility == View.VISIBLE -> R.id.tabSeries
+        binding.tabLive.visibility == View.VISIBLE -> R.id.tabLive
         else -> R.id.tabDownloads
     }
+    binding.tabDownloads.nextFocusRightId = when {
+        binding.btnSearch.visibility == View.VISIBLE -> R.id.btnSearch
+        else -> R.id.btnSettings
+    }
+    binding.btnSearch.nextFocusLeftId = when {
+        binding.tabDownloads.visibility == View.VISIBLE -> R.id.tabDownloads
+        binding.tabDiscover.visibility == View.VISIBLE -> R.id.tabDiscover
+        binding.tabHome.visibility == View.VISIBLE -> R.id.tabHome
+        else -> R.id.btnSearch
+    }
+    binding.btnSearch.nextFocusRightId = R.id.btnSettings
 }
 
 /** True when the search overlay has anything to walk: it searches the live, film and series

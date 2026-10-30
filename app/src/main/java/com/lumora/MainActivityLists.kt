@@ -548,16 +548,6 @@ internal fun MainActivity.setupChannelList() {
         true
     }
     binding.liveContent.layoutManager = LinearLayoutManager(this)
-    binding.liveContent.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) { updateGuideRowWrap() }
-    })
-    binding.liveContent.addOnChildAttachStateChangeListener(object : RecyclerView.OnChildAttachStateChangeListener {
-        override fun onChildViewAttachedToWindow(view: View) { binding.liveContent.post { updateGuideRowWrap() } }
-        override fun onChildViewDetachedFromWindow(view: View) {}
-    })
-    binding.livePreviewGutter.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-        binding.liveContent.post { updateGuideRowWrap() }
-    }
     binding.seriesContent.layoutManager = LinearLayoutManager(this)
     binding.filmsContent.layoutManager = LinearLayoutManager(this)
     binding.categorySidebar.layoutManager = LinearLayoutManager(this)

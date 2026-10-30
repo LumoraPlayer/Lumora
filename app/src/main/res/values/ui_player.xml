@@ -133,4 +133,6 @@
     <!-- Player EPG rail: what's on now and next for the live channel, in the controls bar
          (see MainActivityEpg.renderPlayerEpg). Scrolls right through the channel's guide. -->
     <string name="player_epg_next">Next</string>
+    <string name="live_preview_next">Next: %1$s</string>
+    <string name="live_preview_no_info">No programme information</string>
 </resources>

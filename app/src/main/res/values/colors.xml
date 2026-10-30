@@ -64,4 +64,6 @@
 
     <!-- Hard outline behind poster titles so light text stays legible on bright artwork -->
     <color name="poster_title_outline">#D9000000</color>
+    <!-- Touch press scrim over a live multiview pane. -->
+    <color name="scrim_cell_press">#33000000</color>
 </resources>

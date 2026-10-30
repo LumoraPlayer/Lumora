@@ -110,6 +110,20 @@
     <dimen name="player_epg_card_gap">8dp</dimen>
     <dimen name="player_epg_time_text">9sp</dimen>
     <dimen name="player_epg_title_text">11sp</dimen>
+    <!-- Multiview shell and action bar. The bar is a real strip under the grid, not an
+         overlay, so the row can use a full 48dp target without covering pane labels. -->
+    <dimen name="mv_grid_padding">8dp</dimen>
+    <dimen name="mv_bar_padding_horizontal">16dp</dimen>
+    <dimen name="mv_bar_padding_vertical">10dp</dimen>
+    <dimen name="mv_action_min_height">48dp</dimen>
+    <dimen name="mv_action_text">12sp</dimen>
+    <dimen name="mv_action_padding_horizontal">18dp</dimen>
+    <dimen name="mv_cell_label_text">12sp</dimen>
+    <dimen name="mv_cell_badge_text">9sp</dimen>
+    <dimen name="mv_cell_label_max_width">220dp</dimen>
+    <dimen name="mv_cell_error_icon">28dp</dimen>
+    <dimen name="mv_cell_error_title_text">14sp</dimen>
+    <dimen name="mv_cell_error_hint_text">10sp</dimen>
     <dimen name="guide_channel_logo_size">26dp</dimen>
     <!-- Floor only - the row is wrap_content and normally taller than this on its own. -->
     <dimen name="guide_row_min_height">34dp</dimen>
@@ -126,6 +140,8 @@
          the general type scale, so the toolbar can be tuned without moving everything else
          that happened to sit on the same step. -->
     <dimen name="tab_text">13sp</dimen>
+    <!-- Width of the active-tab underline. -->
+    <dimen name="tab_indicator_width">28dp</dimen>
     <!-- Toolbar clock: a deliberate step under tab_text - it's ambient information, not a
          control, so it must not compete with the tab labels for the eye. -->
     <dimen name="toolbar_clock_text">11sp</dimen>
@@ -285,10 +301,6 @@
     <dimen name="player_option_tile_min_height">56dp</dimen>
     <dimen name="player_option_title_text">14sp</dimen>
     <dimen name="player_option_value_text">12sp</dimen>
-    <!-- Multiview bar: how far the action bar floats above the screen edge. It used to sit
-         flush on the last pixels, half-cut and under the bottom pane labels; a floating
-         rounded panel reads as the chrome it is. -->
-    <dimen name="multiview_bar_bottom_gap">16dp</dimen>
     <!-- Gap between the three toolbar cluster buttons (search/settings/refresh) and the air
          after the last one. Was a 4dp literal on settings/refresh with nothing on the right;
          the search pill's own 14dp padding made the cluster read as one wide gap then two

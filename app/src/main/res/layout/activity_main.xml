@@ -113,9 +113,10 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@android:color/transparent"
+            android:background="@drawable/bg_top_chrome"
             android:clipChildren="false"
                 android:clipToPadding="false"
+            android:elevation="4dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="@dimen/toolbar_padding_horizontal"
@@ -161,6 +162,7 @@
                      post-layout, so the scroller and tabs keep their positions; only the
                      icon moves. Decorative - not focusable, so the D-pad never lands on it. -->
                 <ImageView
+                    android:tag="toolbarBrandMark"
                     android:layout_width="@dimen/toolbar_brand_size"
                     android:layout_height="@dimen/toolbar_brand_size"
                     android:layout_gravity="top"
@@ -169,6 +171,27 @@
                     android:tint="@color/text_primary"
                     android:translationX="@dimen/toolbar_brand_translate_x"
                     android:translationY="@dimen/toolbar_brand_translate_y" />
+
+                <!-- Wordmark beside the mark. Hidden on portrait phones, where the tab
+                     scroller needs every dp of the row. -->
+                <TextView
+                    android:tag="toolbarBrandName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:fontFamily="@font/inter_semibold"
+                    android:includeFontPadding="false"
+                    android:text="@string/app_name"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_subhead" />
+
+                <View
+                    android:tag="toolbarBrandDivider"
+                    android:layout_width="1dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="14dp"
+                    android:layout_marginEnd="10dp"
+                    android:background="@color/divider" />
 
                 <!-- Tab scroller: Home | Live | Series | Films | Discover (+ Downloads on
                      phones) with D-pad focus (pill segmented control). weight=1 makes it
@@ -201,10 +224,10 @@
                     android:fillViewport="true"
                     android:scrollbars="none">
 
-        <!-- FlowRow, not LinearLayout: on a portrait phone these nine items (six tabs, Search,
-             Settings, Refresh) are ~800dp of content inside a ~260dp window, so as one line
+        <!-- FlowRow, not LinearLayout: on a portrait phone the tabs are ~600dp of content
+             inside the narrow window left after the brand, utilities and clock, so as one line
              everything past the second tab could only be reached by dragging the scroller
-             through three screens. FlowRow.wrap is turned on for portrait phones only (see
+             through several screens. FlowRow.wrap is turned on for portrait phones only (see
              applyChromeWrap()) and breaks them onto a second line at full label width; on TV
              and in landscape wrap stays off and this lays out exactly as the LinearLayout
              did - one line, natural widths, scrolled by the parent. -->
@@ -295,7 +318,7 @@
 
                 <View
                     android:id="@+id/tabLiveIndicator"
-                    android:layout_width="24dp"
+                    android:layout_width="@dimen/tab_indicator_width"
                     android:layout_height="4dp"
                     android:layout_marginTop="4dp"
                     android:background="@drawable/tab_indicator"
@@ -353,7 +376,7 @@
 
                 <View
                     android:id="@+id/tabSportsIndicator"
-                    android:layout_width="24dp"
+                    android:layout_width="@dimen/tab_indicator_width"
                     android:layout_height="4dp"
                     android:layout_marginTop="4dp"
                     android:background="@drawable/tab_indicator"
@@ -408,7 +431,7 @@
 
                 <View
                     android:id="@+id/tabSeriesIndicator"
-                    android:layout_width="24dp"
+                    android:layout_width="@dimen/tab_indicator_width"
                     android:layout_height="4dp"
                     android:layout_marginTop="4dp"
                     android:background="@drawable/tab_indicator"
@@ -463,7 +486,7 @@
 
                 <View
                     android:id="@+id/tabFilmsIndicator"
-                    android:layout_width="24dp"
+                    android:layout_width="@dimen/tab_indicator_width"
                     android:layout_height="4dp"
                     android:layout_marginTop="4dp"
                     android:background="@drawable/tab_indicator"
@@ -518,7 +541,7 @@
 
                 <View
                     android:id="@+id/tabHomeIndicator"
-                    android:layout_width="24dp"
+                    android:layout_width="@dimen/tab_indicator_width"
                     android:layout_height="4dp"
                     android:layout_marginTop="4dp"
                     android:background="@drawable/tab_indicator"
@@ -539,7 +562,7 @@
                 android:paddingTop="@dimen/tab_padding_vertical"
                 android:paddingBottom="@dimen/tab_padding_vertical"
                 android:nextFocusLeft="@id/tabHome"
-                android:nextFocusRight="@id/btnSearch"
+                android:nextFocusRight="@id/tabDownloads"
                 android:stateListAnimator="@animator/focus_scale_flat"
                 android:layerType="none"
                 android:clipChildren="false"
@@ -573,68 +596,7 @@
 
                 <View
                     android:id="@+id/tabDiscoverIndicator"
-                    android:layout_width="24dp"
-                    android:layout_height="4dp"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/tab_indicator"
-                    android:visibility="gone" />
-            </LinearLayout>
-
-            <!-- Search: an exact copy of the tab items, id btnSearch. It isn't a tab - it
-                 opens the search overlay - so it never renders the selected state or the
-                 indicator (updateTabStyles never touches it and the indicator stays GONE),
-                 but it must look identical to the tabs so search reads as one of them.
-                 btnSearch keeps the id the old toolbar pill had: MainActivity wires the
-                 click and the visibility gating by this id, and both apply unchanged to
-                 this element. -->
-            <LinearLayout
-                android:id="@+id/btnSearch"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="@dimen/chrome_pill_gap"
-                android:background="@drawable/bg_tab_item"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:paddingHorizontal="@dimen/tab_padding_horizontal"
-                android:paddingTop="@dimen/tab_padding_vertical"
-                android:paddingBottom="@dimen/tab_padding_vertical"
-                android:nextFocusLeft="@id/tabDiscover"
-                android:nextFocusRight="@id/btnSettings"
-                android:stateListAnimator="@animator/focus_scale_flat"
-                android:layerType="none"
-                android:clipChildren="false"
-                android:clipToPadding="false">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <ImageView
-                        android:id="@+id/btnSearchIcon"
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:src="@drawable/ic_search"
-                        android:tint="@color/text_secondary" />
-
-                    <TextView
-                        android:id="@+id/btnSearchLabel"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:ellipsize="end"
-                        android:fontFamily="@font/inter_medium"
-                        android:maxLines="1"
-                        android:text="@string/search"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="@dimen/tab_text" />
-                </LinearLayout>
-
-                <View
-                    android:layout_width="24dp"
+                    android:layout_width="@dimen/tab_indicator_width"
                     android:layout_height="4dp"
                     android:layout_marginTop="4dp"
                     android:background="@drawable/tab_indicator"
@@ -654,8 +616,8 @@
                 android:paddingHorizontal="@dimen/tab_padding_horizontal"
                 android:paddingTop="@dimen/tab_padding_vertical"
                 android:paddingBottom="@dimen/tab_padding_vertical"
-                android:nextFocusLeft="@id/btnSearch"
-                android:nextFocusRight="@id/btnSettings"
+                android:nextFocusLeft="@id/tabDiscover"
+                android:nextFocusRight="@id/btnSearch"
                 android:stateListAnimator="@animator/focus_scale_flat"
                 android:layerType="none"
                 android:visibility="gone"
@@ -690,80 +652,149 @@
 
                 <View
                     android:id="@+id/tabDownloadsIndicator"
-                    android:layout_width="24dp"
+                    android:layout_width="@dimen/tab_indicator_width"
                     android:layout_height="4dp"
                     android:layout_marginTop="4dp"
                     android:background="@drawable/tab_indicator"
                     android:visibility="gone" />
             </LinearLayout>
 
-            <!-- Settings / Refresh: the row's utility pair, last in the same scroller as the
-                 tabs so the chrome reads as one bar rather than a bar plus a detached button
-                 cluster. They keep their old placement (right end, Settings then Refresh)
-                 and stay icon-only - a label each would push the real tabs off a phone's
-                 window for two actions nobody hunts for by name. Vertical padding matches
-                 the tabs (tab_padding_vertical) so they sit in the same band; horizontal
-                 padding stays chrome_button_padding_h so a bare icon doesn't render as a
-                 wide empty capsule. marginStart = chrome_cluster_gap on Settings keeps the
-                 pair distinct from the last tab. Because they now live inside the scroller,
-                 nothing may hide the scroller to hide "the tabs" - see setBrowseTabsVisible(). -->
-            <LinearLayout
-                android:id="@+id/btnSettings"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/chrome_cluster_gap"
-                android:background="@drawable/bg_tab_item"
-                android:clickable="true"
-                android:contentDescription="@string/settings"
-                android:focusable="true"
-                android:gravity="center"
-                android:layerType="none"
-                android:nextFocusLeft="@id/btnSearch"
-                android:nextFocusRight="@id/btnRefresh"
-                android:orientation="vertical"
-                android:paddingHorizontal="@dimen/chrome_button_padding_h"
-                android:paddingTop="@dimen/tab_padding_vertical"
-                android:paddingBottom="@dimen/tab_padding_vertical"
-                android:stateListAnimator="@animator/focus_scale_flat"
-                android:clipChildren="false"
-                android:clipToPadding="false">
-
-                <ImageView
-                    android:id="@+id/btnSettingsIcon"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_settings"
-                    android:tint="@color/text_secondary" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/btnRefresh"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/toolbar_button_gap"
-                android:background="@drawable/bg_tab_item"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:layerType="none"
-                android:nextFocusLeft="@id/btnSettings"
-                android:nextFocusRight="@id/btnRefresh"
-                android:orientation="vertical"
-                android:paddingHorizontal="@dimen/chrome_button_padding_h"
-                android:paddingTop="@dimen/tab_padding_vertical"
-                android:paddingBottom="@dimen/tab_padding_vertical"
-                android:stateListAnimator="@animator/focus_scale_flat"
-                android:clipChildren="false"
-                android:clipToPadding="false">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_refresh"
-                    android:tint="@color/text_secondary" />
-            </LinearLayout>
         </com.lumora.ui.FlowRow>
         </HorizontalScrollView>
+            </LinearLayout>
+            <!-- Search, Settings and Refresh stay pinned at the end of the chrome row instead
+                 of living inside the scrolling tab strip: they are actions, not destinations,
+                 and they must never scroll out of reach on a narrow phone. -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:tag="toolbarUtilitiesDivider"
+                    android:layout_width="1dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="10dp"
+                    android:background="@color/divider" />
+
+                <!-- Search: an exact copy of the tab items, id btnSearch. It isn't a tab - it
+                     opens the search overlay - so it never renders the selected state or the
+                     indicator (updateTabStyles never touches it and the indicator stays GONE),
+                     but it must look identical to the tabs so search reads as one of them.
+                     btnSearch keeps the id the old toolbar pill had: MainActivity wires the
+                     click and the visibility gating by this id, and both apply unchanged to
+                     this element. -->
+                <LinearLayout
+                    android:id="@+id/btnSearch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="@dimen/chrome_pill_gap"
+                    android:background="@drawable/bg_tab_item"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="@dimen/tab_padding_horizontal"
+                    android:paddingTop="@dimen/tab_padding_vertical"
+                    android:paddingBottom="@dimen/tab_padding_vertical"
+                    android:nextFocusLeft="@id/tabDownloads"
+                    android:nextFocusRight="@id/btnSettings"
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:layerType="none"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:id="@+id/btnSearchIcon"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_search"
+                            android:tint="@color/text_secondary" />
+
+                        <TextView
+                            android:id="@+id/btnSearchLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:ellipsize="end"
+                            android:fontFamily="@font/inter_medium"
+                            android:maxLines="1"
+                            android:text="@string/search"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="@dimen/tab_text" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="24dp"
+                        android:layout_height="4dp"
+                        android:layout_marginTop="4dp"
+                        android:background="@drawable/tab_indicator"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/btnSettings"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/chrome_cluster_gap"
+                    android:background="@drawable/bg_tab_item"
+                    android:clickable="true"
+                    android:contentDescription="@string/settings"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:layerType="none"
+                    android:nextFocusLeft="@id/btnSearch"
+                    android:nextFocusRight="@id/btnRefresh"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="@dimen/chrome_button_padding_h"
+                    android:paddingTop="@dimen/tab_padding_vertical"
+                    android:paddingBottom="@dimen/tab_padding_vertical"
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+
+                    <ImageView
+                        android:id="@+id/btnSettingsIcon"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_settings"
+                        android:tint="@color/text_secondary" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/btnRefresh"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/toolbar_button_gap"
+                    android:background="@drawable/bg_tab_item"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:layerType="none"
+                    android:nextFocusLeft="@id/btnSettings"
+                    android:nextFocusRight="@id/btnRefresh"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="@dimen/chrome_button_padding_h"
+                    android:paddingTop="@dimen/tab_padding_vertical"
+                    android:paddingBottom="@dimen/tab_padding_vertical"
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_refresh"
+                        android:tint="@color/text_secondary" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- Local clock. Sits at the end of the chrome row rather than in a row of its
@@ -1244,6 +1275,130 @@
                         android:orientation="vertical"
                         android:paddingHorizontal="16dp">
 
+                        <!-- Docked preview: the video and its Now/Next details sit in their
+                             own shelf above the guide, so no programme block or time label is
+                             ever covered by the preview. -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:layout_marginBottom="10dp"
+                            android:background="@drawable/bg_live_preview_header"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:padding="12dp"
+                            android:visibility="gone">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="16dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:id="@+id/previewChannelName"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="2dp"
+                                    android:ellipsize="end"
+                                    android:fontFamily="@font/inter_semibold"
+                                    android:maxLines="1"
+                                    android:textColor="@color/text_primary"
+                                    android:textSize="@dimen/text_subhead_l" />
+
+                                <TextView
+                                    android:id="@+id/previewProgramNow"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:ellipsize="end"
+                                    android:maxLines="1"
+                                    android:textColor="@color/text_secondary"
+                                    android:textSize="@dimen/text_body_s"
+                                    android:visibility="gone" />
+
+                                <ProgressBar
+                                    android:id="@+id/previewProgramProgress"
+                                    style="?android:attr/progressBarStyleHorizontal"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="3dp"
+                                    android:layout_marginTop="6dp"
+                                    android:max="100"
+                                    android:progressDrawable="@drawable/progress_poster_resume"
+                                    android:visibility="gone" />
+
+                                <TextView
+                                    android:id="@+id/previewProgramNext"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:ellipsize="end"
+                                    android:maxLines="1"
+                                    android:textColor="@color/text_tertiary"
+                                    android:textSize="@dimen/text_caption"
+                                    android:visibility="gone" />
+
+                                <TextView
+                                    android:id="@+id/previewProgramDescription"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="3dp"
+                                    android:ellipsize="end"
+                                    android:maxLines="2"
+                                    android:textColor="@color/text_secondary"
+                                    android:textSize="@dimen/text_caption"
+                                    android:visibility="gone" />
+                            </LinearLayout>
+
+                            <FrameLayout
+                                android:id="@+id/livePreviewGutter"
+                                android:layout_width="@dimen/live_preview_width"
+                                android:layout_height="@dimen/live_preview_height">
+
+                                <FrameLayout
+                                    android:id="@+id/livePreviewPane"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent"
+                                    android:background="@drawable/bg_live_preview_card"
+                                    android:clipChildren="true"
+                                    android:clipToOutline="true"
+                                    android:elevation="6dp">
+
+                                <TextureView
+                                    android:id="@+id/previewSurface"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent" />
+
+                                <ProgressBar
+                                    android:id="@+id/previewBuffering"
+                                    android:layout_width="28dp"
+                                    android:layout_height="28dp"
+                                    android:layout_gravity="center"
+                                    android:indeterminate="true"
+                                    android:indeterminateTint="@color/primary"
+                                    android:visibility="gone" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_gravity="top|start"
+                                    android:layout_margin="8dp"
+                                    android:background="@drawable/pill_live"
+                                    android:includeFontPadding="false"
+                                    android:paddingHorizontal="6dp"
+                                    android:paddingVertical="2dp"
+                                    android:text="@string/live_badge"
+                                    android:textAllCaps="true"
+                                    android:textColor="@android:color/white"
+                                    android:textSize="@dimen/text_tiny"
+                                    android:textStyle="bold" />
+                                </FrameLayout>
+                            </FrameLayout>
+                        </LinearLayout>
+
                         <!-- Guide time ruler: spacer matches the channel-info column width so
                              time labels line up with the program blocks, not the channel names. -->
                         <LinearLayout
@@ -1292,108 +1447,6 @@
                                 android:defaultFocusHighlightEnabled="true"
                                 android:paddingBottom="4dp" />
 
-                            <FrameLayout
-                                android:id="@+id/livePreviewGutter"
-                                android:layout_width="@dimen/live_preview_width"
-                                android:layout_height="wrap_content"
-                                android:layout_gravity="top|end"
-                                android:layout_marginTop="4dp"
-                                android:visibility="gone">
-
-                                <!-- A real PiP card: rounded, elevated, with the channel
-                                     and what is airing now inside the frame instead of a
-                                     black box with a caption underneath. The overlay sits
-                                     on its own scrim so it stays legible over bright video. -->
-                                <FrameLayout
-                                    android:id="@+id/livePreviewPane"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="@dimen/live_preview_height"
-                                    android:layout_gravity="top"
-                                    android:background="@drawable/bg_live_preview_card"
-                                    android:clipChildren="true"
-                                    android:clipToOutline="true"
-                                    android:elevation="8dp">
-
-                                    <TextureView
-                                        android:id="@+id/previewSurface"
-                                        android:layout_width="match_parent"
-                                        android:layout_height="match_parent" />
-
-                                    <ProgressBar
-                                        android:id="@+id/previewBuffering"
-                                        android:layout_width="28dp"
-                                        android:layout_height="28dp"
-                                        android:layout_gravity="center"
-                                        android:indeterminate="true"
-                                        android:indeterminateTint="@color/primary"
-                                        android:visibility="gone" />
-
-                                    <LinearLayout
-                                        android:layout_width="match_parent"
-                                        android:layout_height="wrap_content"
-                                        android:layout_gravity="bottom"
-                                        android:background="@drawable/grad_live_preview_scrim"
-                                        android:orientation="vertical"
-                                        android:paddingHorizontal="10dp"
-                                        android:paddingTop="18dp"
-                                        android:paddingBottom="9dp">
-
-                                        <LinearLayout
-                                            android:layout_width="wrap_content"
-                                            android:layout_height="wrap_content"
-                                            android:gravity="center_vertical"
-                                            android:orientation="horizontal">
-
-                                            <ImageView
-                                                android:layout_width="6dp"
-                                                android:layout_height="6dp"
-                                                android:contentDescription="@null"
-                                                android:src="@drawable/ic_live_dot" />
-
-                                            <TextView
-                                                android:layout_width="wrap_content"
-                                                android:layout_height="wrap_content"
-                                                android:layout_marginStart="4dp"
-                                                android:fontFamily="@font/inter_semibold"
-                                                android:text="@string/live_badge"
-                                                android:textAllCaps="true"
-                                                android:textColor="@color/live_red"
-                                                android:textSize="@dimen/text_tiny" />
-                                        </LinearLayout>
-
-                                        <TextView
-                                            android:id="@+id/previewChannelName"
-                                            android:layout_width="match_parent"
-                                            android:layout_height="wrap_content"
-                                            android:layout_marginTop="2dp"
-                                            android:ellipsize="end"
-                                            android:fontFamily="@font/inter_semibold"
-                                            android:maxLines="1"
-                                            android:textColor="@color/text_primary"
-                                            android:textSize="@dimen/text_body_s" />
-
-                                        <TextView
-                                            android:id="@+id/previewProgramNow"
-                                            android:layout_width="match_parent"
-                                            android:layout_height="wrap_content"
-                                            android:ellipsize="end"
-                                            android:maxLines="1"
-                                            android:textColor="@color/text_secondary"
-                                            android:textSize="@dimen/text_tiny"
-                                            android:visibility="gone" />
-
-                                        <ProgressBar
-                                            android:id="@+id/previewProgramProgress"
-                                            style="?android:attr/progressBarStyleHorizontal"
-                                            android:layout_width="match_parent"
-                                            android:layout_height="2dp"
-                                            android:layout_marginTop="5dp"
-                                            android:max="100"
-                                            android:progressDrawable="@drawable/progress_poster_resume"
-                                            android:visibility="gone" />
-                                    </LinearLayout>
-                                </FrameLayout>
-                        </FrameLayout>
                         </FrameLayout>
                     </LinearLayout>
                 </FrameLayout>
@@ -2692,145 +2745,127 @@
             android:clickable="false"
             android:focusable="false" />
 
-        <!-- Multiview grid: up to four live panes in a 2-column arrangement, replacing the
-             single video surface while the grid is open (see MainActivityMultiview). Rows
-             and cells are inflated in code, since the shape depends on the pane count and
-             on whether the device is a portrait phone (single column). -->
+        <!-- Multiview shell: the grid and its action strip are one vertical surface. The
+             grid takes the remaining height and the strip reserves its own space, so the
+             bar can never cover the bottom row or its labels. -->
         <LinearLayout
-            android:id="@+id/multiviewGrid"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@android:color/black"
             android:orientation="vertical"
-            android:visibility="gone" />
-
-        <!-- Multiview action bar: always up while the grid is open (there is no auto-hide -
-             every action has to be one D-pad move away, Down). It floats above the screen
-             edge, but with no panel behind it - the purple action pills carry themselves
-             against the video. The status line names the selected screen and its current
-             programme; the buttons act on it. -->
-        <LinearLayout
-            android:id="@+id/multiviewBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:layout_marginBottom="@dimen/multiview_bar_bottom_gap"
-            android:clipChildren="false"
-            android:clipToPadding="false"
-            android:orientation="vertical"
-            android:paddingHorizontal="@dimen/player_controls_safe_horizontal_inset"
-            android:paddingVertical="10dp"
             android:visibility="gone">
 
-            <TextView
-                android:id="@+id/multiviewStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="6dp"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/text_primary"
-                android:textSize="@dimen/text_caption" />
-
             <LinearLayout
+                android:id="@+id/multiviewGrid"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="0dp"
+                android:layout_weight="1"
                 android:clipChildren="false"
                 android:clipToPadding="false"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="vertical"
+                android:padding="@dimen/mv_grid_padding" />
+
+            <LinearLayout
+                android:id="@+id/multiviewBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_mv_bar_strip"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="vertical"
+                android:paddingHorizontal="@dimen/mv_bar_padding_horizontal"
+                android:paddingVertical="@dimen/mv_bar_padding_vertical">
 
                 <TextView
-                    android:id="@+id/btnMvAdd"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="6dp"
-                    android:background="@drawable/bg_mv_bar_button"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center"
-                    android:paddingHorizontal="10dp"
-                    android:stateListAnimator="@animator/focus_scale"
-                    android:text="@string/mv_add_pane"
-                    android:textAllCaps="true"
+                    android:id="@+id/multiviewStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:accessibilityLiveRegion="polite"
+                    android:ellipsize="end"
+                    android:fontFamily="@font/inter_medium"
+                    android:maxLines="1"
                     android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_tiny"
-                    android:clipChildren="false"
-    android:clipToPadding="false"/>
+                    android:textSize="@dimen/text_body_s" />
 
-                <TextView
-                    android:id="@+id/btnMvChange"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="6dp"
-                    android:background="@drawable/bg_mv_bar_button"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center"
-                    android:paddingHorizontal="10dp"
-                    android:stateListAnimator="@animator/focus_scale"
-                    android:text="@string/mv_change"
-                    android:textAllCaps="true"
-                    android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_tiny"
+                <!-- Five labelled actions in a scroller: on a 320/360dp phone they stay real
+                     48dp targets and the row scrolls instead of squeezing the labels. -->
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:clipChildren="false"
-    android:clipToPadding="false"/>
+                    android:clipToPadding="false"
+                    android:fillViewport="true"
+                    android:focusable="false"
+                    android:overScrollMode="never"
+                    android:scrollbars="none">
 
-                <TextView
-                    android:id="@+id/btnMvFullscreen"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="6dp"
-                    android:background="@drawable/bg_mv_bar_button"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center"
-                    android:paddingHorizontal="10dp"
-                    android:stateListAnimator="@animator/focus_scale"
-                    android:text="@string/mv_fullscreen"
-                    android:textAllCaps="true"
-                    android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_tiny"
-                    android:clipChildren="false"
-    android:clipToPadding="false"/>
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
+                        android:gravity="center"
+                        android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/btnMvClose"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginEnd="6dp"
-                    android:background="@drawable/bg_mv_bar_button"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center"
-                    android:paddingHorizontal="10dp"
-                    android:stateListAnimator="@animator/focus_scale"
-                    android:text="@string/mv_close_pane"
-                    android:textAllCaps="true"
-                    android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_tiny"
-                    android:clipChildren="false"
-    android:clipToPadding="false"/>
+                        <TextView
+                            android:id="@+id/btnMvAdd"
+                            style="@style/Widget.Lumora.MultiviewAction"
+                            android:layout_width="wrap_content"
+                            android:layout_height="@dimen/mv_action_min_height"
+                            android:layout_marginHorizontal="4dp"
+                            android:gravity="center"
+                            android:minWidth="@dimen/mv_action_min_height"
+                            android:paddingHorizontal="@dimen/mv_action_padding_horizontal"
+                            android:text="@string/mv_add_pane" />
 
-                <TextView
-                    android:id="@+id/btnMvExit"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_mv_bar_button"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center"
-                    android:paddingHorizontal="10dp"
-                    android:stateListAnimator="@animator/focus_scale"
-                    android:text="@string/mv_exit"
-                    android:textAllCaps="true"
-                    android:textColor="@color/text_primary"
-                    android:textSize="@dimen/text_tiny"
-                    android:clipChildren="false"
-    android:clipToPadding="false"/>
+                        <TextView
+                            android:id="@+id/btnMvChange"
+                            style="@style/Widget.Lumora.MultiviewAction"
+                            android:layout_width="wrap_content"
+                            android:layout_height="@dimen/mv_action_min_height"
+                            android:layout_marginHorizontal="4dp"
+                            android:gravity="center"
+                            android:minWidth="@dimen/mv_action_min_height"
+                            android:paddingHorizontal="@dimen/mv_action_padding_horizontal"
+                            android:text="@string/mv_change" />
+
+                        <TextView
+                            android:id="@+id/btnMvFullscreen"
+                            style="@style/Widget.Lumora.MultiviewAction"
+                            android:layout_width="wrap_content"
+                            android:layout_height="@dimen/mv_action_min_height"
+                            android:layout_marginHorizontal="4dp"
+                            android:gravity="center"
+                            android:minWidth="@dimen/mv_action_min_height"
+                            android:paddingHorizontal="@dimen/mv_action_padding_horizontal"
+                            android:text="@string/mv_fullscreen" />
+
+                        <TextView
+                            android:id="@+id/btnMvClose"
+                            style="@style/Widget.Lumora.MultiviewAction"
+                            android:layout_width="wrap_content"
+                            android:layout_height="@dimen/mv_action_min_height"
+                            android:layout_marginHorizontal="4dp"
+                            android:gravity="center"
+                            android:minWidth="@dimen/mv_action_min_height"
+                            android:paddingHorizontal="@dimen/mv_action_padding_horizontal"
+                            android:text="@string/mv_close_pane" />
+
+                        <TextView
+                            android:id="@+id/btnMvExit"
+                            style="@style/Widget.Lumora.MultiviewAction"
+                            android:layout_width="wrap_content"
+                            android:layout_height="@dimen/mv_action_min_height"
+                            android:layout_marginHorizontal="4dp"
+                            android:gravity="center"
+                            android:minWidth="@dimen/mv_action_min_height"
+                            android:paddingHorizontal="@dimen/mv_action_padding_horizontal"
+                            android:text="@string/mv_exit" />
+                    </LinearLayout>
+                </HorizontalScrollView>
             </LinearLayout>
         </LinearLayout>
-
 
         <!-- Skip Intro/Recap/Credits: shown only while playback sits inside a segment
              IntroDB reported (see MainActivitySkip). Bottom-end corner, above the controls

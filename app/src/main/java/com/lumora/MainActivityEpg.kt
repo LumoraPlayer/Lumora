@@ -485,6 +485,7 @@ internal fun MainActivity.ensurePreviewPlayer(): PlayerManager {
 internal fun MainActivity.showLivePreviewPane() {
     if (!isLivePreviewEnabled()) return
     if (liveChannels.isEmpty()) return
+    (binding.livePreviewGutter.parent as? View)?.visibility = View.VISIBLE
     binding.livePreviewGutter.visibility = View.VISIBLE
     binding.livePreviewPane.visibility = View.VISIBLE
     // releaseLivePreview() hides this surface (not just its parent) to stop a stale
@@ -505,56 +506,11 @@ internal fun MainActivity.showLivePreviewPane() {
     binding.liveContent.post { updateGuideRowWrap() }
 }
 
-/** The preview pane floats over the top-right corner of the guide instead of reserving
- *  a permanent column, so rows read like text wrapping around it: whichever rows are
- *  currently scrolled behind it get a right-side margin to clear it, every row below
- *  goes back to full width. Recomputed on scroll and whenever a row is (re)bound, since
- *  which channel occupies "behind the preview" changes as the guide scrolls. */
-
+/** The preview is docked above the guide now, so no row ever sits behind it and nothing
+ *  needs a right-side reservation. Kept as the single call site the scroll/layout hooks
+ *  already use, so the guide can be changed again without touching those hooks. */
 internal fun MainActivity.updateGuideRowWrap() {
-    val showingPreview = binding.livePreviewGutter.visibility == View.VISIBLE
-    val reservedPx = if (showingPreview) {
-        // The pane's real on-screen width, exactly - no added buffer. An extra margin
-        // here was tried twice (first 16dp, then 32dp) to guard against focus-scale
-        // bleed that turned out not to be the real bug, and each just left a visible
-        // gap between a reserved row's content and the pane's actual left edge.
-        binding.livePreviewPane.getGlobalVisibleRect(previewGlobalRect)
-        previewGlobalRect.width()
-    } else 0
-    var anyVisibleRowOverlaps = false
-    // One global-rect read for the list, instead of one per visible row. A row's band on
-    // screen is its layout band inside the list, offset by where the list itself sits -
-    // the same answer the per-row getGlobalVisibleRect gave, for a fraction of the cost:
-    // that call walks the view hierarchy and composes transforms, and this function runs
-    // on every scroll event (twice a frame on a fast fling), over a screenful of rows.
-    if (binding.liveContent.getGlobalVisibleRect(listGlobalRect)) {
-        val listTop = listGlobalRect.top
-        val listHeight = binding.liveContent.height
-        for (i in 0 until binding.liveContent.childCount) {
-            val child = binding.liveContent.getChildAt(i)
-            val overlapsPreview = showingPreview && run {
-                // The row's visible band: its layout band, clipped to the list's own
-                // bounds - a row half-scrolled out of the list is only as visible as the
-                // part still inside it.
-                val rowTop = listTop + maxOf(child.top, 0)
-                val rowBottom = listTop + minOf(child.bottom, listHeight)
-                rowBottom > previewGlobalRect.top && rowTop < previewGlobalRect.bottom
-            }
-            if (overlapsPreview) anyVisibleRowOverlaps = true
-            (binding.liveContent.getChildViewHolder(child) as? LiveGuideAdapter.RowViewHolder)
-                ?.setReservedEnd(if (overlapsPreview) reservedPx else 0)
-        }
-    }
-    // The ruler and the rows share a horizontal scroll offset. Reserve the same viewport
-    // while any visible row wraps around the preview so labels don't continue into a region
-    // where those rows have no programme cells; restore full width once the guide scrolls
-    // below the preview.
-    val headerMarginEnd = if (anyVisibleRowOverlaps) reservedPx else 0
-    val headerLayoutParams = binding.guideHeaderScroll.layoutParams as? ViewGroup.MarginLayoutParams
-    if (headerLayoutParams != null && headerLayoutParams.marginEnd != headerMarginEnd) {
-        headerLayoutParams.marginEnd = headerMarginEnd
-        binding.guideHeaderScroll.layoutParams = headerLayoutParams
-    }
+    // No-op: the docked livePreviewHeader owns its own space above liveContent.
 }
 
 internal fun MainActivity.releaseLivePreview() {
@@ -563,6 +519,7 @@ internal fun MainActivity.releaseLivePreview() {
     previewChannelId = null
     previewTargetChannel = null
     mainHandler.removeCallbacks(previewBlackFrameCheckRunnable)
+    (binding.livePreviewGutter.parent as? View)?.visibility = View.GONE
     binding.livePreviewGutter.visibility = View.GONE
     binding.livePreviewPane.visibility = View.GONE
     updateGuideRowWrap()
@@ -573,6 +530,8 @@ internal fun MainActivity.releaseLivePreview() {
     binding.previewBuffering.visibility = View.GONE
     binding.previewProgramNow.visibility = View.GONE
     binding.previewProgramProgress.visibility = View.GONE
+    binding.previewProgramNext.visibility = View.GONE
+    binding.previewProgramDescription.visibility = View.GONE
     previewPlayerManager?.let { manager ->
         manager.stop()
         manager.release()
@@ -829,17 +788,42 @@ internal fun MainActivity.updatePreviewProgramInfo(channel: Channel) {
     val programs = channel.id.takeIf { it.isNotBlank() }?.let { EpgListCache.peek(it) }
     val nowSeconds = System.currentTimeMillis() / 1000
     val current = programs?.firstOrNull { nowSeconds in it.startTimestamp until it.stopTimestamp }
+    val next = programs
+        ?.filter { it.startTimestamp > (current?.stopTimestamp ?: nowSeconds) }
+        ?.minByOrNull { it.startTimestamp }
+
     if (current == null) {
-        binding.previewProgramNow.visibility = View.GONE
+        binding.previewProgramNow.text = getString(R.string.live_preview_no_info)
+        binding.previewProgramNow.visibility = View.VISIBLE
         binding.previewProgramProgress.visibility = View.GONE
-        return
+        binding.previewProgramDescription.visibility = View.GONE
+    } else {
+        val range = formatEpgTimeRange(current.startTimestamp, current.stopTimestamp)
+        binding.previewProgramNow.text = getString(
+            R.string.list_now_program,
+            "$range  \u00b7  ${current.title}",
+        )
+        binding.previewProgramNow.visibility = View.VISIBLE
+        val span = (current.stopTimestamp - current.startTimestamp).coerceAtLeast(1L)
+        binding.previewProgramProgress.progress =
+            (((nowSeconds - current.startTimestamp) * 100L) / span).toInt().coerceIn(0, 100)
+        binding.previewProgramProgress.visibility = View.VISIBLE
+        val description = current.description?.trim().orEmpty()
+        binding.previewProgramDescription.text = description
+        binding.previewProgramDescription.visibility =
+            if (description.isBlank()) View.GONE else View.VISIBLE
     }
-    binding.previewProgramNow.text = getString(R.string.list_now_program, current.title)
-    binding.previewProgramNow.visibility = View.VISIBLE
-    val span = (current.stopTimestamp - current.startTimestamp).coerceAtLeast(1L)
-    binding.previewProgramProgress.progress =
-        (((nowSeconds - current.startTimestamp) * 100L) / span).toInt().coerceIn(0, 100)
-    binding.previewProgramProgress.visibility = View.VISIBLE
+
+    if (next == null) {
+        binding.previewProgramNext.visibility = View.GONE
+    } else {
+        val range = formatEpgTimeRange(next.startTimestamp, next.stopTimestamp)
+        binding.previewProgramNext.text = getString(
+            R.string.live_preview_next,
+            "$range  \u00b7  ${next.title}",
+        )
+        binding.previewProgramNext.visibility = View.VISIBLE
+    }
 }
 
 internal fun MainActivity.formatEpgTimeRange(startSeconds: Long, stopSeconds: Long): String {

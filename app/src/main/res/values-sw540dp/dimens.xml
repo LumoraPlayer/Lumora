@@ -137,6 +137,18 @@
     <dimen name="player_epg_card_gap">12dp</dimen>
     <dimen name="player_epg_time_text">10sp</dimen>
     <dimen name="player_epg_title_text">13sp</dimen>
+    <dimen name="mv_grid_padding">12dp</dimen>
+    <dimen name="mv_bar_padding_horizontal">20dp</dimen>
+    <dimen name="mv_bar_padding_vertical">12dp</dimen>
+    <dimen name="mv_action_min_height">48dp</dimen>
+    <dimen name="mv_action_text">14sp</dimen>
+    <dimen name="mv_action_padding_horizontal">22dp</dimen>
+    <dimen name="mv_cell_label_text">14sp</dimen>
+    <dimen name="mv_cell_badge_text">11sp</dimen>
+    <dimen name="mv_cell_label_max_width">260dp</dimen>
+    <dimen name="mv_cell_error_icon">32dp</dimen>
+    <dimen name="mv_cell_error_title_text">18sp</dimen>
+    <dimen name="mv_cell_error_hint_text">12sp</dimen>
     <!-- Logo box and row height sized off the 13sp channel name rather than held at a fixed
          box: a 13sp line is ~18dp, so 30dp of logo plus the row's 4dp padding either side is
          all the height the content needs. The old 36dp/58dp pair was set when the type was
@@ -146,7 +158,10 @@
     <!-- The channel column is wide enough for typical channel names at the larger 13sp type,
          without spending more of the timeline than necessary. The guide header's spacer in
          activity_main.xml uses this same dimen, keeping the ruler aligned with the blocks. -->
-    <dimen name="guide_channel_column_width">220dp</dimen>
+    <dimen name="guide_channel_column_width">240dp</dimen>
+    <!-- Long provider category names (and the "Show all categories" helper row) get a third
+         line on TV; two was truncating them mid-word in the taller 14sp tier. -->
+    <integer name="category_row_max_lines">3</integer>
     <!-- Narrower than the old 240dp: the rows are short labels with a count, and the width
          they were given came straight off the guide grid and the poster columns next to
          them. Long names wrap to a second line rather than taking more width - see
@@ -159,6 +174,7 @@
          cluster - the tabs must still fit next to the search/settings/refresh buttons
          without the last tab clipping or the scroller scrolling on a 1080p panel. -->
     <dimen name="tab_text">16sp</dimen>
+    <dimen name="tab_indicator_width">32dp</dimen>
     <!-- The clock sits one step under the tab labels, as on the phone tier - but at the phone's
          11sp rather than the 14sp this tier used to give it. The chrome row has to carry six
          tabs, Search, the settings/refresh pair and the clock on ONE line at 960dp, and the

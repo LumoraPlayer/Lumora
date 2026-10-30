@@ -418,6 +418,7 @@ internal fun MainActivity.isPortraitPhone(): Boolean =
 private fun MainActivity.chromeLabelPills(): List<Triple<View, Int, Int>> = listOf(
     Triple(binding.tabHome, R.id.tabHomeLabel, R.id.tabHomeLabel),
     Triple(binding.tabLive, R.id.tabLiveLabelGroup, R.id.tabLiveLabel),
+    Triple(binding.tabSports, R.id.tabSportsLabel, R.id.tabSportsLabel),
     Triple(binding.tabSeries, R.id.tabSeriesLabel, R.id.tabSeriesLabel),
     Triple(binding.tabFilms, R.id.tabFilmsLabel, R.id.tabFilmsLabel),
     Triple(binding.tabDiscover, R.id.tabDiscoverLabel, R.id.tabDiscoverLabel),
@@ -477,6 +478,29 @@ internal fun MainActivity.applyChromeWrap() {
     val buttonPadH = resources.getDimensionPixelSize(R.dimen.chrome_button_padding_h)
     binding.btnSettings.setPaddingRelative(buttonPadH, padV, buttonPadH, padV)
     binding.btnRefresh.setPaddingRelative(buttonPadH, padV, buttonPadH, padV)
+
+    // The mark + wordmark is the app's identity block. The wordmark is reserved for the
+    // widest windows: at 960dp the tab strip needs the width, and the launcher mark alone
+    // already carries the brand.
+    val showWordmark = !portrait && resources.configuration.screenWidthDp >= 1280
+    binding.root.findViewWithTag<View>("toolbarBrandName")?.visibility =
+        if (showWordmark) View.VISIBLE else View.GONE
+    // With Settings/Refresh pinned at the end, a tight portrait phone has to spend the
+    // brand block's width on the tab strip or the FlowRow drops to one pill per line. Give
+    // that width back by hiding the mark and both dividers; a wide portrait tablet keeps
+    // the full identity block.
+    val tightPortrait = portrait && resources.configuration.screenWidthDp < 600
+    binding.root.findViewWithTag<View>("toolbarBrandMark")?.visibility =
+        if (tightPortrait) View.GONE else View.VISIBLE
+    binding.root.findViewWithTag<View>("toolbarBrandDivider")?.visibility =
+        if (tightPortrait) View.GONE else View.VISIBLE
+    binding.root.findViewWithTag<View>("toolbarUtilitiesDivider")?.visibility =
+        if (tightPortrait) View.GONE else View.VISIBLE
+    // A portrait phone already has the system clock; freeing the toolbar clock and the
+    // Search label gives the tab scroller a usable window beside the fixed utilities.
+    binding.toolbarClock.visibility = if (portrait) View.GONE else View.VISIBLE
+    binding.btnSearchLabel.visibility = if (portrait) View.GONE else View.VISIBLE
+    binding.btnSearch.contentDescription = getString(R.string.search)
 
     // Gap between wrapped lines. The pills scale to 1.06x on focus (focus_scale_flat), so
     // without it a focused pill on the first line grows into the one below.
@@ -1833,7 +1857,7 @@ internal fun MainActivity.updateTabStyles(selected: View) {
             it.typeface = ResourcesCompat.getFont(this, if (isSelected) R.font.inter_semibold else R.font.inter_medium)
         }
         icon?.setColorFilter(
-            getColor(if (isSelected) R.color.text_primary else R.color.text_tertiary),
+            getColor(if (isSelected) R.color.primary_light else R.color.text_tertiary),
             android.graphics.PorterDuff.Mode.SRC_IN
         )
         indicator?.visibility = if (isSelected) View.VISIBLE else View.GONE

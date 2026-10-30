@@ -4,7 +4,6 @@ package com.lumora
 import com.lumora.ui.dialog.LumoraDialog
 import android.content.res.Configuration
 import android.view.KeyEvent
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.TextureView
@@ -15,7 +14,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.lumora.adapter.LiveGuideAdapter
 import com.lumora.data.IptvProviderStore
@@ -96,6 +94,7 @@ internal class MultiviewPane(
     val label: TextView,
     val badge: TextView,
     val spinner: ProgressBar,
+    val error: View,
     val manager: PlayerManager,
     var channel: Channel
 ) {
@@ -233,8 +232,12 @@ internal fun MainActivity.returnToMultiviewGrid(addChannel: Channel?) {
     binding.playerAspectContainer.visibility = View.GONE
     binding.playerSubtitleView.visibility = View.GONE
     binding.bufferingSpinner.visibility = View.GONE
+    (binding.multiviewGrid.parent as? View)?.visibility = View.VISIBLE
     binding.multiviewGrid.visibility = View.VISIBLE
     binding.multiviewBar.visibility = View.VISIBLE
+    // Rotating while add mode was open changes the column count. Re-flow before the panes
+    // are reattached/selected so the grid matches the new window rather than the old shape.
+    layoutMultiviewCells()
     multiviewPanes.forEach { pane ->
         if (pane.released) return@forEach
         pane.manager.setTextureView(pane.surface)
@@ -378,6 +381,7 @@ internal fun MainActivity.teardownMultiview() {
     multiviewPanes.forEach { releaseMultiviewPane(it) }
     multiviewPanes = emptyList()
     binding.multiviewGrid.removeAllViews()
+    (binding.multiviewGrid.parent as? View)?.visibility = View.GONE
     binding.multiviewGrid.visibility = View.GONE
     binding.multiviewBar.visibility = View.GONE
     isMultiviewVisible = false
@@ -424,6 +428,7 @@ internal fun MainActivity.addMultiviewPane(channel: Channel, select: Boolean = t
     val label = cell.findViewById<TextView>(R.id.mvCellLabel)
     val badge = cell.findViewById<TextView>(R.id.mvCellBadge)
     val spinner = cell.findViewById<ProgressBar>(R.id.mvCellSpinner)
+    val error = cell.findViewById<View>(R.id.mvCellError)
     // Muted and focusless from the start: selectMultiviewPane is what hands the audible
     // pane its focus and volume, so a pane can never steal audio the split second it is
     // built before selection runs.
@@ -436,6 +441,7 @@ internal fun MainActivity.addMultiviewPane(channel: Channel, select: Boolean = t
         label = label,
         badge = badge,
         spinner = spinner,
+        error = error,
         manager = manager,
         channel = channel
     )
@@ -463,6 +469,9 @@ internal fun MainActivity.closeMultiviewPane(index: Int) {
     releaseMultiviewPane(pane)
     multiviewPanes = multiviewPanes.filterIndexed { i, _ -> i != index }
     if (multiviewPanes.isEmpty()) {
+        // Keep the closed channel as the guide preview target; exitMultiview() cannot read
+        // it from the now-empty pane list.
+        lastFocusedLiveChannel = pane.channel
         exitMultiview()
         return
     }
@@ -510,8 +519,19 @@ private fun MainActivity.cellLayoutParams(): LinearLayout.LayoutParams =
 
 /** Two columns on TV and landscape; a portrait phone gets one, where two 16:9 tiles side by
  *  side would be postage stamps. */
-internal fun MainActivity.multiviewColumns(): Int =
-    if (!isTv && resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 1 else 2
+/** One pane always gets the whole width; two or more use the window's normal column count.
+ *  A portrait phone is one column whatever the count. Pure so the geometry can be tested. */
+internal fun multiviewColumnCount(paneCount: Int, portraitPhone: Boolean): Int =
+    if (paneCount <= 1 || portraitPhone) 1 else 2
+
+/** Left/right in the grid and its action bar should follow the reading direction: in RTL
+ *  a "right" key walks toward the previous logical item. */
+internal fun multiviewHorizontalStep(delta: Int, rtl: Boolean): Int = if (rtl) -delta else delta
+
+internal fun MainActivity.multiviewColumns(): Int = multiviewColumnCount(
+    multiviewPanes.size,
+    !isTv && resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT,
+)
 
 // ── Playback per pane ────────────────────────────────────────────────────────────────────
 
@@ -535,6 +555,7 @@ internal fun MainActivity.playMultiviewPane(pane: MultiviewPane, channel: Channe
     pane.versionIndex = group.indexOfFirst { !isStreamDead(it) }.takeIf { it >= 0 } ?: 0
     pane.spinner.visibility = View.VISIBLE
     refreshMultiviewPaneUi(pane)
+    if (pane.index == multiviewSelectedIndex) refreshMultiviewStatus()
     startMultiviewStream(pane)
 }
 
@@ -724,6 +745,7 @@ internal fun MainActivity.advanceMultiviewVersion(pane: MultiviewPane, markDead:
  *  pane then sat on "Offline - retrying" forever. */
 internal fun MainActivity.failMultiviewPane(pane: MultiviewPane) {
     if (pane.released || pane.failed) return
+    val wasSelected = pane.index == multiviewSelectedIndex
     pane.failed = true
     pane.played = false
     pane.retrying = false
@@ -732,6 +754,20 @@ internal fun MainActivity.failMultiviewPane(pane: MultiviewPane) {
     pane.nextRetryAtMs = System.currentTimeMillis() + paneRetryDelay(pane.retryAttempt)
     runCatching { pane.manager.stop() }
     refreshMultiviewPaneUi(pane)
+    if (wasSelected) {
+        // Audio followed the selected pane. When it dies, hand both audio and D-pad focus to
+        // a playing pane rather than leaving the whole grid silent on a dead screen.
+        val fallback = multiviewPanes.firstOrNull {
+            it !== pane && !it.released && !it.failed && it.played
+        } ?: multiviewPanes.firstOrNull { it !== pane && !it.released && !it.failed }
+        if (fallback != null) {
+            selectMultiviewPane(fallback.index, takeFocus = pane.root.hasFocus())
+        } else {
+            pane.manager.updateAudioFocus(false)
+            multiviewPanes.forEach { it.manager.updateAudioFocus(false) }
+            refreshMultiviewStatus()
+        }
+    }
     com.lumora.diagnostics.SessionLog.event("multiview", "pane ${pane.index} failed ${pane.channel.name}")
 }
 
@@ -753,6 +789,7 @@ internal fun MainActivity.retryMultiviewPane(pane: MultiviewPane) {
     pane.versionIndex = group.indexOfFirst { !isStreamDead(it) }.takeIf { it >= 0 } ?: 0
     pane.spinner.visibility = View.VISIBLE
     refreshMultiviewPaneUi(pane)
+    if (pane.index == multiviewSelectedIndex) refreshMultiviewStatus()
     com.lumora.diagnostics.SessionLog.event("multiview", "pane ${pane.index} retry ${pane.channel.name}")
     startMultiviewStream(pane)
 }
@@ -825,14 +862,23 @@ internal fun MainActivity.refreshAllMultiviewPanesUi() {
 internal fun MainActivity.refreshMultiviewPaneUi(pane: MultiviewPane) {
     if (pane.released) return
     pane.label.text = pane.channel.name
-    // The cell root is the D-pad/touch target, so it carries the channel's name for TalkBack
-    // (the label TextViews inside it are decorative duplicates).
-    pane.root.contentDescription = pane.channel.name
+    pane.root.isSelected = pane.index == multiviewSelectedIndex
+    // The cell root is the D-pad/touch target, so it carries the whole state for TalkBack:
+    // which screen this is, the channel, and whether it is audible, muted or offline.
+    val screen = getString(R.string.mv_a11y_screen, pane.index + 1)
+    val state = when {
+        pane.failed -> getString(R.string.mv_a11y_offline)
+        pane.retrying -> getString(R.string.mv_a11y_connecting)
+        pane.index == multiviewSelectedIndex -> getString(R.string.mv_a11y_audio_on)
+        else -> getString(R.string.mv_a11y_muted)
+    }
+    pane.root.contentDescription = "${pane.channel.name}, $screen, $state"
+    pane.error.visibility = if (pane.failed) View.VISIBLE else View.GONE
     when {
         pane.failed -> {
-            pane.badge.visibility = View.VISIBLE
-            pane.badge.text = getString(R.string.mv_status_offline)
-            pane.badge.setTextColor(getColor(R.color.text_secondary))
+            // The centred "Offline" panel is the message; a second corner badge would only
+            // repeat it over the dead frame.
+            pane.badge.visibility = View.GONE
         }
         // A retry in flight (auto or user): say so, rather than showing the tile as if
         // nothing were happening - this is the one state where a working retry and a dead
@@ -854,16 +900,32 @@ internal fun MainActivity.refreshMultiviewPaneUi(pane: MultiviewPane) {
 /** The bar's single line: selected channel, then "· programme" once the guide answers. */
 internal fun MainActivity.refreshMultiviewStatus() {
     val pane = multiviewPanes.getOrNull(multiviewSelectedIndex) ?: return
-    binding.multiviewStatus.text = pane.channel.name
+    binding.btnMvFullscreen.text = getString(
+        if (pane.failed) R.string.mv_retry else R.string.mv_fullscreen
+    )
+    val state = when {
+        pane.failed -> getString(R.string.mv_status_offline)
+        pane.retrying -> getString(R.string.mv_status_connecting)
+        else -> null
+    }
+    binding.multiviewStatus.text = if (state == null) {
+        pane.channel.name
+    } else {
+        getString(R.string.mv_status_line, pane.channel.name, state)
+    }
     val channelId = pane.channel.id
-    if (channelId.isBlank() || pane.channel.mediaType != MediaType.LIVE) return
+    if (channelId.isBlank() || pane.channel.mediaType != MediaType.LIVE || state != null) return
     scope.launch {
         val program = runCatching { resolveCurrentProgram(channelId) }.getOrNull() ?: return@launch
         // The grid may have closed (or the pane changed) while the guide was being asked.
         if (!isMultiviewVisible) return@launch
         val current = multiviewPanes.getOrNull(multiviewSelectedIndex)
-        if (current == null || current.channel.id != channelId) return@launch
-        binding.multiviewStatus.text = "${current.channel.name}  \u00b7  ${program.title}"
+        if (current == null || current.channel.id != channelId || current.failed || current.retrying) return@launch
+        binding.multiviewStatus.text = getString(
+            R.string.mv_status_line,
+            current.channel.name,
+            program.title,
+        )
     }
 }
 
@@ -971,23 +1033,27 @@ internal fun MainActivity.handleMultiviewKey(keyCode: Int): Boolean {
             return true
         }
         KeyEvent.KEYCODE_DPAD_LEFT -> {
+            val rtl = binding.multiviewGrid.layoutDirection == View.LAYOUT_DIRECTION_RTL
+            val step = multiviewHorizontalStep(-1, rtl)
             if (barHasFocus) {
-                moveMultiviewBarFocus(-1)
+                moveMultiviewBarFocus(step)
                 return true
             }
-            val target = multiviewSelectedIndex - 1
-            if (target >= 0 && target / columns == multiviewSelectedIndex / columns) {
+            val target = multiviewSelectedIndex + step
+            if (target in panes.indices && target / columns == multiviewSelectedIndex / columns) {
                 selectMultiviewPane(target, takeFocus = true)
             }
             return true
         }
         KeyEvent.KEYCODE_DPAD_RIGHT -> {
+            val rtl = binding.multiviewGrid.layoutDirection == View.LAYOUT_DIRECTION_RTL
+            val step = multiviewHorizontalStep(1, rtl)
             if (barHasFocus) {
-                moveMultiviewBarFocus(1)
+                moveMultiviewBarFocus(step)
                 return true
             }
-            val target = multiviewSelectedIndex + 1
-            if (target < panes.size && target / columns == multiviewSelectedIndex / columns) {
+            val target = multiviewSelectedIndex + step
+            if (target in panes.indices && target / columns == multiviewSelectedIndex / columns) {
                 selectMultiviewPane(target, takeFocus = true)
             }
             return true
@@ -1051,16 +1117,13 @@ internal fun MainActivity.showMultiviewChannelPicker(onPick: (Channel) -> Unit) 
         Toast.makeText(this, getString(R.string.mv_toast_no_live), Toast.LENGTH_SHORT).show()
         return
     }
-    val list = RecyclerView(this).apply {
-        layoutManager = LinearLayoutManager(this@showMultiviewChannelPicker)
-        adapter = MultiviewPickerAdapter(candidates) { channel ->
-            multiviewPickerDialog?.dismiss()
-            onPick(channel)
-        }
-    }
+    val labels = candidates.map { it.name }.toTypedArray()
     multiviewPickerDialog = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.mv_picker_title))
-        .setView(list)
+        .setItems(labels) { dialog, which ->
+            dialog.dismiss()
+            onPick(candidates[which])
+        }
         .setNegativeButton(getString(R.string.cancel), null)
         .setOnDismissListener {
             multiviewPickerDialog = null
@@ -1068,37 +1131,26 @@ internal fun MainActivity.showMultiviewChannelPicker(onPick: (Channel) -> Unit) 
         }
         .create()
         .also { dialog ->
-            dialog.setOnShowListener {
-                // Focus has to land inside the list, or the D-pad starts on the dialog's
-                // Cancel button and the picker needs a stray DOWN before it works. Posted,
-                // since the RecyclerView has no children yet when show() returns.
-                list.post { list.layoutManager?.findViewByPosition(0)?.requestFocus() }
-            }
             dialog.show()
+            // The dialog's own focus pass can run before the list has laid out its first
+            // row, leaving focus on the bare RecyclerView - OK then does nothing until a
+            // stray DOWN. Post once the row exists, and once more in case the list was
+            // still measuring on the first pass.
+            dialog.window?.decorView
+                ?.findViewById<RecyclerView>(R.id.lumoraDialogChoices)
+                ?.let { list ->
+                    list.post {
+                        val first = list.layoutManager?.findViewByPosition(0)
+                        if (first != null) {
+                            first.requestFocus()
+                        } else {
+                            list.post {
+                                list.layoutManager?.findViewByPosition(0)?.requestFocus()
+                            }
+                        }
+                    }
+                }
         }
-}
-
-/** Minimal row adapter for the picker: a name per channel, focusable for the D-pad. */
-internal class MultiviewPickerAdapter(
-    private val items: List<Channel>,
-    private val onPick: (Channel) -> Unit
-) : RecyclerView.Adapter<MultiviewPickerAdapter.ViewHolder>() {
-
-    class ViewHolder(val text: TextView) : RecyclerView.ViewHolder(text)
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_multiview_picker_row, parent, false) as TextView
-        return ViewHolder(view)
-    }
-
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val channel = items[position]
-        holder.text.text = channel.name
-        holder.text.setOnClickListener { onPick(channel) }
-    }
-
-    override fun getItemCount(): Int = items.size
 }
 
 // ── Provider connection limits ───────────────────────────────────────────────────────────
@@ -1111,7 +1163,9 @@ internal fun MainActivity.warnIfProviderOverLimit(channel: Channel) {
     val providerId = channel.sourceProviderId ?: return
     val config = IptvProviderStore.load(prefs).firstOrNull { it.id == providerId } ?: return
     if (config.maxConnections <= 0) return
-    val used = multiviewPanes.count { it.channel.sourceProviderId == providerId }
+    val used = multiviewPanes.count {
+        it.channel.sourceProviderId == providerId && !it.released && !it.failed
+    }
     if (used > config.maxConnections) {
         Toast.makeText(this, getString(R.string.mv_toast_provider_limit, config.name, config.maxConnections), Toast.LENGTH_LONG).show()
     }
