@@ -21,6 +21,14 @@ import kotlinx.coroutines.launch
 // an API before opening costs everything. Everything here is best effort - no network, no
 // TMDB id, or no contributed timestamps all end the same way, with no button and no error.
 
+/** Whether a segment type belongs on this playback. Films keep credits/preview, but no
+ *  "Skip Intro": IntroDB occasionally carries an opening-titles window for a movie, and a
+ *  Skip Intro button over a film's first scene reads as a bug, not a convenience. Series
+ *  episodes keep the full set. */
+internal fun skipSegmentAllowedFor(channel: Channel, type: String): Boolean =
+    channel.mediaType != MediaType.LIVE &&
+        (channel.mediaType != MediaType.MOVIE || !type.equals("intro", ignoreCase = true))
+
 /** Begins (or clears) the skip-segment lookup for a playback that just started. Called from
  *  showPlayerFor, after nowPlayingChannel is set - the async result checks what is playing
  *  when it lands, so a quick surf past a title never attaches its segments to the next one. */
@@ -44,7 +52,7 @@ internal fun MainActivity.startSkipSegmentLookup(channel: Channel) {
         // attaching these timestamps would put another title's skip button over this one.
         val playing = nowPlayingChannel ?: return@launch
         if (playing.id.ifBlank { playing.url } != key || skipSegmentsForKey != key) return@launch
-        currentSkipSegments = segments
+        currentSkipSegments = segments.filter { skipSegmentAllowedFor(playing, it.type) }
         updateSkipSegmentUi()
     }
 }
@@ -102,7 +110,11 @@ internal fun MainActivity.updateSkipSegmentUi() {
     }
     val position = playerManager.currentPosition
     val duration = playerManager.duration
-    val segment = currentSkipSegments.firstOrNull { it.contains(position, duration) && it.key != dismissedSkipSegmentKey }
+    val segment = currentSkipSegments.firstOrNull {
+        it.contains(position, duration) &&
+            skipSegmentAllowedFor(channel, it.type) &&
+            it.key != dismissedSkipSegmentKey
+    }
     activeSkipSegment = segment
     if (segment == null) {
         binding.btnSkipSegment.visibility = View.GONE
@@ -140,6 +152,7 @@ internal fun MainActivity.updateSkipSegmentUi() {
 
 /** The button's click handler. */
 internal fun MainActivity.skipActiveSegment() {
+    val channel = nowPlayingChannel ?: return
     // The cached segment is the fast path; the once-a-second tick can outlive it (the chain
     // stops with playback at the very end, and a pause on the last frame leaves whatever was
     // shown standing), so recompute against the current position before giving up - and with
@@ -149,12 +162,15 @@ internal fun MainActivity.skipActiveSegment() {
     // can read as containing the position) must not seek back into the credits as if the
     // press were the end-of-episode skip. The type compare is case-insensitive like the
     // pill's label lookup.
-    val segment = activeSkipSegment
+    val segment = activeSkipSegment?.takeIf { skipSegmentAllowedFor(channel, it.type) }
         ?: currentSkipSegments.firstOrNull {
-            it.contains(playerManager.currentPosition, playerManager.duration) && it.key != dismissedSkipSegmentKey
+            it.contains(playerManager.currentPosition, playerManager.duration) &&
+                skipSegmentAllowedFor(channel, it.type) &&
+                it.key != dismissedSkipSegmentKey
         }
         ?: currentSkipSegments.lastOrNull {
             it.type.equals("credits", ignoreCase = true) &&
+                skipSegmentAllowedFor(channel, it.type) &&
                 it.key != dismissedSkipSegmentKey &&
                 playerManager.currentPosition >= it.startMs
         }
@@ -166,6 +182,8 @@ internal fun MainActivity.skipActiveSegment() {
  *  rebuffer that reports an earlier position) does not re-offer it. A later episode gets a
  *  fresh slate via resetSkipSegments. */
 private fun MainActivity.performSkipSegment(segment: SkipSegment) {
+    val channel = nowPlayingChannel ?: return
+    if (!skipSegmentAllowedFor(channel, segment.type)) return
     dismissedSkipSegmentKey = segment.key
     activeSkipSegment = null
     binding.btnSkipSegment.visibility = View.GONE

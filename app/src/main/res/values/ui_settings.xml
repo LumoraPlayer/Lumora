@@ -84,6 +84,10 @@
     <string name="sett_backup_secrets_note">The backup file carries provider logins and media-server session tokens as readable text — keep it somewhere private.</string>
     <string name="sett_export_failed">Export failed</string>
     <string name="sett_no_backup_file">No backup file found at %1$s</string>
+    <string name="sett_backup_saved_title">Backup saved</string>
+    <string name="sett_backup_saved_local">No document picker is available on this device. The backup was written to the app external files folder:\n\n%1$s\n\nCopy this file off the device to keep it safe.</string>
+    <string name="sett_backup_missing_title">Backup not found</string>
+    <string name="sett_restore_local_hint">No document picker is available on this device. Copy a Lumora backup into this folder as lumora_backup.json, then choose Restore again.</string>
     <string name="sett_imported_summary">Imported: %1$d providers, %2$d EPG sources, %3$d groups, %4$d settings</string>
     <string name="sett_import_failed_reason">Import failed: %1$s</string>
 

@@ -290,7 +290,40 @@ internal fun MainActivity.takeStartScreen(): String? {
 internal fun MainActivity.canApplyStartScreen(screen: String?): Boolean =
     screen != null && activeTab == 0 && !showingHome && !showingDiscover && !showingSports
 
+/** Last Films/Series sidebar row, persisted across restarts. The match/source ids are
+ *  re-resolved from the fresh row after the tab's categories are built, so a catalogue
+ *  change cannot restore a stale filter. */
+private const val VOD_LAST_ROW_PREFIX = "vod_last_row_"
+
+internal fun vodLastRowKey(tab: Int) = "$VOD_LAST_ROW_PREFIX$tab"
+
+/** Remembers the current Films/Series category/shelf before the tab goes away. Called from
+ *  selectTab before the active tab changes; other paths that clear the selection call
+ *  persistVodSelectionPref() directly. */
+internal fun MainActivity.rememberVodSelection() {
+    val tab = activeTab
+    if (tab != 1 && tab != 2) return
+    vodTabSelections[tab] = VodTabSelection(
+        rowId = selectedRowId,
+        categoryIds = selectedCategoryIds,
+        brandIds = selectedBrandChannelIds,
+        label = selectedCategoryLabel,
+        shelfItems = selectedShelfItems,
+    )
+    persistVodSelectionPref()
+}
+
+/** Writes only the row id: that is enough to restore a category after a restart, and the
+ *  fresh row supplies the current ids/counts when the tab is re-entered. */
+internal fun MainActivity.persistVodSelectionPref() {
+    if (activeTab != 1 && activeTab != 2) return
+    prefs.edit().putString(vodLastRowKey(activeTab), selectedRowId.orEmpty()).apply()
+}
+
 internal fun MainActivity.selectTab(index: Int) {
+    // Capture the current Films/Series selection before anything is cleared. On a same-tab
+    // press this also keeps the category the user is on instead of snapping back to shelves.
+    rememberVodSelection()
     activeSettingsOverlay?.dismiss()
     activeSearchOverlay?.dismiss()
     activeTab = index
@@ -354,6 +387,21 @@ internal fun MainActivity.selectTab(index: Int) {
     selectedRowId = null
     selectedCategoryLabel = null
     selectedShelfItems = null
+    if (index == 1 || index == 2) {
+        val saved = vodTabSelections[index]
+        if (saved != null) {
+            selectedRowId = saved.rowId
+            selectedCategoryIds = saved.categoryIds
+            selectedBrandChannelIds = saved.brandIds
+            selectedCategoryLabel = saved.label
+            selectedShelfItems = saved.shelfItems
+        } else {
+            // First visit since the process started: the row id survives in prefs, and the
+            // ids/label are re-resolved below against the categories actually built now.
+            val row = prefs.getString(vodLastRowKey(index), "").orEmpty()
+            if (row.isNotEmpty()) selectedRowId = row
+        }
+    }
     expandedGroupKeys.clear()
     // Nothing from the outgoing tab stays on screen while the new one builds. The
     // sidebar and the content pane were both left up until submitCategories() replaced
@@ -391,6 +439,37 @@ internal fun MainActivity.selectTab(index: Int) {
         // scrolls down to it, regardless of what's selected at the top.
         if (index == 0) expandedGroupKeys.add("${DYNAMIC_BUCKET_ID_PREFIX}Sports")
         val categories = buildCategoriesForActiveTab()
+        if (index != 0 && selectedShelfItems == null && selectedRowId != null) {
+            // Refresh the stored filter against the rows built for this catalogue. A saved
+            // row whose category disappeared (or a catalogue refresh that changed its
+            // match ids) must not open an empty grid or restore a stale filter.
+            val row = categories.firstOrNull { it.id == selectedRowId }
+                ?: categoryChildrenCache.values
+                    .firstOrNull { children -> children.any { it.id == selectedRowId } }
+                    ?.firstOrNull { it.id == selectedRowId }
+            if (row == null) {
+                selectedRowId = null
+                selectedCategoryIds = null
+                selectedBrandChannelIds = null
+                selectedCategoryLabel = null
+                prefs.edit().remove(vodLastRowKey(index)).apply()
+            } else {
+                selectedCategoryLabel = row.name
+                selectedBrandChannelIds = row.channelIds.ifEmpty { null }
+                selectedCategoryIds = if (row.channelIds.isNotEmpty()) null else row.matchIds
+                if (selectedCategoryIds.isNullOrEmpty() &&
+                    selectedBrandChannelIds == null &&
+                    row.id != NEWEST_CATEGORY_ID
+                ) {
+                    // A row with no filter behind it (the All helper): shelves are the
+                    // only meaningful content.
+                    selectedRowId = null
+                    selectedCategoryIds = null
+                    selectedCategoryLabel = null
+                    selectedBrandChannelIds = null
+                }
+            }
+        }
         // buildCategoriesForActiveTab() is seconds' work on a large catalog, and the user
         // is free to leave the tab while it runs. Everything below puts the category
         // sidebar and the content row back on screen unconditionally, so landing late

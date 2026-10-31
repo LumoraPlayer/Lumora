@@ -934,6 +934,9 @@ class MainActivity : AppCompatActivity() {
     // exact category name doesn't necessarily line up with the sidebar's merged rows).
     // Takes priority over selectedCategoryIds in applyCategoryFilter when set.
     internal var selectedShelfItems: List<Channel>? = null
+    /** Last Films/Series category or shelf selection, per tab, so leaving and returning
+     *  lands where the user was instead of rebuilding the default shelves. */
+    internal val vodTabSelections = mutableMapOf<Int, VodTabSelection>()
     // ── DB-backed VOD grid paging ───────────────────
     // The grid under the Films/Series tabs pages through catalog_channels instead of
     // filtering a resident list. These remember what the current grid is showing.
@@ -3406,3 +3409,13 @@ internal fun List<Channel>.indexOfChannel(channel: Channel): Int {
     if (id.isBlank()) return indexOfFirst { it === channel }
     return indexOfFirst { it === channel || it.id == id }
 }
+
+/** One Films/Series selection, kept per tab so returning to the tab lands on the category
+ *  or shelf the user left instead of the default shelves. */
+internal class VodTabSelection(
+    val rowId: String?,
+    val categoryIds: Set<String>?,
+    val brandIds: Set<String>?,
+    val label: String?,
+    val shelfItems: List<Channel>?,
+)

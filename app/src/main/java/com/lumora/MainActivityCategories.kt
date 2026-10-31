@@ -1548,6 +1548,7 @@ internal fun MainActivity.showAllVodContent() {
     selectedBrandChannelIds = null
     selectedShelfItems = null
     categoryAdapter.setSelected(null)
+    persistVodSelectionPref()
     scope.launch { applyCategoryFilter(wholesale = true) }
 }
 
@@ -1601,6 +1602,7 @@ internal fun MainActivity.showSeeAll(shelf: ContentShelf) {
     // out of the catalogue database. Newest has no keys - it is the "all, by date" query.
     selectedCategoryIds = shelf.matchIds.takeIf { it.isNotEmpty() }
     selectedBrandChannelIds = shelf.channelIds.takeIf { it.isNotEmpty() }
+    persistVodSelectionPref()
     scope.launch { applyCategoryFilter(wholesale = true) }
 }
 
@@ -1761,6 +1763,7 @@ internal fun MainActivity.onCategorySelected(category: CategoryFilter) {
     selectedCategoryLabel = category.name
     selectedBrandChannelIds = category.channelIds.ifEmpty { null }
     selectedCategoryIds = if (category.id == null) null else category.matchIds
+    persistVodSelectionPref()
     if (expandChanged) {
         if (category.expanded) {
             // Was expanded -> collapsing: just remove child rows from the existing
@@ -2325,6 +2328,7 @@ internal fun MainActivity.onSideMenuCategoryClicked(category: CategoryFilter) {
         selectedCategoryLabel = category.name
         selectedBrandChannelIds = category.channelIds.ifEmpty { null }
         selectedCategoryIds = if (category.id == null) null else category.matchIds
+        persistVodSelectionPref()
         categoryAdapter.setSelected(selectedRowId)
         applyCategoryFilter(wholesale = true)
     }

@@ -3,6 +3,7 @@ package com.lumora
 
 import com.lumora.anime.AnimeCatalogClient
 import com.lumora.cache.FavoritesStore
+import com.lumora.cache.VodContentStore
 import com.lumora.data.IptvProviderStore
 import com.lumora.data.catalog.CatalogMapping
 import com.lumora.data.catalog.CatalogRepository
@@ -162,13 +163,23 @@ internal suspend fun MainActivity.buildVodContent(
      *  Lets the caller paint instead of waiting for the whole pass. */
     onProgress: (suspend (MainActivity.FilmsSeriesContent) -> Unit)? = null
 ): MainActivity.FilmsSeriesContent = VOD_BUILD_MUTEX.withLock {
+    val buildStartedAt = System.currentTimeMillis()
     val repo = CatalogRepository.get(this)
     if (isVodDisabled()) return emptyVodContent()
+    // Process start rebuilds the shelves from Room even though the catalogue itself did not
+    // change. Restore the last complete screen first; the key check below decides whether
+    // it is still current or should be shown as stale-while-revalidate.
+    if (vodContentCache == null) {
+        withContext(Dispatchers.IO) { VodContentStore.load(this@buildVodContent) }?.let { (savedKey, saved) ->
+            vodContentCache = VodContentCache(savedKey, saved)
+        }
+    }
     val key = buildVodCacheKey(repo)
     vodContentCache?.let { cached ->
         if (cached.key == key) {
             val refreshed = refreshVodLead(cached.content)
             vodContentCache = VodContentCache(key, refreshed)
+            perf("vod content(cache)", buildStartedAt)
             return refreshed
         }
         // Stale-while-revalidate: the cached content describes the same tabs from before
@@ -197,6 +208,15 @@ internal suspend fun MainActivity.buildVodContent(
         if (onProgress != null) onProgress.invoke(content)
     }
     vodContentCache = VodContentCache(key, content)
+    // Persist off the build coroutine but before returning, so a process death right after
+    // the first paint still has a snapshot to restore. The file is app-private and gzipped.
+    withContext(Dispatchers.IO) { VodContentStore.save(this@buildVodContent, key, content) }
+    perf(
+        "vod content(build)",
+        buildStartedAt,
+        "films=${content.filmList.size} series=${content.seriesList.size} " +
+            "shelves=${content.filmShelves.size}/${content.seriesShelves.size}",
+    )
     content
 }
 
@@ -280,7 +300,10 @@ private suspend fun MainActivity.buildVodCacheKey(repo: CatalogRepository): Stri
     append(getPinnedCategories(2).hashCode())
     append(getHiddenCategories(2).hashCode())
     append(animeSections.hashCode())
-    append(allChannels.size)
+    // Only the in-memory VOD entries (anime/plugin) can change the VOD model outside the
+    // stored catalogue. The old allChannels.size counted live channels too, so a live
+    // refresh or a multiview pane appearing invalidated every Films/Series shelf.
+    append(allChannels.count { it.mediaType != MediaType.LIVE })
     append(FavoritesStore.getFavoriteSeriesIds(this@buildVodCacheKey).hashCode())
 }
 

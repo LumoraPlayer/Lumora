@@ -2350,66 +2350,101 @@ internal fun MainActivity.showProviderSettings() {
 
     // Backup & Restore
     val backupManager = BackupManager(this)
-    dialogView.findViewById<View>(R.id.settingsExportBackup).setOnClickListener {
-        val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(android.content.Intent.CATEGORY_OPENABLE)
-            type = "application/json"
-            putExtra(android.content.Intent.EXTRA_TITLE, "lumora_backup.json")
-        }
-        try {
-            startActivityForResult(intent, MainActivity.REQUEST_EXPORT_BACKUP)
-            pendingBackupManager = backupManager
-        } catch (e: Exception) {
-            // Fire TV and most Android TV boxes ship no document picker at all - SAF
-            // just isn't there to launch. Caught broadly, not just
-            // ActivityNotFoundException: resolver failures surface as other throwables
-            // on some firmware, and any of them must fall back to the fixed
-            // app-storage location instead of crashing the tap.
-            scope.launch {
-                val file = localBackupFile()
-                val success = withContext(Dispatchers.IO) { backupManager.exportTo(Uri.fromFile(file)) }
+
+    fun showBackupPath(title: String, message: String) {
+        LumoraDialog.Builder(this@showProviderSettings)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton(getString(android.R.string.ok), null)
+            .show()
+    }
+
+    // A TV stick can resolve ACTION_CREATE_DOCUMENT / ACTION_OPEN_DOCUMENT to the
+    // framework package stubs, which open to "No application can handle this action".
+    // That is a resolver hit, so the old try/catch never fired. Fall back to the app's
+    // external files folder and show the exact path to copy from/into.
+    fun exportBackupLocally() {
+        scope.launch {
+            val file = localBackupFile()
+            val success = withContext(Dispatchers.IO) { backupManager.exportTo(Uri.fromFile(file)) }
+            if (success) {
+                showBackupPath(
+                    getString(R.string.sett_backup_saved_title),
+                    getString(R.string.sett_backup_saved_local, file.absolutePath),
+                )
+            } else {
                 Toast.makeText(
                     this@showProviderSettings,
-                    if (success) getString(R.string.sett_backup_saved_to, file.absolutePath) else getString(R.string.sett_export_failed),
-                    Toast.LENGTH_LONG
+                    getString(R.string.sett_export_failed),
+                    Toast.LENGTH_LONG,
                 ).show()
             }
         }
     }
+
+    fun importBackupLocally() {
+        val file = localBackupFile()
+        if (!file.exists()) {
+            showBackupPath(
+                getString(R.string.sett_backup_missing_title),
+                getString(R.string.sett_no_backup_file, file.absolutePath) + "\n\n" +
+                    getString(R.string.sett_restore_local_hint),
+            )
+            return
+        }
+        scope.launch {
+            var result = withContext(Dispatchers.IO) { backupManager.importFrom(Uri.fromFile(file)) }
+            if (result.conflicts > 0 && result.providersImported == 0 && result.epgSourcesImported == 0) {
+                result = withContext(Dispatchers.IO) { backupManager.importFrom(Uri.fromFile(file), confirmed = true) }
+            }
+            Toast.makeText(
+                this@showProviderSettings,
+                result.errorMessage?.let { getString(R.string.sett_import_failed_reason, it) }
+                    ?: getString(
+                        R.string.sett_imported_summary,
+                        result.providersImported,
+                        result.epgSourcesImported,
+                        result.customGroupsImported,
+                        result.settingsImported,
+                    ),
+                Toast.LENGTH_LONG,
+            ).show()
+            if (result.errorMessage == null) applyImportedConfiguration()
+        }
+    }
+
+    dialogView.findViewById<View>(R.id.settingsExportBackup).setOnClickListener {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(Intent.EXTRA_TITLE, "lumora_backup.json")
+        }
+        val picker = documentPickerIntent(intent)
+        if (picker == null) {
+            exportBackupLocally()
+        } else {
+            try {
+                startActivityForResult(picker, MainActivity.REQUEST_EXPORT_BACKUP)
+                pendingBackupManager = backupManager
+            } catch (_: Exception) {
+                exportBackupLocally()
+            }
+        }
+    }
     dialogView.findViewById<View>(R.id.settingsImportBackup).setOnClickListener {
-        val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(android.content.Intent.CATEGORY_OPENABLE)
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/json"
         }
-        try {
-            startActivityForResult(intent, MainActivity.REQUEST_IMPORT_BACKUP)
-            pendingBackupManager = backupManager
-        } catch (e: Exception) {
-            // Same broad catch as export above: any resolver failure falls back to the
-            // local file instead of crashing the tap.
-            val file = localBackupFile()
-            if (!file.exists()) {
-                Toast.makeText(this@showProviderSettings, getString(R.string.sett_no_backup_file, file.absolutePath), Toast.LENGTH_LONG).show()
-            } else {
-                scope.launch {
-                    // Import is an explicit user action, so existing data isn't a decision
-                    // point - auto-confirm on the first pass's conflict result (see the
-                    // same pattern in MainActivity.REQUEST_IMPORT_BACKUP) so the import
-                    // actually applies instead of silently reporting 0 imported.
-                    var result = withContext(Dispatchers.IO) { backupManager.importFrom(Uri.fromFile(file)) }
-                    if (result.conflicts > 0 && result.providersImported == 0 && result.epgSourcesImported == 0) {
-                        result = withContext(Dispatchers.IO) { backupManager.importFrom(Uri.fromFile(file), confirmed = true) }
-                    }
-                    // A failed import is not a silent zero - say what went wrong, or the
-                    // toast is indistinguishable from a backup that genuinely held nothing.
-                    Toast.makeText(
-                        this@showProviderSettings,
-                        result.errorMessage?.let { getString(R.string.sett_import_failed_reason, it) }
-                            ?: getString(R.string.sett_imported_summary, result.providersImported, result.epgSourcesImported, result.customGroupsImported, result.settingsImported),
-                        Toast.LENGTH_LONG
-                    ).show()
-                    if (result.errorMessage == null) applyImportedConfiguration()
-                }
+        val picker = documentPickerIntent(intent)
+        if (picker == null) {
+            importBackupLocally()
+        } else {
+            try {
+                startActivityForResult(picker, MainActivity.REQUEST_IMPORT_BACKUP)
+                pendingBackupManager = backupManager
+            } catch (_: Exception) {
+                importBackupLocally()
             }
         }
     }
