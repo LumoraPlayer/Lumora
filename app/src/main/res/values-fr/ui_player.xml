@@ -91,4 +91,25 @@
     <string name="play_last_episode">Dernier épisode</string>
     <string name="play_first">Premier</string>
     <string name="play_last">Dernier</string>
+
+    <!-- Added 2026-10: translations brought up to date -->
+    <string name="player_options_title">Options du lecteur</string>
+    <string name="player_more">Plus</string>
+    <string name="player_back">Retour</string>
+    <string name="player_all_options">Options</string>
+    <string name="player_speed">Vitesse</string>
+    <string name="player_aspect">Format</string>
+    <string name="player_default">Par défaut</string>
+    <string name="play_channel_other_broadcast">%1$s · autre diffusion</string>
+    <string name="play_torrent_version_title">Torrent</string>
+    <string name="play_stremio_version_title">Flux · %1$s</string>
+    <string name="play_source_now">en cours de lecture</string>
+    <string name="play_source_via_debrid">via %1$s</string>
+    <string name="play_source_failed">Impossible d\'ouvrir cette source - essayez-en une autre</string>
+    <string name="play_drm_unsupported">Cet appareil ne peut pas lire ce flux protégé</string>
+    <string name="play_drm_external_unsupported">Les flux protégés ne peuvent pas être confiés à une autre application</string>
+    <string name="play_drm_scheme_unsupported">Ce flux protégé utilise %1$s, qui n\'est pas pris en charge</string>
+    <string name="player_epg_next">Ensuite</string>
+    <string name="live_preview_next">Ensuite : %1$s</string>
+    <string name="live_preview_no_info">Aucune info programme</string>
 </resources>

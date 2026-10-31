@@ -65,6 +65,35 @@ class TmdbClient {
     }
 
     /**
+     * Titles TMDB lists alongside [mediaType]/[id] - the film detail screen's "More Like
+     * This" strip. `recommendations` is the curated list; `similar` is the fallback for the
+     * titles TMDB has no recommendations for at all.
+     *
+     * Cached per title for the process, same reasoning as [titleDetails]: backing out of a
+     * title and re-opening it should not spend another round trip on a list that has not
+     * changed.
+     */
+    suspend fun recommendations(mediaType: String, id: Int): List<Channel> {
+        if (id <= 0) return emptyList()
+        val type = if (mediaType == "tv") "tv" else "movie"
+        val cacheKey = "$languageTag:$type:$id"
+        recommendationCache[cacheKey]?.let { return it }
+        val parsed = withContext(Dispatchers.IO) {
+            val recommended = fetchBody(
+                "/$type/$id/recommendations",
+                "language=$languageTag&page=1"
+            )?.let { parse(it, forcedType = type) }.orEmpty()
+            recommended.ifEmpty {
+                fetchBody("/$type/$id/similar", "language=$languageTag&page=1")
+                    ?.let { parse(it, forcedType = type) }
+                    .orEmpty()
+            }
+        }
+        recommendationCache[cacheKey] = parsed
+        return parsed
+    }
+
+    /**
      * org.json's `optString` returns the literal `"null"` for a JSON null - JSONObject.NULL
      * is an object and its toString() is "null" - so a null `poster_path` became the URL
      * ".../w342null", and a null title became a tile labelled "null". This treats JSON null
@@ -562,6 +591,7 @@ class TmdbClient {
     private val titleCache = java.util.concurrent.ConcurrentHashMap<String, Boxed>()
     private val personCache = java.util.concurrent.ConcurrentHashMap<String, BoxedPerson>()
     private val imdbCache = java.util.concurrent.ConcurrentHashMap<String, BoxedImdb>()
+    private val recommendationCache = java.util.concurrent.ConcurrentHashMap<String, List<Channel>>()
 
     companion object {
         /**

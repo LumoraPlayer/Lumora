@@ -413,8 +413,8 @@ internal fun MainActivity.isPortraitPhone(): Boolean =
 
 /** The chrome pills whose label sits beside their icon, paired with the id of the view that
  *  label lives in - the label itself, except on Live TV where label and Catch Up caret share a
- *  nested group so the caret follows the label when the pill stacks. Settings and Refresh are
- *  not here: they are icon-only, so there is nothing to stack. */
+ *  nested group so the caret follows the label when the pill stacks. Search, Settings and
+ *  Refresh are not here: they are icon-only, so there is nothing to stack. */
 private fun MainActivity.chromeLabelPills(): List<Triple<View, Int, Int>> = listOf(
     Triple(binding.tabHome, R.id.tabHomeLabel, R.id.tabHomeLabel),
     Triple(binding.tabLive, R.id.tabLiveLabelGroup, R.id.tabLiveLabel),
@@ -423,8 +423,64 @@ private fun MainActivity.chromeLabelPills(): List<Triple<View, Int, Int>> = list
     Triple(binding.tabFilms, R.id.tabFilmsLabel, R.id.tabFilmsLabel),
     Triple(binding.tabDiscover, R.id.tabDiscoverLabel, R.id.tabDiscoverLabel),
     Triple(binding.tabDownloads, R.id.tabDownloadsLabel, R.id.tabDownloadsLabel),
-    Triple(binding.btnSearch, R.id.btnSearchLabel, R.id.btnSearchLabel),
 )
+
+/** The label and icon inside one primary tab. Used by both selection and focus so the two
+ *  cannot disagree about which tab is readable. */
+private class TabContent(val label: TextView?, val icon: ImageView?)
+
+private fun MainActivity.tabContent(tab: View): TabContent? = when (tab.id) {
+    R.id.tabLive -> TabContent(
+        tab.findViewById(R.id.tabLiveLabel),
+        tab.findViewById(R.id.tabLiveIcon),
+    )
+    R.id.tabSports -> TabContent(
+        tab.findViewById(R.id.tabSportsLabel),
+        tab.findViewById(R.id.tabSportsIcon),
+    )
+    R.id.tabSeries -> TabContent(
+        tab.findViewById(R.id.tabSeriesLabel),
+        tab.findViewById(R.id.tabSeriesIcon),
+    )
+    R.id.tabFilms -> TabContent(
+        tab.findViewById(R.id.tabFilmsLabel),
+        tab.findViewById(R.id.tabFilmsIcon),
+    )
+    R.id.tabHome -> TabContent(
+        tab.findViewById(R.id.tabHomeLabel),
+        tab.findViewById(R.id.tabHomeIcon),
+    )
+    R.id.tabDiscover -> TabContent(
+        tab.findViewById(R.id.tabDiscoverLabel),
+        tab.findViewById(R.id.tabDiscoverIcon),
+    )
+    R.id.tabDownloads -> TabContent(
+        tab.findViewById(R.id.tabDownloadsLabel),
+        tab.findViewById(R.id.tabDownloadsIcon),
+    )
+    else -> null
+}
+
+/** A selected tab is readable before the D-pad reaches it; a focused tab is readable even
+ *  when it is not the selected one. The old code keyed colour on selection alone, so an
+ *  unselected tab lit by the focus ring kept its dim label. */
+private fun MainActivity.applyTabContentColors(tab: View, focused: Boolean = tab.hasFocus()) {
+    val content = tabContent(tab) ?: return
+    val active = tab.isSelected || focused
+    content.label?.setTextColor(
+        getColor(if (active) R.color.text_primary else R.color.text_secondary)
+    )
+    content.icon?.setColorFilter(
+        getColor(
+            when {
+                tab.isSelected -> R.color.primary_light
+                focused -> R.color.text_primary
+                else -> R.color.text_tertiary
+            }
+        ),
+        android.graphics.PorterDuff.Mode.SRC_IN
+    )
+}
 
 /** Reshapes the top chrome row (six tabs + Search + Settings/Refresh) for a portrait phone.
  *
@@ -496,10 +552,13 @@ internal fun MainActivity.applyChromeWrap() {
         if (tightPortrait) View.GONE else View.VISIBLE
     binding.root.findViewWithTag<View>("toolbarUtilitiesDivider")?.visibility =
         if (tightPortrait) View.GONE else View.VISIBLE
-    // A portrait phone already has the system clock; freeing the toolbar clock and the
-    // Search label gives the tab scroller a usable window beside the fixed utilities.
-    binding.toolbarClock.visibility = if (portrait) View.GONE else View.VISIBLE
-    binding.btnSearchLabel.visibility = if (portrait) View.GONE else View.VISIBLE
+    // A portrait phone already has the system clock; on a narrow landscape tablet the
+    // ambient clock is also the first thing that can go, because it is the only item in
+    // the trailing cluster that is not an action. Hiding it keeps Search/Settings/Refresh
+    // on-screen at 853dp instead of letting the clock push the gear and refresh off the
+    // edge. Wide TV/tablet rows keep it.
+    val showClock = !portrait && resources.configuration.screenWidthDp >= 900
+    binding.toolbarClock.visibility = if (showClock) View.VISIBLE else View.GONE
     binding.btnSearch.contentDescription = getString(R.string.search)
 
     // Gap between wrapped lines. The pills scale to 1.06x on focus (focus_scale_flat), so
@@ -1825,10 +1884,14 @@ internal fun MainActivity.setupTabs() {
     // D-pad focus moving between tabs leaves a stale sliver of the previous tab's
     // rounded-border background behind on some TV-stick GPUs - the view's own
     // self-invalidate on unfocus doesn't always clear it. Forcing the whole bar to
-    // redraw on every focus change is a blunt but reliable fix.
-    val invalidateBarOnFocus = View.OnFocusChangeListener { _, _ -> binding.tabBar.invalidate() }
+    // redraw on every focus change is a blunt but reliable fix. The same pass brightens
+    // the focused tab's label and icon, so the white ring is not the only focus cue.
+    val onTabFocus = View.OnFocusChangeListener { view, hasFocus ->
+        binding.tabBar.invalidate()
+        applyTabContentColors(view, hasFocus)
+    }
     for (tv in listOf(binding.tabHome, binding.tabLive, binding.tabSports, binding.tabSeries, binding.tabFilms, binding.tabDiscover, binding.tabDownloads)) {
-        tv.onFocusChangeListener = invalidateBarOnFocus
+        tv.onFocusChangeListener = onTabFocus
     }
     // Hide tab bar + search until an enabled provider exists
     updateTopChromeVisibility()
@@ -1836,31 +1899,21 @@ internal fun MainActivity.setupTabs() {
 }
 
 internal fun MainActivity.updateTabStyles(selected: View) {
-    for (tv in listOf(binding.tabHome, binding.tabLive, binding.tabSports, binding.tabSeries, binding.tabFilms, binding.tabDiscover, binding.tabDownloads)) {
+    // The tabs are icon-only until chosen; the selected one grows to carry its full name.
+    for ((tv, holderId, labelId) in chromeLabelPills()) {
         val isSelected = tv === selected
         tv.isSelected = isSelected
-        val (labelId, iconId, indicatorId) = when (tv.id) {
-            R.id.tabLive -> Triple(R.id.tabLiveLabel, R.id.tabLiveIcon, R.id.tabLiveIndicator)
-            R.id.tabSports -> Triple(R.id.tabSportsLabel, R.id.tabSportsIcon, R.id.tabSportsIndicator)
-            R.id.tabSeries -> Triple(R.id.tabSeriesLabel, R.id.tabSeriesIcon, R.id.tabSeriesIndicator)
-            R.id.tabFilms -> Triple(R.id.tabFilmsLabel, R.id.tabFilmsIcon, R.id.tabFilmsIndicator)
-            R.id.tabHome -> Triple(R.id.tabHomeLabel, R.id.tabHomeIcon, R.id.tabHomeIndicator)
-            R.id.tabDiscover -> Triple(R.id.tabDiscoverLabel, R.id.tabDiscoverIcon, R.id.tabDiscoverIndicator)
-            R.id.tabDownloads -> Triple(R.id.tabDownloadsLabel, R.id.tabDownloadsIcon, R.id.tabDownloadsIndicator)
-            else -> continue
-        }
         val label = tv.findViewById<TextView>(labelId)
-        val icon = tv.findViewById<ImageView>(iconId)
-        val indicator = tv.findViewById<View>(indicatorId)
-        label?.let {
-            it.setTextColor(getColor(if (isSelected) R.color.text_primary else R.color.text_secondary))
-            it.typeface = ResourcesCompat.getFont(this, if (isSelected) R.font.inter_semibold else R.font.inter_medium)
-        }
-        icon?.setColorFilter(
-            getColor(if (isSelected) R.color.primary_light else R.color.text_tertiary),
-            android.graphics.PorterDuff.Mode.SRC_IN
+        // The label is collapsed for every unselected tab, so TalkBack needs the name on
+        // the tab itself rather than relying on a GONE TextView.
+        tv.contentDescription = label?.text
+        tv.findViewById<View>(holderId).visibility = if (isSelected) View.VISIBLE else View.GONE
+        val content = tabContent(tv) ?: continue
+        content.label?.typeface = ResourcesCompat.getFont(
+            this,
+            if (isSelected) R.font.inter_semibold else R.font.inter_medium,
         )
-        indicator?.visibility = if (isSelected) View.VISIBLE else View.GONE
+        applyTabContentColors(tv)
     }
     selected.requestFocus()
 }

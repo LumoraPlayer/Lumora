@@ -880,6 +880,10 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     val favoriteIcon = binding.detailFavoriteIcon
     val versionsScroll = binding.detailVersionsScroll
     val versionsRow = binding.detailVersionsRow
+    val moreLikeDivider = binding.detailMoreLikeDivider
+    val moreLikeLabel = binding.detailMoreLikeLabel
+    val moreLikeScroll = binding.detailMoreLikeScroll
+    val moreLikeRow = binding.detailMoreLikeRow
     val downloadButton = binding.detailDownloadButton
     val castScroll = binding.detailCastScroll
     val castRow = binding.detailCastRow
@@ -955,9 +959,9 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         val firstCast = binding.detailCastRow.getChildAt(0)
             ?.takeIf { binding.detailCastScroll.isShown && it.isShown }
         if (firstCast?.requestFocus() == true) return true
-        val target = versionsRow.getChildAt(0)?.takeIf { versionsScroll.isShown && it.isShown }
-            ?: selectedSeasonChip?.takeIf { it.isShown }
-        return target?.requestFocus() ?: false
+        // Versions, then a season/episode list, then the film's More Like This strip - the
+        // same order the page itself stacks them.
+        return focusBelowDetailHeader()
     }
 
     // The star sits beside the title, above the Play row: DOWN lands on Play
@@ -1014,6 +1018,10 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     selectedSeasonChip = null
     versionsScroll.visibility = View.GONE
     versionsRow.removeAllViews()
+    moreLikeDivider.visibility = View.GONE
+    moreLikeLabel.visibility = View.GONE
+    moreLikeScroll.visibility = View.GONE
+    moreLikeRow.removeAllViews()
     castScroll.visibility = View.GONE
     castRow.removeAllViews()
     playButton.nextFocusDownId = View.NO_ID
@@ -1035,12 +1043,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     statusText.text = getString(R.string.loading)
     statusText.visibility = View.VISIBLE
     playButton.setOnClickListener(null)
-    binding.detailBackButton.setOnClickListener {
-        hideContentDetail()
-        // The detail screen may have been opened from a search result; without this the
-        // pending-query flag survived and a later Back re-opened the stale search.
-        restoreSearchIfPending()
-    }
+    binding.detailBackButton.setOnClickListener { backOutOfContentDetail() }
     // Nothing requests focus just because contentDetailLayout became visible - without
     // this the D-pad has no reliable starting point on this screen (same class of bug
     // fixed elsewhere via restoreTabFocus()). Landing on Play once it loads is more
@@ -1828,7 +1831,8 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                         wireVerticalFocus(
                             chip,
                             onUp = { focusFirstDetailActionFromBelow() },
-                            onDown = { selectedSeasonChip?.takeIf { it.isShown }?.requestFocus() ?: false }
+                            // Past the versions strip on a film: the More Like This row.
+                            onDown = { focusBelowVersions() }
                         )
                         chip.setOnClickListener {
                             hideContentDetail()
@@ -1848,6 +1852,9 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                         }
                     }
                 }
+                // Film-only: TMDB's recommendations for what to watch next. The strip sits
+                // below the versions row and stays hidden when TMDB has nothing to say.
+                wireMoreLikeThis(item, requestedItemId, versions)
             }
         } catch (e: Exception) {
             if (nowShowingDetailId == requestedItemId) statusText.text = getString(R.string.list_detail_load_failed, e.message?.take(60) ?: "null")
@@ -1904,6 +1911,38 @@ private fun needsEpisodeMetadata(episode: Channel, seriesName: String): Boolean 
         episode.posterUrl.isNullOrBlank() ||
         episode.releaseDate.isNullOrBlank() ||
         isPlaceholderEpisodeTitle(episode, seriesName)
+
+/**
+ * Back out of the detail screen one level: a "More Like This" tile pushes the film it was
+ * pressed on, so this rebuilds that page first and only the root returns to the grid (and a
+ * search session it may have been opened from). Re-arms [detailFromPerson] after the rebuild
+ * for a page that itself came from a filmography - [showContentDetail] resets it on every
+ * open.
+ */
+internal fun MainActivity.backOutOfContentDetail() {
+    // A title opened from a person page returns there before any recommendation trail
+    // underneath it - that page is the topmost step in the chain. openPerson is the guard:
+    // a page that lost its state must fall through to the trail or the grid, not leave the
+    // screen hidden with nothing to show.
+    if (detailFromPerson && openPerson != null) {
+        detailFromPerson = false
+        hideContentDetail(restoreMain = false)
+        showPersonPage()
+        return
+    }
+    detailFromPerson = false
+    val previous = contentDetailBackStack.removeLastOrNull()
+    if (previous != null) {
+        hideContentDetail(restoreMain = false)
+        showContentDetail(previous.item, previous.group)
+        if (previous.fromPerson) detailFromPerson = true
+        return
+    }
+    hideContentDetail()
+    // The detail screen may have been opened from a search result; without this the
+    // pending-query flag survived and a later Back re-opened the stale search.
+    restoreSearchIfPending()
+}
 
 internal fun MainActivity.hideContentDetail(restoreMain: Boolean = true) {
     isContentDetailVisible = false

@@ -142,7 +142,7 @@
                 </LinearLayout>
 
                 <LinearLayout android:id="@+id/navSports" style="@style/Widget.Lumora.SettingsNavRow">
-                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_sports" android:tint="@color/nav_icon_tint" />
+                    <ImageView android:layout_width="@dimen/settings_nav_icon_size" android:layout_height="@dimen/settings_nav_icon_size" android:src="@drawable/ic_sports_ball" android:tint="@color/nav_icon_tint" />
                     <TextView style="@style/Widget.Lumora.SettingsNavLabel" android:text="@string/sports_settings_title" />
                 </LinearLayout>
 

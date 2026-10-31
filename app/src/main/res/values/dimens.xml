@@ -140,12 +140,14 @@
          the general type scale, so the toolbar can be tuned without moving everything else
          that happened to sit on the same step. -->
     <dimen name="tab_text">13sp</dimen>
-    <!-- Width of the active-tab underline. -->
-    <dimen name="tab_indicator_width">28dp</dimen>
     <!-- Toolbar clock: a deliberate step under tab_text - it's ambient information, not a
          control, so it must not compete with the tab labels for the eye. -->
     <dimen name="toolbar_clock_text">11sp</dimen>
-    <dimen name="tab_padding_horizontal">36dp</dimen>
+    <!-- Room to breathe inside a tab pill without turning the row into a sparse line of
+         islands: the old 36dp padding was sized for a scrolling phone strip and left three
+         tabs looking scattered across a landscape tablet. 12dp also keeps all seven
+         icon-only tabs plus the pinned utilities inside an 853dp tablet row. -->
+    <dimen name="tab_padding_horizontal">12dp</dimen>
     <!-- Tab pills are wrap_content in height with this above and below the label, and the
          tab bar itself is wrap_content around them - so the row's height is a function of
          tab_text, not a fixed bar the labels happen to sit inside. -->
@@ -244,6 +246,15 @@
     <dimen name="side_menu_row_height">38dp</dimen>
     <dimen name="side_menu_text">13sp</dimen>
     <dimen name="side_menu_icon">17dp</dimen>
+    <!-- The Live TV dropdown is its own menu, not the player side menu: remote-sized 48dp
+         targets and larger labels, with an opaque panel behind them. -->
+    <dimen name="live_menu_width">224dp</dimen>
+    <dimen name="live_menu_padding">8dp</dimen>
+    <dimen name="live_menu_row_height">48dp</dimen>
+    <dimen name="live_menu_row_padding_horizontal">12dp</dimen>
+    <dimen name="live_menu_icon">18dp</dimen>
+    <dimen name="live_menu_icon_gap">12dp</dimen>
+    <dimen name="live_menu_text">14sp</dimen>
     <dimen name="text_body_s">11sp</dimen>
     <dimen name="text_body">12sp</dimen>
     <dimen name="text_body_l">13sp</dimen>
@@ -322,11 +333,12 @@
          as compact icon buttons - the tab-band height and focus ring carry the tab
          language instead. -->
     <dimen name="chrome_button_padding_h">10dp</dimen>
+    <dimen name="chrome_button_min_size">48dp</dimen>
     <!-- The gap between two chrome pills (the tabs, Search). The pills carry their own
          padding, so this is only the space between them - a dimen because the TV tier
          squeezes it (the chrome row has to carry six tabs, Search, the settings/refresh pair
          and the clock on one line at 960dp) while a wide set keeps the roomier gap. -->
-    <dimen name="chrome_pill_gap">3dp</dimen>
+    <dimen name="chrome_pill_gap">4dp</dimen>
     <!-- The chrome row's own horizontal padding, at the two ends of the tab strip. It is
          what a focused pill's 1.06x scale bleeds into at the row's edges, so it cannot go
          below the scale's overhang - hence a dimen, tightened on the TV tier for the same

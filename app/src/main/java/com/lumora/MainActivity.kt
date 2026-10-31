@@ -801,6 +801,19 @@ class MainActivity : AppCompatActivity() {
     /** True while the title detail on screen was opened from a person page's filmography:
      *  Back goes to that person page instead of the grid behind it. */
     internal var detailFromPerson = false
+    /** Film detail pages behind the one on screen, pushed by a "More Like This" tile. Back
+     *  pops this before dropping to the grid, so a recommendation chain unwinds to the film
+     *  it was started from. Playback leaves it alone: returning from the player re-opens the
+     *  same page with the trail still behind it. */
+    internal val contentDetailBackStack = ArrayDeque<ContentDetailBackEntry>()
+
+    /** One film behind a recommendation; [group] is the version set it was opened with, and
+     *  [fromPerson] keeps its own person-page return path after it is rebuilt. */
+    internal data class ContentDetailBackEntry(
+        val item: Channel,
+        val group: List<Channel>?,
+        val fromPerson: Boolean
+    )
 
     /** Identity of an open person page; see [openPerson]. */
     internal data class OpenPerson(
@@ -2486,14 +2499,9 @@ class MainActivity : AppCompatActivity() {
         // The person page is the topmost content screen when it is up, whether it covers the
         // title it was opened from or a credit's detail page took that slot over.
         else if (isPersonDetailVisible) { hidePersonDetail(); restoreSearchIfPending() }
-        // A title opened from a person page: Back closes it and re-opens the person, rather
-        // than dropping to the grid the whole chain started from.
-        else if (isContentDetailVisible && detailFromPerson) {
-            detailFromPerson = false
-            hideContentDetail(restoreMain = false)
-            showPersonPage()
-        }
-        else if (isContentDetailVisible) { hideContentDetail(); restoreSearchIfPending() }
+        // A title detail unwinds one level: back to the person page it was opened from,
+        // then to the film a "More Like This" tile jumped from, and only then to the grid.
+        else if (isContentDetailVisible) { backOutOfContentDetail() }
         // Back walks back up the way the user came in rather than dropping straight out of
         // the app. Inside a section (Live/Series/Films/Discover/Downloads) the first press
         // goes to the top of that section - a Films/Series category grid up to that tab's

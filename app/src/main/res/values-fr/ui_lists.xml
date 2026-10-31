@@ -33,6 +33,7 @@
     <plurals name="list_season_episode_count">
         <item quantity="one">%1$s · %2$d épisode</item>
         <item quantity="other">%1$s · %2$d épisodes</item>
+        <item quantity="many">%1$s · %2$d d\'épisodes</item>
     </plurals>
     <string name="list_no_episodes">Aucun épisode trouvé</string>
     <string name="list_released">Sorti le : %1$s</string>
@@ -40,6 +41,7 @@
     <string name="list_director">Réalisateur : %1$s</string>
     <string name="list_cast">Distribution : %1$s</string>
     <string name="list_detail_load_failed">Échec du chargement des détails : %1$s</string>
+    <string name="list_more_like_this">Titres similaires</string>
 
     <!-- Fiche d\'un membre de la distribution (biographie + filmographie, MainActivityCast.kt) -->
     <string name="list_person_biography">Biographie</string>
@@ -97,4 +99,14 @@
     <string name="list_recent_clear_all_confirm">Vider toutes les chaînes de Lus récemment ? Seule la liste de cet appareil est concernée.</string>
     <string name="list_recent_removed">Retiré de Lus récemment</string>
     <string name="list_recent_cleared">Lus récemment vidé</string>
+
+    <!-- Added 2026-10: translations brought up to date -->
+    <string name="list_download_drm_unsupported">Les flux protégés ne peuvent pas être téléchargés</string>
+    <string name="list_program_info">Infos programme</string>
+    <string name="list_program_on_now">En ce moment</string>
+    <string name="list_program_ended">Terminé</string>
+    <string name="list_program_duration">%1$d min</string>
+    <string name="list_program_no_description">Aucune description disponible pour ce programme.</string>
+    <string name="list_program_reminder_hint">Maintenez OK pour définir un rappel</string>
+    <string name="list_program_reminder_set">Rappel défini · Maintenez OK pour annuler</string>
 </resources>

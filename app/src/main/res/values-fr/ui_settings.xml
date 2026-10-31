@@ -224,4 +224,19 @@
 
     <!-- Backup -->
     <string name="sett_backup_secrets_note">Le fichier de sauvegarde contient vos identifiants de fournisseurs et les jetons de session des serveurs multimédia en clair — conservez-le dans un endroit privé.</string>
+
+    <!-- Added 2026-10: translations brought up to date -->
+    <string name="sett_provider_backup">Utiliser comme source de secours</string>
+    <string name="sett_provider_backup_hint">Masquée dans la navigation. Elle reste utilisée si la source principale échoue.</string>
+    <string name="sett_provider_backup_badge">Secours</string>
+    <string name="sett_provider_backup_needed">Gardez au moins une source visible</string>
+    <string name="sett_import_failed_reason">Échec de l\'importation : %1$s</string>
+    <string name="sett_fast_zap">Changement de chaîne plus rapide : %1$s</string>
+    <string name="sett_frame_rate_match">Adapter la fréquence d\'affichage : %1$s</string>
+    <string name="sett_start_screen">Ouvrir l\'application sur</string>
+    <string name="sett_start_screen_row">%1$s  ·  %2$s</string>
+    <string name="sett_start_screen_caption">S\'applique à la prochaine ouverture de l\'application</string>
+    <string name="sett_update_checks">Rechercher automatiquement les mises à jour</string>
+    <string name="sett_update_checks_caption">Afficher un avis lorsqu\'une version plus récente est disponible - une version qui doit être mise à jour, ou qui a plus de 10 versions de retard, est de toute façon avertie.</string>
+    <string name="trakt" translatable="false">Trakt</string>
 </resources>

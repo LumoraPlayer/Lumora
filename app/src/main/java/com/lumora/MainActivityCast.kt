@@ -53,15 +53,24 @@ internal fun MainActivity.focusFirstDetailEpisode(): Boolean {
 }
 
 /** Whatever sits below the detail header for a DOWN press out of the cast faces: the
- *  version chips, else the season for the episode on screen, else the episode list
- *  itself - so DOWN never dead-ends on the faces while the strips below are still
- *  loading (they build on a different coroutine than these faces, in any order). */
+ *  version chips, else the season for the episode on screen, else the episode list, else
+ *  the film's More Like This strip - so DOWN never dead-ends on the faces while the strips
+ *  below are still loading (they build on a different coroutine than these faces, in any
+ *  order). */
 internal fun MainActivity.focusBelowDetailHeader(): Boolean {
     val versionsFirst = binding.detailVersionsRow.getChildAt(0)
         ?.takeIf { binding.detailVersionsScroll.isShown && it.isShown }
     if (versionsFirst?.requestFocus() == true) return true
+    return focusBelowVersions()
+}
+
+/** Whatever sits below the versions strip itself. Kept apart from [focusBelowDetailHeader]
+ *  so a DOWN on a version chip skips the strip it is already standing in instead of
+ *  bouncing to its first chip. */
+internal fun MainActivity.focusBelowVersions(): Boolean {
     if (selectedSeasonChip?.takeIf { it.isShown }?.requestFocus() == true) return true
-    return focusFirstDetailEpisode()
+    if (focusFirstDetailEpisode()) return true
+    return firstMoreLikeTile()?.requestFocus() ?: false
 }
 
 /**

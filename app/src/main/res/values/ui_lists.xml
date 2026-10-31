@@ -52,6 +52,7 @@
     <string name="list_director">Director: %1$s</string>
     <string name="list_cast">Cast: %1$s</string>
     <string name="list_detail_load_failed">Failed to load details: %1$s</string>
+    <string name="list_more_like_this">More Like This</string>
 
     <!-- Cast member page (biography + filmography, MainActivityCast.kt) -->
     <string name="list_person_biography">Biography</string>

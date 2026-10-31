@@ -281,6 +281,7 @@
                          land on a line of its own under the label). -->
                     <LinearLayout
                         android:id="@+id/tabLiveLabelGroup"
+                        android:visibility="gone"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -316,13 +317,6 @@
                     </LinearLayout>
                 </LinearLayout>
 
-                <View
-                    android:id="@+id/tabLiveIndicator"
-                    android:layout_width="@dimen/tab_indicator_width"
-                    android:layout_height="4dp"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/tab_indicator"
-                    android:visibility="gone" />
             </LinearLayout>
 
             <!-- Sports sits between Live TV and Series: it is a live-television screen (every
@@ -358,11 +352,12 @@
                         android:id="@+id/tabSportsIcon"
                         android:layout_width="20dp"
                         android:layout_height="20dp"
-                        android:src="@drawable/ic_sports"
+                        android:src="@drawable/ic_sports_ball"
                         android:tint="@color/text_secondary" />
 
                     <TextView
                         android:id="@+id/tabSportsLabel"
+                        android:visibility="gone"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -374,13 +369,6 @@
                         android:textSize="@dimen/tab_text" />
                 </LinearLayout>
 
-                <View
-                    android:id="@+id/tabSportsIndicator"
-                    android:layout_width="@dimen/tab_indicator_width"
-                    android:layout_height="4dp"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/tab_indicator"
-                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout
@@ -418,6 +406,7 @@
 
                     <TextView
                         android:id="@+id/tabSeriesLabel"
+                        android:visibility="gone"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -429,13 +418,6 @@
                         android:textSize="@dimen/tab_text" />
                 </LinearLayout>
 
-                <View
-                    android:id="@+id/tabSeriesIndicator"
-                    android:layout_width="@dimen/tab_indicator_width"
-                    android:layout_height="4dp"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/tab_indicator"
-                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout
@@ -473,6 +455,7 @@
 
                     <TextView
                         android:id="@+id/tabFilmsLabel"
+                        android:visibility="gone"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -484,13 +467,6 @@
                         android:textSize="@dimen/tab_text" />
                 </LinearLayout>
 
-                <View
-                    android:id="@+id/tabFilmsIndicator"
-                    android:layout_width="@dimen/tab_indicator_width"
-                    android:layout_height="4dp"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/tab_indicator"
-                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout
@@ -528,6 +504,7 @@
 
                     <TextView
                         android:id="@+id/tabHomeLabel"
+                        android:visibility="gone"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -539,13 +516,6 @@
                         android:textSize="@dimen/tab_text" />
                 </LinearLayout>
 
-                <View
-                    android:id="@+id/tabHomeIndicator"
-                    android:layout_width="@dimen/tab_indicator_width"
-                    android:layout_height="4dp"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/tab_indicator"
-                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout
@@ -583,6 +553,7 @@
 
                     <TextView
                         android:id="@+id/tabDiscoverLabel"
+                        android:visibility="gone"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -594,13 +565,6 @@
                         android:textSize="@dimen/tab_text" />
                 </LinearLayout>
 
-                <View
-                    android:id="@+id/tabDiscoverIndicator"
-                    android:layout_width="@dimen/tab_indicator_width"
-                    android:layout_height="4dp"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/tab_indicator"
-                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout
@@ -639,6 +603,7 @@
 
                     <TextView
                         android:id="@+id/tabDownloadsLabel"
+                        android:visibility="gone"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -650,13 +615,6 @@
                         android:textSize="@dimen/tab_text" />
                 </LinearLayout>
 
-                <View
-                    android:id="@+id/tabDownloadsIndicator"
-                    android:layout_width="@dimen/tab_indicator_width"
-                    android:layout_height="4dp"
-                    android:layout_marginTop="4dp"
-                    android:background="@drawable/tab_indicator"
-                    android:visibility="gone" />
             </LinearLayout>
 
         </com.lumora.ui.FlowRow>
@@ -693,51 +651,28 @@
                     android:layout_marginHorizontal="@dimen/chrome_pill_gap"
                     android:background="@drawable/bg_tab_item"
                     android:clickable="true"
+                    android:contentDescription="@string/search"
                     android:focusable="true"
                     android:gravity="center"
-                    android:orientation="vertical"
-                    android:paddingHorizontal="@dimen/tab_padding_horizontal"
-                    android:paddingTop="@dimen/tab_padding_vertical"
-                    android:paddingBottom="@dimen/tab_padding_vertical"
+                    android:minWidth="@dimen/chrome_button_min_size"
+                    android:minHeight="@dimen/chrome_button_min_size"
                     android:nextFocusLeft="@id/tabDownloads"
                     android:nextFocusRight="@id/btnSettings"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="@dimen/chrome_button_padding_h"
+                    android:paddingTop="@dimen/tab_padding_vertical"
+                    android:paddingBottom="@dimen/tab_padding_vertical"
                     android:stateListAnimator="@animator/focus_scale_flat"
                     android:layerType="none"
                     android:clipChildren="false"
                     android:clipToPadding="false">
 
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:id="@+id/btnSearchIcon"
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@drawable/ic_search"
-                            android:tint="@color/text_secondary" />
-
-                        <TextView
-                            android:id="@+id/btnSearchLabel"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:ellipsize="end"
-                            android:fontFamily="@font/inter_medium"
-                            android:maxLines="1"
-                            android:text="@string/search"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="@dimen/tab_text" />
-                    </LinearLayout>
-
-                    <View
-                        android:layout_width="24dp"
-                        android:layout_height="4dp"
-                        android:layout_marginTop="4dp"
-                        android:background="@drawable/tab_indicator"
-                        android:visibility="gone" />
+                    <ImageView
+                        android:id="@+id/btnSearchIcon"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_search"
+                        android:tint="@color/text_secondary" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -754,6 +689,8 @@
                     android:nextFocusLeft="@id/btnSearch"
                     android:nextFocusRight="@id/btnRefresh"
                     android:orientation="vertical"
+                    android:minWidth="@dimen/chrome_button_min_size"
+                    android:minHeight="@dimen/chrome_button_min_size"
                     android:paddingHorizontal="@dimen/chrome_button_padding_h"
                     android:paddingTop="@dimen/tab_padding_vertical"
                     android:paddingBottom="@dimen/tab_padding_vertical"
@@ -782,6 +719,8 @@
                     android:nextFocusLeft="@id/btnSettings"
                     android:nextFocusRight="@id/btnRefresh"
                     android:orientation="vertical"
+                    android:minWidth="@dimen/chrome_button_min_size"
+                    android:minHeight="@dimen/chrome_button_min_size"
                     android:paddingHorizontal="@dimen/chrome_button_padding_h"
                     android:paddingTop="@dimen/tab_padding_vertical"
                     android:paddingBottom="@dimen/tab_padding_vertical"
@@ -2489,6 +2428,57 @@
                                 android:overScrollMode="never"
                                 android:paddingHorizontal="6dp"
                                 android:visibility="gone" />
+
+                            <!-- Film-only "More Like This": TMDB's recommendations for the
+                                 title, as the same poster strip the cast page uses for a
+                                 filmography. A series page already ends in its episode list,
+                                 so the whole section stays hidden there; it also stays hidden
+                                 on a film until the lookup actually has something to show. -->
+                            <View
+                                android:id="@+id/detailMoreLikeDivider"
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:layout_marginTop="18dp"
+                                android:background="@color/divider"
+                                android:visibility="gone" />
+
+                            <TextView
+                                android:id="@+id/detailMoreLikeLabel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:fontFamily="@font/inter_semibold"
+                                android:text="@string/list_more_like_this"
+                                android:textAllCaps="true"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="@dimen/text_caption"
+                                android:visibility="gone" />
+
+                            <HorizontalScrollView
+                                android:id="@+id/detailMoreLikeScroll"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:clipChildren="false"
+                                android:clipToPadding="false"
+                                android:scrollbars="none"
+                                android:visibility="gone">
+
+                                <!-- Same breathing room as the cast row: the tiles scale to
+                                     1.06x on focus and the first/last need room to pop
+                                     inside the viewport. -->
+                                <LinearLayout
+                                    android:id="@+id/detailMoreLikeRow"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false"
+                                    android:orientation="horizontal"
+                                    android:paddingStart="4dp"
+                                    android:paddingEnd="4dp"
+                                    android:paddingTop="6dp"
+                                    android:paddingBottom="6dp" />
+                            </HorizontalScrollView>
                         </LinearLayout>
                     </LinearLayout>
 
@@ -3616,7 +3606,7 @@
                 <ImageView
                     android:layout_width="@dimen/side_menu_icon"
                     android:layout_height="@dimen/side_menu_icon"
-                    android:src="@drawable/ic_sports"
+                    android:src="@drawable/ic_sports_ball"
                     android:tint="@color/text_secondary" />
 
                 <TextView

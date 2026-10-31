@@ -64,7 +64,10 @@ internal fun MainActivity.updateCatchupTabVisibility() {
     // The archive vanishing under the user (its provider disabled while they are inside
     // Catch Up) must not leave the pane on screen with no way back to it.
     if (!hasArchive && showingCatchup) { selectTab(0); return }
-    if (!hasArchive && !hasMultiview) dismissLiveTabMenu()
+    if (!hasArchive && !hasMultiview) {
+        dismissLiveTabMenu()
+        binding.tabLiveChevron.rotation = 0f
+    }
     binding.tabLiveChevron.visibility = if (hasArchive || hasMultiview) View.VISIBLE else View.GONE
 }
 
@@ -87,15 +90,28 @@ internal fun MainActivity.showLiveTabMenu() {
         android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
         true
     )
-    // Transparent so bg_category_panel's rounded corners aren't squared off by the
-    // default popup background, and outside taps still dismiss (needs a background set).
+    // Transparent so bg_live_menu_panel's rounded corners aren't squared off by the default
+    // popup background, and outside taps still dismiss (needs a background set).
     popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
-    popup.setOnDismissListener { liveTabMenu = null }
+    popup.setOnDismissListener {
+        liveTabMenu = null
+        // The caret points down again as soon as the menu is gone, and the tab gets its
+        // focus ring back if the menu was opened from the D-pad.
+        binding.tabLiveChevron.animate().rotation(0f).setDuration(140).start()
+        if (!isFinishing && !isDestroyed) binding.tabLive.requestFocus()
+    }
     val liveRow = view.findViewById<View>(R.id.liveMenuLive)
     val multiviewRow = view.findViewById<View>(R.id.liveMenuMultiview)
     val catchupRow = view.findViewById<View>(R.id.liveMenuCatchup)
     multiviewRow.visibility = if (hasMultiview) View.VISIBLE else View.GONE
     catchupRow.visibility = if (hasArchive) View.VISIBLE else View.GONE
+    // Mark where the user already is. Focus still starts on Live TV (that is the way back
+    // out of Catch Up), but the selected row keeps the menu from reading as three equal
+    // choices when one of them is the current pane.
+    val inAddMode = isMultiviewAddMode
+    liveRow.isSelected = !showingCatchup && !inAddMode
+    multiviewRow.isSelected = inAddMode
+    catchupRow.isSelected = showingCatchup
     // The XML chain assumes all three rows exist; re-link it around whatever is visible
     // (wrapping at the ends, the same shape the original two-row menu had), or a D-pad
     // move toward a hidden row dead-ends.
@@ -131,7 +147,28 @@ internal fun MainActivity.showLiveTabMenu() {
         selectCatchup()
     }
     liveTabMenu = popup
-    popup.showAsDropDown(binding.tabLive, 0, 0)
+    // Drop below the chrome surface, not from the tab's text box: showAsDropDown anchors to
+    // the tab's bottom, which sits inside the bar's lower padding, so a zero offset leaves
+    // the panel's rounded top cutting into the bar. The tab and the scroller are measured in
+    // different parents, hence the window coordinates.
+    val tabLocation = IntArray(2)
+    val barLocation = IntArray(2)
+    binding.tabLive.getLocationInWindow(tabLocation)
+    binding.tabBar.getLocationInWindow(barLocation)
+    val belowChrome = (barLocation[1] + binding.tabBar.height) -
+        (tabLocation[1] + binding.tabLive.height) +
+        (6 * resources.displayMetrics.density).toInt()
+    // One focus ring, inside the menu: dropping the tab's ring while the popup owns the
+    // D-pad keeps the anchor and the first row from both looking focused. In RTL the tab
+    // sits near the right edge, so align the panel's right edge to it instead of letting
+    // the fixed-width menu run off-screen.
+    val rtl = binding.tabBar.layoutDirection == View.LAYOUT_DIRECTION_RTL
+    val xoff = if (rtl) {
+        binding.tabLive.width - resources.getDimensionPixelSize(R.dimen.live_menu_width)
+    } else 0
+    binding.tabLive.clearFocus()
+    popup.showAsDropDown(binding.tabLive, xoff, belowChrome)
+    binding.tabLiveChevron.animate().rotation(180f).setDuration(140).start()
     // The tab's own press opens this menu, so it must land on the row that names the tab:
     // pressing Live TV again is the way back to plain browsing, not a jump into Multiview.
     // The other rows are one D-pad DOWN (or a click) away. This also covers opening the

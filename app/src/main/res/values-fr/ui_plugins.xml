@@ -138,4 +138,16 @@
     <string name="plug_add_via_phone_qr">Ajouter sur votre téléphone (QR)</string>
     <string name="plug_stremio_qr_scan">Scannez avec votre téléphone, puis collez le lien du manifeste de l\'extension</string>
     <string name="plug_stremio_qr_received">Lien de l\'extension reçu — installation…</string>
+
+    <!-- Added 2026-10: translations brought up to date -->
+    <string name="plug_reddit_provider_removed">Fournisseur(s) non fonctionnel(s) détecté(s) par le scanner Reddit et supprimé(s) : %1$s</string>
+    <string name="plug_provider_not_answering">%1$s ne répond pas pour le moment - il a été ajouté désactivé. Activez-le depuis Fournisseurs si vous savez qu\'il fonctionne.</string>
+    <string name="plug_scanner_panel_dead">%1$s ne répond plus - ses chaînes ne peuvent pas être lues. Supprimez-le dans Fournisseurs ou relancez le scanner pour obtenir un nouveau panneau.</string>
+    <string name="plug_update_required_message">Cette version de l\'application est obsolète et doit être mise à jour. Lumora v%1$s est disponible (votre version : v%2$s).</string>
+    <string name="plug_force_update_title">Mise à jour requise</string>
+    <string name="plug_force_update_message">Lumora v%1$s a %3$d versions de retard sur la dernière version (v%2$s). L\'application ne peut pas être utilisée tant qu\'elle n\'est pas mise à jour - appuyez sur Mettre à jour maintenant pour l\'installer.</string>
+    <string name="plug_force_update_unrecognised_message">Cette version (v%1$s) n\'est pas une version publiée de Lumora. Installez la version officielle (v%2$s) pour continuer à utiliser l\'application.</string>
+    <string name="plug_update_now">Mettre à jour maintenant</string>
+    <string name="plug_update_dismiss">Ignorer</string>
+    <string name="plug_import_failed_reason">Échec de l\'importation : %1$s</string>
 </resources>
