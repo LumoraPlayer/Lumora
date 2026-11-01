@@ -19,7 +19,8 @@ import java.io.InputStreamReader
 /**
  * Fast, streaming M3U playlist parser.
  * Handles standard IPTV M3U format with EXTINF tags.
- * Classifies entries as LIVE, MOVIE, or SERIES based on group-title heuristics.
+ * Classifies entries as LIVE, MOVIE, or SERIES from tvg-type, URL structure and
+ * group-title heuristics.
  */
 object M3uParser {
 
@@ -29,8 +30,22 @@ object M3uParser {
     )
 
     private val MOVIE_GROUP_KEYWORDS = setOf(
-        "movie", "movies", "film", "films", "vod", "cinema", "pelicula", "peliculas"
+        "movie", "movies", "film", "films", "vod", "pelicula", "peliculas"
     )
+    /** Group names that live bouquets and VOD folders both use. "Cinema" is a
+     *  premium live category on most providers ("Sky Cinema", "FR: CINEMA") just as
+     *  often as it is a films folder, so on its own it cannot say an entry is VOD.
+     *  The stream decides: a stored file extension is evidence, anything else stays
+     *  live - the same default the classifier falls back to. */
+    private val AMBIGUOUS_MOVIE_GROUP_KEYWORDS = setOf("cinema")
+    /** Extensions of files served from VOD storage. Used only to settle an
+     *  [AMBIGUOUS_MOVIE_GROUP_KEYWORDS] group; positive movie keywords do not need it. */
+    private val VOD_FILE_EXTENSIONS = setOf(
+        "mkv", "mp4", "avi", "mov", "m4v", "wmv", "webm", "divx", "mpg", "mpeg"
+    )
+    /** Broadcast transports. No stored VOD file is served over multicast or these
+     *  stream protocols, so they prove live before any group-name guess. */
+    private val LIVE_STREAM_SCHEMES = setOf("udp", "rtp", "rtsp", "rtmp", "srt")
     /** Tested *before* the movie keywords, because the two overlap constantly: a provider that
      *  files its shows under "TV VOD", "Series VOD" or "VOD - TV Shows" matches "vod" as well,
      *  and whichever set is checked first wins. Series is the more specific claim of the two -
@@ -188,10 +203,27 @@ object M3uParser {
         }
 
         // 3. Group name keywords, series first - see SERIES_GROUP_KEYWORDS.
-        val lower = group?.lowercase() ?: return MediaType.LIVE
+        val lower = group?.lowercase().orEmpty()
         if (SERIES_GROUP_KEYWORDS.any { lower.contains(it) }) return MediaType.SERIES
+
+        // 4. A broadcast transport says "live" whatever the group is called: nothing
+        //    stored for VOD is served over multicast, RTSP, RTMP or SRT.
+        if (lowerUrl.substringBefore("://", "").lowercase() in LIVE_STREAM_SCHEMES) return MediaType.LIVE
+
+        // 5. Movie keywords. "Cinema" is checked separately because it is also a live
+        //    bouquet name; only a VOD file behind it makes it a film.
         if (MOVIE_GROUP_KEYWORDS.any { lower.contains(it) }) return MediaType.MOVIE
+        if (AMBIGUOUS_MOVIE_GROUP_KEYWORDS.any { lower.contains(it) } && looksLikeVodFileUrl(lowerUrl)) {
+            return MediaType.MOVIE
+        }
         return MediaType.LIVE
+    }
+
+    /** True when [url] ends in a stored video file's extension. Query strings and
+     *  fragments are ignored - a signed `.mkv` link still names the file. */
+    private fun looksLikeVodFileUrl(url: String): Boolean {
+        val path = url.substringBefore('?').substringBefore('#')
+        return path.substringAfterLast('.', "").lowercase() in VOD_FILE_EXTENSIONS
     }
 
     private fun parse(

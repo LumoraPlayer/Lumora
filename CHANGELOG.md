@@ -12,9 +12,15 @@
 ### Catalogue
 - **A background refresh no longer puts an Importing card over a usable cached catalogue.** When the start paints from the stored catalogue, the ingest card stays hidden for the TTL refresh; it still appears for a first import, a manual refresh, or a Films/Series tab with no cached rows.
 
+### Live TV
+- **A live playlist group called “Cinema” no longer lands in Films.** `cinema` was treated as a movie keyword, and the group match is case-insensitive, so an entire live bouquet named `CINEMA` was classified as VOD during import. “Cinema” is now an ambiguous name: it only means films when the stream itself is a stored video file, while live transports (`udp`, `rtp`, `rtsp`, `rtmp`, `srt`) always stay live. Re-importing or refreshing the playlist reclassifies the existing rows.
+
 ### Detail
 - **Loading states visibly animate.** The status row's spinner accepted only three dots while most loading strings end in the single ellipsis character, so it stayed hidden; both forms now count. The detail page's own “Loading…” line also carries an indeterminate spinner while metadata, versions and episodes are fetched.
 - **The “Resume playback?” prompt focuses Resume.** The player’s own focus work could race the dialog’s initial-focus pass; OK now lands on Resume instead of Start Over or the controls behind the prompt.
+
+### Popups
+- **Dialog choice rows keep their full focus ring.** The 1.06x focused row was clipped by the list frame at the left and right edges, leaving two horizontal white lines instead of a rounded outline. The shared dialog list now has side padding for that scale and lets the ring draw into it, so the quality, audio, track and picker popups all show the complete ring.
 
 ### Backup
 - **Backup and restore work when the TV has no document picker.** Android TV 9 resolves the document intents to the framework's `DocumentsStub`, so the old exception-based fallback never fired and the picker opened to “No application can handle this action”. Stub handlers are now rejected; if a real picker is present it is launched instead, and otherwise the backup is written to `lumora_backup.json` under the app external files folder with the path shown in a dialog. Restore reads that file and explains where to put a backup when it is missing.

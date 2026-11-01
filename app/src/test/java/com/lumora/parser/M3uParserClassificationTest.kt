@@ -89,7 +89,44 @@ class M3uParserClassificationTest {
         assertEquals(MediaType.SERIES, classify("""group-title="Seasons",Some Show""", "https://ex.com/1.mkv"))
     }
 
+    // ── "Cinema" is a live bouquet as often as a VOD folder (GitHub issue #7) ──
+
+    @Test
+    fun `cinema group with a transport stream stays live`() {
+        assertEquals(MediaType.LIVE, classify("""group-title="CINEMA",Canal+ Cinéma""", "https://ex.com/1.ts"))
+    }
+
+    @Test
+    fun `cinema group with an HLS stream stays live`() {
+        assertEquals(MediaType.LIVE, classify("""group-title="FR: CINEMA",Canal+ Cinéma""", "https://ex.com/cinema/index.m3u8"))
+    }
+
+    @Test
+    fun `cinema group without a file extension stays live`() {
+        assertEquals(MediaType.LIVE, classify("""group-title="Cinema",Sky Cinema Premiere""", "https://ex.com/channel/42"))
+    }
+
+    @Test
+    fun `cinema group with a stored film file still classifies as movie`() {
+        assertEquals(MediaType.MOVIE, classify("""group-title="Cinema",A Film""", "https://ex.com/films/film.mkv"))
+    }
+
+    @Test
+    fun `cinema group with a signed film URL still classifies as movie`() {
+        assertEquals(MediaType.MOVIE, classify("""group-title="Cinema",A Film""", "https://ex.com/films/film.mp4?token=abc"))
+    }
+
+    @Test
+    fun `broadcast stream stays live despite a movie group`() {
+        assertEquals(MediaType.LIVE, classify("""group-title="Movies",A Film""", "udp://239.0.0.1:1234"))
+    }
+
     // ── Regressions: what must keep working ──
+
+    @Test
+    fun `series group beats a live-looking stream extension`() {
+        assertEquals(MediaType.SERIES, classify("""group-title="Series",Some Show""", "https://ex.com/1.ts"))
+    }
 
     @Test
     fun `live groups containing tv stay live`() {

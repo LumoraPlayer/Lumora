@@ -68,13 +68,19 @@
          first visible row from its own top edge upwards (the row carries a focus-scale
          transform), and with the panel's clipChildren=false that row painted over the title
          above the list. The frame clips the whole list subtree to the list's bounds. It has
-         no height of its own, so dialogs without a list are unaffected. -->
+         no height of its own, so dialogs without a list are unaffected.
+
+         12dp side padding is focus room, not decoration: the focused row scales to 1.06x,
+         and without it the frame clipped the left/right strokes - every dialog showed two
+         horizontal white lines instead of a rounded ring. clipToPadding=false lets that
+         scaled stroke draw into the padding; clipChildren still stops it at the frame. -->
     <FrameLayout
         android:id="@+id/lumoraDialogChoiceFrame"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:clipChildren="true"
-        android:clipToPadding="true">
+        android:clipToPadding="false"
+        android:paddingHorizontal="@dimen/dialog_choice_side_padding">
 
         <com.lumora.ui.dialog.DialogChoiceList
             android:id="@+id/lumoraDialogChoices"
