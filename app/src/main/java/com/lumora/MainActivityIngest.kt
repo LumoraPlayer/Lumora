@@ -219,6 +219,14 @@ internal fun MainActivity.prioritizeIngestSection(tab: Int) {
     if (tab != 1 && tab != 2) return
     ingestPriorityTab = tab
     if (catalogIngest.isEmpty()) return
+    // If this half is already painted from the cache, the tab is not thin and the card has
+    // nothing to explain; leave it hidden. A tab with no cached rows still brings it back.
+    val hasCachedSection = if (tab == 1) {
+        cachedSeriesCategoryRows.isNotEmpty()
+    } else {
+        cachedFilmCategoryRows.isNotEmpty()
+    }
+    if (hasCachedSection) return
     catalogIngestHidden = false
     catalogIngestPaintedAt = 0L
     renderCatalogIngest()

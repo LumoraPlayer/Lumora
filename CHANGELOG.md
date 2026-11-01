@@ -9,6 +9,9 @@
 - **Live refreshes no longer invalidate the Films/Series cache.** The key now counts only in-memory VOD entries instead of every live channel, so a live load or a multiview pane appearing no longer rebuilds all VOD shelves.
 - **Films no longer offer Skip Intro.** IntroDB can carry an opening-titles window for a movie, which read as a bug over a film; films now keep only credits/preview segments, while episodes keep the full intro/recap/credits set.
 
+### Catalogue
+- **A background refresh no longer puts an Importing card over a usable cached catalogue.** When the start paints from the stored catalogue, the ingest card stays hidden for the TTL refresh; it still appears for a first import, a manual refresh, or a Films/Series tab with no cached rows.
+
 ### Backup
 - **Backup and restore work when the TV has no document picker.** Android TV 9 resolves the document intents to the framework's `DocumentsStub`, so the old exception-based fallback never fired and the picker opened to “No application can handle this action”. Stub handlers are now rejected; if a real picker is present it is launched instead, and otherwise the backup is written to `lumora_backup.json` under the app external files folder with the path shown in a dialog. Restore reads that file and explains where to put a backup when it is missing.
 

@@ -1159,6 +1159,11 @@ internal fun MainActivity.loadAllConfiguredProviders(
         // A fresh load narrates again even if the previous banner was hidden - including a
         // load that was cancelled before its own reset could run.
         resetCatalogIngest()
+        // But a catalogue painted from the store is already usable: a background TTL
+        // refresh must not put an "Importing..." card over content the user can watch.
+        // The card still appears for a first import and for a manual refresh (which
+        // skips the cached read and leaves paintedFromStore false).
+        if (paintedFromStore) hideCatalogIngest()
         // The live derive skips its disk cache while a catalogue is streaming in (see
         // deriveLiveHalf); cleared by finishCatalogIngest once the transfer is over.
         catalogIngestRunning = true
