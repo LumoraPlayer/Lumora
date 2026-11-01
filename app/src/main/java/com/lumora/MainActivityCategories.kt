@@ -1827,6 +1827,14 @@ internal fun MainActivity.setStatus(text: String, visible: Boolean) {
     applyStatus()
 }
 
+/** In-progress messages get a spinner; final results (counts, errors) do not. Both the
+ *  three-dot and the single ellipsis character are accepted - most of the app's loading
+ *  strings use "Loading…", which the old `endsWith("...")` check never matched. */
+internal fun isInProgressStatus(text: String): Boolean {
+    val trimmed = text.trimEnd()
+    return trimmed.endsWith("...") || trimmed.endsWith("…")
+}
+
 /**
  * Decides whether the status actually goes on screen, from the current state rather than
  * from what was true when the message was raised.
@@ -1851,11 +1859,10 @@ internal fun MainActivity.applyStatus() {
         binding.discoverContent.visibility == View.VISIBLE
     val show = statusWanted && !slotTaken
     binding.statusRow.visibility = if (show) View.VISIBLE else View.GONE
-    // In-progress messages ("Loading...", "Connecting...") get a spinner; final
-    // results ("N items", errors) don't - "..." is what already distinguishes them
-    // at every call site, no need for a second parameter everywhere.
+    // In-progress messages ("Loading…", "Connecting…") get a spinner; final
+    // results ("N items", errors) don't.
     binding.statusSpinner.visibility =
-        if (show && statusText.trimEnd().endsWith("...")) View.VISIBLE else View.GONE
+        if (show && isInProgressStatus(statusText)) View.VISIBLE else View.GONE
 }
 
 // ── Tabs ───────────────────────────────────────

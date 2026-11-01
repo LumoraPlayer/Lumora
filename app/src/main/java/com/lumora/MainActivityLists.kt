@@ -950,6 +950,21 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     val sectionLabel = binding.detailSectionLabel
     val episodesDivider = binding.detailEpisodesDivider
     val statusText = binding.detailStatus
+    val detailLoadingSpinner = binding.contentDetailLayout.findViewWithTag<View>("detailLoadingSpinner")
+    fun showDetailLoading() {
+        statusText.text = getString(R.string.loading)
+        statusText.visibility = View.VISIBLE
+        detailLoadingSpinner?.visibility = View.VISIBLE
+    }
+    fun showDetailStatus(text: String) {
+        statusText.text = text
+        statusText.visibility = View.VISIBLE
+        detailLoadingSpinner?.visibility = View.GONE
+    }
+    fun hideDetailStatus() {
+        statusText.visibility = View.GONE
+        detailLoadingSpinner?.visibility = View.GONE
+    }
     val itemsList = binding.detailItemsList
     val seasonScroll = binding.detailSeasonScroll
     val seasonRow = binding.detailSeasonRow
@@ -1119,8 +1134,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     episodesDivider.visibility = View.GONE
     itemsList.visibility = View.GONE
     itemsList.adapter = null
-    statusText.text = getString(R.string.loading)
-    statusText.visibility = View.VISIBLE
+    showDetailLoading()
     playButton.setOnClickListener(null)
     binding.detailBackButton.setOnClickListener { backOutOfContentDetail() }
     // Nothing requests focus just because contentDetailLayout became visible - without
@@ -1735,9 +1749,9 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 if (nowShowingDetailId != requestedItemId) return@launch
                 detailSeasons = seasons
                 if (seasons.all { it.second.isEmpty() }) {
-                    statusText.text = getString(R.string.list_no_episodes)
+                    showDetailStatus(getString(R.string.list_no_episodes))
                 } else {
-                    statusText.visibility = View.GONE
+                    hideDetailStatus()
                     episodesDivider.visibility = View.VISIBLE
                     itemsList.visibility = View.VISIBLE
                     // Built for a single-season show too, not just multi-season ones. The
@@ -1838,7 +1852,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 // chip all belong to that copy, so playing the group's best one instead would
                 // start a different file from zero while the screen said Resume.
                 val opened = versions.firstOrNull { it.id == item.id } ?: versions.first()
-                statusText.visibility = View.GONE
+                hideDetailStatus()
 
                 // The obvious action for a film is "play it" - a button, not a list
                 // labeled "Versions" with one cryptically-named entry in it.
@@ -1936,7 +1950,9 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 wireMoreLikeThis(item, requestedItemId, versions)
             }
         } catch (e: Exception) {
-            if (nowShowingDetailId == requestedItemId) statusText.text = getString(R.string.list_detail_load_failed, e.message?.take(60) ?: "null")
+            if (nowShowingDetailId == requestedItemId) {
+                showDetailStatus(getString(R.string.list_detail_load_failed, e.message?.take(60) ?: "null"))
+            }
         }
     }
     nowShowingDetailId = item.id

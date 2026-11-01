@@ -2398,15 +2398,32 @@
                                     android:orientation="horizontal" />
                             </HorizontalScrollView>
 
-                            <TextView
-                                android:id="@+id/detailStatus"
+                            <LinearLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="10dp"
                                 android:gravity="center"
-                                android:text="@string/loading"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="@dimen/text_body_s" />
+                                android:orientation="horizontal">
+
+                                <ProgressBar
+                                    android:tag="detailLoadingSpinner"
+                                    android:layout_width="24dp"
+                                    android:layout_height="24dp"
+                                    android:layout_marginEnd="10dp"
+                                    android:importantForAccessibility="no"
+                                    android:indeterminate="true"
+                                    android:indeterminateTint="@color/primary_light"
+                                    android:visibility="gone" />
+
+                                <TextView
+                                    android:id="@+id/detailStatus"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="center"
+                                    android:text="@string/loading"
+                                    android:textColor="@color/text_secondary"
+                                    android:textSize="@dimen/text_body_s" />
+                            </LinearLayout>
 
                             <!-- Full panel width: the row shows a title and a plot line, and
                                  the old 300dp TV end-inset (for a list that had a sidebar

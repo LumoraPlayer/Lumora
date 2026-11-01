@@ -2475,7 +2475,20 @@ internal fun MainActivity.maybeShowResumePrompt() {
             playerManager.seekTo(0); playerManager.play()
         }
         .setCancelable(false)
-        .show()
+        .create()
+        .also { dialog ->
+            // The prompt is the resume decision; put the D-pad on Resume rather than
+            // letting the player's focus work race the dialog's own initial-focus pass.
+            dialog.setOnShowListener {
+                dialog.window?.decorView?.post {
+                    if (dialog.isShowing) {
+                        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).requestFocus()
+                    }
+                }
+            }
+            resumePromptDialog = dialog
+            dialog.show()
+        }
 }
 
 /**
