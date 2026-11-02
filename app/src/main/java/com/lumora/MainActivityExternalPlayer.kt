@@ -24,6 +24,10 @@ import com.lumora.player.ExternalPlayer
 
 /** Audio formats a device commonly has no decoder for - used only to word the prompt. */
 private val LICENCED_AUDIO_MIMES = mapOf(
+    // MPEG-1/2 Layer II: the standard DVB/IPTV audio. Fire OS ships an MP3 decoder
+    // (audio/mpeg) but no MP2 one, so these play picture-only until handed to VLC.
+    "audio/mpeg-l2" to "MPEG-1 Layer II (MP2)",
+    "audio/mp2" to "MPEG-1 Layer II (MP2)",
     "audio/ac3" to "Dolby Digital (AC3)",
     "audio/eac3" to "Dolby Digital Plus (E-AC3)",
     "audio/eac3-joc" to "Dolby Digital Plus (E-AC3)",

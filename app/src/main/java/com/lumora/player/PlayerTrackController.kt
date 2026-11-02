@@ -220,6 +220,10 @@ class PlayerTrackController {
             mime.contains("ac3") -> "AC3"
             mime.contains("truehd") -> "TrueHD"
             mime.contains("dts") -> "DTS"
+            // MPEG audio Layer II has to be named before the generic "mpeg" fallback below:
+            // its MIME is audio/mpeg-L2, which would otherwise read as "MP3" even though
+            // MP3's decoder (audio/mpeg) cannot play it on most TV sticks.
+            mime.contains("mpeg-l2") || mime.contains("mp2") -> "MP2"
             mime.contains("opus") -> "Opus"
             mime.contains("vorbis") -> "Vorbis"
             mime.contains("flac") -> "FLAC"
