@@ -245,8 +245,8 @@ private fun MainActivity.showScraperSourcePicker(
     }
     val resultsHost = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        // The rows use @animator/focus_scale, which grows them past their own bounds - without
-        // these the focus pop is visibly cropped top and bottom inside the scroller.
+        // The rows use @animator/focus_scale, which grows them past their own bounds. These
+        // let the pop reach the scroller's padding; the scroller itself clips the viewport.
         clipChildren = false
         clipToPadding = false
     }
@@ -254,8 +254,13 @@ private fun MainActivity.showScraperSourcePicker(
         // wrap_content, capped by the view itself: a weighted 0dp child of a wrap_content
         // dialog measures to exactly 0, so the source list never got any height.
         isFillViewport = true
-        clipChildren = false
+        // The rows pop 1.06x on focus. Their overhang has to fit inside this padding or the
+        // ring's left/right strokes are cut. clipChildren stays true so a row scrolled past
+        // the top cannot paint over the status line above the list.
         clipToPadding = false
+        val side = resources.getDimensionPixelSize(R.dimen.dialog_choice_side_padding)
+        val edge = (6 * resources.displayMetrics.density).toInt()
+        setPaddingRelative(side, edge, side, edge)
         addView(resultsHost)
     }
     container.addView(status)

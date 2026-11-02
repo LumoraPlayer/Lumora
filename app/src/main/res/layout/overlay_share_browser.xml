@@ -8,6 +8,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_app_gradient"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:orientation="vertical"
     android:padding="@dimen/settings_gap_l">
 
@@ -86,13 +88,19 @@
         android:fontFamily="@font/inter_regular"
         android:visibility="gone" />
 
+    <!-- The rows are full-width and use focus_scale_row (1.03x). The side padding is focus
+         room inside the viewport: clipToPadding=false lets the ring draw into it, while the
+         scroller's own bounds still clip a row that scrolls up under the header. -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="@dimen/settings_gap"
         android:layout_weight="1"
-        android:clipChildren="false"
-            android:clipToPadding="false"
+        android:clipToPadding="false"
+        android:paddingStart="@dimen/dialog_choice_side_padding"
+        android:paddingTop="6dp"
+        android:paddingEnd="@dimen/dialog_choice_side_padding"
+        android:paddingBottom="6dp"
         android:scrollbars="none">
 
         <LinearLayout

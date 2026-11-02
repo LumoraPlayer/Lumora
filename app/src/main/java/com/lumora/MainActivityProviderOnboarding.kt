@@ -264,6 +264,11 @@ private fun MainActivity.promptOnboardingRegions(config: IptvProviderConfig, onD
     val container = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         clipToPadding = false
+        // The checker rows pop 1.06x on focus and the dialog's content frame clips at its
+        // bounds. Reserve the same side room the choice list uses, or the full-width "All
+        // regions" row loses the left/right strokes of its ring.
+        val side = resources.getDimensionPixelSize(R.dimen.dialog_choice_side_padding)
+        setPadding(side, 0, side, 0)
     }
     val boxes = LinkedHashMap<String, CheckBox>()
     val picked = selectedLocalities().toMutableSet()

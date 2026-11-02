@@ -1576,8 +1576,8 @@
                          survived - so the list sits inside a wrapper that does the clipping
                          itself, both flags explicit. The wrapper carries no padding, so its
                          clip sits exactly on the edge rows must disappear at, and the
-                         focused row's 1.06x scale (about 8px of growth, well inside the
-                         list's 16dp top inset) never needs to cross it. -->
+                         focused row's 1.03x scale stays inside the list's 16dp top inset and
+                         20dp side padding, so it never needs to cross that clip. -->
                     <FrameLayout
                         android:layout_width="match_parent"
                         android:layout_height="0dp"
@@ -1591,7 +1591,7 @@
                             android:layout_height="match_parent"
                             android:clipToPadding="false"
                             android:defaultFocusHighlightEnabled="true"
-                            android:paddingHorizontal="16dp"
+                            android:paddingHorizontal="20dp"
                             android:paddingTop="16dp"
                             android:paddingBottom="16dp" />
                     </FrameLayout>

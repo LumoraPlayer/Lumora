@@ -335,8 +335,14 @@
     <dimen name="chrome_button_padding_h">10dp</dimen>
     <dimen name="chrome_button_min_size">48dp</dimen>
     <!-- Side room inside a dialog's choice list for the focused row's 1.06x ring, so it
-         draws as a rounded outline instead of two clipped horizontal lines. -->
-    <dimen name="dialog_choice_side_padding">12dp</dimen>
+         draws as a rounded outline instead of two clipped horizontal lines. The dialog caps
+         at 680dp wide with 24dp panel padding, leaving a 632dp frame; at 1.06x a full-width
+         row overhangs ~18dp per side, so 12dp still clipped on tablets/landscape phones. -->
+    <dimen name="dialog_choice_side_padding">20dp</dimen>
+    <!-- The same focus room for a caller-built dialog grid. At the 680dp panel cap its
+         half-width tiles are ~300dp wide, so 1.06x overhangs ~9dp; 8dp of root padding plus
+         the tile's own 4dp margin clears it without narrowing the two-column grid much. -->
+    <dimen name="dialog_content_side_padding">8dp</dimen>
     <!-- The gap between two chrome pills (the tabs, Search). The pills carry their own
          padding, so this is only the space between them - a dimen because the TV tier
          squeezes it (the chrome row has to carry six tabs, Search, the settings/refresh pair

@@ -560,6 +560,13 @@ internal fun MainActivity.showStreamSearchDialog(
         // wrap_content, capped by the view itself: a weighted 0dp child of a wrap_content
         // dialog measures to exactly 0, so the result list had no height at all.
         isFillViewport = true
+        // Result rows pop 1.06x on focus. Leave that overhang room inside the scroller's
+        // padding, or its left/right strokes are clipped by the viewport. clipChildren stays
+        // true so a scrolled row cannot draw over the status line above the list.
+        clipToPadding = false
+        val side = resources.getDimensionPixelSize(R.dimen.dialog_choice_side_padding)
+        val edge = (6 * resources.displayMetrics.density).toInt()
+        setPaddingRelative(side, edge, side, edge)
         addView(resultsHost)
     }
     container.addView(status)

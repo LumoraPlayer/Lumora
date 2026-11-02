@@ -3,13 +3,15 @@
 <!-- A category row inside the player side menu's drill-down list. Mirrors the browsing
      sidebar's item_category.xml: selectable row chrome via bg_select_item (selected =
      brand_muted fill + primary border), focus_scale pop, name + count. The count uses the
-     same text_tertiary treatment as the sidebar so the name stays the primary signal. -->
+     same text_tertiary treatment as the sidebar so the name stays the primary signal.
+     The 8dp side margins are focus room: this row is ~224dp wide in the category column and
+     the 1.06x pop overhangs ~7dp per side, so 4dp margins let the RecyclerView clip the ring. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/sideMenuCategoryRow"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:minHeight="@dimen/side_menu_row_height"
-    android:layout_marginHorizontal="4dp"
+    android:layout_marginHorizontal="8dp"
     android:layout_marginVertical="2dp"
     android:background="@drawable/bg_select_item"
     android:clickable="true"

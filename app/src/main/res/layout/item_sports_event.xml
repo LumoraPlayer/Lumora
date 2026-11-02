@@ -11,8 +11,10 @@
      chips inside rows would put a second set of focus targets inside a list row, which is the
      focus-search shape that goes wrong on these boxes.
 
-     clipChildren/clipToPadding false because the row scales to 1.06x on focus (focus_scale)
-     and would otherwise be sliced top/bottom by its own bounds.
+     clipChildren/clipToPadding false because the row scales on focus and would otherwise be
+     sliced top/bottom by its own bounds. It is a full-width row, so it uses focus_scale_row
+     (1.03x), not the card-sized 1.06x pop: at the board's width 1.06x outruns the list's
+     20dp side padding and the ring's left/right strokes get clipped on a TV.
 
      The Live now section does not use this row: its games are half-width cards, two to a line,
      in item_sports_live_card.xml - the same scoreboard, arranged for half the width. Everything
@@ -32,7 +34,7 @@
     android:orientation="horizontal"
     android:paddingHorizontal="12dp"
     android:paddingVertical="8dp"
-    android:stateListAnimator="@animator/focus_scale">
+    android:stateListAnimator="@animator/focus_scale_row">
 
     <!-- Kick-off, with the state pill under it once there is one (LIVE 67', FT, Postponed). -->
     <LinearLayout

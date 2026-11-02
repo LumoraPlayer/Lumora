@@ -1017,7 +1017,12 @@ internal fun MainActivity.showSportsChannelChooser(event: SportsListItem.Event, 
         orientation = LinearLayout.VERTICAL
         clipChildren = false
         clipToPadding = false
-        setPadding(0, (6 * density).toInt(), 0, (6 * density).toInt())
+        // Side room: the rows fill the dialog's content width and pop 1.06x on focus, which
+        // is ~18dp of overhang per side at the 680dp panel cap. The dialog's content frame
+        // clips at its bounds, so without this the ring lost its left/right strokes. Full-
+        // width rows need the same room as LumoraDialog's own choice list.
+        val side = resources.getDimensionPixelSize(R.dimen.dialog_choice_side_padding)
+        setPadding(side, (6 * density).toInt(), side, (6 * density).toInt())
     }
     for (channel in choices) {
         val detail = detailById[channel.id]

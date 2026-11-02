@@ -8,5 +8,7 @@
     android:layout_height="wrap_content"
     android:clipChildren="false"
     android:clipToPadding="false"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:paddingStart="@dimen/dialog_content_side_padding"
+    android:paddingEnd="@dimen/dialog_content_side_padding">
 </LinearLayout>

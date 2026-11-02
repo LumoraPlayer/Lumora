@@ -70,17 +70,24 @@
          above the list. The frame clips the whole list subtree to the list's bounds. It has
          no height of its own, so dialogs without a list are unaffected.
 
-         12dp side padding is focus room, not decoration: the focused row scales to 1.06x,
-         and without it the frame clipped the left/right strokes - every dialog showed two
-         horizontal white lines instead of a rounded ring. clipToPadding=false lets that
-         scaled stroke draw into the padding; clipChildren still stops it at the frame. -->
+         The side padding is focus room, not decoration: the focused row scales to 1.06x,
+         and the frame must leave the full overhang inside its own bounds or the left/right
+         strokes are clipped into two horizontal lines. The panel caps at 680dp and has 24dp
+         padding, so the frame is 632dp wide; at 1.06x a full-width row needs ~18dp of room
+         per side. 12dp was only enough for a phone-width dialog, so tablet/landscape panels
+         still squared off the ring. clipToPadding=false lets the scaled stroke draw into the
+         padding; clipChildren still stops it at the frame.
+
+         paddingStart/paddingEnd, not paddingHorizontal: the latter is API 26 and minSdk is
+         25, so on Android 7.1/Fire OS the frame had no side room at all. -->
     <FrameLayout
         android:id="@+id/lumoraDialogChoiceFrame"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:clipChildren="true"
         android:clipToPadding="false"
-        android:paddingHorizontal="@dimen/dialog_choice_side_padding">
+        android:paddingStart="@dimen/dialog_choice_side_padding"
+        android:paddingEnd="@dimen/dialog_choice_side_padding">
 
         <com.lumora.ui.dialog.DialogChoiceList
             android:id="@+id/lumoraDialogChoices"
