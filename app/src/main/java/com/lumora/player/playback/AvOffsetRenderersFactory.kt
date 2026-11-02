@@ -84,6 +84,12 @@ class AvOffsetRenderersFactory(
     context: Context,
     private val offsetUsProvider: () -> Long,
 ) : DefaultRenderersFactory(context) {
+    init {
+        // Software audio fallback: DefaultRenderersFactory finds the vendored FFmpeg renderer
+        // reflectively and uses it only when no MediaCodec decoder exists for the track.
+        setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+    }
+
     override fun buildVideoRenderers(
         context: Context,
         extensionRendererMode: Int,

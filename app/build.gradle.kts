@@ -209,6 +209,12 @@ dependencies {
     implementation("androidx.media3:media3-datasource-okhttp:1.4.1")
     implementation("androidx.tracing:tracing:1.2.0")
 
+    // Software audio fallback for codecs the device has no MediaCodec for - MP2/MP1, DTS,
+    // TrueHD/MLP (and the Dolby formats when a stick lacks even those). The extension is
+    // Media3's own decoder_ffmpeg module, vendored because it is not published to Maven, with
+    // a minimal FFmpeg 6.0 built in tools/ffmpeg (see that README plus the LGPL notice).
+    implementation(project(":media3-ffmpeg"))
+
     // UI
     implementation("androidx.recyclerview:recyclerview:1.3.2")
 
