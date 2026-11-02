@@ -334,10 +334,10 @@
          language instead. -->
     <dimen name="chrome_button_padding_h">10dp</dimen>
     <dimen name="chrome_button_min_size">48dp</dimen>
-    <!-- Side room inside a dialog's choice list for the focused row's 1.06x ring, so it
-         draws as a rounded outline instead of two clipped horizontal lines. The dialog caps
-         at 680dp wide with 24dp panel padding, leaving a 632dp frame; at 1.06x a full-width
-         row overhangs ~18dp per side, so 12dp still clipped on tablets/landscape phones. -->
+    <!-- Side margins on each dialog choice row, reserved for the focused row's 1.06x ring.
+         The row is inset rather than the list so the scale-up stays inside the RecyclerView's
+         content box and the list can clip normally. The dialog caps at 680dp wide with 24dp
+         panel padding; at 1.06x a full-width row overhangs ~18dp per side, so 20dp clears it. -->
     <dimen name="dialog_choice_side_padding">20dp</dimen>
     <!-- The same focus room for a caller-built dialog grid. At the 680dp panel cap its
          half-width tiles are ~300dp wide, so 1.06x overhangs ~9dp; 8dp of root padding plus

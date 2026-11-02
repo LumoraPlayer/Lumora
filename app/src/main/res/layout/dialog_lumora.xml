@@ -70,31 +70,28 @@
          above the list. The frame clips the whole list subtree to the list's bounds. It has
          no height of its own, so dialogs without a list are unaffected.
 
-         The side padding is focus room, not decoration: the focused row scales to 1.06x,
-         and the frame must leave the full overhang inside its own bounds or the left/right
-         strokes are clipped into two horizontal lines. The panel caps at 680dp and has 24dp
-         padding, so the frame is 632dp wide; at 1.06x a full-width row needs ~18dp of room
-         per side. 12dp was only enough for a phone-width dialog, so tablet/landscape panels
-         still squared off the ring. clipToPadding=false lets the scaled stroke draw into the
-         padding; clipChildren still stops it at the frame.
+         Focus room for the 1.06x row pop is on the row itself (item_lumora_dialog_choice's
+         start/end margins), not as padding on this frame. Insetting the row keeps the scaled
+         overhang inside the RecyclerView's content box, so the list can clip normally.
+         Frame padding relied on clipChildren/clipToPadding=false to let the scale draw into
+         it, but on a real device the RecyclerView still clipped the row at its own bounds:
+         the left/right strokes vanished while the top/bottom ones survived.
 
-         paddingStart/paddingEnd, not paddingHorizontal: the latter is API 26 and minSdk is
-         25, so on Android 7.1/Fire OS the frame had no side room at all. -->
+         The frame and list clip normally (clipToPadding=false on the list only lets the row's
+         vertical scale use its 6dp top/bottom padding). -->
     <FrameLayout
         android:id="@+id/lumoraDialogChoiceFrame"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:clipChildren="true"
-        android:clipToPadding="false"
-        android:paddingStart="@dimen/dialog_choice_side_padding"
-        android:paddingEnd="@dimen/dialog_choice_side_padding">
+        android:clipToPadding="true">
 
         <com.lumora.ui.dialog.DialogChoiceList
             android:id="@+id/lumoraDialogChoices"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:clipChildren="false"
+            android:clipChildren="true"
             android:clipToPadding="false"
             android:paddingTop="6dp"
             android:paddingBottom="6dp"
