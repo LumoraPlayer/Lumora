@@ -8,4 +8,10 @@
     <!-- VodDownloader's setDestinationInExternalFilesDir(context, "downloads", ...) - what an
          external player is handed when a finished download is opened outside the app. -->
     <external-files-path name="vod_downloads" path="downloads/" />
+    <!-- Local files (the file browser's storage roots): a video opened from Local files lives
+         under /storage, not under the app's own external files dir, so FileProvider could not
+         mint a URI for it and the hand-off fell back to file:// - which Android 7+ refuses
+         with FileUriExposedException before the other player ever starts. Grants stay
+         per-URI and the provider itself is unexported, so this exposes nothing by itself. -->
+    <root-path name="storage" path="/storage/" />
 </paths>

@@ -27,6 +27,9 @@ import java.io.File
  */
 object ExternalPlayer {
 
+    /** What every video player's manifest filter accepts, whatever it does not list by name. */
+    private const val GENERIC_VIDEO_TYPE = "video/*"
+
     /** Players worth naming in a picker, most capable first. Anything else still shows up
      *  through the system chooser - this list only drives the "open in X" shortcut. */
     private val KNOWN_PLAYERS = listOf(
@@ -110,26 +113,50 @@ object ExternalPlayer {
     }
 
     /**
-     * Launch [intent], falling back to the system chooser when the named package turns out
-     * not to handle it. Returns false when nothing on the device would take the stream, so
-     * the caller can say so rather than failing silently.
+     * Launch [intent], falling back to a generic video type and then to the system chooser.
+     * Returns false when nothing on the device would take the stream, so the caller can say
+     * so rather than failing silently.
+     *
+     * The retry exists because Android matches MIME types case-sensitively against the
+     * filters in each player's manifest, while every Intent type is normalised to lower case.
+     * VLC (3.x) therefore declares `application/x-mpegURL` - a type no Intent can ever equal -
+     * and no DASH type at all, so an HLS or DASH hand-off that was resolvable in principle
+     * found no activity and fell through to a chooser with no player in it. The generic video
+     * wildcard is what every video player declares; it costs the demuxer hint only, since
+     * the URL still carries its extension.
      */
     fun launch(context: Context, intent: Intent): Boolean {
+        if (tryStart(context, intent)) return true
+
+        val generic = intent.withMimeType(GENERIC_VIDEO_TYPE)
+        if (generic !== intent && tryStart(context, generic)) return true
+
         return try {
-            context.startActivity(intent)
+            context.startActivity(
+                Intent.createChooser(generic.withPackage(null), context.getString(R.string.ui_play_with))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
             true
         } catch (_: ActivityNotFoundException) {
-            try {
-                context.startActivity(
-                    Intent.createChooser(intent.apply { setPackage(null) }, context.getString(R.string.ui_play_with))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-                true
-            } catch (_: ActivityNotFoundException) {
-                false
-            }
+            false
         }
     }
+
+    private fun tryStart(context: Context, intent: Intent): Boolean = try {
+        context.startActivity(intent)
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
+    }
+
+    /** A copy with the same data, extras and target, retyped without clearing the URI. */
+    private fun Intent.withMimeType(type: String): Intent =
+        if (this.type == type) this else Intent(this).apply {
+            data?.let { setDataAndTypeAndNormalize(it, type) }
+        }
+
+    private fun Intent.withPackage(packageName: String?): Intent =
+        Intent(this).apply { setPackage(packageName) }
 
     /** A `file://` download becomes a `content://` URI the receiving app is allowed to read;
      *  anything else (http, rtsp, the local torrent HTTP server) is already shareable. */
@@ -142,22 +169,23 @@ object ExternalPlayer {
     }
 
     /**
-     * A concrete type rather than a generic video wildcard where the extension gives one:
-     * VLC and MX Player
-     * both pick their demuxer off the MIME when the URL has no usable extension, and an HLS
-     * playlist announced as a generic video file is the case that most often opens as a
-     * garbled single segment.
+     * A concrete type where the extension gives one, so the receiving player can pick its
+     * demuxer without sniffing, and [GENERIC_VIDEO_TYPE] otherwise. The spelling matters:
+     * VLC declares the mixed-case `application/x-mpegURL` (which no Intent can match - types
+     * are normalised to lower case) but also the registered `application/vnd.apple.mpegurl`,
+     * so that is the one sent for HLS. Players differ on `application/dash+xml`, which is why
+     * [launch] retries with the generic type when a specific one resolves to nobody.
      */
     private fun mimeTypeFor(url: String): String {
         val path = url.substringBefore('?').lowercase()
         return when {
-            path.endsWith(".m3u8") || path.endsWith(".m3u") -> "application/x-mpegurl"
+            path.endsWith(".m3u8") || path.endsWith(".m3u") -> "application/vnd.apple.mpegurl"
             path.endsWith(".mpd") -> "application/dash+xml"
             path.endsWith(".mkv") -> "video/x-matroska"
             path.endsWith(".mp4") || path.endsWith(".m4v") -> "video/mp4"
             path.endsWith(".ts") -> "video/mp2t"
             path.endsWith(".avi") -> "video/x-msvideo"
-            else -> "video/*"
+            else -> GENERIC_VIDEO_TYPE
         }
     }
 
