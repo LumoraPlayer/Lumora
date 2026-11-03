@@ -3108,11 +3108,15 @@ internal fun MainActivity.showProviderSettings() {
             when {
                 info == null -> Toast.makeText(this@showProviderSettings, getString(R.string.sett_couldnt_check_updates), Toast.LENGTH_SHORT).show()
                 info.isUpdateAvailable && info.downloadUrl.isNotBlank() -> {
+                    val notes = cleanReleaseNotesForDialog(info.releaseNotes).replace("%", "%%")
                     LumoraDialog.Builder(this@showProviderSettings)
                         .setTitle(getString(R.string.sett_update_available))
-                        .setMessage(getString(R.string.sett_update_available_message, info.latestVersion, info.currentVersion, info.releaseNotes.take(200).replace("%", "%%")))
+                        .setMessage(getString(R.string.sett_update_available_message, info.latestVersion, info.currentVersion, notes))
                         .setPositiveButton(getString(R.string.update)) { _, _ -> downloadAndInstallUpdate(info.downloadUrl, info.latestVersion) }
                         .setNegativeButton(getString(R.string.sett_later), null)
+                        // Update starts a download and the package installer; a stray OK on
+                        // this prompt must land on Later instead.
+                        .setInitialFocusButton(LumoraDialog.BUTTON_NEGATIVE)
                         .show()
                 }
                 else -> Toast.makeText(this@showProviderSettings, getString(R.string.sett_latest_version), Toast.LENGTH_SHORT).show()
@@ -4017,6 +4021,32 @@ private fun MainActivity.showRecordingNasQrDialog(onChanged: () -> Unit = {}) {
         }
     }
 }
+/**
+ * Turns the release body from CHANGELOG.md into plain text for the manual update prompt.
+ *
+ * The prompt used to print the raw source - `## Lumora v6.7`, `### Films & Series`,
+ * `**The ...**` - and cut it at 200 characters mid-sentence. Strip the Markdown markers,
+ * collapse blank lines, and take a short excerpt ending on a word boundary.
+ */
+internal fun cleanReleaseNotesForDialog(raw: String, limit: Int = 400): String {
+    if (raw.isBlank()) return ""
+    val cleaned = raw
+        .replace("\r\n", "\n")
+        .replace(Regex("""(?m)^\s{0,3}#{1,6}\s*"""), "")
+        .replace(Regex("""\*\*(.+?)\*\*"""), "$1")
+        .replace(Regex("""__(.+?)__"""), "$1")
+        .replace(Regex("""`([^`]+)`"""), "$1")
+        .replace(Regex("""\[([^\]]+)]\([^)]*\)"""), "$1")
+        .replace(Regex("""(?m)^\s*[-*+]\s+"""), "• ")
+        .replace(Regex("""\n{2,}"""), "\n")
+        .trim()
+    if (cleaned.length <= limit) return cleaned
+    val cut = cleaned.take(limit)
+    val boundary = cut.lastIndexOfAny(charArrayOf(' ', '\n', '.', ',', ';', ':'))
+    val excerpt = if (boundary > limit / 2) cut.take(boundary) else cut
+    return excerpt.trimEnd().trimEnd('.', ',', ';', ':') + "…"
+}
+
 /**
  * One row of the narrowed-import picker: a set of category ids that tick together.
  *

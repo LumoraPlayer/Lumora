@@ -2129,13 +2129,26 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.plug_update_required_message, info.latestVersion, info.currentVersion)
         binding.updateBannerButton.setOnClickListener {
             binding.updateBanner.visibility = View.GONE
+            // The clicked button was the focused view; without this the D-pad is left on a
+            // GONE view with nothing focused.
+            restoreTabFocus()
             downloadAndInstallUpdate(info.downloadUrl, info.latestVersion)
         }
         binding.updateBannerDismiss.setOnClickListener {
             prefs.edit().putBoolean(PREF_UPDATE_CHECKS, false).apply()
             binding.updateBanner.visibility = View.GONE
+            restoreTabFocus()
         }
         binding.updateBanner.visibility = View.VISIBLE
+        // Land the ring on the safe choice: Update starts a 30+ MB download and the installer,
+        // so it must not be what a stray OK hits. Skip the steal when something modal is
+        // already on screen by the time the check returns - the notice can wait underneath.
+        binding.updateBannerDismiss.post {
+            val modalUp = activeSettingsOverlay != null || activeSearchOverlay != null ||
+                activeFileBrowser != null || isPlayerVisible || isContentDetailVisible ||
+                isPersonDetailVisible
+            if (binding.updateBanner.isShown && !modalUp) binding.updateBannerDismiss.requestFocus()
+        }
     }
 
     /** Downloads the release APK via DownloadManager, then hands it to the system package

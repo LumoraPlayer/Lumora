@@ -72,6 +72,8 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
     private var customView: View? = null
     private var fullscreen = false
     private var fullscreenInstalled = false
+    /** Button to focus on open when the caller wants the safe choice rather than Positive. */
+    private var preferredFocusButton: Int? = null
 
     init {
         setContentView(R.layout.dialog_lumora)
@@ -221,6 +223,15 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
         buttonViews[which] ?: buttonViews.getValue(BUTTON_POSITIVE)
 
     /**
+     * Puts focus on [which] when the dialog opens instead of the default Positive button.
+     * Used for prompts whose positive action starts something irreversible (the update
+     * download): the safe choice should be the one a stray OK lands on.
+     */
+    fun setInitialFocusButton(which: Int) {
+        preferredFocusButton = which
+    }
+
+    /**
      * Renders the whole panel at [scale] of its laid-out size.
      *
      * A uniform scale rather than per-view sizes: the panel, its type and its spacing are the
@@ -306,8 +317,15 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
      */
     private fun scheduleInitialFocus() {
         if (fullscreen) return
-        panel.post {
+
+        /** One focus attempt; true when a child of the panel actually owns focus. */
+        fun focusTarget(): Boolean {
             val focused = window?.currentFocus
+            // An explicit preferred button wins over anything the framework auto-focused.
+            preferredFocusButton?.let { which ->
+                val preferred = buttonViews[which]?.takeIf { it.visibility == View.VISIBLE }
+                if (preferred != null) return preferred.requestFocus()
+            }
             // Respect focus a caller's setOnShowListener already placed inside the panel
             // (a form field, a specific button). A decor view, the panel itself, the bare
             // list container or a button the framework auto-focused is not that: on TV
@@ -316,22 +334,24 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
             if (focused != null && focused !== panel && focused !== choiceList &&
                 !focusedIsButton && isInside(focused, panel)
             ) {
-                return@post
+                return true
             }
-            when {
-                choiceList.visibility == View.VISIBLE -> {
-                    val first = choiceList.layoutManager?.findViewByPosition(0)
-                    if (first != null) {
-                        first.requestFocus()
-                    } else {
-                        choiceList.post {
-                            choiceList.layoutManager?.findViewByPosition(0)?.requestFocus()
-                        }
-                    }
-                }
-                customView != null -> (customView?.let { firstFocusable(it) } ?: defaultButton())?.requestFocus()
-                else -> defaultButton()?.requestFocus()
+            return when {
+                choiceList.visibility == View.VISIBLE ->
+                    choiceList.layoutManager?.findViewByPosition(0)?.requestFocus() == true
+                customView != null ->
+                    (customView?.let { firstFocusable(it) } ?: defaultButton())?.requestFocus() == true
+                else -> defaultButton()?.requestFocus() == true
             }
+        }
+
+        // The first post can run before the dialog window has focus (seen when the prompt is
+        // opened from a settings overlay after an async check): requestFocus() then returns
+        // false and the window keeps focus on its decor, leaving the D-pad dead. Retry on the
+        // next frame, then put focus on the panel at worst - never leave it on the decor.
+        panel.post {
+            if (focusTarget()) return@post
+            panel.post { if (!focusTarget()) panel.requestFocus() }
         }
     }
 
@@ -480,6 +500,9 @@ open class LumoraDialog(context: Context) : AppCompatDialog(context, R.style.The
 
         fun setNeutralButton(textId: Int, listener: OnChoiceClickListener?) =
             apply { dialog.setButton(BUTTON_NEUTRAL, textId, listener) }
+
+        /** See [LumoraDialog.setInitialFocusButton]. */
+        fun setInitialFocusButton(which: Int) = apply { dialog.setInitialFocusButton(which) }
 
         fun setCancelable(cancelable: Boolean) = apply { dialog.setCancelable(cancelable) }
 
