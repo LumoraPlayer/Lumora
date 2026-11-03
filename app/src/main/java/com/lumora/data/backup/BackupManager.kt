@@ -43,6 +43,7 @@ import com.lumora.diagnostics.CrashReporter
 import com.lumora.diagnostics.SessionLog
 import com.lumora.model.IptvProviderConfig
 import com.lumora.model.MediaServerConfig
+import com.lumora.ui.KeyboardLanguages
 import com.lumora.player.PlayerManager
 import com.lumora.player.playback.AvOffsetManager
 import com.lumora.scraper.bridge.ScraperSiteStore
@@ -204,6 +205,7 @@ internal val BACKED_UP_SETTINGS: Map<String, SettingType> = mapOf(
     PREF_START_SCREEN to SettingType.STRING,
     PREF_AUDIO_LANGUAGE to SettingType.STRING,
     PREF_SUBTITLE_LANGUAGE to SettingType.STRING,
+    KeyboardLanguages.PREF_KEYBOARD_LANGUAGES to SettingType.STRING,
     // Filters
     PREF_HIDE_NON_ENGLISH to SettingType.BOOLEAN,
     PREF_LOCALITY_FILTER to SettingType.STRING_SET,

@@ -11,7 +11,9 @@ import android.view.KeyEvent
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.appcompat.widget.AppCompatTextView
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.widget.TextViewCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.lumora.R
 
@@ -28,18 +30,27 @@ import com.lumora.R
  * Keys are laid out as rows of equally-weighted views, which is what makes D-pad navigation
  * work without any explicit nextFocus wiring: the default focus search resolves up/down
  * geometrically, and equal weights keep the columns aligned enough for that to feel right.
+ * Row widths differ by language (QWERTY is 10/9/7, Arabic is 12/11/11), and the punctuation
+ * layer still uses its own 10/9/7 rows; switching a layer rebuilds only the three letter
+ * rows, so the bottom action row - and the focus resting on it - never moves.
  *
  *  One deliberate exception to "let the framework figure it out":
  *  - the bottom row has nothing reliably below it (the results grid is a sibling, and
  *    crossing out of the keyboard's own tree via default focus search is geometry roulette),
  *    so DOWN from any bottom-row key is routed through [bottomRowDownTarget] when the host
  *    has set one.
- *  The letter rows need no wiring: equal weights align the columns, and the fourth row's
- *  seven wider keys still sit under the right-hand keys of the row above (N under K, M
- *  under L) - default focus search resolves those, which is how the D-pad reaches N and M
- *  at all. (A previous version routed DOWN from K/L straight to the results grid, wrongly
- *  assuming nothing sat below them; on a real remote that made M - and N - unreachable
- *  from above.)
+ *  The letter rows need no wiring. Equal weights align the columns enough for the default
+ *  focus search, and rows of uneven width (Arabic's 12-key top row) are resolved
+ *  geometrically the same way.
+ *
+ * Languages come from [KeyboardLanguages]. The first enabled language - or the device/UI
+ * language, when it is among them - is the layer the keyboard opens on. When more than one
+ * language is enabled the digits row carries a two-letter language key: pressing it cycles
+ * to the next enabled layer and rebuilds the letters in place while the key itself keeps
+ * focus. With only one language there is nothing to switch to, so the key is not built.
+ * Key rows are always laid out left-to-right, even in an RTL interface: the letter order is
+ * the physical keyboard's (Arabic's ض on Q, Hebrew's ק on Q), and mirroring the row would
+ * move every key out from under that muscle memory. The glyphs themselves still shape RTL.
  *
  * Hosts point outside focus targets at the keyboard as a whole (the results grid's top-row UP
  * and first-column LEFT both land here). Focusing it always focuses a *key* - see
@@ -69,14 +80,20 @@ class OnScreenKeyboard @JvmOverloads constructor(
      */
     var bottomRowDownTarget: View? = null
 
-    /** Four letter rows, digits on top. Layer 0 is shared between letter and punctuation
-     *  modes; rows 1-3 are the ones the ?123/ABC key swaps. */
-    private val letterRows = listOf(
-        "1234567890", "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"
-    ).map { row -> row.map { it.toString() } }
+    /** The enabled layers, in preference order, and the one currently drawn. The keyboard
+     *  opens on the device/UI language when it is among them, otherwise on the first. */
+    private val languages: List<KeyboardLanguage> = KeyboardLanguages.enabled(context)
+    private var languageIndex: Int = languages
+        .indexOfFirst { it.code == KeyboardLanguages.preferredCode(context) }
+        .coerceAtLeast(0)
+    private val language: KeyboardLanguage get() = languages[languageIndex]
 
-    /** Same row widths as the letter block (10/9/7) so a layer swap keeps every key in
-     *  place - the D-pad geometry never changes, only the labels. */
+    /** Decimal digits stay Latin on every layer: the catalogue indexes titles and channel
+     *  numbers with ASCII digits, and an Arabic-Indic ١ would never match them. */
+    private val digitRow: List<String> = "1234567890".map { it.toString() }
+
+    /** The punctuation layer keeps the QWERTY block's widths (10/9/7); switching a
+     *  language or a layer rebuilds the letter rows to match whatever is showing. */
     private val punctRows: List<List<String>> = listOf(
         listOf("'", "-", "&", ":", ",", "?", "!", "(", ")", "."),
         listOf("@", "#", "$", "%", "^", "*", "_", "=", "+"),
@@ -89,10 +106,11 @@ class OnScreenKeyboard @JvmOverloads constructor(
     private val delLabel: String = context.getString(R.string.ui_key_del)
     private val clearLabel: String = context.getString(R.string.ui_key_clear)
 
-    /** The three rows that swap between letter and punctuation layers (children 1..3;
-     *  child 0 is the digits row, which both layers share). */
-    private val layerRows = mutableListOf<LinearLayout>()
+    /** The three rows that swap between letter and punctuation layers (child 0 is the
+     *  digits row, which every layer shares). */
+    private val letterRowViews = mutableListOf<LinearLayout>()
     private var toggleKey: TextView? = null
+    private var languageKey: TextView? = null
     private var punctMode = false
 
     init {
@@ -135,20 +153,35 @@ class OnScreenKeyboard @JvmOverloads constructor(
     }
 
     private fun build() {
-        // Digits + the three swappable letter rows.
-        for (row in letterRows) addView(keyRow(row))
-        layerRows += getChildAt(1) as LinearLayout
-        layerRows += getChildAt(2) as LinearLayout
-        layerRows += getChildAt(3) as LinearLayout
+        // Digits + the language switch (when there is a second layer) on the top row, then
+        // the three swappable letter rows. Keeping the language key out of the bottom row
+        // leaves SPACE/DEL/CLEAR their full width: those labels are translated, and a fifth
+        // action key squeezed "CLEAR" into "CLEA" on a 300dp keyboard.
+        val top = newRow()
+        val topGap = horizontalGap(digitRow.size + if (languages.size > 1) 1 else 0)
+        digitRow.forEach { digit -> top.addView(letterKey(digit, topGap)) }
+        if (languages.size > 1) {
+            languageKey = actionKey(language.code.uppercase(), 1f, hGap = topGap) { cycleLanguage() }
+            top.addView(languageKey)
+        }
+        addView(top)
+
+        language.letterRows.forEach { labels ->
+            val row = keyRow(labels)
+            letterRowViews += row
+            addView(row)
+        }
 
         // Bottom row: the shift key toggles the punctuation layer, SPACE keeps its wide
         // key (the most-used key in a multi-word query), then DEL and CLEAR.
-        val bottom = keyRow(
-            labels = listOf(shiftLabel, spaceLabel, delLabel, clearLabel),
-            weights = listOf(1f, 2f, 1f, 1f)
-        )
+        val bottom = newRow()
+        bottom.addView(actionKey(shiftLabel, 1f) { toggleLayer() })
+        bottom.addView(actionKey(spaceLabel, 2f) { onKey?.invoke(" ") })
+        bottom.addView(actionKey(delLabel, 1f) { onBackspace?.invoke() })
+        bottom.addView(actionKey(clearLabel, 1f) { onClear?.invoke() })
         addView(bottom)
         toggleKey = bottom.getChildAt(0) as TextView
+        updateLanguageKey()
 
         // DOWN from anywhere on the bottom row: into the results (via the host's target),
         // never stranded below the keyboard with nothing to land on.
@@ -162,8 +195,8 @@ class OnScreenKeyboard @JvmOverloads constructor(
         }
     }
 
-    /** DOWN from the bottom row / K / L: focus the host's target, or fall through to the
-     *  default focus search if there isn't one worth using. */
+    /** DOWN from the bottom row: focus the host's target, or fall through to the default
+     *  focus search if there isn't one worth using. */
     private fun routeDown(): Boolean {
         val target = bottomRowDownTarget ?: return false
         if (!target.isShown) return false
@@ -178,31 +211,70 @@ class OnScreenKeyboard @JvmOverloads constructor(
         return false
     }
 
-    private fun keyRow(labels: List<String>, weights: List<Float>? = null): LinearLayout {
-        val row = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            clipChildren = false
-            clipToPadding = false
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
-        }
-        labels.forEachIndexed { index, label ->
-            row.addView(key(label, weights?.getOrNull(index) ?: 1f))
-        }
+    private fun keyRow(labels: List<String>): LinearLayout {
+        val row = newRow()
+        val hGap = horizontalGap(labels.size)
+        labels.forEach { label -> row.addView(letterKey(label, hGap)) }
         return row
     }
 
-    private fun key(label: String, weight: Float): TextView {
+    /** TWELVE keys at the full 4dp gap leave ~17dp of glyph room in the TV keyboard's
+     *  300dp column; halving the side margin on wide rows gives them the same ~21dp the
+     *  10-key rows get, so Arabic/Persian/Turkish letters are not squeezed. */
+    private fun horizontalGap(keyCount: Int): Int {
         val gap = resources.getDimensionPixelSize(R.dimen.keyboard_key_gap)
-        return TextView(context).apply {
+        return if (keyCount > 10) gap / 2 else gap
+    }
+
+    /**
+     * A key row is always left-to-right, whatever the UI language is doing. The rows are
+     * physical keyboard order (QWERTY's Q, Arabic's ض, Hebrew's ק on the same key), so an
+     * RTL pass that mirrored a row would put every letter somewhere different from the
+     * keyboard the user learned. TextView still shapes the letters themselves RTL.
+     */
+    private fun newRow(): LinearLayout = LinearLayout(context).apply {
+        orientation = HORIZONTAL
+        layoutDirection = View.LAYOUT_DIRECTION_LTR
+        clipChildren = false
+        clipToPadding = false
+        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+    }
+
+    /** A key whose label is a letter. Its click reads the LIVE label: applyLayer() swaps
+     *  the text in place, so a rebuilt key always emits what it currently shows. */
+    private fun letterKey(label: String, hGap: Int): TextView =
+        key(label, 1f, isAction = false, hGap = hGap).apply {
+            setOnClickListener { onKey?.invoke(text.toString()) }
+        }
+
+    /** An action key (the bottom row, or the top row's language switch). Its action is
+     *  passed explicitly rather than matched back from the live label, so a language or
+     *  punctuation layer can never turn SPACE into a typed word. */
+    private fun actionKey(
+        label: String,
+        weight: Float,
+        hGap: Int = resources.getDimensionPixelSize(R.dimen.keyboard_key_gap),
+        action: () -> Unit
+    ): TextView =
+        key(label, weight, isAction = true, hGap = hGap).apply { setOnClickListener { action() } }
+
+    private fun key(label: String, weight: Float, isAction: Boolean, hGap: Int): TextView {
+        val vGap = resources.getDimensionPixelSize(R.dimen.keyboard_key_gap)
+        // AppCompatTextView rather than a plain TextView: the action labels auto-size to
+        // fit their key (see below), and AppCompat is what makes that work below API 26.
+        return AppCompatTextView(context).apply {
             text = label
             gravity = Gravity.CENTER
             isFocusable = true
             isClickable = true
+            // A key label never wraps: a two-line CLEAR changes the bottom row's height and
+            // reads as a broken key. Long translations shrink (below) instead.
+            maxLines = 1
             setTextColor(context.getColor(R.color.text_primary))
             setTextSize(
                 TypedValue.COMPLEX_UNIT_PX,
                 resources.getDimension(
-                    if (label.length > 1) R.dimen.keyboard_action_text else R.dimen.keyboard_key_text
+                    if (isAction) R.dimen.keyboard_action_text else R.dimen.keyboard_key_text
                 )
             )
             // Inter instead of fake-bold (setTypeface(null, BOLD) synthesizes a bold from the
@@ -211,55 +283,96 @@ class OnScreenKeyboard @JvmOverloads constructor(
             // CLEAR don't out-weight the letters at their smaller size.
             typeface = ResourcesCompat.getFont(
                 context,
-                if (label.length > 1) R.font.inter_medium else R.font.inter_semibold
+                if (isAction) R.font.inter_medium else R.font.inter_semibold
             )
             setBackgroundResource(R.drawable.bg_keyboard_key)
             stateListAnimator = android.animation.AnimatorInflater
                 .loadStateListAnimator(context, R.animator.focus_scale_flat)
             minHeight = resources.getDimensionPixelSize(R.dimen.keyboard_key_height)
+            // Five bottom keys leave less width than the four that fit SPACE/DEL/CLEAR
+            // before, and the translations are not all as short as "CLEAR" (Russian
+            // ОЧИСТИТЬ, German LÖSCHEN). Let the action labels shrink a little rather
+            // than clip when the language key is present.
+            if (isAction) {
+                val pxPerSp = TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_SP, 1f, resources.displayMetrics
+                )
+                val maxSp = resources.getDimension(R.dimen.keyboard_action_text) / pxPerSp
+                TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                    this,
+                    (maxSp * 0.78f).toInt().coerceAtLeast(8),
+                    maxSp.toInt().coerceAtLeast(9),
+                    1,
+                    TypedValue.COMPLEX_UNIT_SP
+                )
+            }
             // 0dp + weight, so a row always fills the keyboard's width exactly and the
             // columns line up between rows - which is what the D-pad navigates by.
             layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, weight).apply {
-                setMargins(gap, gap, gap, gap)
+                setMargins(hGap, vGap, hGap, vGap)
             }
-            // Read the LIVE label, not the build-time one: applyLayer() swaps the text in
-            // place (punct mode), and emit() must see what the key currently shows, not
-            // what it was inflated with - otherwise ?123 mode displays punctuation but
-            // every press types the original letter.
-            setOnClickListener { emit(text.toString()) }
         }
     }
 
-    private fun emit(label: String) {
-        when (label) {
-            spaceLabel -> onKey?.invoke(" ")
-            delLabel -> onBackspace?.invoke()
-            clearLabel -> onClear?.invoke()
-            shiftLabel, abcLabel -> {
-                // Swap the letter rows for punctuation (or back) in place - the key views
-                // are reused, so whatever holds focus keeps it through the swap.
-                punctMode = !punctMode
-                applyLayer()
-            }
-            else -> onKey?.invoke(label)
-        }
+    /** Swaps the three letter rows for punctuation (or back) in place. The key views are
+     *  reused when the row width does not change, so the toggle key keeps focus. */
+    private fun toggleLayer() {
+        punctMode = !punctMode
+        applyLayer()
     }
 
-    /** Re-labels the swappable rows for the current layer without rebuilding any views. */
+    /** Moves to the next enabled language. A language switch is a request for that
+     *  language's letters, so it always leaves the punctuation layer. */
+    private fun cycleLanguage() {
+        if (languages.size < 2) return
+        languageIndex = (languageIndex + 1) % languages.size
+        punctMode = false
+        applyLayer()
+    }
+
+    /** Re-labels the swappable rows for the current layer and language. Rows whose width
+     *  changes (Arabic/Persian/Hebrew versus the punctuation layer) are rebuilt; the top row
+     *  (where the language key lives) and the bottom action row are never touched. */
     private fun applyLayer() {
-        val labels = if (punctMode) punctRows else letterRows.drop(1)
-        layerRows.forEachIndexed { rowIndex, row ->
-            val rowLabels = labels[rowIndex]
-            for (col in 0 until row.childCount) {
-                (row.getChildAt(col) as? TextView)?.text = rowLabels.getOrNull(col) ?: ""
-            }
+        val showingLetters = !punctMode
+        letterRowViews.forEachIndexed { rowIndex, row ->
+            val labels = if (showingLetters) language.letterRows[rowIndex] else punctRows[rowIndex]
+            renderRow(row, labels)
         }
         toggleKey?.text = if (punctMode) abcLabel else shiftLabel
+        updateLanguageKey()
     }
 
-    /** The G key - middle of the letter block, where focus should land when the keyboard
-     *  opens so typing can start without first navigating into the keys. Not the top-left
-     *  "1": a letter is the overwhelmingly likely first key, and G is the closest to all
-     *  of them (average D-pad distance to any letter is a fraction of the trip from "1"). */
-    fun firstKey(): View? = layerRows.getOrNull(1)?.getChildAt(4)
+    private fun renderRow(row: LinearLayout, labels: List<String>) {
+        if (row.childCount == labels.size) {
+            labels.forEachIndexed { col, label ->
+                (row.getChildAt(col) as? TextView)?.text = label
+            }
+            return
+        }
+        row.removeAllViews()
+        val hGap = horizontalGap(labels.size)
+        labels.forEach { label -> row.addView(letterKey(label, hGap)) }
+    }
+
+    /** The language key shows the layer you are on, and describes the layer a press will
+     *  move to - a bare "AR" that types Arabic is not obvious on a TV with no globe icon. */
+    private fun updateLanguageKey() {
+        val key = languageKey ?: return
+        key.text = language.code.uppercase()
+        val next = languages[(languageIndex + 1) % languages.size]
+        key.contentDescription = context.getString(
+            R.string.keyboard_language_key_desc,
+            language.displayName,
+            next.displayName
+        )
+    }
+
+    /** The middle of the letter block, where focus should land when the keyboard opens so
+     *  typing can start without first navigating into the keys. For QWERTY that is G - the
+     *  closest letter to all the others - and every other layer gets the same treatment
+     *  (the middle key of its middle row) rather than a language-specific hard-coded one. */
+    fun firstKey(): View? = letterRowViews.getOrNull(1)?.let { row ->
+        if (row.childCount == 0) null else row.getChildAt(row.childCount / 2)
+    }
 }

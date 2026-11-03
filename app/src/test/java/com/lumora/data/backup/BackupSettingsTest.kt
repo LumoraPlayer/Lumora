@@ -65,6 +65,7 @@ class BackupSettingsTest {
         assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["locality_show_untagged"])
         assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["simple_mode"])
         assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["ui_language"])
+        assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["keyboard_languages"])
         assertEquals(SettingType.INT, BACKED_UP_SETTINGS["subtitle_text_size"])
         assertEquals(SettingType.INT, BACKED_UP_SETTINGS["av_offset_ms"])
         assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["update_checks_enabled"])

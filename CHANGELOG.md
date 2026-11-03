@@ -3,6 +3,9 @@
 
 ## 6.8
 
+### Search
+- **The on-screen search keyboard types Arabic, and its languages are configurable.** Arabic, Persian, Russian, Greek, Hebrew and Turkish letter layers sit beside English; the keyboard opens on the device or UI language when that layer is enabled, and when more than one language is on a two-letter key cycles between them without leaving the keys. Settings → General → **Keyboard languages** ticks which layers are available, defaulting to English plus the device language. The Arabic layer types into the same normalized matching the catalogue already uses, so searching `احمد` finds `أحمد`.
+
 ### Navigation
 - **Sports moved under the Live TV dropdown, and the main tabs now read as names.** Sports is a live-television screen, so it sits with Live TV, Multiview and Catch Up in the Live dropdown instead of spending a top-level pill of its own. Series, Movies and Home keep their full names on screen even when another tab is selected; the width freed by the Sports pill is what lets them. Opening Sports from the dropdown leaves Live TV highlighted, and the row still hides with the board's own provider and Settings gate.
 

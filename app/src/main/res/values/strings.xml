@@ -7,6 +7,13 @@
          the picker's entries are native-language display names and don't need translating. -->
     <string name="settings_ui_language">Language</string>
     <string name="settings_ui_language_caption">Translates the whole app — also sets audio, subtitles and TMDB</string>
+    <!-- Settings -> General -> the on-screen search keyboard's language set. The list of
+         names is native (English, العربية, ...) so the row reads the same in every UI
+         language; only the surrounding wording is translated. -->
+    <string name="sett_keyboard_languages">Keyboard languages</string>
+    <string name="sett_keyboard_languages_row">%1$s · change</string>
+    <string name="sett_keyboard_languages_description">Tick the languages the on-screen search keyboard can switch between.</string>
+    <string name="sett_keyboard_languages_required">Keep at least one keyboard language enabled</string>
     <string name="settings_type_m3u">Type: M3U</string>
     <string name="m3u_url">M3U/M3U8 Playlist URL</string>
     <string name="m3u_url_hint">https://example.com/playlist.m3u</string>
@@ -472,6 +479,9 @@
          aapt would otherwise read "?123" as a resource reference. -->
     <string name="keyboard_shift">\?123</string>
     <string name="keyboard_abc">ABC</string>
+    <!-- ui/OnScreenKeyboard.kt - the language key's TalkBack label. %1$s is the current
+         keyboard language, %2$s the one the next press moves to. -->
+    <string name="keyboard_language_key_desc">Keyboard language: %1$s. Activate to switch to %2$s.</string>
 
     <!-- activity_main.xml / dialog_discover_search.xml - Discover (TMDB) search -->
     <string name="discover_search_hint">Search movies &amp; series…</string>

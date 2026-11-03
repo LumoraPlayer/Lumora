@@ -34,6 +34,7 @@ import com.lumora.data.ProviderStatus
 import com.lumora.data.ProviderStatusProbe
 import com.lumora.pairing.QrPairingManager
 import com.lumora.player.PlayerManager
+import com.lumora.ui.KeyboardLanguages
 import com.lumora.util.normalizeServerUrl
 import com.lumora.util.isLocalFileUrl
 import com.lumora.util.catalogueTagOf
@@ -655,6 +656,72 @@ internal fun MainActivity.languageChoiceRow(
 
 internal fun MainActivity.languageName(code: String): String =
     PLAYBACK_LANGUAGES.firstOrNull { it.first == code }?.second ?: code.uppercase()
+
+/**
+ * Settings row for the on-screen search keyboard's language set.
+ *
+ * The keyboard itself is only ever built while a search overlay is open, so a change here is
+ * picked up the next time the overlay opens - there is nothing live to refresh. The row shows
+ * the enabled languages' native names, and the dialog refuses to save an empty set: a keyboard
+ * with no letters would leave search permanently unusable on a TV with no IME.
+ */
+internal fun MainActivity.keyboardLanguagesRow(): TextView {
+    val row = TextView(this)
+    row.setTextColor(getColor(R.color.text_primary))
+    row.setBackgroundResource(R.drawable.card_surface_background)
+    val hPad = resources.getDimensionPixelSize(R.dimen.settings_gap_l)
+    val vPad = resources.getDimensionPixelSize(R.dimen.settings_row_padding_vertical)
+    row.setPadding(hPad, vPad, hPad, vPad)
+    row.stateListAnimator = AnimatorInflater.loadStateListAnimator(this, R.animator.focus_scale_flat)
+    row.isClickable = true
+    row.isFocusable = true
+    row.layoutParams = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT
+    ).apply { topMargin = resources.getDimensionPixelSize(R.dimen.settings_gap_m) }
+
+    fun render() {
+        val names = KeyboardLanguages.enabled(this).joinToString(", ") { it.displayName }
+        row.text = twoLineSettingsText(
+            getString(R.string.sett_keyboard_languages),
+            getString(R.string.sett_keyboard_languages_row, names)
+        )
+    }
+    render()
+
+    row.setOnClickListener {
+        val options = KeyboardLanguages.supported
+        val enabled = KeyboardLanguages.enabledCodes(this).toSet()
+        val checked = BooleanArray(options.size) { options[it].code in enabled }
+        val dialog = LumoraDialog.Builder(this)
+            .setTitle(getString(R.string.sett_keyboard_languages))
+            .setMessage(getString(R.string.sett_keyboard_languages_description))
+            .setMultiChoiceItems(options.map { it.displayName }.toTypedArray(), checked) { _, which, isChecked ->
+                checked[which] = isChecked
+            }
+            .setPositiveButton(getString(R.string.save), null)
+            .setNegativeButton(getString(R.string.cancel), null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(LumoraDialog.BUTTON_POSITIVE).setOnClickListener save@{
+                val chosen = options.filterIndexed { index, _ -> checked[index] }.map { it.code }
+                if (chosen.isEmpty()) {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.sett_keyboard_languages_required),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@save
+                }
+                KeyboardLanguages.save(this, chosen)
+                render()
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
+    }
+    return row
+}
 
 /** The medium-title-over-grey-caption text every settings row uses. Shared so a plain
  *  row and a CheckBox row can't drift apart. */
@@ -2977,6 +3044,10 @@ internal fun MainActivity.showProviderSettings() {
             )
         )
     )
+    // The search keyboard's letter layers. Full width rather than a fourth column in the
+    // language group above: the row carries a list of names, which is the one value in this
+    // pane that gets longer the more the user enables.
+    generalPane.addView(keyboardLanguagesRow())
 
     // Settings nav rail: one section visible at a time.
     val navRows = listOf(
