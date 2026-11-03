@@ -24,8 +24,8 @@ Nothing is behind a paywall — the multi-playlist support, EPG guide, recording
 
 - **Multiple playlists, EPG, DVR, catch-up and favourites — included, not unlocked.** The features comparable players reserve for a premium tier are all present, free, with no account and no telemetry.
 - **The whole app on the car screen, over Android Auto — parked only.** Lumora appears in the Android Auto launcher and Android Auto projects the real interface onto the head unit, so you browse and play exactly as you do on the phone. It is **not a driving feature and cannot be one**: this class of app is restricted to a stationary vehicle, and a warning to that effect opens every launch on the car screen. See [Android Auto](#android-auto-parked-only).
-- **Jellyfin, Silo and Plex, properly done.** Point Lumora at your own servers and their films and series merge into the same shelves as your IPTV catalogue — the same title from several sources becomes one card. Resume points, watched marks and favourites sync with the server, and files your stick can't decode are converted server-side rather than opening to a black screen.
-- **Run every subscription at once.** Any number of Xtream Codes, M3U, Stalker Portal, Jellyfin, Silo and Plex sources active together, merged into one catalogue instead of switching between playlists.
+- **Jellyfin, Emby, Silo and Plex, properly done.** Point Lumora at your own servers and their films and series merge into the same shelves as your IPTV catalogue — the same title from several sources becomes one card. Resume points, watched marks and favourites sync with the server, and files your stick can't decode are converted server-side rather than opening to a black screen.
+- **Run every subscription at once.** Any number of Xtream Codes, M3U, Stalker Portal, Jellyfin, Emby, Silo and Plex sources active together, merged into one catalogue instead of switching between playlists.
 - **Live TV that tidies itself up.** Duplicate feeds of the same channel collapse into one entry at the best available quality (4K → FHD → HD → SD), with instant fallback to any other copy mid-playback; Sports, News, Music and Cinema surface at the top automatically whatever your provider filed them under.
 - **Multiview.** Watch several live channels at once in a D-pad-driven grid — each screen its own player with its own quality fallback, the selected one audible, the count sized to your providers' connection limits (set per provider).
 - **A proper EPG guide.** Scrollable program grid with per-channel schedules, now/next info, program reminders, timeshift/catch-up and DVR recording.
@@ -77,23 +77,23 @@ Nothing is behind a paywall — the multi-playlist support, EPG guide, recording
 - Full VOD library browsing with category shelves
 - Duplicate/version merging for movies re-listed under multiple source tags
 - Season/episode browser with **episode-level "Continue Watching"** — resumes the exact episode you left off on, and auto-advances to the next episode when one finishes
-- Watch state follows the *episode*, not the copy: finishing something on one provider marks it on the others, and on your Jellyfin/Silo/Plex servers
+- Watch state follows the *episode*, not the copy: finishing something on one provider marks it on the others, and on your Jellyfin/Emby/Silo/Plex servers
 - Poster grid view for browsing a full category, plus a global search with poster results
 - Pin, hide, and "See All" controls on every category shelf
 
-### Jellyfin, Silo and Plex (optional)
+### Jellyfin, Emby, Silo and Plex (optional)
 
 Lumora is an IPTV player first — a personal media server is an extra slot you can fill if you happen to run one, and everything below is inert if you don't. Any number of each can be configured and enabled at the same time.
 
 - Films and series merge into the **same shelves and poster grids** as your IPTV catalogue, with their own shelves on Films and Series; a title several sources carry becomes one card with each source selectable
 - **Two-way progress sync** — resume points and watched marks are read from and reported back to the server, so viewing in any other client is reflected here and vice versa
 - Server-driven **Continue Watching** and **Next Up** rows on Home, deduped against local progress
-- **Favourites sync** (Jellyfin; Plex has no per-item equivalent, so those stay local)
+- **Favourites sync** (Jellyfin and Emby; Plex has no per-item equivalent, so those stay local)
 - **Format handling** — plays the original file untouched where the device can handle it, and asks the server to convert it on the fly where it can't (10-bit HEVC, TrueHD/DTS audio and similar), based on what the device actually reports it can decode
 - External and server-extracted **subtitle tracks** loaded with their forced/default flags honoured
 - **Chapter picker** and, on Jellyfin, **seek-preview thumbnails** (trickplay)
 - Real season names (Specials included) and per-episode watched state from the server
-- Jellyfin: password or **Quick Connect** sign-in. Silo: password sign-in with the profile after `#` (its Jellyfin-compatible endpoint, usually port 8096). Plex: account sign-in via the 4-character code at plex.tv/link, or by scanning a QR of that page
+- Jellyfin: password or **Quick Connect** sign-in. Emby: password sign-in (Emby has no Quick Connect). Silo: password sign-in with the profile after `#` (its Jellyfin-compatible endpoint, usually port 8096). Plex: account sign-in via the 4-character code at plex.tv/link, or by scanning a QR of that page. Jellyfin, Emby and Silo can also be set up from your phone with the QR pairing flow
 - Plex has **no Live TV** — its live path is a tuner-session flow Lumora's URL-per-channel model can't express — and Silo's Jellyfin-compatible layer is movies/series only, so a Plex or Silo entry covers Movies and Series only
 
 ### SMB & WebDAV shares (optional)
@@ -166,7 +166,7 @@ Grab the latest signed APK from the [Releases](https://github.com/LumoraPlayer/L
 
 To use it in the car, also switch on **Unknown sources** in Android Auto's developer settings (Android Auto → Settings → tap *Version* ten times → ⋮ → Developer settings → Unknown sources). Lumora is sideloaded, so the car launcher hides it until that's on.
 
-On first launch, you'll be asked to add a provider — this is your own Xtream Codes / M3U / Stalker Portal IPTV subscription, or your own Jellyfin, Silo or Plex server. Lumora has no content of its own and cannot supply one for you.
+On first launch, you'll be asked to add a provider — this is your own Xtream Codes / M3U / Stalker Portal IPTV subscription, or your own Jellyfin, Emby, Silo or Plex server. Lumora has no content of its own and cannot supply one for you.
 
 ## Building from Source
 
@@ -205,7 +205,7 @@ app/src/main/java/com/lumora/
 ├── cache/         Local caches (derived catalogue rows, favorites, playback position, watch history, ...)
 ├── data/          Providers, Room database, backup, sync workers, update checker
 │   ├── local/     Room database, DAOs, entities
-│   ├── remote/    Jellyfin / Silo / Plex / Stalker / TMDB network clients
+│   ├── remote/    Jellyfin / Emby / Silo / Plex / Stalker / TMDB network clients
 │   ├── backup/    Local + Google Drive export/import
 │   └── sync/      WorkManager EPG sync worker
 ├── download/      Offline download manager (phone only)

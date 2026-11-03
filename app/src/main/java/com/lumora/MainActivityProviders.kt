@@ -72,14 +72,14 @@ internal fun MainActivity.hasIptvConfigured(): Boolean = IptvProviderStore.load(
 internal fun MainActivity.hasLiveIptvProvider(): Boolean =
     IptvProviderStore.load(prefs).any { it.enabled && providerAllowsLive(it) }
 
-/** Every configured media-server account, of both kinds. Any number of each can exist and be
+/** Every configured media-server account, of any kind. Any number of each can exist and be
  *  active at once; their catalogs merge into the same browsing experience as the IPTV ones. */
 internal fun MainActivity.mediaServers(): List<MediaServerConfig> =
     MediaServerStore.load(prefs).filter { it.isComplete }
 
-/** Jellyfin-protocol accounts: Jellyfin itself and Silo (which speaks the same protocol), all
- *  reached through [JellyfinProvider]. Kept as one list - the client code cannot tell them
- *  apart, only the labels and the sign-in flow can. */
+/** Jellyfin-protocol accounts: Jellyfin itself, Emby and Silo (which all speak the same
+ *  MediaBrowser API), all reached through [JellyfinProvider]. Kept as one list - the client
+ *  code cannot tell them apart, only the labels and the sign-in flow can. */
 internal fun MainActivity.jellyfinServers(): List<MediaServerConfig> =
     mediaServers().filter { it.usesJellyfinProtocol }
 
@@ -300,8 +300,9 @@ internal fun MainActivity.plexAllowsSeries(cfg: MediaServerConfig): Boolean =
  *  it is, so it resolves rather than disappearing until the next refresh re-stamps it. */
 internal fun MainActivity.mediaServerOwner(ch: Channel, servers: List<MediaServerConfig>): MediaServerConfig? {
     if (!ch.isOwnLibrary) return null
-    // isJellyfin covers every Jellyfin-protocol item, Silo included (its client *is* the
-    // Jellyfin client), so the lookup matches both account types rather than the raw string.
+    // isJellyfin covers every MediaBrowser-protocol item, Emby and Silo included (their
+    // client *is* the Jellyfin client), so the lookup matches those account types rather
+    // than the raw string.
     val ofType = servers.filter { if (ch.isJellyfin) it.usesJellyfinProtocol else it.isPlex }
     return ofType.firstOrNull { it.id == ch.sourceProviderId }
         ?: if (ch.sourceProviderId == null) ofType.singleOrNull() else null
@@ -1298,6 +1299,7 @@ internal fun MainActivity.loadAllConfiguredProviders(
                     getString(
                         when {
                             server.isPlex -> R.string.plug_connecting_to_plex
+                            server.isEmby -> R.string.plug_connecting_to_emby
                             server.isSilo -> R.string.plug_connecting_to_silo
                             else -> R.string.plug_connecting_to_jellyfin
                         }

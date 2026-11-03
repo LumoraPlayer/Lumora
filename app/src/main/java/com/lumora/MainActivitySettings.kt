@@ -374,9 +374,9 @@ internal suspend fun MainActivity.performJellyfinQuickConnect(
     return true
 }
 
-/** Creates or updates one Jellyfin-protocol entry (Jellyfin or Silo) in [MediaServerStore],
- *  preserving whatever the existing entry already carried that this call doesn't set (content
- *  gates, and the credentials when only a session is being refreshed). */
+/** Creates or updates one Jellyfin-protocol entry (Jellyfin, Emby or Silo) in
+ *  [MediaServerStore], preserving whatever the existing entry already carried that this call
+ *  doesn't set (content gates, and the credentials when only a session is being refreshed). */
 internal fun MainActivity.saveJellyfinServer(
     existingId: String?,
     url: String,
@@ -388,14 +388,26 @@ internal fun MainActivity.saveJellyfinServer(
     type: String = "jellyfin"
 ): MediaServerConfig {
     val previous = MediaServerStore.get(prefs, existingId)
-    // Editing keeps the entry's own type; the parameter only decides what a fresh entry is.
-    val resolvedType = previous?.type ?: type
+    // The selected type is authoritative. It used to defer to the stored entry, which meant a
+    // server added under the wrong family (Jellyfin vs Emby) could never be corrected from the
+    // edit form: choosing the right tile saved the old type again. Every caller already passes
+    // the type it is saving for.
+    val resolvedType = type
+    val typeChanged = previous != null && previous.type != resolvedType
     val config = MediaServerConfig(
         id = existingId ?: MediaServerStore.newId(),
         type = resolvedType,
-        name = name?.takeIf { it.isNotBlank() } ?: previous?.name ?: getString(
-            if (resolvedType == "silo") R.string.provider_type_silo else R.string.provider_type_jellyfin
-        ),
+        // Keep the account's own name across an edit, unless the type itself changed - then a
+        // stale "Jellyfin" label would sit on an Emby row.
+        name = name?.takeIf { it.isNotBlank() }
+            ?: previous?.name?.takeIf { !typeChanged }
+            ?: getString(
+                when (resolvedType) {
+                    "silo" -> R.string.provider_type_silo
+                    "emby" -> R.string.provider_type_emby
+                    else -> R.string.provider_type_jellyfin
+                }
+            ),
         enabled = true,
         url = url,
         // A password sign-in and a Quick Connect session are alternatives, not additions: the
@@ -407,8 +419,9 @@ internal fun MainActivity.saveJellyfinServer(
         userId = userId ?: previous?.userId.takeIf { username == null },
         // Silo has no Live TV to gate (its Jellyfin compatibility layer is movies/series), so
         // a fresh Silo entry defaults the TV flag off rather than advertising a toggle that
-        // can never produce channels.
-        liveEnabled = previous?.liveEnabled ?: (resolvedType != "silo"),
+        // can never produce channels. A type change resets that default instead of inheriting
+        // the old family's gate.
+        liveEnabled = if (previous != null && !typeChanged) previous.liveEnabled else (resolvedType != "silo"),
         moviesEnabled = previous?.moviesEnabled ?: true,
         seriesEnabled = previous?.seriesEnabled ?: true
     )
@@ -967,6 +980,7 @@ internal fun MainActivity.showProviderSettings() {
     val typeJellyfin = dialogView.findViewById<View>(R.id.settingsTypeJellyfin)
     val typeSilo = dialogView.findViewById<View>(R.id.settingsTypeSilo)
     val typePlex = dialogView.findViewById<View>(R.id.settingsTypePlex)
+    val typeEmby = dialogView.findViewById<View>(R.id.settingsTypeEmby)
     val typeSmb = dialogView.findViewById<View>(R.id.settingsTypeSmb)
     val typeWebdav = dialogView.findViewById<View>(R.id.settingsTypeWebdav)
     val showQrButton = dialogView.findViewById<View>(R.id.settingsShowQrButton)
@@ -1286,7 +1300,7 @@ internal fun MainActivity.showProviderSettings() {
     var editingProviderId: String? = null
     val typeCards = mapOf(
         "m3u" to typeM3u, "xtream" to typeXtream, "stalker" to typeStalker,
-        "jellyfin" to typeJellyfin, "silo" to typeSilo, "plex" to typePlex,
+        "jellyfin" to typeJellyfin, "emby" to typeEmby, "silo" to typeSilo, "plex" to typePlex,
         "smb" to typeSmb, "webdav" to typeWebdav
     )
     val typeLabels = mapOf(
@@ -1294,6 +1308,7 @@ internal fun MainActivity.showProviderSettings() {
         "xtream" to getString(R.string.provider_type_xtream),
         "stalker" to getString(R.string.sett_stalker_portal),
         "jellyfin" to getString(R.string.provider_type_jellyfin),
+        "emby" to getString(R.string.provider_type_emby),
         "silo" to getString(R.string.provider_type_silo),
         "plex" to getString(R.string.provider_type_plex),
         "smb" to getString(R.string.provider_type_smb),
@@ -1343,9 +1358,9 @@ internal fun MainActivity.showProviderSettings() {
         }
     }
 
-    // Collapses the 4-card type picker to a one-line "Type: X · Change" summary once
-    // picked - keeping all 4 cards on screen while filling in fields pushed the QR
-    // code/fields below the fold, forcing a scroll right after tapping "Show QR".
+    // Collapses the type picker to a one-line "Type: X · Change" summary once picked - keeping
+    // every type card on screen while filling in fields pushed the QR code/fields below the
+    // fold, forcing a scroll right after tapping "Show QR".
     fun selectType(type: String) {
         currentType = type
         // Backup sources are an IPTV concept (hidden browsing, kept for failover) - the
@@ -1362,8 +1377,8 @@ internal fun MainActivity.showProviderSettings() {
         typeSummary.visibility = View.VISIBLE
         typeSummaryLabel.text = getString(R.string.sett_type_summary, typeLabels[type] ?: "")
         iptvFieldsSection.visibility = View.VISIBLE
-        // Jellyfin and Silo take a name like an IPTV provider does - several accounts can be
-        // configured, and "Jellyfin" on every row says nothing about which is which. Plex
+        // Jellyfin, Emby and Silo take a name like an IPTV provider does - several accounts can
+        // be configured, and "Jellyfin" on every row says nothing about which is which. Plex
         // doesn't: its row is named after whichever server the account sign-in bound to, so a
         // typed name would be overwritten the moment the sign-in finished.
         nameSection.visibility = if (type == "plex") View.GONE else View.VISIBLE
@@ -1373,7 +1388,8 @@ internal fun MainActivity.showProviderSettings() {
         // the second thing that decides what this provider is), so it needs its own gate.
         xtreamImportRow.visibility = if (type == "xtream") View.VISIBLE else View.GONE
         stalkerGroup.visibility = if (type == "stalker") View.VISIBLE else View.GONE
-        jellyfinGroup.visibility = if (type == "jellyfin" || type == "silo") View.VISIBLE else View.GONE
+        jellyfinGroup.visibility =
+            if (type == "jellyfin" || type == "emby" || type == "silo") View.VISIBLE else View.GONE
         plexGroup.visibility = if (type == "plex") View.VISIBLE else View.GONE
         smbGroup.visibility = if (type == "smb") View.VISIBLE else View.GONE
         webdavGroup.visibility = if (type == "webdav") View.VISIBLE else View.GONE
@@ -1384,18 +1400,32 @@ internal fun MainActivity.showProviderSettings() {
         // Silo speaks the Jellyfin protocol but signs in with a username/password and a
         // profile ("user#profile"), and Quick Connect is not part of its compatibility
         // layer - so the button and the "if Quick Connect is off" framing would both be
-        // wrong for it. The same two fields then serve as the whole sign-in.
+        // wrong for it. Emby has no Quick Connect either, and its own username hint is
+        // clearer than Jellyfin's. The same two fields then serve as the whole sign-in.
         val isSilo = type == "silo"
-        jellyfinQuickConnectButton.visibility = if (isSilo) View.GONE else View.VISIBLE
-        jellyfinUserLabel.text = getString(if (isSilo) R.string.xtream_username else R.string.username_if_quick_connect_off)
-        jellyfinUser.hint = getString(if (isSilo) R.string.silo_username_hint else R.string.jellyfin_username_hint)
+        val isEmby = type == "emby"
+        jellyfinQuickConnectButton.visibility = if (isSilo || isEmby) View.GONE else View.VISIBLE
+        jellyfinUserLabel.text = getString(
+            when {
+                isSilo -> R.string.xtream_username
+                isEmby -> R.string.sett_media_server_username
+                else -> R.string.username_if_quick_connect_off
+            }
+        )
+        jellyfinUser.hint = getString(
+            when {
+                isSilo -> R.string.silo_username_hint
+                isEmby -> R.string.emby_username_hint
+                else -> R.string.jellyfin_username_hint
+            }
+        )
         // Stalker portals identify a device by its MAC - leave blank for user to fill.
         // Plex is deliberately not QR-eligible here, even though it is the most QR-driven type
         // of the lot: its own sign-in *is* a QR (of plex.tv/link), so offering the phone-
         // pairing QR alongside it put two different QR codes on screen at once, pointing at
         // two different places, with nothing to say which one to scan. The phone-pairing form
         // still offers Plex in its dropdown for anyone who arrives there from another type.
-        val qrEligible = type in listOf("m3u", "xtream", "stalker", "jellyfin", "silo", "smb", "webdav")
+        val qrEligible = type in listOf("m3u", "xtream", "stalker", "jellyfin", "emby", "silo", "smb", "webdav")
         showQrButton.visibility = if (qrEligible) View.VISIBLE else View.GONE
         manualDivider.visibility = if (qrEligible) View.VISIBLE else View.GONE
         // The tapped type card just went GONE (typePicker hidden above), taking focus
@@ -1578,6 +1608,33 @@ internal fun MainActivity.showProviderSettings() {
                         username = user,
                         password = pass,
                         type = "silo"
+                    )
+
+                    stopQrServer()
+                    dialog.dismiss()
+                    loadAllConfiguredProviders(forceRefresh = true)
+                }
+                "emby" -> {
+                    // Emby has no Quick Connect, so username/password is the whole sign-in.
+                    // A blank password is legitimate (Emby lets an account have none), but a
+                    // blank username is not - without it the client cannot authenticate.
+                    val url = form["embyServerUrl"]?.let { normalizeServerUrl(it, defaultScheme = "https") }
+                    if (url.isNullOrBlank()) {
+                        qrStatus.text = getString(R.string.sett_enter_server_url)
+                        return@runOnUiThread
+                    }
+                    val user = form["embyUsername"]?.takeIf { it.isNotBlank() }
+                    if (user == null) {
+                        qrStatus.text = getString(R.string.sett_enter_username)
+                        return@runOnUiThread
+                    }
+                    saveJellyfinServer(
+                        existingId = editingMediaServerId,
+                        url = url,
+                        name = form["name"]?.takeIf { it.isNotBlank() },
+                        username = user,
+                        password = form["embyPassword"].orEmpty(),
+                        type = "emby"
                     )
 
                     stopQrServer()
@@ -1851,9 +1908,9 @@ internal fun MainActivity.showProviderSettings() {
         if (existing == null) focusWhenReady(typeM3u)
     }
 
-    // Jellyfin-protocol accounts (Jellyfin and Silo) live in MediaServerStore, not
+    // Jellyfin-protocol accounts (Jellyfin, Emby and Silo) live in MediaServerStore, not
     // IptvProviderStore, so editing one re-uses the same form/type-card UI but pre-fills from
-    // its MediaServerConfig - including which of the two types it is.
+    // its MediaServerConfig - including which of the three types it is.
     fun openJellyfinEditForm(existing: MediaServerConfig) {
         editingProviderId = null
         editingMediaServerId = existing.id
@@ -2123,9 +2180,9 @@ internal fun MainActivity.showProviderSettings() {
             }
             iptvProviderListContainer.addView(row)
         }
-        // One row per configured media-server account, of either kind - any number of each
-        // can exist, so these are rendered from the list exactly like the IPTV rows above
-        // rather than as two fixed slots.
+        // One row per configured media-server account, of any kind - any number of each can
+        // exist, so these are rendered from the list exactly like the IPTV rows above rather
+        // than as fixed slots.
         for (server in servers) {
             val row = layoutInflater.inflate(R.layout.item_iptv_provider_row, iptvProviderListContainer, false)
             val enabledBox = row.findViewById<CheckBox>(R.id.rowEnabled)
@@ -2215,6 +2272,7 @@ internal fun MainActivity.showProviderSettings() {
             val typeLabel = getString(
                 when {
                     server.isPlex -> R.string.provider_type_plex
+                    server.isEmby -> R.string.provider_type_emby
                     server.isSilo -> R.string.provider_type_silo
                     server.isSmb -> R.string.provider_type_smb
                     server.isWebdav -> R.string.provider_type_webdav
@@ -2258,6 +2316,7 @@ internal fun MainActivity.showProviderSettings() {
                             when {
                                 server.isShare -> R.string.sett_remove_share_message
                                 server.isPlex -> R.string.sett_remove_plex_message
+                                server.isEmby -> R.string.sett_remove_emby_message
                                 else -> R.string.sett_remove_jellyfin_message
                             }
                         )
@@ -3339,6 +3398,25 @@ internal fun MainActivity.showProviderSettings() {
                     name = name,
                     username = jellyfinUser.text.toString().trim(),
                     password = jellyfinPass.text.toString().trim()
+                )
+            }
+            "emby" -> {
+                // Emby is reached over the same MediaBrowser API as Jellyfin, but has no
+                // Quick Connect: the username/password fields are the whole sign-in. The
+                // password may legitimately be empty; the username may not.
+                val url = jellyfinUrl.text.toString().trim().let { if (it.isBlank()) it else normalizeServerUrl(it, defaultScheme = "https") }
+                if (url.isBlank()) { Toast.makeText(this, getString(R.string.sett_enter_server_url), Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+                val username = jellyfinUser.text.toString().trim()
+                if (username.isBlank()) {
+                    Toast.makeText(this, getString(R.string.sett_enter_username), Toast.LENGTH_SHORT).show(); return@setOnClickListener
+                }
+                saveJellyfinServer(
+                    existingId = editingMediaServerId,
+                    url = url,
+                    name = name,
+                    username = username,
+                    password = jellyfinPass.text.toString().trim(),
+                    type = "emby"
                 )
             }
             "silo" -> {

@@ -440,8 +440,9 @@ internal fun MainActivity.loadDiscoverLibraryBadges(items: List<Channel>) {
 internal suspend fun MainActivity.discoverBadgesFor(items: List<Channel>): Map<String, String> =
     withContext(Dispatchers.Default) {
         // Hoisted: mediaServers() re-parses its JSON pref on every call, and the owner lookup
-        // below runs per version per tile. The badge names the account's server family, so a
-        // Silo library reads "Silo" even though its items carry the Jellyfin-protocol flag.
+        // below runs per version per tile. The badge names the account's server family, so an
+        // Emby or Silo library reads under its own name even though its items carry the
+        // Jellyfin-protocol flag.
         val owned = mediaServers()
         items.mapNotNull { item ->
             val versions = catalogVersionsFor(findCatalogMatches(item))
@@ -451,6 +452,7 @@ internal suspend fun MainActivity.discoverBadgesFor(items: List<Channel>): Map<S
             // has the title.
             val servers = listOfNotNull(
                 "Jellyfin".takeIf { versions.any { v -> mediaServerOwner(v, owned)?.isJellyfin == true } },
+                "Emby".takeIf { versions.any { v -> mediaServerOwner(v, owned)?.isEmby == true } },
                 "Silo".takeIf { versions.any { v -> mediaServerOwner(v, owned)?.isSilo == true } },
                 "Plex".takeIf { versions.any { v -> v.isPlex } }
             )

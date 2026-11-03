@@ -414,8 +414,10 @@ class RecordingService : Service() {
                 // catalogue authenticated once, but this service runs in its own process
                 // state. Sign in now and persist the token for the next recording.
                 val fresh = withContext(Dispatchers.IO) {
-                    JellyfinProvider(com.lumora.BaseApplication.instance.okHttpClient)
-                        .authenticate(server.url.orEmpty(), server.username.orEmpty(), server.password.orEmpty())
+                    JellyfinProvider(
+                        com.lumora.BaseApplication.instance.okHttpClient,
+                        isEmby = server.isEmby
+                    ).authenticate(server.url.orEmpty(), server.username.orEmpty(), server.password.orEmpty())
                 }.getOrNull()
                 if (fresh?.token != null) {
                     MediaServerStore.upsert(prefs, server.copy(token = fresh.token, userId = fresh.userId))
@@ -423,7 +425,14 @@ class RecordingService : Service() {
                 fresh?.token
             }
             return token?.takeIf { it.isNotBlank() }
-                ?.let { mapOf("Authorization" to "MediaBrowser Token=\"$it\"") }
+                ?.let { value ->
+                    if (server.isEmby) {
+                        // Emby's documented token header; see JellyfinProvider.authorize().
+                        mapOf("X-Emby-Token" to value)
+                    } else {
+                        mapOf("Authorization" to "MediaBrowser Token=\"$value\"")
+                    }
+                }
                 .orEmpty()
         }
         if (channel.isPlex && !server.token.isNullOrBlank()) {

@@ -12,6 +12,9 @@
 ### Playback
 - **A stream served under a misleading file extension now plays.** Media3 names the container from the URL path, so an HLS playlist or MPEG-TS segment served as `something.png` (or `.php`, `.do`, another non-container extension) was opened with the progressive/PNG extractors and failed with `UnrecognizedInputFormatException`, even though the bytes were a normal stream. Ambiguous URLs are now sniffed from their first bytes before the source is chosen; `.m3u8`, `.mp4`, `.ts`, `.mkv` and other known containers keep the existing no-request path. HLS segments are already sniffed by Media3, so a normal playlist with `.png` segment URLs continues to play untouched.
 
+### Providers
+- **Emby can now be added as its own media-server type.** Emby speaks the same MediaBrowser API as Jellyfin, so its films, series, Live TV, resume points, watched marks, favourites and playback reporting reuse the Jellyfin client — with Emby's own `api_key`/`X-Emby-Token` wire details where they differ. It has its own tile in Settings, its own Films/Series sidebar row and Discover badge, and the same phone QR pairing flow for entering the server and account from a phone. Emby has no Quick Connect, so its sign-in is username/password.
+
 ## 6.7
 
 ### Films & Series

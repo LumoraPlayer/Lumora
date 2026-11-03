@@ -520,8 +520,9 @@
 
                     <!-- The media servers sit on their own row rather than being squeezed
                          into the IPTV one: five cards across a phone-width column left each
-                         one too narrow to read its own caption. Jellyfin, Silo and Plex share
-                         one row now - captions are short enough at a third of the width. -->
+                         one too narrow to read its own caption. Jellyfin, Emby, Silo and Plex
+                         share one row now - captions are short enough at a quarter of the
+                         width. -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -548,6 +549,27 @@
                             android:clipChildren="false"
                             android:clipToPadding="false">
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_jellyfin" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/settingsTypeEmby"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:minHeight="@dimen/settings_type_card_height"
+                            android:layout_weight="1"
+                            android:layout_marginHorizontal="@dimen/settings_gap_s"
+                            android:background="@drawable/card_surface_background"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:orientation="vertical"
+                            android:paddingHorizontal="4dp"
+                            android:paddingVertical="6dp"
+                            android:stateListAnimator="@animator/focus_scale_flat"
+                            android:clipChildren="false"
+                            android:clipToPadding="false">
+                            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/provider_type_emby" android:textColor="@color/text_primary" android:textSize="@dimen/settings_text_caption" android:fontFamily="@font/inter_medium" />
                             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:gravity="center" android:maxLines="1" android:text="@string/media_server" android:textColor="@color/text_tertiary" android:textSize="@dimen/settings_text_micro" android:fontFamily="@font/inter_regular" />
                         </LinearLayout>
 
@@ -596,7 +618,7 @@
 
                     <!-- File shares (SMB + WebDAV) on their own row: two cards read cleanly at
                          half the width, and keeping them off the media-server row leaves that
-                         row at the three cards it was laid out for. -->
+                         row at the four cards it was laid out for. -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

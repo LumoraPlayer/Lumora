@@ -335,6 +335,9 @@ internal const val PLEX_CATEGORY_ID = "__plex__"
  *  rather than folded into the Jellyfin one: Silo speaks the Jellyfin protocol but is a
  *  separate server, and "my Silo library" reads wrong under a "Jellyfin" heading. */
 internal const val SILO_CATEGORY_ID = "__silo__"
+/** Films/Series sidebar row for an Emby library. Emby shares Jellyfin's protocol but is a
+ *  separate server with its own name, so it gets its own heading like Silo and Plex. */
+internal const val EMBY_CATEGORY_ID = "__emby__"
 /** Series sidebar row for the plugin-gated anime catalog. Expandable: its children are the
  *  catalog's sections (Trending Now, Currently Airing, one per genre, ...). Built explicitly
  *  rather than derived from the channels' own category name, because anime titles carry a

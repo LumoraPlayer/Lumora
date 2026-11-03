@@ -4,24 +4,25 @@ package com.lumora.data.remote.jellyfin
 import okhttp3.Interceptor
 import okhttp3.Response
 
-/** Attaches the Jellyfin session token to any request hitting the currently-connected
- *  Jellyfin server's host - added to the app's shared OkHttpClient so generic image
- *  loading (PosterLoader etc, which have no idea a given URL is Jellyfin-specific)
- *  gets authenticated automatically instead of silently 401ing.
+/** Attaches the Jellyfin/Emby session token to any request hitting the currently-connected
+ *  server's host - added to the app's shared OkHttpClient so generic image loading
+ *  (PosterLoader etc, which have no idea a given URL is Jellyfin-specific) gets
+ *  authenticated automatically instead of silently 401ing.
  *
  *  Jellyfin 12.0 removed the legacy token headers (`X-Emby-Token`,
- *  `X-MediaBrowser-Token`) and the `api_key` query parameter, so the only accepted
- *  forms left are the `Authorization: MediaBrowser Token="..."` header and the
- *  `ApiKey` query parameter. The header is used here; requests that already carry
- *  either credential (the provider's own calls, or URLs built with `ApiKey`) are left
+ *  `X-MediaBrowser-Token`) and the `api_key` query parameter, so Jellyfin uses
+ *  `Authorization: MediaBrowser Token="..."` or the `ApiKey` query parameter. Emby documents
+ *  `X-Emby-Token` (or `api_key`) instead. Requests that already carry a credential are left
  *  alone so a request never presents two tokens at once. */
 class JellyfinAuthInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val host = JellyfinSession.serverHost
         val token = JellyfinSession.accessToken
+        val emby = JellyfinSession.isEmby
         if (host == null || token == null || (request.url.host != host && !request.url.host.endsWith(".$host")) ||
             !request.header("Authorization").isNullOrBlank() ||
+            !request.header("X-Emby-Token").isNullOrBlank() ||
             request.url.queryParameter("ApiKey") != null ||
             request.url.queryParameter("api_key") != null
         ) {
@@ -29,7 +30,17 @@ class JellyfinAuthInterceptor : Interceptor {
         }
         return chain.proceed(
             request.newBuilder()
-                .header("Authorization", "MediaBrowser Token=\"$token\"")
+                .apply {
+                    // Emby's canonical token header. Its authorization schema expects client
+                    // and device fields, so a token-only Authorization value is not the right
+                    // shape there; X-Emby-Token is what the server documents for every
+                    // authenticated request (images included).
+                    if (emby) {
+                        header("X-Emby-Token", token)
+                    } else {
+                        header("Authorization", "MediaBrowser Token=\"$token\"")
+                    }
+                }
                 .build()
         )
     }

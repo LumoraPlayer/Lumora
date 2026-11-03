@@ -142,11 +142,11 @@ object ProviderStatusProbe {
         }
 
     /**
-     * True when a media server or share answers. Jellyfin/Silo use the public info endpoint
-     * (no token needed, so a lapsed session doesn't read as a dead server), Plex uses its
-     * unauthenticated identity endpoint, WebDAV answers OPTIONS, and SMB is a TCP connect to
-     * the share's port - the cheapest thing that says the host is there without opening a
-     * session or validating credentials.
+     * True when a media server or share answers. Jellyfin/Emby/Silo use the public info
+     * endpoint (no token needed, so a lapsed session doesn't read as a dead server), Plex
+     * uses its unauthenticated identity endpoint, WebDAV answers OPTIONS, and SMB is a TCP
+     * connect to the share's port - the cheapest thing that says the host is there without
+     * opening a session or validating credentials.
      */
     suspend fun probeServer(config: MediaServerConfig, client: OkHttpClient): Boolean =
         withContext(Dispatchers.IO) {

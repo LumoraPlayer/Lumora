@@ -208,7 +208,7 @@ internal fun MainActivity.showCategoryContextMenu(category: CategoryFilter) {
             .show()
         return
     }
-    if (id == JELLYFIN_CATEGORY_ID || id == SILO_CATEGORY_ID || id == PLEX_CATEGORY_ID || id == NEWEST_CATEGORY_ID ||
+    if (id == JELLYFIN_CATEGORY_ID || id == EMBY_CATEGORY_ID || id == SILO_CATEGORY_ID || id == PLEX_CATEGORY_ID || id == NEWEST_CATEGORY_ID ||
         id == UP_NEXT_CATEGORY_ID || id == FAVOURITES_CATEGORY_ID
     ) {
         LumoraDialog.Builder(this)
@@ -1273,6 +1273,9 @@ internal fun MainActivity.buildCategoryRows(
         fun ownedBySilo(ch: Channel): Boolean =
             mediaServerOwner(ch, servers)?.isSilo == true ||
                 versionsById[ch.id]?.any { mediaServerOwner(it, servers)?.isSilo == true } == true
+        fun ownedByEmby(ch: Channel): Boolean =
+            mediaServerOwner(ch, servers)?.isEmby == true ||
+                versionsById[ch.id]?.any { mediaServerOwner(it, servers)?.isEmby == true } == true
         if (tab != 0 && JELLYFIN_CATEGORY_ID !in hiddenIds) {
             // A title the Jellyfin library *and* an IPTV provider both carry is one
             // deduped card, and the representative that wins the card is whichever copy
@@ -1287,6 +1290,22 @@ internal fun MainActivity.buildCategoryRows(
                         name = "Jellyfin",
                         count = jellyfinIds.size,
                         channelIds = jellyfinIds,
+                        isDynamic = true
+                    )
+                )
+            }
+        }
+        // Emby gets the same own-library row: it speaks the Jellyfin protocol but is a
+        // separate server, and its library is its own shelf to the person browsing.
+        if (tab != 0 && EMBY_CATEGORY_ID !in hiddenIds) {
+            val embyIds = list.filter(::ownedByEmby).map { it.id }.toSet()
+            if (embyIds.isNotEmpty()) {
+                result.add(
+                    CategoryFilter(
+                        id = EMBY_CATEGORY_ID,
+                        name = "Emby",
+                        count = embyIds.size,
+                        channelIds = embyIds,
                         isDynamic = true
                     )
                 )

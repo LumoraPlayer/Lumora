@@ -51,11 +51,17 @@ private const val MAX_ITEMS = 50_000
 private const val CALL_TIMEOUT_SECONDS = 30L
 
 /**
- * Jellyfin media server provider integration.
- * Fetches live TV, movies, series, and episodes from a Jellyfin server via its REST API.
- * Supports password-based auth and Quick Connect.
+ * Jellyfin-protocol media server provider integration.
+ * Fetches live TV, movies, series, and episodes from a Jellyfin, Emby or Silo server via its
+ * REST API. Supports password-based auth and Quick Connect (Jellyfin only; Emby has no
+ * Quick Connect and Silo's compatibility layer does not expose it).
+ *
+ * [isEmby] only changes wire details: Emby takes the session token in its documented
+ * `X-Emby-Token` header and expects the historic `api_key` query parameter, while Jellyfin
+ * 12 requires `Authorization: MediaBrowser Token=...` and `ApiKey`. Everything else - the
+ * item shapes, user data, playback negotiation and reporting - is shared MediaBrowser API.
  */
-class JellyfinProvider(baseClient: OkHttpClient) {
+class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = false) {
 
     /** Shares the base client's connection pool, dispatcher and cache - newBuilder() only
      *  layers the call timeout on top, so this costs nothing beyond the wrapper. */
@@ -212,22 +218,46 @@ class JellyfinProvider(baseClient: OkHttpClient) {
             // Version comes back empty from a header it couldn't parse). A fixed literal
             // sidesteps that risk entirely - confirmed against another working Jellyfin
             // client's implementation, which does the same.
-            append("MediaBrowser Client=\"Lumora\", Device=\"Lumora\", DeviceId=\"$id\", Version=\"1.0.0\"")
+            //
+            // Emby documents its own `Emby Client=..., Device=..., DeviceId=..., Version=...`
+            // scheme; Jellyfin accepts the `MediaBrowser` scheme it forked. Sending each
+            // server the scheme it documents avoids relying on the other's compatibility
+            // parser for the one request that cannot carry a token yet.
+            val scheme = if (isEmby) "Emby" else "MediaBrowser"
+            append("$scheme Client=\"Lumora\", Device=\"Lumora\", DeviceId=\"$id\", Version=\"1.0.0\"")
             token?.takeIf { it.isNotBlank() }?.let { append(", Token=\"$it\"") }
         }
     }
 
-    /** Authorization header for an already-authenticated call, in Jellyfin's current
+    /** Authorization header for an already-authenticated Jellyfin call, in Jellyfin's current
      *  `MediaBrowser` scheme. Jellyfin 12.0 removed the legacy `X-Emby-Token` /
      *  `X-MediaBrowser-Token` headers, so this is the only accepted way to present a
-     *  session token. The same scheme has been supported since 10.8, so this stays
-     *  compatible with older servers. */
+     *  session token there. The same scheme has been supported since 10.8, so this stays
+     *  compatible with older Jellyfin servers. */
     private fun tokenAuthHeader(token: String): String = "MediaBrowser Token=\"$token\""
+
+    /** [Request.Builder] with the session token attached.
+     *
+     *  Emby gets the token exactly as its own API documents it - in `X-Emby-Token` - and not
+     *  a token-only `Authorization: MediaBrowser` value. Emby's authorization schema expects
+     *  Client/Device/DeviceId/Version fields, so a token-only header is at best ignored and
+     *  at worst rejected; `X-Emby-Token` is the canonical header for every Emby version.
+     *  Jellyfin uses the modern Authorization header, which is the only one Jellyfin 12
+     *  accepts. */
+    private fun Request.Builder.authorize(token: String): Request.Builder = apply {
+        if (isEmby) {
+            header("X-Emby-Token", token)
+        } else {
+            header("Authorization", tokenAuthHeader(token))
+        }
+    }
 
     /** Token carried in the URL instead of a header, for URLs fetched by Media3 (playback,
      *  subtitles) rather than by OkHttp - those never see [JellyfinAuthInterceptor]. Jellyfin
-     *  12.0 removed the legacy lowercase `api_key`; `ApiKey` is the current name. */
-    private fun apiKeyParam(token: String): String = "ApiKey=$token"
+     *  12.0 removed the legacy lowercase `api_key`; `ApiKey` is the current name. Emby kept
+     *  the original `api_key` spelling and does not read `ApiKey`. */
+    private fun apiKeyParam(token: String): String =
+        if (isEmby) "api_key=$token" else "ApiKey=$token"
 
     /**
      * Authenticate with a Jellyfin server using username/password.
@@ -242,9 +272,13 @@ class JellyfinProvider(baseClient: OkHttpClient) {
                 put("Pw", password)
             }
 
+            val auth = authHeader(base, username)
             val request = Request.Builder().url(url)
                 .header("Content-Type", "application/json")
-                .header("Authorization", authHeader(base, username))
+                .header("Authorization", auth)
+                // Emby's own clients still send the historical header name; the server
+                // accepts either name, but older builds are more reliable with this one.
+                .apply { if (isEmby) header("X-Emby-Authorization", auth) }
                 .header("User-Agent", "Lumora/1.0")
                 .post(payload.toString().toRequestBody("application/json".toMediaType()))
                 .build()
@@ -277,7 +311,7 @@ class JellyfinProvider(baseClient: OkHttpClient) {
                     userId = uid
                     serverBase = base
                 }
-                JellyfinSession.update(base, token)
+                JellyfinSession.update(base, token, isEmby)
                 Result.success(AuthResult(success = true, token = token, userId = uid, serverName = serverName))
             } else {
                 Result.failure(Exception("Invalid auth response"))
@@ -305,7 +339,7 @@ class JellyfinProvider(baseClient: OkHttpClient) {
             this.userId = userId
             this.serverBase = base
         }
-        JellyfinSession.update(base, token)
+        JellyfinSession.update(base, token, isEmby)
     }
 
     /**
@@ -405,7 +439,7 @@ class JellyfinProvider(baseClient: OkHttpClient) {
                     userId = uid
                     serverBase = base
                 }
-                JellyfinSession.update(base, token)
+                JellyfinSession.update(base, token, isEmby)
                 Result.success(AuthResult(success = true, token = token, userId = uid, serverName = serverName))
             } else {
                 Result.failure(Exception("Invalid Quick Connect auth response"))
@@ -604,7 +638,7 @@ class JellyfinProvider(baseClient: OkHttpClient) {
         val url = "$base/Users/$userId/FavoriteItems/$itemId"
         return runCatching {
             val builder = Request.Builder().url(url)
-                .header("Authorization", tokenAuthHeader(token))
+                .authorize(token)
                 .header("User-Agent", "Lumora/1.0")
             val request = if (favorite) {
                 builder.post("{}".toRequestBody("application/json".toMediaType())).build()
@@ -625,7 +659,7 @@ class JellyfinProvider(baseClient: OkHttpClient) {
         val url = "$base/Users/$uid/PlayedItems/$itemId"
         return runCatching {
             val builder = Request.Builder().url(url)
-                .header("Authorization", tokenAuthHeader(token))
+                .authorize(token)
                 .header("User-Agent", "Lumora/1.0")
             val request = if (played) {
                 builder.post("{}".toRequestBody("application/json".toMediaType())).build()
@@ -645,7 +679,7 @@ class JellyfinProvider(baseClient: OkHttpClient) {
         val url = "$base/Users/$uid/Items/$itemId/UserData"
         return runCatching {
             val request = Request.Builder().url(url)
-                .header("Authorization", tokenAuthHeader(token))
+                .authorize(token)
                 .header("User-Agent", "Lumora/1.0")
                 .delete()
                 .build()
@@ -742,7 +776,7 @@ class JellyfinProvider(baseClient: OkHttpClient) {
     /** One page: the items, plus TotalRecordCount when the endpoint reports one. */
     private suspend fun fetchItems(url: String, token: String): Pair<List<JSONObject>, Int?> {
         val request = Request.Builder().url(url)
-            .header("Authorization", tokenAuthHeader(token))
+            .authorize(token)
             .header("User-Agent", "Lumora/1.0")
             .build()
 
@@ -767,7 +801,7 @@ class JellyfinProvider(baseClient: OkHttpClient) {
         val token = accessToken ?: return null
         return runCatching {
             val request = Request.Builder().url(url)
-                .header("Authorization", tokenAuthHeader(token))
+                .authorize(token)
                 .header("User-Agent", "Lumora/1.0")
                 .build()
             client.newCall(request).execute().use { response ->
@@ -783,7 +817,7 @@ class JellyfinProvider(baseClient: OkHttpClient) {
         val token = accessToken ?: return false
         return runCatching {
             val request = Request.Builder().url(url)
-                .header("Authorization", tokenAuthHeader(token))
+                .authorize(token)
                 .header("Content-Type", "application/json")
                 .header("User-Agent", "Lumora/1.0")
                 .post(payload.toString().toRequestBody("application/json".toMediaType()))
@@ -1047,6 +1081,9 @@ class JellyfinProvider(baseClient: OkHttpClient) {
             .put("MaxStreamingBitrate", maxBitrate)
             .put("StartTimeTicks", startPositionMs * TICKS_PER_MS)
             .apply {
+                // Emby's PlaybackInfoRequest documents UserId as part of the body; Jellyfin
+                // accepts it there too. The query parameter stays for older servers.
+                userId?.let { put("UserId", it) }
                 audioStreamIndex?.let { put("AudioStreamIndex", it) }
                 mediaSourceId?.let { put("MediaSourceId", it) }
             }
@@ -1059,7 +1096,7 @@ class JellyfinProvider(baseClient: OkHttpClient) {
 
         return runCatching {
             val request = Request.Builder().url(url)
-                .header("Authorization", tokenAuthHeader(token))
+                .authorize(token)
                 .header("Content-Type", "application/json")
                 .header("User-Agent", "Lumora/1.0")
                 .post(payload.toString().toRequestBody("application/json".toMediaType()))

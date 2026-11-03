@@ -448,7 +448,7 @@ private suspend fun MainActivity.buildVodShelves(
         // read as clutter. `refresh*ShelvesIfShowing` (shelvesFromCategoryRows) has always
         // skipped them; this pass has to agree, or the shelf appears and disappears depending
         // on whether a playback refreshed the poster last.
-        if (id == JELLYFIN_CATEGORY_ID || id == SILO_CATEGORY_ID || id == PLEX_CATEGORY_ID) {
+        if (id == JELLYFIN_CATEGORY_ID || id == EMBY_CATEGORY_ID || id == SILO_CATEGORY_ID || id == PLEX_CATEGORY_ID) {
             return@mapNotNull null
         }
         async(Dispatchers.IO) {

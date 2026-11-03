@@ -30,8 +30,8 @@ import okhttp3.Request
 internal fun MainActivity.jellyfinServerUrl(cfg: MediaServerConfig): String? =
     cfg.url?.takeIf { it.isNotBlank() }?.let { normalizeServerUrl(it, defaultScheme = "https") }
 
-/** The Jellyfin-protocol account a channel came from (Jellyfin or Silo), or null when it
- *  isn't a Jellyfin-protocol item (or its account has since been removed). */
+/** The Jellyfin-protocol account a channel came from (Jellyfin, Emby or Silo), or null when
+ *  it isn't a Jellyfin-protocol item (or its account has since been removed). */
 internal fun MainActivity.jellyfinConfigFor(channel: Channel): MediaServerConfig? =
     if (!channel.isJellyfin) null
     else MediaServerStore.get(prefs, channel.sourceProviderId)?.takeIf { it.usesJellyfinProtocol }
@@ -48,11 +48,11 @@ internal fun MainActivity.jellyfinProviderStub(url: String?): Provider =
     Provider(name = "Jellyfin", type = ProviderType.M3U, serverUrl = url)
 
 /** Authenticates (or restores) a session for one configured Jellyfin-protocol account
- *  (Jellyfin or Silo). Failure message is already user-facing. */
+ *  (Jellyfin, Emby or Silo). Failure message is already user-facing. */
 internal suspend fun MainActivity.connectJellyfin(cfg: MediaServerConfig): Result<JellyfinProvider> {
     val label = cfg.errorLabel()
     val url = jellyfinServerUrl(cfg) ?: return Result.failure(Exception("$label: no server URL"))
-    val jellyfin = JellyfinProvider(BaseApplication.instance.okHttpClient)
+    val jellyfin = JellyfinProvider(BaseApplication.instance.okHttpClient, isEmby = cfg.isEmby)
     if (!cfg.token.isNullOrBlank() && !cfg.userId.isNullOrBlank()) {
         // Quick Connect never yields a password to re-authenticate with later -
         // reuse the session it already gave us instead.
@@ -71,10 +71,14 @@ internal suspend fun MainActivity.connectJellyfin(cfg: MediaServerConfig): Resul
     return Result.success(jellyfin)
 }
 
-/** "Jellyfin"/"Silo" for provider-failure messages, preferring the account's own name so a
- *  multi-account setup says which server failed. */
+/** "Jellyfin"/"Emby"/"Silo" for provider-failure messages, preferring the account's own name
+ *  so a multi-account setup says which server failed. */
 internal fun MediaServerConfig.errorLabel(): String =
-    name.takeIf { it.isNotBlank() } ?: if (isSilo) "Silo" else "Jellyfin"
+    name.takeIf { it.isNotBlank() } ?: when {
+        isEmby -> "Emby"
+        isSilo -> "Silo"
+        else -> "Jellyfin"
+    }
 
 /** The live session for one Jellyfin account, reconnecting on demand. A cold start that hits
  *  the channel cache returns from loadAllConfiguredProviders() before any Jellyfin fetch runs,
@@ -131,6 +135,7 @@ internal suspend fun MainActivity.fetchJellyfinChannels(cfg: MediaServerConfig):
             // crawled at all, and never was. Silo never crawls Live TV even when the flag
             // is on - its 1.0 scope is movies and series, the Jellyfin compatibility layer
             // doesn't serve /LiveTv, and a 404 there would otherwise fail the whole fetch.
+            // Emby does serve Live TV, so it takes the same path as Jellyfin.
             coroutineScope {
                 val liveDeferred = if (!cfg.isSilo && jellyfinAllowsLive(cfg)) async { jellyfin.getLiveTvChannels() } else null
                 val moviesDeferred = if (jellyfinAllowsMovies(cfg)) async { jellyfin.getMovies() } else null

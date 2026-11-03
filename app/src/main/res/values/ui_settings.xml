@@ -62,6 +62,9 @@
     <string name="sett_remove_plex_message">Its films and shows will no longer appear.</string>
     <string name="sett_remove_jellyfin_confirm">Remove Jellyfin?</string>
     <string name="sett_remove_jellyfin_message">Its channels will no longer appear.</string>
+    <string name="sett_remove_emby_message">Its films and shows will no longer appear.</string>
+    <string name="sett_media_server_username">Username</string>
+    <string name="sett_enter_username">Enter a username</string>
     <string name="sett_choose_provider_type_first">Choose a provider type first</string>
     <string name="sett_enter_m3u_url">Enter an M3U URL</string>
     <string name="m3u_browse_local">Browse local file</string>
