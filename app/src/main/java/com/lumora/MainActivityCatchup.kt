@@ -53,36 +53,40 @@ internal fun MainActivity.catchupCategories(): List<Pair<String, List<Channel>>>
         .toList()
         .sortedBy { it.first.lowercase() }
 
-/** Catch Up hangs off the Live TV tab as a dropdown, so all this has to keep current is
- *  the caret that advertises it - shown when some enabled provider actually reports archive
- *  channels *or* multiview is switched on (the dropdown is the way into multiview from the
- *  tab itself now). Called after every pane switch (selectTab/selectHome/selectDiscover/
- *  selectDownloads/selectCatchup), since none of those otherwise touch it. */
+/** Sports, Multiview and Catch Up all hang off the Live TV tab as a dropdown, so all this has
+ *  to keep current is the caret that advertises it - shown when the Sports board is available,
+ *  some enabled provider actually reports archive channels, or multiview is switched on (the
+ *  dropdown is the way into all three from the tab itself now). Called after every pane switch
+ *  (selectTab/selectHome/selectDiscover/selectDownloads/selectCatchup), since none of those
+ *  otherwise touch it. */
 internal fun MainActivity.updateCatchupTabVisibility() {
     val hasArchive = catchupChannels().isNotEmpty()
     val hasMultiview = isMultiviewEnabled()
+    val hasSports = sportsTabAvailable()
     // The archive vanishing under the user (its provider disabled while they are inside
     // Catch Up) must not leave the pane on screen with no way back to it.
     if (!hasArchive && showingCatchup) { selectTab(0); return }
-    if (!hasArchive && !hasMultiview) {
+    if (!hasArchive && !hasMultiview && !hasSports) {
         dismissLiveTabMenu()
         binding.tabLiveChevron.rotation = 0f
     }
-    binding.tabLiveChevron.visibility = if (hasArchive || hasMultiview) View.VISIBLE else View.GONE
+    binding.tabLiveChevron.visibility =
+        if (hasArchive || hasMultiview || hasSports) View.VISIBLE else View.GONE
 }
 
 /** Opens the Live TV tab's dropdown, anchored under the tab itself. Its own focusable
  *  window: the D-pad walks the rows without the tab bar's key intercepts in the way, and
  *  BACK closes it before the Activity ever sees the press.
  *
- *  Rows without anything behind them are hidden (Catch Up with no archive channels,
- *  Multiview when the feature is switched off); the focus chain is re-linked around
- *  whatever is left, since the XML chain assumes all three. */
+ *  Rows without anything behind them are hidden (Sports switched off or no live provider,
+ *  Catch Up with no archive channels, Multiview when the feature is switched off); the focus
+ *  chain is re-linked around whatever is left, since the XML chain assumes all four. */
 internal fun MainActivity.showLiveTabMenu() {
     dismissLiveTabMenu()
     val hasArchive = catchupChannels().isNotEmpty()
     val hasMultiview = isMultiviewEnabled()
-    if (!hasArchive && !hasMultiview) return
+    val hasSports = sportsTabAvailable()
+    if (!hasArchive && !hasMultiview && !hasSports) return
     val view = layoutInflater.inflate(R.layout.popup_live_menu, null)
     val popup = android.widget.PopupWindow(
         view,
@@ -101,21 +105,25 @@ internal fun MainActivity.showLiveTabMenu() {
         if (!isFinishing && !isDestroyed) binding.tabLive.requestFocus()
     }
     val liveRow = view.findViewById<View>(R.id.liveMenuLive)
+    val sportsRow = view.findViewById<View>(R.id.liveMenuSports)
     val multiviewRow = view.findViewById<View>(R.id.liveMenuMultiview)
     val catchupRow = view.findViewById<View>(R.id.liveMenuCatchup)
+    sportsRow.visibility = if (hasSports) View.VISIBLE else View.GONE
     multiviewRow.visibility = if (hasMultiview) View.VISIBLE else View.GONE
     catchupRow.visibility = if (hasArchive) View.VISIBLE else View.GONE
     // Mark where the user already is. Focus still starts on Live TV (that is the way back
-    // out of Catch Up), but the selected row keeps the menu from reading as three equal
+    // out of Sports/Catch Up), but the selected row keeps the menu from reading as four equal
     // choices when one of them is the current pane.
     val inAddMode = isMultiviewAddMode
-    liveRow.isSelected = !showingCatchup && !inAddMode
+    liveRow.isSelected = !showingSports && !showingCatchup && !inAddMode
+    sportsRow.isSelected = showingSports
     multiviewRow.isSelected = inAddMode
     catchupRow.isSelected = showingCatchup
-    // The XML chain assumes all three rows exist; re-link it around whatever is visible
+    // The XML chain assumes all four rows exist; re-link it around whatever is visible
     // (wrapping at the ends, the same shape the original two-row menu had), or a D-pad
     // move toward a hidden row dead-ends.
-    val visibleRows = listOf(liveRow, multiviewRow, catchupRow).filter { it.visibility == View.VISIBLE }
+    val visibleRows = listOf(liveRow, sportsRow, multiviewRow, catchupRow)
+        .filter { it.visibility == View.VISIBLE }
     visibleRows.forEachIndexed { index, row ->
         row.nextFocusUpId = visibleRows.getOrNull(index - 1)?.id ?: visibleRows.last().id
         row.nextFocusDownId = visibleRows.getOrNull(index + 1)?.id ?: visibleRows.first().id
@@ -128,6 +136,14 @@ internal fun MainActivity.showLiveTabMenu() {
         showingHome = false
         if (isMultiviewAddMode) abandonMultiviewAddMode()
         selectTab(0)
+    }
+    // Sports: the live-television board that used to own a top-level pill. Same abandon rule
+    // as the other panes - a grid session cannot survive a switch to it.
+    sportsRow.setOnClickListener {
+        popup.dismiss()
+        showingHome = false
+        if (isMultiviewAddMode) abandonMultiviewAddMode()
+        selectSports()
     }
     // Multiview: browse Live TV to add the next screen of the grid. With a grid session
     // waiting (entered from its Add screen), this is already the current mode; the row is

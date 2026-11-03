@@ -144,7 +144,8 @@ private class LiveCardGutter(
 }
 
 /** Switches to the Sports board: the content slot with the category rail hidden (there are no
- *  categories to browse here), the tab bar's highlight moved, and the board loaded. */
+ *  categories to browse here), the Live TV tab kept highlighted (Sports is one of its
+ *  dropdown panes now), and the board loaded. */
 internal fun MainActivity.selectSports() {
     activeSettingsOverlay?.dismiss()
     activeSearchOverlay?.dismiss()
@@ -167,9 +168,8 @@ internal fun MainActivity.selectSports() {
     binding.downloadsContent.visibility = View.GONE
     binding.downloadsEmptyText.visibility = View.GONE
     binding.sportsPane.visibility = View.VISIBLE
-    sportsAdapter.topRowFocusUpTargetId =
-        if (binding.tabSports.isShown) R.id.tabSports else R.id.tabLive
-    updateTabStyles(binding.tabSports)
+    sportsAdapter.topRowFocusUpTargetId = R.id.tabLive
+    updateTabStyles(binding.tabLive)
     updateCatchupTabVisibility()
     applyStatus()
     // Entering the tab is the only thing that refreshes the board: the repository decides
@@ -896,7 +896,7 @@ private fun MainActivity.buildSportChip(parent: ViewGroup, sport: Sport?, label:
         icon.setImageResource(sport.iconRes)
         icon.visibility = View.VISIBLE
     }
-    chip.nextFocusUpId = if (binding.tabSports.isShown) R.id.tabSports else R.id.tabLive
+    chip.nextFocusUpId = R.id.tabLive
     return chip
 }
 

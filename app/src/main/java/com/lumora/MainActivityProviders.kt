@@ -123,56 +123,56 @@ internal fun MainActivity.updateTopChromeVisibility() {
 }
 
 /**
- * The Sports tab's own gate: an IPTV provider that actually carries live channels, plus the
+ * The Sports board's own gate: an IPTV provider that actually carries live channels, plus the
  * Settings switch (show/hide), plus the bounce off a pane that would otherwise be on screen
  * with no way back to it.
  *
- * Deliberately stricter than the Live TV tab's gate. The board is built out of live channels
- * and their guide - a media server (Jellyfin/Silo/Plex has no live path in this app) or a
- * plugin-only setup produces neither, so the tab would only ever open onto "loading your
+ * Deliberately stricter than the Live TV gate. The board is built out of live channels and
+ * their guide - a media server (Jellyfin/Silo/Plex has no live path in this app) or a
+ * plugin-only setup produces neither, so the pane would only ever open onto "loading your
  * channels" and stay there. It appears once something can actually be watched on it.
  *
- * Sports stays on screen in simple mode along with Live and Home - unlike Series/Films/Discover
- * it is a live-television screen (every row ends in a channel), which is the mode's whole point.
+ * Sports is no longer a pill of its own: it is a row in the Live TV dropdown, because it is a
+ * live-television screen (every row ends in a channel) and the top row needs its width for the
+ * named Series/Films/Home tabs. Simple mode therefore keeps it reachable through that same
+ * dropdown rather than a separate tab; [navSports] stays for the player's side menu.
  */
+internal fun MainActivity.sportsTabAvailable(): Boolean =
+    hasLiveIptvProvider() && !com.lumora.sports.SportsConfig.isTabHidden(prefs)
+
 internal fun MainActivity.updateSportsTabVisibility() {
-    val show = hasLiveIptvProvider() && !com.lumora.sports.SportsConfig.isTabHidden(prefs)
-    val visibility = if (show) View.VISIBLE else View.GONE
-    binding.tabSports.visibility = visibility
-    binding.navSports.visibility = visibility
+    val show = sportsTabAvailable()
+    // The top-level pill is permanently gone now - the dropdown is its only entry point.
+    binding.tabSports.visibility = View.GONE
+    binding.navSports.visibility = if (show) View.VISIBLE else View.GONE
     if (!show && showingSports) selectTab(0)
-    // The neighbourhood links have to be rebuilt either way: a nextFocusId pointing at a GONE
-    // view resolves to nothing and eats the press on API 25 (see updateChromeFocusChain).
-    if (show) {
-        binding.tabLive.nextFocusRightId = R.id.tabSports
-        binding.tabSports.nextFocusLeftId = R.id.tabLive
-        binding.tabSports.nextFocusRightId = nextVisibleTabAfter(binding.tabSports)
-        binding.tabSeries.nextFocusLeftId = R.id.tabSports
-        binding.navLive.nextFocusDownId = R.id.navSports
-        binding.navSports.nextFocusUpId = R.id.navLive
-        binding.navSports.nextFocusDownId = R.id.navSeries
-        binding.navSeries.nextFocusUpId = R.id.navSports
-    } else {
+    // The top row is Live -> Series ... now, so the old Sports links would point at a GONE
+    // view and eat the D-pad press on API 25 (see updateChromeFocusChain). With Live itself
+    // gone (plugin-only setup) leave the Series chain alone: updateProviderOnlyTabsVisibility
+    // has already pointed it at the first visible tab.
+    if (binding.tabLive.visibility == View.VISIBLE) {
         binding.tabLive.nextFocusRightId = nextVisibleTabAfter(binding.tabLive)
         binding.tabSeries.nextFocusLeftId = R.id.tabLive
-        binding.navLive.nextFocusDownId = R.id.navSeries
-        binding.navSeries.nextFocusUpId = R.id.navLive
     }
+    binding.navLive.nextFocusDownId = if (show) R.id.navSports else R.id.navSeries
+    binding.navSports.nextFocusUpId = R.id.navLive
+    binding.navSports.nextFocusDownId = R.id.navSeries
+    binding.navSeries.nextFocusUpId = if (show) R.id.navSports else R.id.navLive
 }
 
 /**
  * The id of the next chrome tab actually on screen after [after], or [after]'s own id when
  * nothing is left of it.
  *
- * Needed rather than the XML default because the row runs Live, Sports, Series, Films, Home,
- * Discover, Search, Settings and any of the middle ones can be gone (simple mode keeps Live and
- * Home; a plugin-only setup drops Live; Sports itself is the tab being placed here). A
- * nextFocusId pointing at a GONE view resolves to nothing and eats the press on API 25 - the
- * oldest supported devices don't walk past it the way newer FocusFinder does.
+ * Needed rather than the XML default because the row runs Live, Series, Films, Home, Discover,
+ * Search, Settings and any of the middle ones can be gone (simple mode keeps Live and Home; a
+ * plugin-only setup drops Live). A nextFocusId pointing at a GONE view resolves to nothing and
+ * eats the press on API 25 - the oldest supported devices don't walk past it the way newer
+ * FocusFinder does.
  */
 private fun MainActivity.nextVisibleTabAfter(after: View): Int {
     val row = listOf(
-        binding.tabLive, binding.tabSports, binding.tabSeries, binding.tabFilms,
+        binding.tabLive, binding.tabSeries, binding.tabFilms,
         binding.tabHome, binding.tabDiscover, binding.btnSearch, binding.btnSettings
     )
     val start = row.indexOf(after)
@@ -190,7 +190,7 @@ private fun MainActivity.nextVisibleTabAfter(after: View): Int {
 internal fun MainActivity.setBrowseTabsVisible(visible: Boolean) {
     val vis = if (visible) View.VISIBLE else View.GONE
     for (tab in listOf(
-        binding.tabHome, binding.tabLive, binding.tabSports, binding.tabSeries,
+        binding.tabHome, binding.tabLive, binding.tabSeries,
         binding.tabFilms, binding.tabDiscover, binding.tabDownloads, binding.btnSearch,
     )) {
         tab.visibility = vis

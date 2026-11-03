@@ -1875,18 +1875,16 @@ internal fun MainActivity.setupTabs() {
     // drop down, so the tab stays a plain tab.
     binding.tabLive.setOnClickListener {
         val onLiveSection = (activeTab == 0 && !showingHome && !showingDiscover && !showingDownloads && !showingSports) || showingCatchup
-        // The dropdown carries Catch Up and Multiview, so it opens when either has
-        // something behind it - with only one row left it is still a real menu.
-        if (onLiveSection && (catchupChannels().isNotEmpty() || isMultiviewEnabled())) showLiveTabMenu()
-        else selectTab(0)
+        // The dropdown carries Sports, Catch Up and Multiview, so it opens when any of them
+        // has something behind it - with only one row left it is still a real menu.
+        if (onLiveSection && (sportsTabAvailable() || catchupChannels().isNotEmpty() || isMultiviewEnabled())) {
+            showLiveTabMenu()
+        } else {
+            selectTab(0)
+        }
     }
     binding.tabSeries.setOnClickListener { selectTab(1) }
     binding.tabFilms.setOnClickListener { selectTab(2) }
-    binding.tabSports.setOnClickListener {
-        // Pressing the tab you are already inside refreshes the board - the one way to ask for
-        // a re-check without leaving the tab and coming back.
-        if (showingSports) refreshSportsBoard(forceRefresh = true) else selectSports()
-    }
     binding.tabDiscover.setOnClickListener { showingHome = false; selectDiscover() }
     binding.tabDownloads.setOnClickListener { showingHome = false; selectDownloads() }
     setupSportsTab()
@@ -1909,15 +1907,19 @@ internal fun MainActivity.setupTabs() {
 }
 
 internal fun MainActivity.updateTabStyles(selected: View) {
-    // The tabs are icon-only until chosen; the selected one grows to carry its full name.
+    // The tabs are icon-only until chosen, except the three main browse tabs - Series, Films
+    // and Home keep their full names on screen even when another tab is selected. Sports
+    // moving into the Live TV dropdown is what gave the row the width for them.
     for ((tv, holderId, labelId) in chromeLabelPills()) {
         val isSelected = tv === selected
+        val alwaysNamed = tv === binding.tabSeries || tv === binding.tabFilms || tv === binding.tabHome
         tv.isSelected = isSelected
         val label = tv.findViewById<TextView>(labelId)
-        // The label is collapsed for every unselected tab, so TalkBack needs the name on
+        // The label is collapsed for the other unselected tabs, so TalkBack needs the name on
         // the tab itself rather than relying on a GONE TextView.
         tv.contentDescription = label?.text
-        tv.findViewById<View>(holderId).visibility = if (isSelected) View.VISIBLE else View.GONE
+        tv.findViewById<View>(holderId).visibility =
+            if (isSelected || alwaysNamed) View.VISIBLE else View.GONE
         val content = tabContent(tv) ?: continue
         content.label?.typeface = ResourcesCompat.getFont(
             this,

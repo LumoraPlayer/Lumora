@@ -319,13 +319,16 @@
 
             </LinearLayout>
 
-            <!-- Sports sits between Live TV and Series: it is a live-television screen (every
-                 row ends in a channel), so it belongs against Live rather than among the
-                 on-demand tabs. Same pill as the rest, icon + label, no dropdown. -->
+            <!-- Sports used to be a pill of its own here. It is a live-television screen (every
+                 row ends in a channel), so it now lives in the Live TV dropdown instead, and
+                 the width it freed is what lets Series/Films/Home keep their names visible.
+                 GONE rather than removed: the pane, its click wiring and the player side menu's
+                 navSports row still reference this view. -->
             <LinearLayout
                 android:id="@+id/tabSports"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:visibility="gone"
                 android:layout_marginHorizontal="@dimen/chrome_pill_gap"
                 android:background="@drawable/bg_tab_item"
                 android:clickable="true"

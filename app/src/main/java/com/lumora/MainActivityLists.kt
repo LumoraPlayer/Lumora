@@ -2141,7 +2141,8 @@ internal fun MainActivity.restoreTabFocus() {
         showingHome -> binding.tabHome
         showingDiscover -> binding.tabDiscover
         showingDownloads -> binding.tabDownloads
-        showingSports -> binding.tabSports
+        // Sports lives under Live TV now, so returning from it lands the ring on Live.
+        showingSports -> binding.tabLive
         activeTab == 0 -> binding.tabLive
         activeTab == 1 -> binding.tabSeries
         else -> binding.tabFilms
