@@ -3,6 +3,8 @@ package com.lumora.player
 
 import android.content.Context
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.view.SurfaceView
 import androidx.tracing.Trace
 import androidx.media3.common.AudioAttributes
@@ -25,7 +27,14 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import com.lumora.BaseApplication
 import com.lumora.player.playback.AvOffsetManager
 import com.lumora.player.playback.AvOffsetRenderersFactory
+import com.lumora.player.playback.StreamContentSniffer
+import java.util.Collections
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * Lightweight wrapper around Media3 ExoPlayer.
@@ -126,6 +135,19 @@ class PlayerManager(
     private var released = false
     private var zapTraceOpen = false
     private var zapTraceCookie = 0
+
+    // Content sniffing for URLs with no usable container extension (see StreamContentSniffer).
+    // Both the probe and its main-thread continuation can outlive the playUrl that started
+    // them, so every attempt carries a generation and only the newest one may start playback.
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val probeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var playRequestGeneration = 0
+    private val probeCache = Collections.synchronizedMap(
+        object : LinkedHashMap<String, String>(32, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>): Boolean =
+                size > 64
+        }
+    )
 
     // The one-shot audio/forced-subtitle track overrides (see attachOneShot*) stay attached
     // until onTracksChanged hands over a real track list - a dead stream or endless buffering
@@ -400,12 +422,7 @@ class PlayerManager(
         // A pending coroutine can outlive the activity (release() only runs at suspension
         // points); calling into a released ExoPlayer throws. Refuse rather than crash.
         if (released) return
-        endZapTrace()
-        // Async section: the start and the first-frame callback are not guaranteed to be on
-        // the same thread, and atrace's sync sections are thread-local.
-        zapTraceCookie++
-        Trace.beginAsyncSection("LumoraZap", zapTraceCookie)
-        zapTraceOpen = true
+        val generation = ++playRequestGeneration
         lastResolvedStream = ResolvedStream(url, userAgent, headers)
         // Recorded before the position is overridden below, so a replay of a replay still
         // carries the original arguments and only the position changes.
@@ -426,6 +443,105 @@ class PlayerManager(
                 onDrmUnsupported = onDrmUnsupported
             )
         }
+
+        // Media3 names the container from the URI extension. A host that disguises a playlist
+        // or an MPEG-TS segment as `something.png` therefore gets the progressive/PNG
+        // extractors and dies with UnrecognizedInputFormatException even though the bytes are a
+        // perfectly normal stream - the same stream OTT Navigator, VLC and Streamlink play
+        // because they look at the content. Probe only the ambiguous extensions: a `.m3u8`,
+        // `.mp4`, `.ts` or `.mkv` URL keeps the existing no-request path.
+        if (mimeType.isNullOrBlank() && dataSourceOverride == null && StreamContentSniffer.shouldProbe(url)) {
+            val probeHeaders = if (!manifestHeaders.isNullOrEmpty()) manifestHeaders else headers
+            probeScope.launch {
+                val detected = probeMimeType(url, userAgent, probeHeaders, maintainTokenQuery)
+                mainHandler.post {
+                    // A newer playUrl (or release) owns the player now; a stale probe must not
+                    // replace its source with the one from the channel the user left.
+                    if (released || generation != playRequestGeneration) return@post
+                    startPlayback(
+                        url = url,
+                        userAgent = userAgent,
+                        subtitles = subtitles,
+                        startPositionMs = startPositionMs,
+                        headers = headers,
+                        audio = audio,
+                        preferAudioLanguage = preferAudioLanguage,
+                        maintainTokenQuery = maintainTokenQuery,
+                        // Null when the probe saw nothing recognisable: Media3's own
+                        // inference is still the last word, and its error is the useful one.
+                        mimeType = detected ?: mimeType,
+                        dataSourceOverride = dataSourceOverride,
+                        drm = drm,
+                        manifestHeaders = manifestHeaders,
+                        onDrmUnsupported = onDrmUnsupported
+                    )
+                }
+            }
+            return
+        }
+
+        startPlayback(
+            url = url,
+            userAgent = userAgent,
+            subtitles = subtitles,
+            startPositionMs = startPositionMs,
+            headers = headers,
+            audio = audio,
+            preferAudioLanguage = preferAudioLanguage,
+            maintainTokenQuery = maintainTokenQuery,
+            mimeType = mimeType,
+            dataSourceOverride = dataSourceOverride,
+            drm = drm,
+            manifestHeaders = manifestHeaders,
+            onDrmUnsupported = onDrmUnsupported
+        )
+    }
+
+    /**
+     * Reads enough of [url] to name its container when the extension cannot. Cached per URL:
+     * the guide re-requests the same live preview every time focus moves across its row.
+     */
+    private fun probeMimeType(
+        url: String,
+        userAgent: String?,
+        headers: Map<String, String>?,
+        maintainTokenQuery: String?,
+    ): String? {
+        probeCache[url]?.let { return it }
+        val probeUrl = StreamContentSniffer.applyTokenQuery(url, maintainTokenQuery)
+        val detected = StreamContentSniffer.probe(
+            BaseApplication.instance.playbackOkHttpClient,
+            probeUrl,
+            userAgent,
+            headers,
+        )
+        if (detected != null) probeCache[url] = detected
+        return detected
+    }
+
+    private fun startPlayback(
+        url: String,
+        userAgent: String?,
+        subtitles: List<ExternalSubtitle>,
+        startPositionMs: Long,
+        headers: Map<String, String>?,
+        audio: String?,
+        preferAudioLanguage: Boolean,
+        maintainTokenQuery: String?,
+        mimeType: String?,
+        dataSourceOverride: DataSource.Factory?,
+        drm: ClearKeyDrm.PlaybackDrm?,
+        manifestHeaders: Map<String, String>?,
+        onDrmUnsupported: ((String) -> Unit)?,
+    ) {
+        // The probe path re-checks after its main-thread hop; the direct path checks here.
+        if (released) return
+        endZapTrace()
+        // Async section: the start and the first-frame callback are not guaranteed to be on
+        // the same thread, and atrace's sync sections are thread-local.
+        zapTraceCookie++
+        Trace.beginAsyncSection("LumoraZap", zapTraceCookie)
+        zapTraceOpen = true
         // A retry resumes where the failed play had reached; the recorded call keeps the
         // original start position for any later replay.
         @Suppress("NAME_SHADOWING")
@@ -898,6 +1014,7 @@ class PlayerManager(
     fun release() {
         if (released) return
         released = true
+        probeScope.cancel()
         endZapTrace()
         listeners.forEach { player.removeListener(it) }
         listeners.clear()
