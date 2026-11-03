@@ -44,7 +44,7 @@ class PlayerQuickActionView @JvmOverloads constructor(
         clipToPadding = false
         minimumHeight = resources.getDimensionPixelSize(R.dimen.player_quick_action_height)
         background = ContextCompat.getDrawable(context, R.drawable.bg_player_quick_action)
-        setPadding(dp(10), dp(4), dp(10), dp(4))
+        applyWidePadding()
 
         LayoutInflater.from(context).inflate(R.layout.view_player_quick_action, this, true)
         iconView = findViewById(R.id.playerQuickActionIcon)
@@ -95,13 +95,12 @@ class PlayerQuickActionView @JvmOverloads constructor(
             textParams.marginStart = 0
             textParams.weight = 0f
             textBlock.layoutParams = textParams
-
             titleView.gravity = Gravity.CENTER
             valueView.gravity = Gravity.CENTER
         } else {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(4), dp(10), dp(4))
+            applyWidePadding()
             val iconSize = resources.getDimensionPixelSize(R.dimen.player_quick_action_icon_size)
             val iconParams = iconView.layoutParams as LinearLayout.LayoutParams
             iconParams.width = iconSize
@@ -112,7 +111,9 @@ class PlayerQuickActionView @JvmOverloads constructor(
 
             val textParams = textBlock.layoutParams as LinearLayout.LayoutParams
             textParams.width = 0
-            textParams.marginStart = dp(8)
+            textParams.marginStart = resources.getDimensionPixelSize(
+                R.dimen.player_quick_action_text_gap
+            )
             textParams.weight = 1f
             textBlock.layoutParams = textParams
 
@@ -126,6 +127,13 @@ class PlayerQuickActionView @JvmOverloads constructor(
         contentDescription = listOf(titleText, valueText)
             .filter { it.isNotBlank() }
             .joinToString(", ")
+    }
+
+    /** The horizontal inset used when the icon sits beside the text. TV trades a little of it
+     *  for label width: five shortcuts share one row there, while a tablet shows four. */
+    private fun applyWidePadding() {
+        val horizontal = resources.getDimensionPixelSize(R.dimen.player_quick_action_padding_h)
+        setPadding(horizontal, dp(4), horizontal, dp(4))
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()

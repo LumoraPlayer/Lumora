@@ -109,7 +109,9 @@
     <dimen name="player_epg_card_height">40dp</dimen>
     <dimen name="player_epg_card_gap">8dp</dimen>
     <dimen name="player_epg_time_text">9sp</dimen>
+    <dimen name="player_epg_time_text_min">8sp</dimen>
     <dimen name="player_epg_title_text">11sp</dimen>
+    <dimen name="player_epg_title_text_min">9sp</dimen>
     <!-- Multiview shell and action bar. The bar is a real strip under the grid, not an
          overlay, so the row can use a full 48dp target without covering pane labels. -->
     <dimen name="mv_grid_padding">8dp</dimen>
@@ -306,12 +308,18 @@
     <dimen name="player_quick_action_height">56dp</dimen>
     <dimen name="player_quick_action_gap">4dp</dimen>
     <dimen name="player_quick_action_icon_size">20dp</dimen>
+    <dimen name="player_quick_action_padding_h">10dp</dimen>
+    <dimen name="player_quick_action_text_gap">8dp</dimen>
     <dimen name="player_quick_action_title_text">10sp</dimen>
+    <dimen name="player_quick_action_title_text_min">8sp</dimen>
     <dimen name="player_quick_action_value_text">11sp</dimen>
+    <dimen name="player_quick_action_value_text_min">9sp</dimen>
     <!-- Two-line tiles in the options panel: title plus the current value. -->
     <dimen name="player_option_tile_min_height">56dp</dimen>
     <dimen name="player_option_title_text">14sp</dimen>
+    <dimen name="player_option_title_text_min">11sp</dimen>
     <dimen name="player_option_value_text">12sp</dimen>
+    <dimen name="player_option_value_text_min">10sp</dimen>
     <!-- Gap between the three toolbar cluster buttons (search/settings/refresh) and the air
          after the last one. Was a 4dp literal on settings/refresh with nothing on the right;
          the search pill's own 14dp padding made the cluster read as one wide gap then two

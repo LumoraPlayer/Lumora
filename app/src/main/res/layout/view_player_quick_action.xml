@@ -3,7 +3,8 @@
 <!-- Contents of PlayerQuickActionView: an icon, a title and a live value. The parent custom
      view owns the focus ring, selected state and orientation switching; these children only
      paint the content and inherit the parent's selected state for their colour selectors. -->
-<merge xmlns:android="http://schemas.android.com/apk/res/android">
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <ImageView
         android:id="@+id/playerQuickActionIcon"
@@ -22,10 +23,14 @@
         android:duplicateParentState="true"
         android:orientation="vertical">
 
-        <TextView
+        <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/playerQuickActionTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            app:autoSizeMaxTextSize="@dimen/player_quick_action_title_text"
+            app:autoSizeMinTextSize="@dimen/player_quick_action_title_text_min"
+            app:autoSizeStepGranularity="1sp"
+            app:autoSizeTextType="uniform"
             android:duplicateParentState="true"
             android:ellipsize="end"
             android:includeFontPadding="false"
@@ -33,10 +38,14 @@
             android:textColor="@color/player_quick_action_title"
             android:textSize="@dimen/player_quick_action_title_text" />
 
-        <TextView
+        <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/playerQuickActionValue"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            app:autoSizeMaxTextSize="@dimen/player_quick_action_value_text"
+            app:autoSizeMinTextSize="@dimen/player_quick_action_value_text_min"
+            app:autoSizeStepGranularity="1sp"
+            app:autoSizeTextType="uniform"
             android:duplicateParentState="true"
             android:ellipsize="end"
             android:includeFontPadding="false"

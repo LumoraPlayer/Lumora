@@ -136,7 +136,9 @@
     <dimen name="player_epg_card_height">46dp</dimen>
     <dimen name="player_epg_card_gap">12dp</dimen>
     <dimen name="player_epg_time_text">10sp</dimen>
+    <dimen name="player_epg_time_text_min">9sp</dimen>
     <dimen name="player_epg_title_text">13sp</dimen>
+    <dimen name="player_epg_title_text_min">10sp</dimen>
     <dimen name="mv_grid_padding">12dp</dimen>
     <dimen name="mv_bar_padding_horizontal">20dp</dimen>
     <dimen name="mv_bar_padding_vertical">12dp</dimen>
@@ -316,13 +318,19 @@
     <dimen name="player_transport_gap">6dp</dimen>
     <dimen name="player_seek_height">36dp</dimen>
     <dimen name="player_quick_action_height">56dp</dimen>
-    <dimen name="player_quick_action_gap">6dp</dimen>
-    <dimen name="player_quick_action_icon_size">22dp</dimen>
+    <dimen name="player_quick_action_gap">4dp</dimen>
+    <dimen name="player_quick_action_icon_size">20dp</dimen>
+    <dimen name="player_quick_action_padding_h">8dp</dimen>
+    <dimen name="player_quick_action_text_gap">6dp</dimen>
     <dimen name="player_quick_action_title_text">12sp</dimen>
+    <dimen name="player_quick_action_title_text_min">9sp</dimen>
     <dimen name="player_quick_action_value_text">13sp</dimen>
+    <dimen name="player_quick_action_value_text_min">8sp</dimen>
     <dimen name="player_option_tile_min_height">60dp</dimen>
     <dimen name="player_option_title_text">16sp</dimen>
+    <dimen name="player_option_title_text_min">12sp</dimen>
     <dimen name="player_option_value_text">13sp</dimen>
+    <dimen name="player_option_value_text_min">10sp</dimen>
     <!-- TV tier of the toolbar cluster spacing - see values/dimens.xml. Slightly wider than
          phone: the buttons are aimed at a remote across a room, and the panel has room to
          spare at 960dp wide. -->

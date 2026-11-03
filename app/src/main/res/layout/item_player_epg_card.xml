@@ -6,6 +6,7 @@
      Selected marks the programme actually airing, focused is where the D-pad is - the
      selector gives focused priority so the two never fight over the same border. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="@dimen/player_epg_card_width"
     android:layout_height="@dimen/player_epg_card_height"
     android:layout_marginEnd="@dimen/player_epg_card_gap"
@@ -19,21 +20,29 @@
     android:paddingHorizontal="9dp"
     android:paddingVertical="5dp">
 
-    <TextView
+    <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/epgCardTime"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        app:autoSizeMaxTextSize="@dimen/player_epg_time_text"
+        app:autoSizeMinTextSize="@dimen/player_epg_time_text_min"
+        app:autoSizeStepGranularity="1sp"
+        app:autoSizeTextType="uniform"
         android:ellipsize="end"
         android:includeFontPadding="false"
         android:maxLines="1"
         android:textColor="@color/text_tertiary"
         android:textSize="@dimen/player_epg_time_text" />
 
-    <TextView
+    <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/epgCardTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="1dp"
+        app:autoSizeMaxTextSize="@dimen/player_epg_title_text"
+        app:autoSizeMinTextSize="@dimen/player_epg_title_text_min"
+        app:autoSizeStepGranularity="1sp"
+        app:autoSizeTextType="uniform"
         android:ellipsize="end"
         android:fontFamily="@font/inter_medium"
         android:includeFontPadding="false"

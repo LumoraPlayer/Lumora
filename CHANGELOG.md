@@ -15,6 +15,9 @@
 ### Providers
 - **Emby can now be added as its own media-server type.** Emby speaks the same MediaBrowser API as Jellyfin, so its films, series, Live TV, resume points, watched marks, favourites and playback reporting reuse the Jellyfin client — with Emby's own `api_key`/`X-Emby-Token` wire details where they differ. It has its own tile in Settings, its own Films/Series sidebar row and Discover badge, and the same phone QR pairing flow for entering the server and account from a phone. Emby has no Quick Connect, so its sign-in is username/password.
 
+### Player
+- **Player box labels fit on Android TV instead of ending in ellipses.** The TV type scale is larger than the space the narrow quick-action tiles leave for text, and the five shortcuts a TV shows (Speed included) are tighter than the tablet's four. Quick-action titles and values, the Player options tile labels and the now/next card labels now auto-fit down to a legible floor, while the TV quick-action boxes reclaim a little horizontal space from their icon gap and padding. The tablet's labels, which already fit at full size, keep their existing size.
+
 ## 6.7
 
 ### Films & Series

@@ -4,6 +4,7 @@
      value and chevron all highlight together; the value can be hidden for actions that have
      no state to report. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="0dp"
     android:layout_height="wrap_content"
     android:layout_margin="4dp"
@@ -26,20 +27,28 @@
         android:layout_weight="1"
         android:orientation="vertical">
 
-        <TextView
+        <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/playerOptionTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            app:autoSizeMaxTextSize="@dimen/player_option_title_text"
+            app:autoSizeMinTextSize="@dimen/player_option_title_text_min"
+            app:autoSizeStepGranularity="1sp"
+            app:autoSizeTextType="uniform"
             android:ellipsize="end"
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="@color/text_primary"
             android:textSize="@dimen/player_option_title_text" />
 
-        <TextView
+        <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/playerOptionValue"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            app:autoSizeMaxTextSize="@dimen/player_option_value_text"
+            app:autoSizeMinTextSize="@dimen/player_option_value_text_min"
+            app:autoSizeStepGranularity="1sp"
+            app:autoSizeTextType="uniform"
             android:ellipsize="end"
             android:includeFontPadding="false"
             android:maxLines="1"

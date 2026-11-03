@@ -191,7 +191,8 @@ internal fun MainActivity.updatePlayerOptionLabels() {
 private fun MainActivity.currentSubtitleLabel(): String {
     val selected = trackController.subtitleTracks(playerManager.getExoPlayer())
         .firstOrNull { it.isSelected }
-    return selected?.name?.takeIf { it.isNotBlank() } ?: getString(R.string.list_off)
+    return selected?.name?.takeIf { it.isNotBlank() }?.let(::shortTrackLabel)
+        ?: getString(R.string.list_off)
 }
 
 private fun MainActivity.currentAudioLabel(): String {
