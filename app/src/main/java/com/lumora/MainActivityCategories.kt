@@ -1926,12 +1926,15 @@ internal fun MainActivity.setupTabs() {
 }
 
 internal fun MainActivity.updateTabStyles(selected: View) {
-    // The tabs are icon-only until chosen, except the three main browse tabs - Series, Films
-    // and Home keep their full names on screen even when another tab is selected. Sports
-    // moving into the Live TV dropdown is what gave the row the width for them.
+    // The tabs are icon-only until chosen, except the browse tabs that have to stay
+    // readable at a glance - Live TV, Series, Films and Home keep their full names on
+    // screen even when another tab is selected. The Live TV label is what makes the
+    // dropdown tab identifiable without guessing at its icon; the caret still follows
+    // updateCatchupTabVisibility().
     for ((tv, holderId, labelId) in chromeLabelPills()) {
         val isSelected = tv === selected
-        val alwaysNamed = tv === binding.tabSeries || tv === binding.tabFilms || tv === binding.tabHome
+        val alwaysNamed = tv === binding.tabLive || tv === binding.tabSeries ||
+            tv === binding.tabFilms || tv === binding.tabHome
         tv.isSelected = isSelected
         val label = tv.findViewById<TextView>(labelId)
         // The label is collapsed for the other unselected tabs, so TalkBack needs the name on

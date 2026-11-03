@@ -8,6 +8,7 @@
 
 ### Navigation
 - **Sports moved under the Live TV dropdown, and the main tabs now read as names.** Sports is a live-television screen, so it sits with Live TV, Multiview and Catch Up in the Live dropdown instead of spending a top-level pill of its own. Series, Movies and Home keep their full names on screen even when another tab is selected; the width freed by the Sports pill is what lets them. Opening Sports from the dropdown leaves Live TV highlighted, and the row still hides with the board's own provider and Settings gate.
+- **Live TV keeps its name when another tab is selected.** The tab used to collapse to its icon as soon as Series, Movies or Home took focus, leaving the dropdown tab identifiable only by its icon. It now keeps "Live TV" (and its caret when the dropdown has rows) beside the other named tabs.
 
 ### Updates
 - **The update notice lands on Dismiss, and the About update prompt is usable.** The launch notice now puts focus on Dismiss instead of leaving the ring wherever it was, so a stray OK cannot start the download. The Settings → About prompt opened with no button focused at all - the D-pad was dead - and it printed the release body as raw Markdown (`## Lumora v6.7`, `**...**`) cut off mid-sentence. The dialog now retries its initial focus once the window actually owns it, defaults to **Later**, and shows a cleaned, word-boundary excerpt of the release notes.
