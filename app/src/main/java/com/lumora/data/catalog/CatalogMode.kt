@@ -111,14 +111,23 @@ object CatalogMode {
         val app = context.applicationContext
         cachedEligible?.let { if (cachedFor === app) return it }
         // Payload under the byte cutoff AND the last build's row count within the heap
-        // budget. Before the first build the count is unknown, and the resident loader
-        // re-checks the real count before it builds anything.
+        // budget. A count that is not known is not permission to load: an upgraded install
+        // can still have the old flat cache on disk, and its size has never been measured
+        // against this device's heap. The first load of a setup therefore uses Room, records
+        // the real row count, and only then can a later launch choose the resident path.
         val rows = storedCatalogueRows(app)
-        val eligible = mode(app) == Mode.RAM && (rows == null || fitsResident(app, rows))
+        val eligible = residentEligible(mode(app), rows) { fitsResident(app, it) }
         cachedFor = app
         cachedEligible = eligible
         return eligible
     }
+
+    /** Test seam for [isRamEligible]'s three conditions, without a Context. */
+    internal fun residentEligible(
+        mode: Mode,
+        storedRows: Int?,
+        fits: (Int) -> Boolean
+    ): Boolean = mode == Mode.RAM && storedRows != null && fits(storedRows)
 }
 
 /** Every provider gate that can put a row in the catalogue is off - it contributes nothing. */

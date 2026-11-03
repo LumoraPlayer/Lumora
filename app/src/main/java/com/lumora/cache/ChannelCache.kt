@@ -9,6 +9,7 @@ import com.lumora.model.MediaType
 import com.lumora.parser.KodiProps
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileInputStream
 import java.io.RandomAccessFile
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -213,6 +214,39 @@ object ChannelCache {
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load cache: ${e.message}")
             null
+        }
+    }
+
+    /**
+     * How many rows the flat cache holds, or null when there is no cache. This is a byte
+     * scan with a fixed buffer, not [load]: the caller uses it to reject a cache that is
+     * too large to become the resident model *before* materialising a single Channel from
+     * it. A 130 MB legacy cache used to spend ~44 s and most of a 228 MB heap just to find
+     * out it could not fit; counting its newlines costs a fraction of that and allocates
+     * nothing proportional to the file.
+     */
+    fun rowCount(context: Context): Int? {
+        val file = File(context.filesDir, CACHE_FILE)
+        if (!file.isFile) return null
+        return runCatching { countLines(file) }.getOrNull()
+    }
+
+    /** Newline count, treating a final unterminated line as a row. Test seam for [rowCount]. */
+    internal fun countLines(file: File): Int {
+        FileInputStream(file).use { input ->
+            val buffer = ByteArray(64 * 1024)
+            var lines = 0
+            var last = NEWLINE_BYTE
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                for (i in 0 until read) {
+                    if (buffer[i] == NEWLINE_BYTE) lines++
+                    last = buffer[i]
+                }
+            }
+            if (last != NEWLINE_BYTE) lines++
+            return lines
         }
     }
 

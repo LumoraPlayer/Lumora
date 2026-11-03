@@ -3,6 +3,7 @@ package com.lumora.data.catalog
 
 import com.lumora.model.IptvProviderConfig
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -93,5 +94,15 @@ class CatalogModeTest {
         assertTrue(372_042 > cap)
         // A normal panel is not pushed off the resident path by this gate.
         assertTrue(60_000 <= cap)
+    }
+
+    @Test
+    fun `an unknown row count is not resident eligible`() {
+        // A small measured playlist is not permission to load an unmeasured catalogue:
+        // an uninstall/upgrade can leave a flat cache from an older, much larger setup.
+        assertFalse(CatalogMode.residentEligible(CatalogMode.Mode.RAM, null) { true })
+        assertTrue(CatalogMode.residentEligible(CatalogMode.Mode.RAM, 20_000) { true })
+        assertFalse(CatalogMode.residentEligible(CatalogMode.Mode.RAM, 20_000) { false })
+        assertFalse(CatalogMode.residentEligible(CatalogMode.Mode.DATABASE, 20_000) { true })
     }
 }

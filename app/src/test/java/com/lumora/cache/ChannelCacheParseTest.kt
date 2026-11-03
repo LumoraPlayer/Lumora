@@ -9,6 +9,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import java.io.StringWriter
 
 /**
@@ -250,5 +251,22 @@ class ChannelCacheParseTest {
         assertTrue(single.legacyFormat)
         assertTrue(parallel.legacyFormat)
         assertEquals(4_500, parallel.channels.size)
+    }
+
+    @Test
+    fun `row count treats a final unterminated line as a row`() {
+        val file = File.createTempFile("lumora-cache", ".txt")
+        try {
+            file.writeText("one\ntwo\nthree")
+            assertEquals(3, ChannelCache.countLines(file))
+
+            file.writeText("one\ntwo\n")
+            assertEquals(2, ChannelCache.countLines(file))
+
+            file.writeText("")
+            assertEquals(0, ChannelCache.countLines(file))
+        } finally {
+            file.delete()
+        }
     }
 }

@@ -379,7 +379,11 @@ object ResidentCatalog {
      *  Returns whether the resident model is now in use - callers use it to decide whether the
      *  flat [ChannelCache] copy on disk is still worth keeping. */
     suspend fun refresh(context: Context, dao: CatalogChannelDao): Boolean {
-        if (!CatalogMode.isRamEligible(context)) {
+        // This is also the pass that *learns* the row count after a database-mode load, so it
+        // cannot require isRamEligible() first: that now says no while the count is unknown.
+        // The payload cutoff still has to pass, and the real count below is the authoritative
+        // heap gate before anything is built.
+        if (CatalogMode.mode(context) != CatalogMode.Mode.RAM) {
             clear()
             failed = false
             return false
@@ -522,12 +526,36 @@ object ResidentCatalog {
                 }
                 return null
             }
+            // The flat cache can outlive the row count that describes the current
+            // catalogue: an upgrade may still carry the old file, and a provider refresh
+            // may have written a fresh size while leaving the previous cache behind. Count
+            // its rows against the same heap budget *before* parsing, so an oversized file
+            // is dropped rather than materialised into a heap that cannot hold it.
+            val cachedRows = withContext(Dispatchers.IO) {
+                runCatching { ChannelCache.rowCount(context) }.getOrNull()
+            }
+            val cacheFits = cachedRows == null || CatalogMode.fitsResident(context, cachedRows)
+            if (!cacheFits) {
+                Log.i(
+                    TAG,
+                    "resident cache skipped: $cachedRows rows > ${CatalogMode.ramRowCap(context)} cap"
+                )
+                CatalogMode.rememberCatalogueRows(context, cachedRows ?: 0)
+                withContext(Dispatchers.IO) { runCatching { ChannelCache.clear(context) } }
+                // Nothing in Room to fall back to: mark the resident path failed for this
+                // process and leave the oversized count remembered, so the next launch
+                // goes straight to the database/network path instead of retrying it.
+                if (rows == null || rows == 0) {
+                    failed = true
+                    return null
+                }
+            }
             // A RAM-mode ingest persists only the flat cache; prefer it over a database
             // scan. If there is no cache (first switch from the DB path), the rows are in
             // Room and the build below seeds the cache for the next start.
-            val cached = withContext(Dispatchers.IO) {
+            val cached = if (cacheFits) withContext(Dispatchers.IO) {
                 runCatching { ChannelCache.load(context) }.getOrNull()
-            }
+            } else null
             if (!cached.isNullOrEmpty()) {
                 val built = try {
                     withContext(Dispatchers.Default) { buildFromChannels(context, cached) }
