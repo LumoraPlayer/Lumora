@@ -121,6 +121,25 @@ class ProviderStatusProbeTest {
     }
 
     @Test
+    fun `an xtream API answering forbidden is offline`() = runBlocking {
+        // A panel fronted by Cloudflare (or one that has blocked the account) answers 403
+        // while the host is perfectly reachable. That is still unusable, so the dot must not
+        // be green.
+        val web = MockWebServer()
+        web.enqueue(MockResponse().setResponseCode(403))
+        web.start()
+        try {
+            assertFalse(
+                ProviderStatusProbe.probeIptv(
+                    iptv(type = "xtream", url = web.url("/").toString()), OkHttpClient()
+                )
+            )
+        } finally {
+            web.shutdown()
+        }
+    }
+
+    @Test
     fun `jellyfin and silo are checked on the public info endpoint`() = runBlocking {
         val web = MockWebServer()
         repeat(2) { web.enqueue(MockResponse().setBody("{}")) }

@@ -102,10 +102,12 @@ object ProviderStatusProbe {
      * may 404 on the bare base URL even while working), Stalker and M3U use the stored URL.
      * A local playlist can't go offline remotely and is never touched over the network.
      *
-     * M3U is the one type where a 4xx is a real verdict: the playlist itself is the service,
-     * so a missing/forbidden playlist URL is exactly the thing that stops it working. The
-     * other types only need a response that isn't a server error - their login state is not
-     * this check's business.
+     * M3U and Xtream are the types where the probed URL is the service itself: a missing or
+     * forbidden playlist/API response is exactly the thing that stops it working. An Xtream
+     * panel that blocks a request with 403/401 used to paint green under the old "anything
+     * below 500 is an answer" rule, which made a dead subscription look online. Stalker still
+     * only needs a response that isn't a server error - its stored page URL is not the API
+     * call the app actually uses, and its login state is not this check's business.
      */
     suspend fun probeIptv(config: IptvProviderConfig, client: OkHttpClient): Boolean =
         withContext(Dispatchers.IO) {
@@ -132,7 +134,10 @@ object ProviderStatusProbe {
                 .build()
             try {
                 client.newCall(request).execute().use { response ->
-                    if (config.type == "m3u") response.isSuccessful else response.code < 500
+                    when (config.type) {
+                        "m3u", "xtream" -> response.isSuccessful
+                        else -> response.code < 500
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
