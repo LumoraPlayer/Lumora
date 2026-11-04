@@ -2649,42 +2649,44 @@ internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
     // The multiview entry path passes restorePreview = false: the grid is taking the screen
     // next, so restoring the guide's inline preview (and scrolling the guide to its channel)
     // would build a player one line before the grid releases it again.
-    if (restorePreview && activeTab == 0 && !showingSports) {
+    var returningToLiveRow = false
+    if (restorePreview && activeTab == 0 && !showingSports && !showingCatchup) {
         showLivePreviewPane()
         val previewTarget = lastFocusedLiveChannel ?: wasPlaying
         previewTarget?.let { requestPreviewLoad(it) }
-        // Backing out lands in the channel's own dynamic row (Sports/News bucket, brand
-        // row, Jellyfin) when it belongs to one - that's the list it was picked from, so
-        // returning to whatever filter happened to be selected loses the user's place.
-        val dynamicRow = previewTarget?.let { dynamicCategoryFor(it) }
-        if (dynamicRow != null && dynamicRow.id != selectedRowId) {
-            selectedShelfItems = null
-            selectedRowId = dynamicRow.id
-            selectedCategoryLabel = dynamicRow.name
-            selectedBrandChannelIds = dynamicRow.channelIds.ifEmpty { null }
-            selectedCategoryIds = if (dynamicRow.channelIds.isNotEmpty()) null else dynamicRow.matchIds
-            // Scroll only once the new filter's list is in place - the position of the
-            // channel is meaningless against the outgoing one.
-            scope.launch {
-                // The row can be a brand row inside a collapsed bucket, in which case
-                // selecting it without expanding its parent highlights nothing.
-                if (categoryAdapter.currentList.none { it.id == dynamicRow.id }) {
-                    parentOfCategoryRow(dynamicRow.id)?.let { parentId ->
-                        expandedGroupKeys.add(parentId)
-                        rebuildCategoriesForActiveTab()
+        if (previewTarget != null) {
+            returningToLiveRow = true
+            // Backing out lands in the channel's own dynamic row (Sports/News bucket, brand
+            // row, Jellyfin) when it belongs to one - that's the list it was picked from, so
+            // returning to whatever filter happened to be selected loses the user's place.
+            val dynamicRow = dynamicCategoryFor(previewTarget)
+            if (dynamicRow != null && dynamicRow.id != selectedRowId) {
+                selectedShelfItems = null
+                selectedRowId = dynamicRow.id
+                selectedCategoryLabel = dynamicRow.name
+                selectedBrandChannelIds = dynamicRow.channelIds.ifEmpty { null }
+                selectedCategoryIds = if (dynamicRow.channelIds.isNotEmpty()) null else dynamicRow.matchIds
+                // Scroll/focus only once the new filter's list is in place - the position of
+                // the channel is meaningless against the outgoing one.
+                scope.launch {
+                    // The row can be a brand row inside a collapsed bucket, in which case
+                    // selecting it without expanding its parent highlights nothing.
+                    if (categoryAdapter.currentList.none { it.id == dynamicRow.id }) {
+                        parentOfCategoryRow(dynamicRow.id)?.let { parentId ->
+                            expandedGroupKeys.add(parentId)
+                            rebuildCategoriesForActiveTab()
+                        }
                     }
+                    categoryAdapter.setSelected(selectedRowId)
+                    applyCategoryFilter()
+                    focusLiveChannelRowAfterPlayer(previewTarget)
                 }
-                categoryAdapter.setSelected(selectedRowId)
-                applyCategoryFilter()
-                previewTarget.let { scrollLiveListTo(it) }
+            } else {
+                // Scroll and focus the last-watched channel. Scrolling alone left the ring on
+                // the Live TV tab; the row is the place the viewer left, not the toolbar.
+                scrollLiveListTo(previewTarget)
+                focusLiveChannelRowAfterPlayer(previewTarget)
             }
-        } else {
-            // Scroll the channel list so the last-watched channel is visible when
-            // the player closes, instead of showing the first channel (which
-            // applyCategoryFilter scrolled to on tab switch). The list may have a
-            // category filter active, so find the position in the adapter list
-            // rather than assuming liveChannels order.
-            previewTarget?.let { scrollLiveListTo(it) }
         }
     }
     // Whatever just finished playing may have changed Continue Watching - refresh
@@ -2714,7 +2716,9 @@ internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
         showContentDetail(returnTo, returnGroup)
         return
     }
-    restoreTabFocus()
+    // A live return now owns its own row focus; only VOD/Home/other tabs fall back to the
+    // toolbar tab. Otherwise the tab focus won the race and the channel row lost the ring.
+    if (!returningToLiveRow) restoreTabFocus()
 }
 
 /**

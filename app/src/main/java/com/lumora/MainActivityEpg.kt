@@ -54,6 +54,46 @@ internal fun MainActivity.scrollLiveListTo(channel: Channel) {
     if (pos >= 0) binding.liveContent.post { binding.liveContent.scrollToPosition(pos) }
 }
 
+/**
+ * Puts D-pad focus back on [channel]'s guide row after fullscreen playback closes.
+ *
+ * Scrolling the list is not enough: on television the rows are not focus targets until
+ * their ViewHolder exists, so the old hidePlayer path scrolled the channel into view and
+ * then restored focus to the Live TV tab, leaving the viewer to find the channel again.
+ * Retries across a few frames because a category rebuild or scroll can land after the
+ * player closes. Aborts if the user has already moved somewhere else, so a delayed frame
+ * cannot pull focus out of Settings, Search, a detail page or another tab. If the row
+ * never materialises (the provider refreshed it away), the tab is the safe fallback.
+ */
+internal fun MainActivity.focusLiveChannelRowAfterPlayer(channel: Channel, attempts: Int = 8) {
+    fun stillOnLiveList(): Boolean =
+        !isPlayerVisible && !showingHome && !showingDiscover && !showingDownloads &&
+            !showingSports && !showingCatchup && activeTab == 0 &&
+            activeSettingsOverlay == null && activeSearchOverlay == null &&
+            !isContentDetailVisible && !isPersonDetailVisible
+
+    fun attempt(left: Int) {
+        if (!stillOnLiveList()) return
+        val pos = liveAdapter.currentList.indexOfFirst { it.id == channel.id }
+        if (pos >= 0) {
+            binding.liveContent.scrollToPosition(pos)
+            val holder = binding.liveContent.findViewHolderForAdapterPosition(pos)
+            if ((holder as? com.lumora.adapter.LiveGuideAdapter.RowViewHolder)?.requestChannelFocus() == true) {
+                return
+            }
+        }
+        if (left > 0) {
+            binding.liveContent.post { attempt(left - 1) }
+        } else if (stillOnLiveList()) {
+            // The channel is gone from the fresh catalogue; land somewhere usable rather
+            // than leaving the window with no focus at all.
+            restoreTabFocus()
+        }
+    }
+
+    binding.liveContent.post { attempt(attempts) }
+}
+
 // ── EPG ──────────────────────────────────────────
 
 /** Currently-airing program for a live channel, or null if there's no EPG data for it. */
