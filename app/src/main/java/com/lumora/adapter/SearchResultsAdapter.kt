@@ -91,13 +91,13 @@ class SearchResultsAdapter(
             TYPE_EPG -> EpgHolder(
                 LayoutInflater.from(context).inflate(R.layout.item_epg_result, parent, false).also { view ->
                     tightenMargins(view)
-                    compactCorners(view, R.id.epgPosterFrame, R.id.epgPoster)
+                    compactCorners(view, R.id.epgPosterFrame, R.id.epgPoster, R.id.epgPosterScrim)
                 }
             )
             else -> MediaHolder(
                 LayoutInflater.from(context).inflate(R.layout.item_poster_grid, parent, false).also { view ->
                     tightenMargins(view)
-                    compactCorners(view, R.id.itemPosterFrame, R.id.itemPoster)
+                    compactCorners(view, R.id.itemPosterFrame, R.id.itemPoster, R.id.itemPosterScrim)
                     // Override the artwork FRAME, not just the image inside it. The frame is
                     // what gives the card its height; resizing only the image left a 160dp
                     // browsing frame around a 52dp thumbnail, which is why search tiles read
@@ -125,13 +125,15 @@ class SearchResultsAdapter(
 
     /** The browsing grids' 18dp corner is a pill on a search tile. Compact search uses a
      *  tighter shape on both the frame and the image's own outline. */
-    private fun compactCorners(view: View, frameId: Int, imageId: Int) {
-        if (spanCount < 4) return
+    private fun compactCorners(view: View, frameId: Int, imageId: Int, scrimId: Int) {
+        if (spanCount < 3) return
         view.findViewById<View>(frameId)
             ?.setBackgroundResource(R.drawable.bg_rounded_poster_search)
         view.findViewById<RoundedImageView>(imageId)?.setCornerRadius(
             view.resources.getDimensionPixelSize(R.dimen.search_poster_image_corner_radius).toFloat()
         )
+        view.findViewById<View>(scrimId)
+            ?.setBackgroundResource(R.drawable.grad_poster_scrim_search)
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
@@ -238,9 +240,9 @@ class SearchResultsAdapter(
             titleText.text = if (channel.mediaType == MediaType.MOVIE || channel.mediaType == MediaType.SERIES) {
                 cleanVodTitle(channel.name)
             } else channel.name
-            if (spanCount >= 4) {
+            if (spanCount >= 3) {
                 // Search's compact grid: one caption line at a thumbnail scale, so a title
-                // ellipsizes instead of breaking mid-word across two lines of a 60dp tile.
+                // ellipsizes instead of breaking mid-word across two lines of a small tile.
                 titleText.maxLines = 1
                 TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
                     titleText, 8, 10, 1, TypedValue.COMPLEX_UNIT_SP
@@ -299,7 +301,7 @@ class SearchResultsAdapter(
             itemView.tag = result.channel.id
             titleText.text = result.programTitle
             metaText.text = result.metaLine
-            if (spanCount >= 4) {
+            if (spanCount >= 3) {
                 titleText.maxLines = 1
                 TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
                     titleText, 8, 10, 1, TypedValue.COMPLEX_UNIT_SP

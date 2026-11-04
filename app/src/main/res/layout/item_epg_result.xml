@@ -38,6 +38,7 @@
             app:cornerRadius="@dimen/poster_image_corner_radius" />
 
         <View
+            android:id="@+id/epgPosterScrim"
             android:layout_width="match_parent"
             android:layout_height="80dp"
             android:layout_gravity="bottom"

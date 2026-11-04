@@ -383,9 +383,9 @@
     <dimen name="search_section_gap">14dp</dimen>
     <!-- Gutter between the keyboard column and the results column. Was a 12dp literal. -->
     <dimen name="search_column_gap">12dp</dimen>
-    <!-- Search results are thumbnails, not browsing posters: four columns with a 56dp still
-         keeps several result rows visible alongside the keyboard on a phone. -->
-    <dimen name="search_poster_image_height">56dp</dimen>
+    <!-- Search results are thumbnails, not browsing posters: three columns with an 84dp
+         still keeps several result rows visible alongside the keyboard on a phone. -->
+    <dimen name="search_poster_image_height">84dp</dimen>
     <dimen name="search_poster_image_corner_radius">10dp</dimen>
     <!-- Vertical gap between the search status line, recents strip, filter chips and the
          results grid, and horizontal gap between the filter chips. -->

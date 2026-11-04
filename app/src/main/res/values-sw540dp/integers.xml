@@ -7,7 +7,7 @@
     <integer name="poster_grid_max_span">5</integer>
 
     <!-- Search results share the panel with the keyboard, so this counts columns in the
-         ~430dp left over, not across the screen. Six columns keeps each tile a thumbnail:
-         four drew posters large enough to crowd out the second row on a TV. -->
-    <integer name="search_results_span">6</integer>
+         ~430dp left over, not across the screen. Four columns keeps each tile large enough
+         to read without turning the grid into full browsing posters. -->
+    <integer name="search_results_span">4</integer>
 </resources>

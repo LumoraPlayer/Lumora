@@ -220,12 +220,12 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:fontFamily="@font/inter_medium"
-                android:paddingHorizontal="18dp"
-                android:paddingVertical="10dp"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="6dp"
                 android:stateListAnimator="@animator/focus_scale"
                 android:text="@string/search_filter_all"
                 android:textColor="@color/season_chip_text"
-                android:textSize="@dimen/text_body_l"
+                android:textSize="@dimen/text_body_s"
                 android:clipChildren="false"
                 android:clipToPadding="false"/>
 
@@ -238,12 +238,12 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:fontFamily="@font/inter_medium"
-                android:paddingHorizontal="18dp"
-                android:paddingVertical="10dp"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="6dp"
                 android:stateListAnimator="@animator/focus_scale"
                 android:text="@string/live_badge"
                 android:textColor="@color/season_chip_text"
-                android:textSize="@dimen/text_body_l"
+                android:textSize="@dimen/text_body_s"
                 android:clipChildren="false"
                 android:clipToPadding="false"/>
 
@@ -256,12 +256,12 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:fontFamily="@font/inter_medium"
-                android:paddingHorizontal="18dp"
-                android:paddingVertical="10dp"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="6dp"
                 android:stateListAnimator="@animator/focus_scale"
                 android:text="@string/search_filter_films"
                 android:textColor="@color/season_chip_text"
-                android:textSize="@dimen/text_body_l"
+                android:textSize="@dimen/text_body_s"
                 android:clipChildren="false"
                 android:clipToPadding="false"/>
 
@@ -273,12 +273,12 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:fontFamily="@font/inter_medium"
-                android:paddingHorizontal="18dp"
-                android:paddingVertical="10dp"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="6dp"
                 android:stateListAnimator="@animator/focus_scale"
                 android:text="@string/search_filter_series"
                 android:textColor="@color/season_chip_text"
-                android:textSize="@dimen/text_body_l"
+                android:textSize="@dimen/text_body_s"
                 android:clipChildren="false"
                 android:clipToPadding="false"/>
         </LinearLayout>

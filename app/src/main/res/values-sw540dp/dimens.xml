@@ -352,10 +352,10 @@
          three zones (header / keyboard / results) read as separate blocks at sofa distance. -->
     <dimen name="search_section_gap">16dp</dimen>
     <dimen name="search_column_gap">16dp</dimen>
-    <!-- Search result artwork is deliberately thumbnail-sized: six columns across the
-         ~430dp beside the keyboard, with a 52dp still so several rows fit under the filters
-         instead of four oversized posters taking the whole pane. -->
-    <dimen name="search_poster_image_height">52dp</dimen>
+    <!-- Search result artwork is deliberately thumbnail-sized, but not tiny: four columns
+         across the ~430dp beside the keyboard with a 78dp still gives each tile a readable
+         poster shape and still fits more than one row under the filters. -->
+    <dimen name="search_poster_image_height">78dp</dimen>
     <!-- TV tier of the search inner-row spacing (status / recents / filters / grid) and the
          filter-chip gap - roomier than phone, same +2dp as search_section_gap's step. -->
     <dimen name="search_row_gap">10dp</dimen>
