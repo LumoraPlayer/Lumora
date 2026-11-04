@@ -759,6 +759,7 @@ internal fun MainActivity.showPlayerFor(
     binding.playerChannelName.text = channel.name
     binding.playerSubtitle.visibility = View.GONE
     binding.playerLiveBadge.visibility = if (channel.mediaType == MediaType.LIVE) View.VISIBLE else View.GONE
+    updatePlayerClock()
     // Multiview is a live-only feature and can be switched off entirely in Settings; the
     // More panel decides whether to offer it when it opens.
     if (channel.mediaType == MediaType.LIVE) {
@@ -1397,6 +1398,15 @@ internal fun MainActivity.tryNextVodVersion(): Boolean {
     Toast.makeText(this, getString(R.string.play_switching_source), Toast.LENGTH_SHORT).show()
     showPlayerFor(next, resumeFromMs = resumeMs)
     return true
+}
+
+/** Keeps the wall clock beside the LIVE badge in step with the device clock. */
+internal fun MainActivity.updatePlayerClock() {
+    val live = nowPlayingChannel?.mediaType == MediaType.LIVE
+    binding.playerLiveClock.visibility = if (live) View.VISIBLE else View.GONE
+    if (!live) return
+    binding.playerLiveClock.text =
+        android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date())
 }
 
 /** The end of the line: every internal recovery is spent, so the stream is handed to whatever

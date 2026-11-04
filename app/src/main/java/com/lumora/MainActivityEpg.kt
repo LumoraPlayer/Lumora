@@ -1335,6 +1335,9 @@ internal fun MainActivity.togglePlayerEpgReminder(program: XtreamClient.EpgProgr
  * Cheap when nothing changed - it returns until a minute has passed since the last draw.
  */
 internal fun MainActivity.tickPlayerEpgClock() {
+    // Runs on the once-a-second player tick and on every controls reveal, so the clock
+    // beside the LIVE badge follows wall time while the bar is on screen.
+    updatePlayerClock()
     if (!isPlayerVisible || nowPlayingChannel?.mediaType != MediaType.LIVE) return
     if (binding.playerEpgSection.visibility != View.VISIBLE) return
     val nowMs = System.currentTimeMillis()

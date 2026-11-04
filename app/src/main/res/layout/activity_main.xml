@@ -3114,6 +3114,18 @@
                             android:textStyle="bold" />
 
                         <TextView
+                            android:id="@+id/playerLiveClock"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:fontFamily="@font/inter_medium"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="@dimen/text_caption"
+                            android:visibility="gone" />
+
+                        <TextView
                             android:id="@+id/playerLiveBadge"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"

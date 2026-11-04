@@ -364,6 +364,11 @@ class LiveGuideAdapter(
                 when (keyCode) {
                     android.view.KeyEvent.KEYCODE_DPAD_LEFT -> leftEdgeFocusTarget?.invoke() ?: false
                     android.view.KeyEvent.KEYCODE_DPAD_UP -> focusTabFromTopRow()
+                    // At the bottom of a category there is no row below. Left to the
+                    // framework, focus search escapes the list and lands in the category
+                    // rail on the left; the last channel is the end of this group, so the
+                    // key is consumed here instead.
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> isLastRow()
                     else -> false
                 }
             }
@@ -900,9 +905,14 @@ class LiveGuideAdapter(
                     if (hasFocus) current?.let { onChannelFocused?.invoke(it) }
                 }
                 setOnKeyListener { _, keyCode, event ->
-                    if (event.action == android.view.KeyEvent.ACTION_DOWN &&
-                        keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP
-                    ) focusTabFromTopRow() else false
+                    if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                    when (keyCode) {
+                        android.view.KeyEvent.KEYCODE_DPAD_UP -> focusTabFromTopRow()
+                        // Same bottom boundary as the channel column: a programme block on
+                        // the last row must not hand DOWN to the category rail either.
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> isLastRow()
+                        else -> false
+                    }
                 }
                 setOnLongClickListener { view ->
                     val channel = current
@@ -924,6 +934,12 @@ class LiveGuideAdapter(
             if (bindingAdapterPosition != 0) return false
             val target = itemView.rootView.findViewById<View>(topRowFocusUpTargetId)
             return target?.takeIf { it.isShown }?.requestFocus() ?: true
+        }
+
+        /** True on the final guide row, where DOWN has nowhere left to go inside the list. */
+        private fun isLastRow(): Boolean {
+            val pos = bindingAdapterPosition
+            return pos != RecyclerView.NO_POSITION && pos == itemCount - 1
         }
     }
 
