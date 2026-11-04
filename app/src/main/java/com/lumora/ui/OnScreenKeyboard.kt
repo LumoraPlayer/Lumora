@@ -32,7 +32,8 @@ import com.lumora.R
  * geometrically, and equal weights keep the columns aligned enough for that to feel right.
  * Row widths differ by language (QWERTY is 10/9/7, Arabic is 12/11/11), and the punctuation
  * layer still uses its own 10/9/7 rows; switching a layer rebuilds only the three letter
- * rows, so the bottom action row - and the focus resting on it - never moves.
+ * rows, so the bottom action row - SPACE, SEARCH, DEL and CLEAR - and the focus resting on
+ * it never moves.
  *
  *  One deliberate exception to "let the framework figure it out":
  *  - the bottom row has nothing reliably below it (the results grid is a sibling, and
@@ -71,6 +72,8 @@ class OnScreenKeyboard @JvmOverloads constructor(
     var onBackspace: (() -> Unit)? = null
     /** Clear the whole query. */
     var onClear: (() -> Unit)? = null
+    /** Commit the query and move on to its results (the host decides where focus lands). */
+    var onSearch: (() -> Unit)? = null
 
     /**
      * Where DOWN from the bottom row should go (typically the results grid). If it's a
@@ -105,6 +108,7 @@ class OnScreenKeyboard @JvmOverloads constructor(
     private val spaceLabel: String = context.getString(R.string.ui_key_space)
     private val delLabel: String = context.getString(R.string.ui_key_del)
     private val clearLabel: String = context.getString(R.string.ui_key_clear)
+    private val searchLabel: String = context.getString(R.string.search)
 
     /** The three rows that swap between letter and punctuation layers (child 0 is the
      *  digits row, which every layer shares). */
@@ -155,8 +159,8 @@ class OnScreenKeyboard @JvmOverloads constructor(
     private fun build() {
         // Digits + the language switch (when there is a second layer) on the top row, then
         // the three swappable letter rows. Keeping the language key out of the bottom row
-        // leaves SPACE/DEL/CLEAR their full width: those labels are translated, and a fifth
-        // action key squeezed "CLEAR" into "CLEA" on a 300dp keyboard.
+        // leaves the action labels their full width; those labels are translated, and one
+        // more key in that row squeezes "CLEAR" into "CLEA" on a narrow keyboard.
         val top = newRow()
         val topGap = horizontalGap(digitRow.size + if (languages.size > 1) 1 else 0)
         digitRow.forEach { digit -> top.addView(letterKey(digit, topGap)) }
@@ -172,11 +176,18 @@ class OnScreenKeyboard @JvmOverloads constructor(
             addView(row)
         }
 
-        // Bottom row: the shift key toggles the punctuation layer, SPACE keeps its wide
-        // key (the most-used key in a multi-word query), then DEL and CLEAR.
+        // Bottom row: layer toggle, SPACE (the most-used key in a multi-word query), SEARCH
+        // as the one committed action, then DEL and CLEAR. SEARCH keeps the brand fill so a
+        // remote user can spot the way into the results without walking the whole deck.
         val bottom = newRow()
         bottom.addView(actionKey(shiftLabel, 1f) { toggleLayer() })
         bottom.addView(actionKey(spaceLabel, 2f) { onKey?.invoke(" ") })
+        val searchKey = actionKey(searchLabel, 1.2f) { onSearch?.invoke() }.apply {
+            setBackgroundResource(R.drawable.bg_keyboard_search_key)
+            setTextColor(context.getColor(R.color.text_on_primary))
+            contentDescription = searchLabel
+        }
+        bottom.addView(searchKey)
         bottom.addView(actionKey(delLabel, 1f) { onBackspace?.invoke() })
         bottom.addView(actionKey(clearLabel, 1f) { onClear?.invoke() })
         addView(bottom)

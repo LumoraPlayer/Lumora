@@ -87,6 +87,8 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
     // screen.
     var shown: List<Channel> = emptyList()
     var shownBadges: Map<String, String> = emptyMap()
+    // The keyboard's SEARCH key asks for the first match once the current query lands.
+    var focusFirstOnPublish = false
     val resultsAdapter = com.lumora.adapter.PosterGridAdapter(
         badgeFor = { item -> shownBadges[item.id]?.let { it to R.color.primary } }
     ) { item ->
@@ -125,6 +127,15 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
         resultsList.visibility = if (results.isEmpty()) View.GONE else View.VISIBLE
         status.text = statusText ?: ""
         status.visibility = if (statusText == null) View.GONE else View.VISIBLE
+        if (focusFirstOnPublish && results.isNotEmpty()) {
+            focusFirstOnPublish = false
+            resultsList.scrollToPosition(0)
+            resultsList.post {
+                if (resultsList.layoutManager?.findViewByPosition(0)?.requestFocus() != true) {
+                    keyboard.requestFocus()
+                }
+            }
+        }
     }
     /** Runs [query] against TMDB and paints the grid. Cancelling the previous job is what
      *  keeps a slow earlier query from landing on top of a newer one's results. */
@@ -171,6 +182,14 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
         val runnable = Runnable { runSearch(query) }
         pendingSearch = runnable
         mainHandler.postDelayed(runnable, 250)
+    }
+    keyboard.onSearch = {
+        val query = input.text.toString().trim()
+        if (query.length >= 2) {
+            focusFirstOnPublish = true
+            pendingSearch?.let { mainHandler.removeCallbacks(it) }
+            runSearch(query)
+        }
     }
     input.addTextChangedListener(object : android.text.TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}

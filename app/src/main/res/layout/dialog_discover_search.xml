@@ -24,27 +24,56 @@
         android:orientation="vertical"
         android:padding="@dimen/search_panel_padding">
 
-        <!-- Header: the query display + close, exactly the main search overlay's pattern. -->
+        <!-- Header: the same two-level command shape as the main search overlay, so the
+             two search surfaces do not feel like different apps. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="vertical">
 
-            <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:layout_marginEnd="10dp"
-                android:src="@drawable/ic_search"
-                android:tint="@color/text_secondary" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/inter_semibold"
+                    android:text="@string/search"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_subhead_l" />
+
+                <LinearLayout
+                    android:id="@+id/discoverSearchClose"
+                    android:layout_width="@dimen/toolbar_button_size"
+                    android:layout_height="@dimen/toolbar_button_size"
+                    android:background="@drawable/bg_toolbar_button"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:stateListAnimator="@animator/focus_scale"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:contentDescription="@string/close"
+                        android:src="@drawable/ic_x"
+                        android:tint="@color/text_primary" />
+                </LinearLayout>
+            </LinearLayout>
 
             <!-- Not focusable, same as searchInput: a focused field with no IME is a dead
                  end for the remote. The host feeds text from the keyboard below, and the
                  BlinkingCursorView stands in for the caret a focused field would draw. -->
             <FrameLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1">
+                android:layout_marginTop="10dp">
 
                 <EditText
                     android:id="@+id/discoverSearchQuery"
@@ -58,12 +87,23 @@
                     android:imeOptions="actionSearch"
                     android:importantForAutofill="no"
                     android:inputType="text"
-                    android:paddingHorizontal="14dp"
+                    android:paddingStart="44dp"
+                    android:paddingEnd="14dp"
                     android:paddingVertical="12dp"
                     android:singleLine="true"
                     android:textColor="@color/text_primary"
                     android:textColorHint="@color/text_tertiary"
                     android:textSize="@dimen/text_subhead" />
+
+                <!-- Drawn after the field: the field's own opaque bg_input would cover an
+                     icon placed behind it. -->
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="start|center_vertical"
+                    android:layout_marginStart="14dp"
+                    android:src="@drawable/ic_search"
+                    android:tint="@color/text_secondary" />
 
                 <com.lumora.ui.BlinkingCursorView
                     android:id="@+id/discoverSearchCursor"
@@ -72,27 +112,6 @@
                     android:layout_gravity="start|center_vertical"
                     android:background="@color/text_primary" />
             </FrameLayout>
-
-            <LinearLayout
-                android:id="@+id/discoverSearchClose"
-                android:layout_width="@dimen/toolbar_button_size"
-                android:layout_height="@dimen/toolbar_button_size"
-                android:layout_marginStart="12dp"
-                android:background="@drawable/bg_toolbar_button"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center"
-                android:stateListAnimator="@animator/focus_scale"
-                android:clipChildren="false"
-                android:clipToPadding="false">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:contentDescription="@string/close"
-                    android:src="@drawable/ic_x"
-                    android:tint="@color/text_primary" />
-            </LinearLayout>
         </LinearLayout>
 
         <!-- Keyboard on the left, TMDB matches on the right, both on screen at once - the

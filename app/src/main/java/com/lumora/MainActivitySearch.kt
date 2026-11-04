@@ -145,6 +145,33 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
         mainHandler.postDelayed(runnable, 200)
     }
 
+    // The keyboard's SEARCH key is the explicit "take me to the matches" action. It never
+    // types; it commits the current query and lands focus on the first result (or waits for
+    // the pending search to publish one), so a remote user does not have to guess that DOWN
+    // from the keys is the way out.
+    keyboard.onSearch = {
+        val query = input.text.toString().trim()
+        if (query.length < 2) {
+            keyboard.requestFocus()
+        } else {
+            focusFirstResultOnNextPublish = true
+            val first = if (resultsAdapter.itemCount > 0) {
+                resultsList.scrollToPosition(0)
+                resultsList.post {
+                    if (resultsList.layoutManager?.findViewByPosition(0)?.requestFocus() != true) {
+                        keyboard.requestFocus()
+                    }
+                }
+                true
+            } else false
+            if (first) {
+                focusFirstResultOnNextPublish = false
+            } else {
+                scheduleSearch(query)
+            }
+        }
+    }
+
     // P2-4: media-type filter chips. EPG results are only shown under All/Live.
     fun applyFilterChip(selected: View) {
         for (id in listOf(R.id.searchFilterAll, R.id.searchFilterLive, R.id.searchFilterFilms, R.id.searchFilterSeries)) {

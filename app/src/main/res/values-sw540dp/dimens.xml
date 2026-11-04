@@ -343,9 +343,9 @@
          two-up results grid without either running to the bezels. -->
     <dimen name="search_panel_width">820dp</dimen>
     <dimen name="search_panel_padding">20dp</dimen>
-    <dimen name="search_keyboard_width">300dp</dimen>
-    <dimen name="keyboard_key_height">46dp</dimen>
-    <dimen name="keyboard_key_gap">4dp</dimen>
+    <dimen name="search_keyboard_width">340dp</dimen>
+    <dimen name="keyboard_key_height">50dp</dimen>
+    <dimen name="keyboard_key_gap">5dp</dimen>
     <dimen name="keyboard_key_text">18sp</dimen>
     <dimen name="keyboard_action_text">13sp</dimen>
     <!-- TV tier of the search zone spacing - see values/dimens.xml. Roomier than phone so the
@@ -355,9 +355,9 @@
     <!-- Sized so search shows two rows of four without scrolling. The grid gets roughly
          305dp of height (the slot, less the toolbar, tab bar, panel padding, query row and
          status line), and a card costs its artwork plus 16dp of card padding and 16dp of
-         margin - so 118dp of poster is the most that fits twice over. Four columns across
-         the ~470dp beside the keyboard gives each card ~85dp of artwork width, which makes
-         these slightly squatter than 2:3; centerCrop absorbs that. -->
+         margin - so 110dp of poster is the most that fits twice over. Four columns across
+         the ~430dp beside the keyboard gives each card about 95dp of artwork width, which
+         makes these slightly squatter than 2:3; centerCrop absorbs that. -->
     <dimen name="search_poster_image_height">110dp</dimen>
     <!-- TV tier of the search inner-row spacing (status / recents / filters / grid) and the
          filter-chip gap - roomier than phone, same +2dp as search_section_gap's step. -->
