@@ -37,13 +37,109 @@
 
                 <TextView
                     android:id="@+id/searchTitle"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:fontFamily="@font/inter_semibold"
                     android:text="@string/search"
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/text_subhead_l" />
+
+                <!-- Type filters sit on the title row, so switching All/Live/Films/Series
+                     does not take a row away from the results. The strip scrolls on narrow
+                     phones; a TV has room for every chip. -->
+                <HorizontalScrollView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:layout_weight="1"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:scrollbars="none">
+
+<LinearLayout
+                    android:id="@+id/searchFiltersRow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:clipChildren="false"
+                            android:clipToPadding="false"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/searchFilterAll"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="@dimen/search_chip_gap"
+                        android:background="@drawable/bg_season_chip"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:fontFamily="@font/inter_medium"
+                        android:paddingHorizontal="14dp"
+                        android:paddingVertical="6dp"
+
+                        android:stateListAnimator="@animator/focus_scale"
+                        android:text="@string/search_filter_all"
+                        android:textColor="@color/season_chip_text"
+                        android:textSize="@dimen/text_body_s"
+                        android:clipChildren="false"
+    android:clipToPadding="false"/>
+
+                    <TextView
+                        android:id="@+id/searchFilterLive"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="@dimen/search_chip_gap"
+                        android:background="@drawable/bg_season_chip"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:fontFamily="@font/inter_medium"
+                        android:paddingHorizontal="14dp"
+                        android:paddingVertical="6dp"
+                        android:stateListAnimator="@animator/focus_scale"
+                        android:text="@string/live_badge"
+                        android:textColor="@color/season_chip_text"
+                        android:textSize="@dimen/text_body_s"
+                        android:clipChildren="false"
+    android:clipToPadding="false"/>
+
+                    <TextView
+                        android:id="@+id/searchFilterFilms"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="@dimen/search_chip_gap"
+                        android:background="@drawable/bg_season_chip"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:fontFamily="@font/inter_medium"
+                        android:paddingHorizontal="14dp"
+                        android:paddingVertical="6dp"
+                        android:stateListAnimator="@animator/focus_scale"
+                        android:text="@string/search_filter_films"
+                        android:textColor="@color/season_chip_text"
+                        android:textSize="@dimen/text_body_s"
+                        android:clipChildren="false"
+    android:clipToPadding="false"/>
+
+                    <TextView
+                        android:id="@+id/searchFilterSeries"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_season_chip"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:fontFamily="@font/inter_medium"
+                        android:paddingHorizontal="14dp"
+                        android:paddingVertical="6dp"
+                        android:stateListAnimator="@animator/focus_scale"
+                        android:text="@string/search_filter_series"
+                        android:textColor="@color/season_chip_text"
+                        android:textSize="@dimen/text_body_s"
+                        android:clipChildren="false"
+    android:clipToPadding="false"/>
+                </LinearLayout>
+                </HorizontalScrollView>
 
                 <LinearLayout
                     android:id="@+id/searchCloseButton"
@@ -233,94 +329,6 @@
                                 android:orientation="horizontal" />
                         </HorizontalScrollView>
                     </FrameLayout>
-                </LinearLayout>
-
-                <!-- Result-type filter: static row of season-chip lookalikes. Selection is
-                     applied by the host in code (isSelected + season_chip_text), not in XML
-                     - the "All" chip starts selected when the overlay opens, matching the
-                     persisted filter. -->
-                <LinearLayout
-                    android:id="@+id/searchFiltersRow"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/search_row_gap"
-                    android:clipChildren="false"
-                            android:clipToPadding="false"
-                    android:gravity="center"
-                    android:orientation="horizontal"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:id="@+id/searchFilterAll"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="@dimen/search_chip_gap"
-                        android:background="@drawable/bg_season_chip"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:fontFamily="@font/inter_medium"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="6dp"
-
-                        android:stateListAnimator="@animator/focus_scale"
-                        android:text="@string/search_filter_all"
-                        android:textColor="@color/season_chip_text"
-                        android:textSize="@dimen/text_body_s"
-                        android:clipChildren="false"
-    android:clipToPadding="false"/>
-
-                    <TextView
-                        android:id="@+id/searchFilterLive"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="@dimen/search_chip_gap"
-                        android:background="@drawable/bg_season_chip"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:fontFamily="@font/inter_medium"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="6dp"
-                        android:stateListAnimator="@animator/focus_scale"
-                        android:text="@string/live_badge"
-                        android:textColor="@color/season_chip_text"
-                        android:textSize="@dimen/text_body_s"
-                        android:clipChildren="false"
-    android:clipToPadding="false"/>
-
-                    <TextView
-                        android:id="@+id/searchFilterFilms"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="@dimen/search_chip_gap"
-                        android:background="@drawable/bg_season_chip"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:fontFamily="@font/inter_medium"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="6dp"
-                        android:stateListAnimator="@animator/focus_scale"
-                        android:text="@string/search_filter_films"
-                        android:textColor="@color/season_chip_text"
-                        android:textSize="@dimen/text_body_s"
-                        android:clipChildren="false"
-    android:clipToPadding="false"/>
-
-                    <TextView
-                        android:id="@+id/searchFilterSeries"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_season_chip"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:fontFamily="@font/inter_medium"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="6dp"
-                        android:stateListAnimator="@animator/focus_scale"
-                        android:text="@string/search_filter_series"
-                        android:textColor="@color/season_chip_text"
-                        android:textSize="@dimen/text_body_s"
-                        android:clipChildren="false"
-    android:clipToPadding="false"/>
                 </LinearLayout>
 
                 <!-- Clip the grid to its own viewport. With clipChildren off, a scrolled

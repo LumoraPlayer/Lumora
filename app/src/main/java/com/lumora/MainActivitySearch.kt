@@ -123,7 +123,9 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
         if (touchDevice) return
         val filterId = selectedFilterChipId()
         resultsAdapter.topRowFocusUpTargetId = if (filtersVisible) filterId else R.id.searchKeyboard
-        keyboard.bottomRowDownTarget = if (filtersVisible) searchView.findViewById(filterId) else resultsList
+        // The chips now live on the title row above the keys, so DOWN from the keyboard
+        // belongs to the results (not to a chip that is physically above it).
+        keyboard.bottomRowDownTarget = resultsList
     }
 
     if (!touchDevice) {
