@@ -24,6 +24,7 @@
          artwork fills the tile; the rounded frame clips it and the root's foreground draws
          the focus ring over it. -->
     <FrameLayout
+        android:id="@+id/epgPosterFrame"
         android:layout_width="match_parent"
         android:layout_height="@dimen/search_poster_image_height"
         android:background="@drawable/bg_rounded_poster_large"

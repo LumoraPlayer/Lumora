@@ -17,6 +17,7 @@
          clip/placeholder; the focus ring is drawn over the picture by the root's
          foreground. -->
     <FrameLayout
+        android:id="@+id/itemPosterFrame"
         android:layout_width="match_parent"
         android:layout_height="@dimen/poster_image_height"
         android:background="@drawable/bg_rounded_poster_large"

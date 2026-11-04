@@ -78,6 +78,16 @@ class RoundedImageView @JvmOverloads constructor(
         clipToOutline = true
     }
 
+    /** Changes the corner radius after inflation and redraws the existing outline/path.
+     *  Search uses it to tighten the shared poster tiles for its compact grid. */
+    fun setCornerRadius(radiusPx: Float) {
+        if (cornerRadius == radiusPx) return
+        cornerRadius = radiusPx
+        invalidateOutline()
+        updateClipPath(width, height)
+        invalidate()
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         // The outline is in view coordinates, so a new size is a new outline.

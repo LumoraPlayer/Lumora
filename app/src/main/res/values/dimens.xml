@@ -383,10 +383,10 @@
     <dimen name="search_section_gap">14dp</dimen>
     <!-- Gutter between the keyboard column and the results column. Was a 12dp literal. -->
     <dimen name="search_column_gap">12dp</dimen>
-    <!-- Shorter than poster_image_height: a search column is much narrower than a Films/Series
-         grid column, and the card's height doesn't follow its width. 112dp is the old 96dp
-         artwork plus the 16dp card frame the image now fills. -->
-    <dimen name="search_poster_image_height">112dp</dimen>
+    <!-- Search results are thumbnails, not browsing posters: four columns with a 56dp still
+         keeps several result rows visible alongside the keyboard on a phone. -->
+    <dimen name="search_poster_image_height">56dp</dimen>
+    <dimen name="search_poster_image_corner_radius">10dp</dimen>
     <!-- Vertical gap between the search status line, recents strip, filter chips and the
          results grid, and horizontal gap between the filter chips. -->
     <dimen name="search_row_gap">8dp</dimen>
