@@ -12,6 +12,7 @@ import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.util.DeviceProfile
 import com.lumora.util.normalizeForSearch
+import com.lumora.util.releaseDateSortKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -30,6 +31,9 @@ class CatalogRepository private constructor(
 
     /** Set once this process has walked the catalogue's missing search keys. */
     @Volatile private var searchBackfillDone = false
+
+    /** Set once this process has repaired the `dateSort` values an older parser left at 0. */
+    @Volatile private var dateSortBackfillDone = false
 
     private val dao get() = db.catalogChannelDao()
 
@@ -65,6 +69,37 @@ class CatalogRepository private constructor(
             if (page.size < SEARCH_BACKFILL_PAGE) break
         }
         searchBackfillDone = true
+    }
+
+    /**
+     * Recomputes `dateSort` for rows an older parser stored as 0 because it could not read the
+     * provider's date spelling (notably two-digit-year-first "26/11/05" values).
+     *
+     * Like the search-key backfill this runs once per process, in pages, after the first live
+     * read rather than inside a Room migration. New rows are written with the current parser
+     * (or -1 when the date is unreadable), so each legacy row is visited at most once: the
+     * update only matches `dateSort = 0`.
+     */
+    suspend fun backfillDateSorts(): Boolean = withContext(Dispatchers.IO) {
+        if (dateSortBackfillDone) return@withContext false
+        var updated = false
+        var after = ""
+        while (true) {
+            val page = dao.dateSortBackfillPage(after, DATE_BACKFILL_PAGE)
+            if (page.isEmpty()) break
+            updated = true
+            db.withTransaction {
+                for (row in page) {
+                    // -1 retires an unreadable date for good; a positive key is the real sort.
+                    val key = releaseDateSortKey(row.releaseDate, row.year).takeIf { it > 0 } ?: -1
+                    dao.updateDateSort(row.uid, key)
+                }
+            }
+            after = page.last().uid
+            if (page.size < DATE_BACKFILL_PAGE) break
+        }
+        dateSortBackfillDone = true
+        updated
     }
 
     /** Rebuilds (or clears) the resident read model after a catalogue write. */
@@ -704,6 +739,9 @@ private const val SQL_VARIABLE_CHUNK = 900
 
 /** Rows per search-key backfill transaction (see [CatalogRepository.backfillSearchNames]). */
 private const val SEARCH_BACKFILL_PAGE = 2_000
+
+/** Rows per date-sort backfill transaction (see [CatalogRepository.backfillDateSorts]). */
+private const val DATE_BACKFILL_PAGE = 2_000
 
 /**
  * The live rows the app is willing to hold resident. A `Channel` costs roughly 800-900

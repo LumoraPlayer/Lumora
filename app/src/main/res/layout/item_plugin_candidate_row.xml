@@ -71,6 +71,8 @@
         android:clickable="true"
         android:focusable="true"
         android:paddingHorizontal="@dimen/settings_gap"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
         android:stateListAnimator="@animator/focus_scale"
         android:clipChildren="false"
         android:clipToPadding="false">
@@ -78,6 +80,7 @@
             android:id="@+id/candidateAddLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:maxLines="1"
             android:text="@string/add"
             android:textColor="@color/text_on_primary"
             android:textSize="@dimen/settings_text_body"

@@ -1640,12 +1640,22 @@ class MainActivity : AppCompatActivity() {
         }
         // The search-key backfill is a whole-table write and can run for minutes on a legacy
         // catalogue. Let the live read (and the paint that awaits it) have the database
-        // first; search keeps falling back to `name` for rows it has not reached yet.
+        // first; search keeps falling back to `name` for rows it has not reached yet. The
+        // date-sort pass follows it for the VOD rows an older parser stored at 0.
         val livePreload = catalogLivePreload
         scope.launch(Dispatchers.IO) {
             runCatching { livePreload?.await() }
             runCatching {
                 CatalogRepository.get(this@MainActivity).backfillSearchNames()
+            }
+            val datesRepaired = runCatching {
+                CatalogRepository.get(this@MainActivity).backfillDateSorts()
+            }.getOrDefault(false)
+            // A resident catalogue (small playlists) was built before this pass, so its
+            // cards still carry the old date keys. Rebuild it once the stored rows are fixed;
+            // Room-backed catalogues query the table directly and need no refresh.
+            if (datesRepaired && com.lumora.data.catalog.CatalogMode.isRamEligible(this@MainActivity)) {
+                runCatching { CatalogRepository.get(this@MainActivity).refreshResidentCatalog() }
             }
         }
         // Which screen the app opens on (Settings → General). Read here, before anything

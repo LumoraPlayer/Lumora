@@ -43,6 +43,31 @@ class NewestShelfOrderingTest {
     }
 
     @Test
+    fun `two-digit year first dates read as yy mm dd`() {
+        val expected = 2026 * 10000 + 11 * 100 + 5
+        assertEquals(expected, releaseDateSortKey("26/11/05"))
+        assertEquals(expected, releaseDateSortKey("26-11-05"))
+        assertEquals(expected, releaseDateSortKey("26.11.05"))
+        // Some panels put the full date in their `year` field.
+        assertEquals(expected, releaseDateSortKey(null, "26/11/05"))
+        // The pivot is fixed, so the same catalogue orders the same way next year.
+        assertEquals(1999 * 10000 + 12 * 100 + 31, releaseDateSortKey("99/12/31"))
+        assertEquals(2000 * 10000 + 1 * 100 + 2, releaseDateSortKey("00/01/02"))
+    }
+
+    @Test
+    fun `two-digit year first dates order the newest shelf`() {
+        val ordered = newestByDate(
+            listOf(
+                series("Older", "older", releaseDate = "25/12/31"),
+                series("Newest", "newest", releaseDate = "26/11/05"),
+                series("Oldest", "oldest", releaseDate = "99/12/31")
+            )
+        )
+        assertEquals(listOf("newest", "older", "oldest"), ordered.map { it.id })
+    }
+
+    @Test
     fun `a bare year keeps year granularity and unreadable values sort last`() {
         assertEquals(2020 * 10000, releaseDateSortKey("2020"))
         assertEquals(2020 * 10000, releaseDateSortKey("June 2020"))

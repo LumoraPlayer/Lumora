@@ -118,6 +118,21 @@ class CatalogMappingTest {
     }
 
     @Test
+    fun `vod row reads a two-digit year first release date`() {
+        val channel = Channel(
+            id = "9",
+            name = "A Show",
+            url = "u",
+            mediaType = MediaType.SERIES,
+            releaseDate = "26/11/05"
+        )
+
+        val row = CatalogMapping.toEntity(channel, orderIndex = 0)
+
+        assertEquals(20261105, row.dateSort)
+    }
+
+    @Test
     fun `search name folds Arabic variants but the display name keeps them`() {
         val channel = Channel(
             id = "8",

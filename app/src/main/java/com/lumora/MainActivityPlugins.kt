@@ -1810,21 +1810,34 @@ internal fun MainActivity.wirePluginStoresSection(dialogView: View, manager: Plu
         listContainer.removeAllViews()
         val stores = pluginStoreManager.storeUrls()
         listEmpty.visibility = if (stores.isEmpty()) View.VISIBLE else View.GONE
+        // Each row's Browse button sets the id before anything looks it up: the XML id is the
+        // same on every inflated row, and nextFocus links resolve by id through the whole tree,
+        // so without unique ids every link would land on the first row's Browse.
+        val rowTargets = mutableListOf<Pair<View, View?>>()
         for (store in stores) {
             val row = layoutInflater.inflate(R.layout.item_plugin_store_row, listContainer, false)
             row.findViewById<TextView>(R.id.storeName).text = store.name ?: store.url
             row.findViewById<TextView>(R.id.storeUrl).text = store.url
-            row.findViewById<View>(R.id.storeBrowseButton).setOnClickListener { showBrowseStoreDialog(store) }
-            val removeButton = row.findViewById<View>(R.id.storeRemoveButton)
+            val browseButton = row.findViewById<View>(R.id.storeBrowseButton).apply {
+                id = View.generateViewId()
+                setOnClickListener { showBrowseStoreDialog(store) }
+            }
+            val removeButton = row.findViewById<View>(R.id.storeRemoveButton).apply {
+                id = View.generateViewId()
+            }
             if (store.removable) {
                 removeButton.visibility = View.VISIBLE
                 removeButton.setOnClickListener {
                     pluginStoreManager.removeStore(store.url)
                     renderStoreList()
                 }
+                browseButton.nextFocusRightId = removeButton.id
+                removeButton.nextFocusLeftId = browseButton.id
             } else {
                 removeButton.visibility = View.GONE
+                browseButton.nextFocusRightId = View.NO_ID
             }
+            rowTargets += browseButton to removeButton.takeIf { store.removable }
             listContainer.addView(row)
             // Fetch the store's self-declared name in the background and fill it in once
             // known - showing the URL immediately means the row isn't empty while loading.
@@ -1835,6 +1848,33 @@ internal fun MainActivity.wirePluginStoresSection(dialogView: View, manager: Plu
                     }
                 }
             }
+        }
+        // The store rows sit between two full-width focusables ("Add Stremio addon" above,
+        // "Add a plugin store" below) while their Browse buttons hug the right edge. Default
+        // focus search scores the full-width row below as the better DOWN target, so Browse
+        // was skipped entirely, and LEFT from "Add a plugin store" could fall through to the
+        // Activity root - a view with no focus ring and no D-pad path back. Wire the column
+        // explicitly instead of leaving it to geometry.
+        val installStremio = dialogView.findViewById<View>(R.id.settingsPluginInstallStremio)
+        val addStore = dialogView.findViewById<View>(R.id.settingsPluginAddStore)
+        if (rowTargets.isNotEmpty()) {
+            installStremio.nextFocusDownId = rowTargets.first().first.id
+            rowTargets.first().first.nextFocusUpId = installStremio.id
+            rowTargets.forEachIndexed { index, (browse, remove) ->
+                val next = rowTargets.getOrNull(index + 1)
+                val downId = next?.first?.id ?: addStore.id
+                browse.nextFocusDownId = downId
+                if (next != null) next.first.nextFocusUpId = browse.id
+                remove?.nextFocusUpId = browse.nextFocusUpId
+                remove?.nextFocusDownId = downId
+            }
+            addStore.nextFocusUpId = rowTargets.last().first.id
+            // LEFT from the Add-store row is the other natural way back to Browse.
+            addStore.nextFocusLeftId = rowTargets.last().first.id
+        } else {
+            installStremio.nextFocusDownId = addStore.id
+            addStore.nextFocusUpId = installStremio.id
+            addStore.nextFocusLeftId = View.NO_ID
         }
     }
     dialogView.findViewById<View>(R.id.settingsPluginAddStore)?.setOnClickListener { showAddStoreDialog() }

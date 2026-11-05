@@ -27,6 +27,9 @@ data class CatalogLeafRow(
 /** The two columns the search-key backfill needs. */
 data class CatalogNameRow(val uid: String, val name: String)
 
+/** The date columns the `dateSort` backfill needs. */
+data class CatalogDateRow(val uid: String, val releaseDate: String?, val year: String?)
+
 @Dao
 interface CatalogChannelDao {
 
@@ -200,6 +203,26 @@ interface CatalogChannelDao {
             "WHERE uid = :uid AND name = :name AND searchName = ''"
     )
     suspend fun updateSearchName(uid: String, name: String, searchName: String)
+
+    /**
+     * One page of VOD rows whose `dateSort` still has to be recomputed.
+     *
+     * 0 is the pre-backfill marker: older builds wrote it when the date parser could not read
+     * the provider's spelling, and the mapping now writes -1 instead so an unreadable date is
+     * not rescanned on every launch. Keyed by [uid] so the pass can resume after a process
+     * death.
+     */
+    @Query(
+        "SELECT uid, releaseDate, year FROM catalog_channels " +
+            "WHERE dateSort = 0 AND mediaType != 'LIVE' " +
+            "AND ((releaseDate IS NOT NULL AND releaseDate != '') " +
+            "OR (year IS NOT NULL AND year != '')) " +
+            "AND uid > :afterUid ORDER BY uid ASC LIMIT :limit"
+    )
+    suspend fun dateSortBackfillPage(afterUid: String, limit: Int): List<CatalogDateRow>
+
+    @Query("UPDATE catalog_channels SET dateSort = :dateSort WHERE uid = :uid AND dateSort = 0")
+    suspend fun updateDateSort(uid: String, dateSort: Int)
 
     @Query(
         "SELECT categoryId, categoryName, COUNT(*) AS count FROM catalog_channels " +

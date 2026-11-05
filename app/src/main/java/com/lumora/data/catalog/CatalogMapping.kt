@@ -133,7 +133,10 @@ object CatalogMapping {
             hasPoster = hasPoster,
             orderIndex = orderIndex,
             yearSort = resolved.year?.toIntOrNull() ?: -1,
-            dateSort = if (isVod) releaseDateSortKey(resolved.releaseDate, resolved.year) else -1,
+            // -1, not 0, for "no readable date": the catalogue backfill repairs rows left
+            // at 0 by an older parser (see CatalogRepository.backfillDateSorts), while a
+            // -1 is final and is not scanned again on every launch.
+            dateSort = if (isVod) releaseDateSortKey(resolved.releaseDate, resolved.year).takeIf { it > 0 } ?: -1 else -1,
             syncToken = syncToken,
             baseRank = baseRank,
             // A backup provider's copies sort behind every visible one (and are hidden
