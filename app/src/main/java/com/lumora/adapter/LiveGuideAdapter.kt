@@ -363,12 +363,30 @@ class LiveGuideAdapter(
                 if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
                 when (keyCode) {
                     android.view.KeyEvent.KEYCODE_DPAD_LEFT -> leftEdgeFocusTarget?.invoke() ?: false
-                    android.view.KeyEvent.KEYCODE_DPAD_UP -> focusTabFromTopRow()
+                    // Vertical travel stays in the channel column. Left to the framework,
+                    // UP from a lower row sometimes finds the previous row's EPG block
+                    // (geometry picks the nearer rectangle, not the same column) and the
+                    // D-pad ends up in the timeline instead of walking back up the channels.
+                    android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                        val position = bindingAdapterPosition
+                        when {
+                            position == RecyclerView.NO_POSITION -> false
+                            position == 0 -> focusTabFromTopRow()
+                            else -> focusChannelRow(position - 1)
+                        }
+                    }
                     // At the bottom of a category there is no row below. Left to the
                     // framework, focus search escapes the list and lands in the category
                     // rail on the left; the last channel is the end of this group, so the
                     // key is consumed here instead.
-                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> isLastRow()
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        val position = bindingAdapterPosition
+                        when {
+                            position == RecyclerView.NO_POSITION -> false
+                            position == itemCount - 1 -> true
+                            else -> focusChannelRow(position + 1)
+                        }
+                    }
                     else -> false
                 }
             }
@@ -934,6 +952,24 @@ class LiveGuideAdapter(
             if (bindingAdapterPosition != 0) return false
             val target = itemView.rootView.findViewById<View>(topRowFocusUpTargetId)
             return target?.takeIf { it.isShown }?.requestFocus() ?: true
+        }
+
+        /** Moves focus to the channel column of the row at [position], keeping vertical
+         *  travel inside the channels instead of letting focus search pick an EPG block on
+         *  the way. The target row is normally already laid out; if it is just outside the
+         *  viewport, scroll it in and retry on the next frame. Consuming the key even while
+         *  that retry is pending is deliberate - falling through to default focus search is
+         *  exactly the jump this exists to prevent. */
+        private fun focusChannelRow(position: Int): Boolean {
+            if (position !in 0 until itemCount) return false
+            val rv = recyclerView ?: return false
+            val holder = rv.findViewHolderForAdapterPosition(position) as? RowViewHolder
+            if (holder?.requestChannelFocus() == true) return true
+            rv.scrollToPosition(position)
+            rv.post {
+                (rv.findViewHolderForAdapterPosition(position) as? RowViewHolder)?.requestChannelFocus()
+            }
+            return true
         }
 
         /** True on the final guide row, where DOWN has nowhere left to go inside the list. */
