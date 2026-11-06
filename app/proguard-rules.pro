@@ -68,6 +68,20 @@
 # outright) on any other - including a debug build of the same version.
 -keep class com.lumora.data.backup.** { *; }
 
+# The Films/Series screen snapshot (VodContentStore) is Gson-serialised directly from these
+# models. Unkept, R8 renamed their fields per build: a snapshot written by one 6.9 build was
+# discarded by the next with a ClassCastException, so Films/Series rebuilt every shelf on
+# every cold start and after every update. Keeping the model stable lets a snapshot survive
+# app-version bumps; VodContentStore.FORMAT is bumped when the model itself changes.
+# -keepattributes Signature (above) keeps the List/Map/Set element types Gson needs too.
+-keep class com.lumora.MainActivity$FilmsSeriesContent { *; }
+-keep class com.lumora.cache.VodContentStore$Snapshot { *; }
+-keep class com.lumora.model.Channel { *; }
+-keep class com.lumora.model.DrmKey { *; }
+-keep class com.lumora.model.ContentShelf { *; }
+-keep class com.lumora.model.CategoryFilter { *; }
+-keep class com.lumora.model.MediaType { *; }
+
 # Provider.providers and Extractor.extractors are keyed by each implementation's own `name`
 # string, and several providers are matched back from a persisted name (UserPreferences.
 # currentProvider). Obfuscating the classes is fine; stripping one as unreachable is not,

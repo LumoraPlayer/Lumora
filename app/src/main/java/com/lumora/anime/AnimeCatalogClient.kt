@@ -47,6 +47,27 @@ class AnimeCatalogClient(private val client: OkHttpClient) {
             "Mystery", "Psychological", "Romance", "Sci-Fi", "Slice of Life", "Sports",
             "Supernatural", "Thriller"
         )
+
+        /**
+         * Stable identity of a fetched catalogue for cache-keying. The VOD snapshot cannot
+         * use MainActivity.animeSections directly: that list is empty until the provider load
+         * finishes, so every cold start would compute a different key and rebuild the shelves
+         * even though the previous snapshot was valid. This is persisted after a successful
+         * fetch and read back on the next start.
+         */
+        internal fun catalogFingerprint(catalog: Catalog): String {
+            var hash = 1125899906842597L
+            for (section in catalog.sections) {
+                hash = hash * 31 + section.label.hashCode()
+                for (id in section.channelIds) hash = hash * 31 + id.hashCode()
+            }
+            for (channel in catalog.channels) {
+                hash = hash * 31 + channel.id.hashCode()
+                hash = hash * 31 + channel.name.hashCode()
+                hash = hash * 31 + (channel.posterUrl?.hashCode() ?: 0)
+            }
+            return "${catalog.channels.size}|${hash.toULong().toString(16)}"
+        }
     }
 
     /** One sidebar child row: a label and the anime channel ids that belong under it. */

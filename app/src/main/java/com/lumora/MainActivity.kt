@@ -98,6 +98,10 @@ internal const val PREF_UP_NEXT_HIDDEN = "up_next_hidden_series"
  *  keyed by provider ids it has never heard of - so the translation is kept here for the
  *  restore to undo. */
 internal const val PREF_UP_NEXT_DROPPED_TRAKT = "up_next_dropped_trakt"
+/** Stable identity of the last successfully fetched anime catalogue. The VOD snapshot key
+ *  reads this instead of the in-memory [MainActivity.animeSections], which is empty until the
+ *  provider load finishes - using the live list made every cold start miss the cache. */
+internal const val PREF_ANIME_FINGERPRINT = "anime_catalog_fingerprint"
 // Dub handling: prefer dub-flagged search results, and keep sideloaded subtitles on when a
 // stream plays back with its dubbed audio track (both default off).
 internal const val PREF_PREFER_DUB_AUDIO = "prefer_dub_audio"

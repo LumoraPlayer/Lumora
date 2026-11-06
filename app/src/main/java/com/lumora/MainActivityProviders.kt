@@ -1619,6 +1619,12 @@ internal fun MainActivity.fetchAnimeChannels(): List<Channel> {
         // left over from a previous load would build sidebar rows whose ids aren't in the
         // tab any more, so it's replaced (or cleared) on every fetch.
         animeSections = catalog.sections
+        // Persist the identity now, not the live list: the VOD snapshot key is read on the
+        // next cold start before this fetch has run, and an empty anime list there used to
+        // invalidate a perfectly good snapshot every time.
+        prefs.edit()
+            .putString(PREF_ANIME_FINGERPRINT, AnimeCatalogClient.catalogFingerprint(catalog))
+            .apply()
         catalog.channels
     } catch (e: Exception) {
         animeSections = emptyList()

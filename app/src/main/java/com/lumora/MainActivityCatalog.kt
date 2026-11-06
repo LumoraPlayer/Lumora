@@ -287,6 +287,11 @@ internal fun MainActivity.deriveFilmsSeries() {
         )
         if (allChannels !== snapshot || !isActive) return@launch
         applyVodContent(result)
+        // The shelf adapters are updated by applyVodContent, but a viewer already inside a
+        // Films/Series category grid also needs the sidebar and filter re-applied against the
+        // rows that were just built. Otherwise the new cache only appeared after a tab
+        // switch or a restart.
+        scope.launch { refreshVisibleVodTabAfterBuild() }
     }
 }
 

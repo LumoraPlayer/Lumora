@@ -25,10 +25,11 @@ import java.util.zip.GZIPOutputStream
  * cards and the version groups, so the next launch can paint immediately and only fall
  * back to the queries when the catalogue or a shaping pref changed.
  *
- * The file is gzipped JSON and app-private. It carries the app version code and a format
- * version: R8 renames model fields between releases, so a snapshot written by one build
- * must never be deserialised by another. An unreadable or stale file is discarded and
- * rebuilt.
+ * The file is gzipped JSON and app-private. It carries a format version and a debug flag.
+ * The models it serialises are kept by name in proguard-rules.pro, so R8 no longer changes
+ * their field names between releases - that is what lets a snapshot survive an app update.
+ * [FORMAT] is bumped whenever the model itself changes; an unreadable or stale file is
+ * discarded and rebuilt.
  *
  * Playback state is deliberately not trusted from here: [MainActivity.refreshVodLead] runs
  * on every cache hit, so Continue Watching / Favourites still come from the current stores.
@@ -36,14 +37,14 @@ import java.util.zip.GZIPOutputStream
 internal object VodContentStore {
 
     private const val TAG = "VodContentStore"
-    private const val FILE = "vod_content_v1.json.gz"
-    private const val FORMAT = 1
+    // v2: the v1 snapshots were written with R8-renamed fields and cannot be read back.
+    private const val FILE = "vod_content_v2.json.gz"
+    private const val FORMAT = 2
 
     private val gson = Gson()
 
     private data class Snapshot(
         val format: Int = FORMAT,
-        val versionCode: Int = 0,
         val debug: Boolean = false,
         val key: String = "",
         val content: MainActivity.FilmsSeriesContent? = null,
@@ -51,6 +52,9 @@ internal object VodContentStore {
 
     /** Returns the stored key and content, or null when there is nothing usable. */
     fun load(context: Context): Pair<String, MainActivity.FilmsSeriesContent>? {
+        // An upgrade from the broken v1 file should not leave a multi-hundred-KB orphan
+        // behind forever.
+        runCatching { File(context.filesDir, "vod_content_v1.json.gz").delete() }
         val file = File(context.filesDir, FILE)
         if (!file.isFile) return null
         val startedAt = System.currentTimeMillis()
@@ -60,11 +64,11 @@ internal object VodContentStore {
                     val snapshot = gson.fromJson(reader, Snapshot::class.java)
                     if (snapshot == null ||
                         snapshot.format != FORMAT ||
-                        snapshot.versionCode != BuildConfig.VERSION_CODE ||
                         snapshot.debug != BuildConfig.DEBUG
                     ) {
-                        // An update changed the build (and therefore R8's field names);
-                        // reading it again every cold start would just waste I/O.
+                        // A model change or a debug/release switch: the JSON shape no longer
+                        // matches this build. Reading it again every cold start would just
+                        // waste I/O.
                         runCatching { file.delete() }
                         return null
                     }
@@ -99,7 +103,6 @@ internal object VodContentStore {
                     gson.toJson(
                         Snapshot(
                             format = FORMAT,
-                            versionCode = BuildConfig.VERSION_CODE,
                             debug = BuildConfig.DEBUG,
                             key = key,
                             content = content,
