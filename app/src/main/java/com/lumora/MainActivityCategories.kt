@@ -297,7 +297,11 @@ internal fun MainActivity.toggleFavoriteVodItem(item: Channel) {
 internal fun MainActivity.refreshHomeShelvesIfShowing() {
     if (showingHome) {
         refreshVodProgress()
-        homeShelfAdapter.submitList(buildHomeShelves())
+        homeShelfAdapter.submitList(buildHomeShelves()) {
+            // Removing a shelf/poster takes the focused view with it. Re-claim Home if the
+            // refresh left nothing visible focused (no-op when the ring survived).
+            if (showingHome) restoreBrowseFocusIfLost()
+        }
     }
 }
 
@@ -2027,9 +2031,12 @@ internal fun MainActivity.openSideMenu() {
     // screen is where a later collapse hands focus back to, until a row is expanded.
     collapseSideMenuCategories()
     sideMenuExpandedTab = activeTab.coerceIn(0, 2)
-    // The drawer covers the bottom-right corner the Up Next card sits in - clear it
-    // so the menu opens over clean video, same as showControls does.
-    if (upNextActive) binding.upNextOverlay.visibility = View.GONE
+    // The drawer covers the bottom-right corner the end pill sits in - clear it and pause
+    // its countdown so the menu opens over clean video, same as showControls does.
+    if (upNextActive) {
+        binding.btnSkipSegment.visibility = View.GONE
+        mainHandler.removeCallbacks(upNextTickRunnable)
+    }
     // The menu stays put until the user dismisses it - no auto-hide countdown.
     mainHandler.removeCallbacks(hideControlsRunnable)
     closePlayerEpgDetails()
@@ -2067,14 +2074,11 @@ internal fun MainActivity.closeSideMenu() {
     // fresh open re-derives both.
     clearSideMenuSelection()
     collapseSideMenuCategories()
-    // Menu closed over the video - bring Up Next back if it was mid-countdown,
+    // Menu closed over the video - bring the end pill back if it was mid-countdown,
     // exactly like hideControls does. The bottom bar stays hidden, so the video is
     // fullscreen again = "back to what's playing".
-    // ...and resume its tick too (removeCallbacks first, same as hideControls): openSideMenu
-    // paused it when it hid the controls overlay, so without this the card came back frozen
-    // and auto-advance never fired.
     if (upNextActive) {
-        binding.upNextOverlay.visibility = View.VISIBLE
+        binding.btnSkipSegment.visibility = View.VISIBLE
         mainHandler.removeCallbacks(upNextTickRunnable)
         mainHandler.postDelayed(upNextTickRunnable, 1000)
     }

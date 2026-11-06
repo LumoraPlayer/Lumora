@@ -3,6 +3,7 @@ package com.lumora
 
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import com.lumora.skip.SkipSegment
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,5 +44,43 @@ class SkipSegmentPolicyTest {
         val live = channel(MediaType.LIVE)
         assertFalse(skipSegmentAllowedFor(live, "intro"))
         assertFalse(skipSegmentAllowedFor(live, "credits"))
+    }
+
+    private val episodeRuntimeMs = 45 * 60_000L
+
+    @Test
+    fun anEpisodeEndCreditsOwnsTheEnd() {
+        val credits = SkipSegment("credits", 42 * 60_000L, 0)
+        assertTrue(credits.isEndCredits(episodeRuntimeMs))
+    }
+
+    @Test
+    fun filmEndCreditsOwnTheEndToo() {
+        val credits = SkipSegment("credits", 100 * 60_000L, 0)
+        assertTrue(credits.isEndCredits(110 * 60_000L))
+    }
+
+    @Test
+    fun creditsBeforeAStingerDoNotOwnTheEnd() {
+        val credits = SkipSegment("credits", 40 * 60_000L, 44 * 60_000L)
+        assertFalse(credits.isEndCredits(episodeRuntimeMs))
+    }
+
+    @Test
+    fun aNullStartCreditsMarkerNeverOwnsTheEnd() {
+        val malformed = SkipSegment("credits", 0, 0)
+        assertFalse(malformed.isEndCredits(episodeRuntimeMs))
+    }
+
+    @Test
+    fun aStartPastTheDurationNeverOwnsTheEnd() {
+        val malformed = SkipSegment("credits", 50 * 60_000L, 0)
+        assertFalse(malformed.isEndCredits(episodeRuntimeMs))
+    }
+
+    @Test
+    fun anIntroDoesNotOwnTheEndAsCredits() {
+        val intro = SkipSegment("intro", 60_000L, 150_000L)
+        assertFalse(intro.isEndCredits(episodeRuntimeMs))
     }
 }

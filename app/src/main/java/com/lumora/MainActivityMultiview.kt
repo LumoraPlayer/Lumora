@@ -224,6 +224,8 @@ internal fun MainActivity.returnToMultiviewGrid(addChannel: Channel?) {
     isPlayerVisible = true
     userPausedPlayback = false
     multiviewSampleCursor = 0
+    // The grid owns the screen; the catalogue ingest card must not sit over a pane.
+    hideCatalogIngestForPlayback()
     binding.mainContent.visibility = View.GONE
     binding.playerLayout.visibility = View.VISIBLE
     binding.playerLayout.keepScreenOn = true

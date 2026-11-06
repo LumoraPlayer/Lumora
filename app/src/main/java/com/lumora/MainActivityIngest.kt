@@ -86,11 +86,23 @@ internal fun MainActivity.publishCatalogConnecting(providerId: String, name: Str
     if (!uiPainted) setStatus("", visible = false)
 }
 
-/** Paints the banner from whatever the enabled providers have reported. */
-internal fun MainActivity.renderCatalogIngest() {
+/**
+ * Paints the banner from whatever the enabled providers have reported.
+ *
+ * [takeFocus] is false for the repaint after the player closes: the card was only stepping
+ * aside for playback, and pulling the D-pad back onto its Hide button would undo the landing
+ * the player's own return path just chose.
+ */
+internal fun MainActivity.renderCatalogIngest(takeFocus: Boolean = true) {
     // Hiding the banner is about the narration, not the work: keep collecting state (the
     // end-of-load summary and the stored sizes still need it) and skip the repaint.
     if (catalogIngestHidden) return
+    // Fullscreen playback owns the screen. Keep collecting the numbers, but keep the card
+    // out of the picture; hidePlayer repaints it if the load is still running.
+    if (isPlayerVisible) {
+        hideIngestBanner()
+        return
+    }
     val states = catalogIngest.values
     if (states.isEmpty()) {
         hideIngestBanner()
@@ -153,7 +165,13 @@ internal fun MainActivity.renderCatalogIngest() {
     } else {
         phaseTotal?.takeIf { it > 0 }?.let { (current.phaseBytes.toFloat() / it).coerceIn(0f, 1f) }
     }
-    showIngestBanner(text, fraction)
+    showIngestBanner(text, fraction, takeFocus)
+}
+
+/** Takes the card down for a fullscreen playback session without ending its narration:
+ *  see [renderCatalogIngest] and [hidePlayer]. */
+internal fun MainActivity.hideCatalogIngestForPlayback() {
+    hideIngestBanner()
 }
 
 /** Drops the banner for the rest of this load. The ingest keeps running in the background:
@@ -232,7 +250,7 @@ internal fun MainActivity.prioritizeIngestSection(tab: Int) {
     renderCatalogIngest()
 }
 
-private fun MainActivity.showIngestBanner(text: String, fraction: Float?) {
+private fun MainActivity.showIngestBanner(text: String, fraction: Float?, takeFocus: Boolean) {
     val appearing = binding.ingestBanner.visibility != View.VISIBLE
     binding.ingestBanner.visibility = View.VISIBLE
     binding.ingestText.text = text
@@ -244,7 +262,7 @@ private fun MainActivity.showIngestBanner(text: String, fraction: Float?) {
         bar.progress = (fraction * 100).toInt()
     }
     guardIngestFocus()
-    if (appearing) takeIngestFocus()
+    if (appearing && takeFocus) takeIngestFocus()
 }
 
 /**
@@ -308,8 +326,32 @@ private fun MainActivity.isCoveredByIngestCard(view: View): Boolean {
 }
 
 private fun MainActivity.hideIngestBanner() {
+    // The Hide button is a focus target, and this card disappears on its own when the load
+    // finishes. Turning a focused view GONE leaves the window with no focused view at all -
+    // the D-pad then does nothing and the screen looks frozen. Hand the ring back before
+    // (and after) the card goes away.
+    val hadFocus = binding.ingestBanner.hasFocus()
     releaseIngestFocusGuard()
     binding.ingestBanner.visibility = View.GONE
+    if (hadFocus) restoreBrowseFocusIfLost()
+}
+
+/**
+ * Re-claims a visible focus point after the ingest card or a Home shelf rebuild removes the
+ * view that held it. No-op while something visible - including a settings/search overlay -
+ * already owns the D-pad, and while the player or a detail page is the current context.
+ */
+internal fun MainActivity.restoreBrowseFocusIfLost() {
+    val focused = binding.root.findFocus()
+    if (focused != null && focused.isShown) return
+    when {
+        activeSettingsOverlay != null || activeSearchOverlay != null -> Unit
+        isPlayerVisible || isContentDetailVisible || isPersonDetailVisible -> Unit
+        showingHome -> focusHomeShelfPoster(0, 0)
+        showingDownloads -> binding.tabDownloads.requestFocus()
+        showingSports -> binding.tabLive.requestFocus()
+        else -> restoreTabFocus()
+    }
 }
 
 private fun MainActivity.ingestPhaseLabel(phase: String): String = when (phase) {

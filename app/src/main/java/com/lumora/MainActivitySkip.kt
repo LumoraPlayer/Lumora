@@ -29,6 +29,17 @@ internal fun skipSegmentAllowedFor(channel: Channel, type: String): Boolean =
     channel.mediaType != MediaType.LIVE &&
         (channel.mediaType != MediaType.MOVIE || !type.equals("intro", ignoreCase = true))
 
+/** True when [this] is a credits segment that actually owns the end of the media - the only
+ *  shape that raises the merged "Play Next Episode" / "Skip Credits" offer as soon as the
+ *  credits start (see updateSkipSegmentUi). IntroDB can answer with a null start (stored as
+ *  0) or, after a wrong-title match, a start past the duration; neither ever raises a pill,
+ *  so neither may count as an end-of-media marker. */
+internal fun SkipSegment.isEndCredits(durationMs: Long): Boolean =
+    type.equals("credits", ignoreCase = true) &&
+        startMs > 0 &&
+        startMs < durationMs &&
+        effectiveEndMs(durationMs) >= durationMs - MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L
+
 /** Begins (or clears) the skip-segment lookup for a playback that just started. Called from
  *  showPlayerFor, after nowPlayingChannel is set - the async result checks what is playing
  *  when it lands, so a quick surf past a title never attaches its segments to the next one. */
@@ -90,14 +101,15 @@ internal fun MainActivity.resetSkipSegments() {
 internal fun MainActivity.updateSkipSegmentUi() {
     if (!isPlayerVisible) return
     val channel = nowPlayingChannel ?: return
-    // The Up Next pill owns the bottom-end corner - two offers stacked there is one too
-    // many, and the pill is the one that moves playback on. (It exists for episodes with no
-    // credits segment; a credits segment suppresses it entirely, see checkUpNextTrigger.)
+    // The merged end offer owns the bottom-end corner and the pill's countdown. Leave its
+    // text and focus alone; this tick only manages intro/recap/preview markers.
     if (upNextActive) {
-        if (binding.btnSkipSegment.visibility != View.GONE) binding.btnSkipSegment.visibility = View.GONE
         activeSkipSegment = null
         return
     }
+    // The pill was pressed/expired and the player is seeking to the end so STATE_ENDED can
+    // save the watched mark. Do not raise a fresh offer during that gap.
+    if (pendingEndOfferAction != null) return
     if (channel.mediaType == MediaType.LIVE || currentSkipSegments.isEmpty()) {
         if (binding.btnSkipSegment.visibility != View.GONE) binding.btnSkipSegment.visibility = View.GONE
         activeSkipSegment = null
@@ -120,9 +132,24 @@ internal fun MainActivity.updateSkipSegmentUi() {
         binding.btnSkipSegment.visibility = View.GONE
         return
     }
+    // End credits raise the merged offer immediately: "Play Next Episode" when the queue has
+    // one, otherwise "Skip Credits" back to the poster. It is one pill with one countdown,
+    // replacing the old separate Skip Credits / Up Next pair.
+    if (segment.isEndCredits(duration)) {
+        activeSkipSegment = null
+        // Episodes count down (the original request). Films are manual-only: a Marvel entry
+        // can put one or more scenes between credit blocks, and a countdown must never skip
+        // them. At the actual end STATE_ENDED starts the 30s countdown, where it is safe.
+        val seconds = if (channel.mediaType == MediaType.SERIES) {
+            MainActivity.CREDITS_AUTO_SKIP_SECONDS
+        } else {
+            0
+        }
+        if (!upNextDismissed) showEndOffer(nextEpisodeInQueue(), seconds)
+        return
+    }
     if (segment.key != lastShownSkipSegmentKey) {
         lastShownSkipSegmentKey = segment.key
-        binding.btnSkipSegment.text = skipSegmentLabel(segment.type)
         binding.btnSkipSegment.visibility = View.VISIBLE
         // Highlight it for the press the moment it appears - the pill is the one thing to
         // press, and nothing ever moved focus onto it before, so OK did nothing until the
@@ -142,9 +169,9 @@ internal fun MainActivity.updateSkipSegmentUi() {
             }
         }
     }
-    // Auto-skip covers the openers only. Skipping the credits by itself would race the
-    // end-of-playback handling (save-watched, Up Next, auto-advance), and skipping a preview
-    // is a taste call, not a convenience - both stay manual button presses.
+    binding.btnSkipSegment.text = skipSegmentLabel(segment.type)
+    // Opening auto-skip is the explicit preference's job; a preview is a taste call, not a
+    // convenience, so it stays a manual button press.
     if (prefs.getBoolean(PREF_SKIP_AUTO, false) && (segment.type == "intro" || segment.type == "recap")) {
         performSkipSegment(segment)
     }
@@ -180,7 +207,8 @@ internal fun MainActivity.skipActiveSegment() {
 
 /** Seeks past [segment] and marks it spent, so re-entering its window (a manual rewind, a
  *  rebuffer that reports an earlier position) does not re-offer it. A later episode gets a
- *  fresh slate via resetSkipSegments. */
+ *  fresh slate via resetSkipSegments. End credits never reach here: they raise the merged
+ *  end offer instead (see updateSkipSegmentUi). */
 private fun MainActivity.performSkipSegment(segment: SkipSegment) {
     val channel = nowPlayingChannel ?: return
     if (!skipSegmentAllowedFor(channel, segment.type)) return
@@ -190,7 +218,7 @@ private fun MainActivity.performSkipSegment(segment: SkipSegment) {
     val duration = playerManager.duration
     val end = segment.effectiveEndMs(duration)
     // Stop a second short of the media's own end: landing exactly on it races the player's
-    // end-of-item handling (save-watched, Up Next), which reads better a beat early.
+    // end-of-item handling (save-watched, end offer), which reads better a beat early.
     val target = if (duration > 0) end.coerceAtMost(duration - 1000L) else end
     playerManager.seekTo(target.coerceAtLeast(0L))
     showControls()

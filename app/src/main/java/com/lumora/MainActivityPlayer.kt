@@ -159,7 +159,7 @@ internal fun MainActivity.setupPlayerControls() {
     }
     binding.sideMenuCategoryList.layoutManager = LinearLayoutManager(this)
     binding.sideMenuCategoryList.adapter = sideMenuCategoryAdapter
-    binding.btnSkipSegment.setOnClickListener { skipActiveSegment() }
+    binding.btnSkipSegment.setOnClickListener { onSkipPillClick() }
     // Persisted subtitle text size (Small/Medium/Large, see MainActivitySubs) - applied at
     // setup so the very first subtitle this session renders at the chosen size.
     applySubtitleStyle()
@@ -198,11 +198,6 @@ internal fun MainActivity.setupPlayerControls() {
             showControls()
             Toast.makeText(this@setupPlayerControls, getString(R.string.play_sleep_timer_ended), Toast.LENGTH_SHORT).show()
         }
-    }
-
-    // Up Next pill — press advances now; Back cancels the offer (handleBackNavigation).
-    binding.upNextOverlay.setOnClickListener {
-        if (!advanceToNextEpisode()) cancelUpNext()
     }
 
     // Cast — uses MediaRouteButton which shows a device picker on tap.
@@ -412,23 +407,43 @@ internal fun MainActivity.setupPlayerControls() {
                         PlaybackPositionStore.clear(this@setupPlayerControls, finishedKey)
                     }
                 }
-                // If an offer is already counting - raised before the end on an episode with
-                // no credits segment - it owns the advance. A refused offer must not be
-                // second-guessed either: Back means the episode ends here, with Next and
-                // Back left to the viewer - the next-episode entry saved above still keeps
-                // the series on the Continue Watching / Up Next shelves.
-                if (upNextActive || upNextDismissed) return@onPlaybackStateChanged
-                // The end of the episode is where the next episode is asked for: the pill
-                // goes up with its countdown (MainActivity.UP_NEXT_COUNTDOWN_SECONDS) and
-                // nothing starts until that reaches zero. This is also the landing after
-                // Skip Credits seeks to the end, and the replacement for the old silent
-                // advance - an exchange the viewer can refuse instead of one that happens.
-                val queue = currentEpisodeQueue
-                val nextIdx = currentEpisodeQueueIndex + 1
-                if (nextIdx in queue.indices) {
-                    upNextEpisode = queue[nextIdx]
-                    showUpNextOverlay()
+                // An end offer pressed before the media ended seeks here first. Run its
+                // action now, once the watched mark above has been saved. Deferred out of
+                // this listener callback; Back can close the player in the posted frame.
+                if (pendingEndOfferAction != null) {
+                    mainHandler.post {
+                        if (isPlayerVisible) applyPendingEndOffer()
+                    }
+                    return@onPlaybackStateChanged
                 }
+                // A refused offer must not be second-guessed: Back means the episode ends
+                // here, with Next and Back left to the viewer - the next-episode entry saved
+                // above still keeps the series on the Continue Watching / Up Next shelves.
+                if (upNextDismissed) return@onPlaybackStateChanged
+                // An offer raised during the credits already owns the end zone. A marker-based
+                // series offer is already counting; a manual one (films, or text-detected
+                // credits) starts its countdown only now, when there is nothing left to skip.
+                if (upNextActive) {
+                    if (upNextCountdown <= 0) {
+                        upNextCountdown = MainActivity.CREDITS_AUTO_SKIP_SECONDS
+                        updateEndOfferText()
+                        if (!isPlayerSideMenuOpen()) mainHandler.post(upNextTickRunnable)
+                    }
+                    return@onPlaybackStateChanged
+                }
+                val finishedChannel = nowPlayingChannel
+                if (finishedChannel == null || finishedChannel.mediaType == MediaType.LIVE) {
+                    return@onPlaybackStateChanged
+                }
+                // Nothing raised the offer before the end - no credits marker, or playback
+                // was paused through the window. Raise it here: Play Next Episode when the
+                // queue has one, otherwise Skip Credits back to the poster.
+                val next = nextEpisodeInQueue()
+                showEndOffer(
+                    next,
+                    if (next != null) MainActivity.UP_NEXT_COUNTDOWN_SECONDS
+                    else MainActivity.CREDITS_AUTO_SKIP_SECONDS
+                )
             }
             }
         }
@@ -689,8 +704,10 @@ internal fun MainActivity.showPlayerFor(
     // A challenge promoted a moment *before* this line is already a live dialog that nothing
     // else would take down; close it, and its fetch resumes as cancelled so its caller moves on.
     dismissActiveScraperChallenges()
-    // Reset Up Next state on any new playback
+    // Reset end-offer state on any new playback
     cancelUpNext()
+    pendingEndOfferAction = null
+    pendingEndOfferEpisode = null
     // A newly selected channel/title starts in fullscreen. The overlay defaults to VISIBLE
     // in the layout, and a previous session may have left it up after its hide timer was
     // cancelled, so don't rely on the auto-hide to dismiss it here.
@@ -746,6 +763,9 @@ internal fun MainActivity.showPlayerFor(
     }
     resumePromptShown = resumeFromMs != null
     progressTickCount = 0
+    // The ingest card floats over the browse panes; it must not float over the picture.
+    // This is a playback-only suppression - hidePlayer repaints it if the load is still on.
+    hideCatalogIngestForPlayback()
     binding.mainContent.visibility = View.GONE
     binding.playerLayout.visibility = View.VISIBLE
     binding.playerLayout.keepScreenOn = true
@@ -847,6 +867,9 @@ internal fun MainActivity.showPlayerFor(
     startVodQualityWatch(channel)
     binding.playerAspectContainer.videoAspectRatio = 0f
     playerManager.setSurfaceView(binding.playerSurface)
+    // Text-detected end-of-item offer for titles with no IntroDB credits marker. It only
+    // samples in the final window and never auto-skips by itself (see MainActivityCreditsText).
+    startCreditsTextWatch()
     // No controls bar on start (it used to pop open on every play): it covered the opening
     // frames and fought the skip pill for focus the moment the pill appeared. The bar is one
     // press away - any direction reveals it (see onKeyDown's reveal branch) - and a media
@@ -2605,6 +2628,9 @@ internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
     binding.playerLayout.visibility = View.GONE
     binding.mainContent.visibility = View.VISIBLE
     binding.playerLayout.keepScreenOn = false
+    // The card only stepped aside for playback. If its catalogue load is still running,
+    // bring the narration back - without taking focus from the screen the player returned to.
+    renderCatalogIngest(takeFocus = false)
     mainHandler.removeCallbacks(hideControlsRunnable)
     // A fresh player session starts with the side menu tucked away - kill any
     // in-flight slide animation and reset the transform it left behind.
@@ -2626,10 +2652,13 @@ internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
     mainHandler.removeCallbacks(longStallCheckRunnable)
     mainHandler.removeCallbacks(blackFrameCheckRunnable)
     mainHandler.removeCallbacks(vodQualityCheckRunnable)
-    // Full cancel, not just the tick: leaving upNextActive set with the card gone made the
+    stopCreditsTextWatch()
+    // Full cancel, not just the tick: leaving upNextActive set with the pill gone made the
     // next player session's D-pad guards think an offer was on screen when none was, and
     // suppressed STATE_ENDED's auto-advance for it.
     cancelUpNext()
+    pendingEndOfferAction = null
+    pendingEndOfferEpisode = null
     // A numeric entry still pending when the player closes would resolve ~1.5s later and
     // re-open playback (resolveDigitInput -> playItem) over whatever the user moved to.
     clearDigitBuffer()

@@ -92,8 +92,9 @@ class QrPairingManager(private val context: Context) {
     val result: PairingResult? get() = _result
 
     /** Start the pairing server with an optional provider type preset. [purpose] "nas" opens
-     *  the phone page in NAS mode (SMB/WebDAV only, plus the destination folder) - the rest of
-     *  the handshake is identical, so a NAS setup reuses the same QR/HTTP/token machinery. */
+     *  the phone page in NAS mode (SMB/WebDAV only, plus the destination folder), and "epg"
+     *  opens the one-field XMLTV source form - the rest of the handshake is identical, so
+     *  those setups reuse the same QR/HTTP/token machinery. */
     suspend fun start(providerType: String? = null, purpose: String = "provider"): PairingResult? = withContext(Dispatchers.IO) {
         stop()
         Log.d(TAG, "Starting QR pairing server...")
@@ -218,6 +219,8 @@ class QrPairingManager(private val context: Context) {
                         ?: if (purpose == "nas") "smb" else "m3u"
                     if (!isTokenValid(token)) {
                         writeHtml(c.getOutputStream(), 403, errorPage("Link expired or invalid. Start a new QR session on the TV."))
+                    } else if (purpose == "epg") {
+                        writeHtml(c.getOutputStream(), 200, epgFormPage(token ?: ""))
                     } else if (purpose == "nas") {
                         writeHtml(c.getOutputStream(), 200, nasFormPage(token ?: "", presetType))
                     } else {
@@ -322,6 +325,12 @@ class QrPairingManager(private val context: Context) {
                             consumeToken(token)
                             writeHtml(c.getOutputStream(), 200, plexLinkPage(result.code, result.authUrl))
                         }
+                    } else if (type == "epg") {
+                        // A form field left over from a type switch never belongs here.
+                        parsed?.uploadedFile?.delete()
+                        onProviderReceived?.invoke("epg", form)
+                        consumeToken(token)
+                        writeHtml(c.getOutputStream(), 200, successPage("EPG source sent! Check your TV."))
                     } else if (type == "m3u" && parsed?.uploadedFile != null) {
                         // A playlist file picked on the phone. The phone has the file, so
                         // the TV keeps a copy: a content:// URI from the phone would be
@@ -813,6 +822,41 @@ document.getElementById('webdavFields').classList.toggle('active',t==='webdav');
 syncEnabledFields();}
 syncEnabledFields();
 </script>
+</body></html>
+""".trimIndent()
+
+    private fun epgFormPage(token: String) = """
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lumora Pairing</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0d0d0d;color:#eee;margin:0;padding:16px}
+main{max-width:520px;margin:20px auto;background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:24px}
+h1{margin:0 0 4px;font-size:22px;color:#fff} p{color:#9e9e9e;margin:4px 0 16px;line-height:1.4}
+label{display:block;margin-top:16px;font-size:14px;font-weight:600;color:#ccc}
+input{width:100%;margin-top:6px;padding:14px;border-radius:10px;border:1px solid #444;background:#0d0d0d;color:#fff;font-size:16px}
+input:focus{outline:none;border-color:#2979ff;box-shadow:0 0 0 2px rgba(41,121,255,0.3)}
+button{width:100%;margin-top:24px;padding:16px;border:0;border-radius:12px;background:#2979ff;color:#fff;font-weight:700;font-size:17px}
+button:active{background:#1565c0}
+.hint{font-size:13px;color:#777;margin-top:6px;line-height:1.4}
+</style></head>
+<body>
+<main>
+<h1>Add EPG Source</h1>
+<p>Paste the XMLTV guide address. It is sent directly to your TV over your local network.</p>
+<form method="post" action="/submit?t=${token.escapeHtml()}">
+<input type="hidden" name="token" value="${token.escapeHtml()}">
+<input type="hidden" name="type" value="epg">
+<label>Name (optional)</label>
+<input name="name" placeholder="My guide">
+<label>XMLTV EPG URL</label>
+<input name="epgUrl" type="url" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="https://example.com/guide.xml.gz" required>
+<div class="hint">The same URL your provider gave you. .xml and .xml.gz are both fine.</div>
+<button type="submit">Send to TV</button>
+</form>
+</main>
 </body></html>
 """.trimIndent()
 

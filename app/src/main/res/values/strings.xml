@@ -63,6 +63,7 @@
     <!-- Numeric Input -->
     <!-- Up Next / Auto-Advance -->
     <string name="up_next">Up Next</string>
+    <string name="play_next_episode">Play Next Episode</string>
     <string name="play_now">Play Now</string>
 
     <!-- Incremental Search -->
@@ -546,7 +547,7 @@
     <string name="skip_credits_noun">Credits</string>
     <string name="skip_preview_noun">Preview</string>
     <string name="sett_skip_segments">Skip intro button</string>
-    <string name="sett_skip_segments_caption">Shows a Skip button when IntroDB has intro/recap/credits timestamps for the title</string>
+    <string name="sett_skip_segments_caption">Shows a Skip button for IntroDB intro/recap/credits timestamps, and detects end credits on screen when there is no marker</string>
     <string name="sett_skip_auto">Auto-skip intros</string>
     <string name="sett_skip_auto_caption">Seeks past intros and recaps automatically, without waiting for the button</string>
 

@@ -121,7 +121,12 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
                 // replaced the empty state with a blank screen.
                 binding.homeContent.visibility = View.VISIBLE
                 binding.homeSearchBar.visibility = if (hasSearchableCatalog()) View.VISIBLE else View.GONE
-                homeShelfAdapter.submitList(buildHomeShelves())
+                homeShelfAdapter.submitList(buildHomeShelves()) {
+                    // The refresh can replace the shelf/poster that held the ring - and the
+                    // ingest card that owned it a moment ago has just been hidden. If that
+                    // left nothing visible focused, put the D-pad back on Home.
+                    if (showingHome) restoreBrowseFocusIfLost()
+                }
             } else if (showingDiscover) {
                 // Discover owns the slot and has no catalog chrome to refresh - the
                 // refreshed catalog is picked up when the user switches back.

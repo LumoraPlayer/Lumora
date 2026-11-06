@@ -439,6 +439,9 @@ internal const val GESTURE_SEEK_MS = 10_000L
 internal const val ZOOM_MIN = 1.0f
 internal const val ZOOM_MAX = 3.0f
 
+/** What the merged end-of-item pill does when pressed or when its countdown expires. */
+internal enum class EndOfferAction { PLAY_NEXT, BACK_TO_POSTER }
+
 class MainActivity : AppCompatActivity() {
 
     internal lateinit var binding: ActivityMainBinding
@@ -711,6 +714,9 @@ class MainActivity : AppCompatActivity() {
     /** Set while the Plugins pane's Stremio QR dialog is open: hands the phone's manifest
      *  link to the dialog that asked for it (see QrPairingManager's submit handler). */
     internal var stremioQrReceived: ((String) -> Unit)? = null
+    /** Set while the Add EPG Source dialog's QR session is open. The phone's submitted
+     *  name/URL arrives through QrPairingManager, which knows nothing about that dialog. */
+    internal var epgQrReceived: ((Map<String, String>) -> Unit)? = null
     /** Installed JS plugin scripts - see PluginScriptManager. Discovered once at startup and
      *  refreshed whenever Settings > Plugins is opened. */
     internal val pluginScriptManager by lazy { PluginScriptManager(this, prefs) }
@@ -1158,6 +1164,12 @@ class MainActivity : AppCompatActivity() {
     /** Last segment the button was labelled for, so the label is only rewritten when the
      *  active segment actually changes rather than on every tick. */
     internal var lastShownSkipSegmentKey: String? = null
+    // ── OCR fallback when IntroDB has no credits marker ──
+    /** Created lazily on the first end-window sample; kept across plays and closed in onDestroy. */
+    internal var creditsTextDetector: com.lumora.skip.CreditsTextDetector? = null
+    /** Consecutive OCR samples that looked like a credits roll. Two in a row raise the pill. */
+    internal var creditsTextStreak = 0
+    internal val creditsTextScanRunnable = Runnable { checkForCreditsText() }
 
     /** The negotiated stream for whatever Jellyfin item is playing (see
      *  JellyfinProvider.resolveStream). Its PlaySessionId is what ties every progress report
@@ -1226,36 +1238,42 @@ class MainActivity : AppCompatActivity() {
      *  new entry / hide the overlay mid-typing. */
     internal var digitNotFoundRunnable: Runnable? = null
 
-    // ── Up Next / Auto-Advance ──────────────────
+    // ── End-of-item offer (merged Skip Credits / Play Next Episode) ──
+    /** The next episode for the offer, or null when the offer can only go back to the
+     *  poster (a film, or the last episode of a series). */
     internal var upNextEpisode: Channel? = null
     internal var upNextCountdown = UP_NEXT_COUNTDOWN_SECONDS
     internal var upNextActive = false
     /**
-     * True once the offer has been refused for the episode playing now - its Cancel button,
-     * Back, or the controls bar taking over. Without this the once-a-second trigger raised the
-     * card again on its very next tick (its condition still holds for the rest of the last
-     * minute), and STATE_ENDED's silent fallback advanced anyway, so "Cancel" cancelled
-     * nothing. Cleared by showPlayerFor, so the next episode - or a re-play of this one - gets
-     * its own offer.
+     * True once the offer has been refused for the episode playing now - its pill's Back
+     * press, or the controls bar taking over. Without this the once-a-second trigger raised
+     * the pill again on its very next tick, so "Back" cancelled nothing. Cleared by
+     * showPlayerFor, so the next episode - or a re-play of this one - gets its own offer.
      */
     internal var upNextDismissed = false
+    /** The action captured when the offer is pressed while the media still has to seek to
+     *  its end first. STATE_ENDED consumes it after the watched mark has been saved. */
+    internal var pendingEndOfferAction: EndOfferAction? = null
+    internal var pendingEndOfferEpisode: Channel? = null
     internal val upNextTickRunnable = object : Runnable {
         override fun run() {
             if (upNextActive) {
-                // The countdown is time-to-advance, not wall-clock: it must not keep running
+                // Manual-only offers have no countdown tick; a stale post must not press them.
+                if (upNextCountdown <= 0) return
+                // The countdown is time-to-act, not wall-clock: it must not keep running
                 // while the player is paused (the viewer paused to read the offer, not to
                 // skip it) or the app sits in the background (onPause removes the tick
                 // outright; this guard also covers a pause mid-window without leaving the
-                // app). Re-post without decrementing so unpausing picks the countdown up
-                // exactly where it stopped.
-                if (!playerManager.isPlaying) {
+                // app). STATE_ENDED is the one non-playing state it keeps running in: at
+                // that point waiting is the offer's whole job.
+                if (!playerManager.isPlaying && playerManager.playbackState != Player.STATE_ENDED) {
                     mainHandler.postDelayed(this, 1000)
                     return
                 }
                 upNextCountdown--
-                updateUpNextOverlay()
+                updateEndOfferText()
                 if (upNextCountdown <= 0) {
-                    executeUpNextAdvance()
+                    executeEndOffer()
                 } else {
                     mainHandler.postDelayed(this, 1000)
                 }
@@ -1352,13 +1370,16 @@ class MainActivity : AppCompatActivity() {
         internal const val REQUEST_PICK_M3U = 2003
         private const val EDGE_SWIPE_ZONE_DP = 24f
         private const val EDGE_SWIPE_THRESHOLD_DP = 64f
-        /** How long the end-of-episode offer counts down before the next episode begins, and
-         *  therefore how early it appears when nothing else owns the end zone (with no
-         *  credits segment the pill shows this many seconds before the end). Also the
-         *  countdown after Skip Credits seeks to the end. 15s is enough to read the next
-         *  episode's marker and hit the pill, or back out, without parking on the closing
-         *  frame for long. The end zone's own pill carries it - see checkUpNextTrigger. */
+        /** How long "Play Next Episode" counts down when the fallback raises it because the
+         *  episode has no end-credits marker. It also appears this many seconds before the
+         *  real end, so the viewer can press it or back out without parking on the closing
+         *  frame. See checkEndOfferTrigger. */
         internal const val UP_NEXT_COUNTDOWN_SECONDS = 15
+        /** How long the merged end offer waits when an end-credits marker raised it, or when
+         *  "Skip Credits" appears after the actual end. It pauses with the picture and, on
+         *  expiry, seeks past the credits and starts the next episode or returns to the
+         *  poster. */
+        internal const val CREDITS_AUTO_SKIP_SECONDS = 30
     }
 
     /** Resume fraction per card id, refreshed when VOD content is built and after playback.
@@ -1464,7 +1485,7 @@ class MainActivity : AppCompatActivity() {
         override fun run() {
             if (playerManager.isPlaying) {
                 updateProgress()
-                checkUpNextTrigger()
+                checkEndOfferTrigger()
                 tickPlayerEpgClock()
                 mainHandler.postDelayed(this, 1000)
             }
@@ -2274,6 +2295,8 @@ class MainActivity : AppCompatActivity() {
             mainHandler.removeCallbacks(upNextTickRunnable)
             mainHandler.postDelayed(upNextTickRunnable, 1000)
         }
+        // The OCR fallback stopped rescheduling while the activity was not RESUMED.
+        if (isPlayerVisible && !upNextActive && !upNextDismissed) startCreditsTextWatch()
     }
 
     /**
@@ -2325,6 +2348,8 @@ class MainActivity : AppCompatActivity() {
                 // The Up Next countdown pauses too - otherwise the 15s window could elapse
                 // while the app is behind Home and start the next episode out of nowhere.
                 mainHandler.removeCallbacks(upNextTickRunnable)
+                // Same for the OCR sampler: no frame copies or recognition behind Home.
+                stopCreditsTextWatch()
                 // After the pause, so it reports the paused state: the play is still open
                 // (onResume resumes it), but the server's resume point should already be
                 // current if the process is killed while backgrounded and no stop ever lands.
@@ -2455,6 +2480,8 @@ class MainActivity : AppCompatActivity() {
         qrManager.stop()
         displayFrameRateController?.release()
         displayFrameRateController = null
+        closeCreditsTextWatch()
+        epgQrReceived = null
         playerManager.release()
         if (::sleepTimer.isInitialized) sleepTimer.stop()
         if (::castManager.isInitialized) castManager.release()
@@ -3122,9 +3149,9 @@ class MainActivity : AppCompatActivity() {
         // also perform whatever that direction would otherwise do, same as it not also
         // clicking the button it lands focus on. Skipped while the side menu is open -
         // the drawer is the only chrome on screen and it must not pop the bottom bar
-        // over itself - and while the Up Next pill is up: showControls() takes that pill
-        // down (they share the corner), so consuming the key here stole the D-pad before it
-        // could press the pill.
+        // over itself - and while the end pill is up: showControls() takes that pill down
+        // (they share the corner), so consuming the key here stole the D-pad before it could
+        // press the pill.
         val isDirectionalKey = keyCode in intArrayOf(
             android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_DPAD_DOWN,
             android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
@@ -3134,7 +3161,7 @@ class MainActivity : AppCompatActivity() {
         // wherever focus went - the controls bar can clear focus entirely as it auto-hides,
         // which left OK re-opening the bar instead of skipping. Press the pill directly
         // unless the viewer is deliberately inside the controls bar (then OK belongs to
-        // whatever they walked to). The Up Next pill is the same offer, same corner.
+        // whatever they walked to). The merged end pill is the same offer, same corner.
         if (isPlayerVisible && !isPlayerSideMenuOpen() &&
             (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
                 keyCode == android.view.KeyEvent.KEYCODE_ENTER) &&
@@ -3142,10 +3169,6 @@ class MainActivity : AppCompatActivity() {
         ) {
             if (binding.btnSkipSegment.visibility == View.VISIBLE) {
                 binding.btnSkipSegment.performClick()
-                return true
-            }
-            if (upNextActive) {
-                binding.upNextOverlay.performClick()
                 return true
             }
         }

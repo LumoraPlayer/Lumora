@@ -7,6 +7,11 @@
     <string name="sett_add_epg_source_title">Add EPG Source</string>
     <string name="sett_enter_url">Enter a URL</string>
     <string name="sett_epg_source_added">EPG source added — downloading guide</string>
+    <string name="sett_epg_source_add_failed">Couldn\'t add EPG source</string>
+    <string name="sett_epg_add_via_qr">Add via QR code</string>
+    <string name="sett_epg_qr_hint">Scan this with your phone to type the EPG address there</string>
+    <string name="sett_epg_qr_waiting">Waiting for your phone…</string>
+    <string name="sett_epg_qr_failed">Couldn\'t start the QR code - check this device\'s Wi-Fi</string>
 
     <!-- MainActivitySettings.kt - Jellyfin Quick Connect status -->
     <string name="sett_starting">Starting…</string>

@@ -270,6 +270,12 @@ dependencies {
     // QR code generation (ZXing)
     implementation("com.google.zxing:core:3.5.3")
 
+    // On-device OCR for the end-of-item "no credits marker" fallback. Bundled (com.google.mlkit,
+    // not play-services-mlkit) on purpose: Fire TV sticks have no Google Play Services, and the
+    // detector must work offline. Latin model only - non-Latin credits simply miss this early
+    // offer and keep the existing end-of-playback fallback.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 

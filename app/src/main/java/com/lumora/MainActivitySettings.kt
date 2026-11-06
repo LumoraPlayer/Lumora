@@ -284,44 +284,171 @@ internal fun isShareType(type: String?): Boolean = type == "smb" || type == "web
 internal fun isCatalogueProviderType(type: String?): Boolean =
     type == "m3u" || type == "xtream" || type == "stalker"
 
-internal fun MainActivity.showAddEpgSourceDialog() {
-    val input = EditText(this).apply {
-        hint = getString(R.string.sett_epg_source_url_hint)
-        inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+/** The fallback name for a source the user did not name. */
+internal fun defaultEpgSourceName(): String =
+    "EPG " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+
+/** Persists one EPG source and starts its first download. Shared by the manual form and the
+ *  phone QR flow, which can arrive while the dialog that started it is still settling. */
+internal fun MainActivity.addEpgSource(name: String, url: String) {
+    val cleanUrl = url.trim()
+    if (cleanUrl.isBlank()) return
+    scope.launch {
+        val saved = runCatching {
+            database.epgSourceDao().insert(
+                EpgSourceEntity(
+                    id = java.util.UUID.randomUUID().toString(),
+                    name = name.trim().ifBlank { defaultEpgSourceName() },
+                    url = cleanUrl
+                )
+            )
+        }.isSuccess
+        if (!saved) {
+            Toast.makeText(this@addEpgSource, getString(R.string.sett_epg_source_add_failed), Toast.LENGTH_SHORT).show()
+            return@launch
+        }
+        // Fetch it now rather than leaving the new source dark until the next 6h periodic
+        // run - adding a source and seeing no guide for hours reads as broken.
+        com.lumora.data.sync.EpgSyncWorker.enqueue(this@addEpgSource)
+        Toast.makeText(this@addEpgSource, getString(R.string.sett_epg_source_added), Toast.LENGTH_SHORT).show()
     }
+}
+
+internal fun MainActivity.showAddEpgSourceDialog() {
     val nameInput = EditText(this).apply {
         hint = getString(R.string.sett_epg_source_name_hint)
+        // CLASS_TEXT matters: a bare VARIATION_URI made some TV keyboards open in a mode
+        // that accepted nothing, which read as the Add button doing nothing.
         inputType = android.text.InputType.TYPE_CLASS_TEXT
     }
+    val urlInput = EditText(this).apply {
+        hint = getString(R.string.sett_epg_source_url_hint)
+        inputType = android.text.InputType.TYPE_CLASS_TEXT or
+            android.text.InputType.TYPE_TEXT_VARIATION_URI
+    }
+    val qrButton = Button(this).apply {
+        text = getString(R.string.sett_epg_add_via_qr)
+        isAllCaps = false
+    }
+    val qrImage = ImageView(this).apply {
+        visibility = View.GONE
+        adjustViewBounds = true
+        scaleType = ImageView.ScaleType.FIT_CENTER
+    }
+    val qrStatus = TextView(this).apply {
+        visibility = View.GONE
+        setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.text_secondary))
+        textSize = 14f
+    }
+    val gap = (12 * resources.displayMetrics.density).toInt()
+    val qrSize = (220 * resources.displayMetrics.density).toInt()
     val layout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(40, 20, 40, 20)
-        addView(nameInput)
-        addView(input)
+        addView(nameInput, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        addView(urlInput, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = gap })
+        addView(qrButton, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = gap })
+        addView(qrImage, LinearLayout.LayoutParams(qrSize, qrSize).apply {
+            topMargin = gap
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+        })
+        addView(qrStatus, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (gap / 2) })
     }
-    LumoraDialog.Builder(this)
+
+    val dialog = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.sett_add_epg_source_title))
         .setView(layout)
-        .setPositiveButton(getString(R.string.add)) { _, _ ->
-            val name = nameInput.text.toString().trim().ifBlank { "EPG ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}" }
-            val url = input.text.toString().trim()
-            if (url.isBlank()) { Toast.makeText(this, getString(R.string.sett_enter_url), Toast.LENGTH_SHORT).show(); return@setPositiveButton }
-            scope.launch {
-                database.epgSourceDao().insert(
-                    EpgSourceEntity(
-                        id = java.util.UUID.randomUUID().toString(),
-                        name = name,
-                        url = url
-                    )
-                )
-                // Fetch it now rather than leaving the new source dark until the next 6h
-                // periodic run — adding a source and seeing no guide for hours reads as broken.
-                com.lumora.data.sync.EpgSyncWorker.enqueue(this@showAddEpgSourceDialog)
-                Toast.makeText(this@showAddEpgSourceDialog, getString(R.string.sett_epg_source_added), Toast.LENGTH_SHORT).show()
+        .setPositiveButton(getString(R.string.add), null)
+        .setNegativeButton(getString(R.string.cancel), null)
+        .create()
+
+    var qrSession: QrPairingManager.PairingResult? = null
+    var startedQr = false
+
+    // The phone's submission arrives through the one QrPairingManager the Settings screen
+    // owns; this hook is the part that knows which dialog asked for it.
+    epgQrReceived = { form ->
+        val url = form["epgUrl"]?.trim().orEmpty()
+        if (url.isNotBlank()) {
+            addEpgSource(form["name"]?.trim().orEmpty(), url)
+            qrManager.stop()
+            dialog.dismiss()
+        }
+    }
+
+    qrButton.setOnClickListener {
+        if (qrSession != null) return@setOnClickListener
+        startedQr = true
+        qrButton.isEnabled = false
+        qrStatus.visibility = View.VISIBLE
+        qrStatus.text = getString(R.string.sett_starting_server)
+        qrImage.visibility = View.GONE
+        scope.launch {
+            val result = qrManager.start(purpose = "epg")
+            if (isFinishing || isDestroyed) return@launch
+            if (!dialog.isShowing) {
+                qrManager.stop()
+                return@launch
+            }
+            if (result == null) {
+                qrButton.isEnabled = true
+                qrStatus.text = getString(R.string.sett_epg_qr_failed)
+                return@launch
+            }
+            qrSession = result
+            qrImage.setImageBitmap(result.qrBitmap)
+            qrImage.visibility = View.VISIBLE
+            qrButton.visibility = View.GONE
+            // Same lifetime line the provider QR shows, so an expired code does not sit
+            // there pretending to still be scannable.
+            while (qrSession === result && dialog.isShowing) {
+                val remaining = (result.expiresAtMs - System.currentTimeMillis()) / 1000
+                if (remaining <= 0) {
+                    qrStatus.text = getString(R.string.sett_epg_qr_failed)
+                    qrImage.visibility = View.GONE
+                    qrButton.visibility = View.VISIBLE
+                    qrButton.isEnabled = true
+                    qrSession = null
+                    qrManager.stop()
+                    break
+                }
+                qrStatus.text = getString(R.string.sett_epg_qr_hint) + "\n" +
+                    getString(R.string.sett_expires_in, remaining / 60, remaining % 60)
+                delay(1000)
             }
         }
-        .setNegativeButton(getString(R.string.cancel), null)
-        .show()
+    }
+
+    // Validate before dismissing: LumoraDialog's stock button listener dismisses even when
+    // the form is rejected, which is exactly the "I pressed Add and nothing happened" path.
+    dialog.getButton(LumoraDialog.BUTTON_POSITIVE).setOnClickListener {
+        val url = urlInput.text.toString().trim()
+        if (url.isBlank()) {
+            Toast.makeText(this, getString(R.string.sett_enter_url), Toast.LENGTH_SHORT).show()
+            urlInput.requestFocus()
+            return@setOnClickListener
+        }
+        addEpgSource(nameInput.text.toString(), url)
+        qrManager.stop()
+        dialog.dismiss()
+    }
+    dialog.setOnDismissListener {
+        epgQrReceived = null
+        if (startedQr) qrManager.stop()
+    }
+    dialog.show()
 }
 
 // ── Jellyfin Quick Connect ─────────────────────
@@ -1577,6 +1704,21 @@ internal fun MainActivity.showProviderSettings() {
         runOnUiThread {
             qrStatus.text = getString(R.string.sett_provider_received)
             when (type) {
+                "epg" -> {
+                    val url = form["epgUrl"]?.trim().orEmpty()
+                    val handler = epgQrReceived
+                    if (handler != null) {
+                        handler(form)
+                    } else if (url.isNotBlank()) {
+                        // The add dialog was closed between the phone scanning and the POST
+                        // landing. The source still belongs to the user, so keep it.
+                        addEpgSource(form["name"]?.trim().orEmpty(), url)
+                    }
+                    // Reset the provider pane's QR state too: an EPG session used the same
+                    // one-at-a-time server, and leaving serverRunning set would make the next
+                    // provider Show QR button refuse to start.
+                    stopQrServer()
+                }
                 "stremio" -> {
                     // The phone submitted an addon link. The Plugins pane's QR dialog owns
                     // the install while it is open (its list has to refresh); a link that
@@ -3317,6 +3459,7 @@ internal fun MainActivity.showProviderSettings() {
         refreshPluginNavRows = null
         refreshPluginList = null
         stremioQrReceived = null
+        epgQrReceived = null
         closeOpenPluginPage = null
         openPluginId = null
         liveDiscoveryStatusView = null

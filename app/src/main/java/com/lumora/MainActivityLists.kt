@@ -2100,39 +2100,51 @@ internal fun MainActivity.showEpgSourceListDialog() {
             return@launch
         }
         val names = sources.map { "${it.name} (${it.url.take(40)}...)" }.toTypedArray()
-        LumoraDialog.Builder(this@showEpgSourceListDialog)
+        val dialog = LumoraDialog.Builder(this@showEpgSourceListDialog)
             .setTitle(getString(R.string.epg_sources))
             .setItems(names) { _, which ->
                 val source = sources[which]
-                LumoraDialog.Builder(this@showEpgSourceListDialog)
-                    .setTitle(getString(R.string.list_delete_source))
-                    .setMessage(getString(R.string.list_remove_source, source.name))
-                    .setPositiveButton(getString(R.string.list_delete)) { _, _ ->
-                        scope.launch {
-                            // Stop a sync that may still be writing this source's rows after
-                            // the delete below.
-                            com.lumora.data.sync.EpgSyncWorker.cancel(this@showEpgSourceListDialog)
-                            // The source's guide rows live under guideKey suffix
-                            // "xmltv:<sourceId>"; deleting only the source row left them
-                            // feeding the guide until they expired.
-                            val sourceKey = "xmltv:${source.id}"
-                            val dao = database.epgProgramDao()
-                            dao.deleteForSource(sourceKey)
-                            dao.deleteGuideStateForSource(sourceKey)
-                            database.epgSourceDao().delete(source)
+                // setItems() dismisses the list after this callback, so post the confirmation
+                // or it can be layered underneath the list's window on some TV ROMs.
+                mainHandler.post {
+                    LumoraDialog.Builder(this@showEpgSourceListDialog)
+                        .setTitle(getString(R.string.list_delete_source))
+                        .setMessage(getString(R.string.list_remove_source, source.name))
+                        .setPositiveButton(getString(R.string.list_delete)) { _, _ ->
+                            scope.launch {
+                                // Stop a sync that may still be writing this source's rows after
+                                // the delete below.
+                                com.lumora.data.sync.EpgSyncWorker.cancel(this@showEpgSourceListDialog)
+                                // The source's guide rows live under guideKey suffix
+                                // "xmltv:<sourceId>"; deleting only the source row left them
+                                // feeding the guide until they expired.
+                                val sourceKey = "xmltv:${source.id}"
+                                val dao = database.epgProgramDao()
+                                dao.deleteForSource(sourceKey)
+                                dao.deleteGuideStateForSource(sourceKey)
+                                database.epgSourceDao().delete(source)
+                            }
+                            Toast.makeText(this@showEpgSourceListDialog, getString(R.string.list_epg_source_deleted), Toast.LENGTH_SHORT).show()
                         }
-                        Toast.makeText(this@showEpgSourceListDialog, getString(R.string.list_epg_source_deleted), Toast.LENGTH_SHORT).show()
-                    }
-                    .setNegativeButton(getString(R.string.cancel), null)
-                    .show()
+                        .setNegativeButton(getString(R.string.cancel), null)
+                        .show()
+                }
             }
-            .setPositiveButton(getString(R.string.add), { _, _ -> showAddEpgSourceDialog() })
+            .setPositiveButton(getString(R.string.add), null)
             .setNeutralButton(getString(R.string.list_refresh_now)) { _, _ ->
                 com.lumora.data.sync.EpgSyncWorker.enqueue(this@showEpgSourceListDialog)
                 Toast.makeText(this@showEpgSourceListDialog, getString(R.string.list_downloading_epg), Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(getString(R.string.close), null)
-            .show()
+            .create()
+        // Let this list go before the add form opens. Showing a third dialog from inside the
+        // button listener left the new one underneath on some TV ROMs, which is the "Add does
+        // nothing" report; a post guarantees the list's window is gone first.
+        dialog.getButton(LumoraDialog.BUTTON_POSITIVE).setOnClickListener {
+            dialog.dismiss()
+            mainHandler.post { showAddEpgSourceDialog() }
+        }
+        dialog.show()
     }
 }
 

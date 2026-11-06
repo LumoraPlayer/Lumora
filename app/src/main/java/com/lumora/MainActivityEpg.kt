@@ -641,77 +641,153 @@ internal fun MainActivity.clearDigitBuffer() {
     digitNotFoundRunnable = null
 }
 
-// ── Up Next / Auto-Advance ────────────────────
-internal fun MainActivity.checkUpNextTrigger() {
+// ── End-of-item offer (merged Skip Credits / Play Next Episode) ──
+internal fun MainActivity.checkEndOfferTrigger() {
     if (upNextActive) return // already showing
     if (upNextDismissed) return // refused for this episode - see the field's kdoc
+    if (pendingEndOfferAction != null) return // pressed; waiting for STATE_ENDED
     if (!playerManager.isPlaying) return
-    if (currentEpisodeQueueIndex < 0) return // not in an episode queue
-    val nextIdx = currentEpisodeQueueIndex + 1
-    if (nextIdx !in currentEpisodeQueue.indices) return // no next episode
     val duration = playerManager.duration
     val position = playerManager.currentPosition
     if (duration <= 0) return
-    // A credits segment means the end zone already has its one offer: the Skip Credits pill
-    // (MainActivitySkip), which moves straight to the next episode when the queue has one.
-    // The countdown stands down while that segment owns the end zone - two offers in the same
-    // corner on the same minute is what this exists to prevent. But only one that actually
-    // owns it: IntroDB can answer with a null start (stored as 0) or, after a wrong-title
-    // match, a start past the duration, and neither ever raises a pill in the end zone, so
-    // suppressing the countdown for those swallowed the episode's only offer. The type
-    // compare is case-insensitive, like the pill's own label lookup.
-    val endZoneCredits = currentSkipSegments.any { segment ->
-        segment.type.equals("credits", ignoreCase = true) &&
-            segment.startMs > 0 &&
-            segment.startMs < duration &&
-            segment.effectiveEndMs(duration) >= duration - MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L
-    }
-    if (endZoneCredits) return
-    if (duration - position > MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L) return // more than the countdown window left
-    upNextEpisode = currentEpisodeQueue[nextIdx]
-    showUpNextOverlay()
+    // An end-credits marker raises the offer from updateSkipSegmentUi as soon as the credits
+    // start; this fallback is only for an episode with no such marker.
+    if (currentSkipSegments.any { it.isEndCredits(duration) }) return
+    val next = nextEpisodeInQueue() ?: return
+    if (duration - position > MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L) return
+    showEndOffer(next, MainActivity.UP_NEXT_COUNTDOWN_SECONDS)
 }
 
-internal fun MainActivity.showUpNextOverlay() {
+/** The next playable episode after the one playing, or null outside a queue / at the end. */
+internal fun MainActivity.nextEpisodeInQueue(): Channel? =
+    currentEpisodeQueue.getOrNull(if (currentEpisodeQueueIndex >= 0) currentEpisodeQueueIndex + 1 else -1)
+
+/**
+ * Raises the one pill the end zone offers. [next] non-null means "Play Next Episode"; null
+ * means "Skip Credits", which seeks past the credits (when there are any) and returns to the
+ * title's poster. [seconds] is the auto-press delay: 15 for the no-credits next-episode
+ * window, 30 when an end-credits marker started the offer.
+ */
+internal fun MainActivity.showEndOffer(next: Channel?, seconds: Int) {
+    if (upNextActive || upNextDismissed) return
+    upNextEpisode = next
+    upNextCountdown = seconds
     upNextActive = true
-    upNextCountdown = MainActivity.UP_NEXT_COUNTDOWN_SECONDS
-    binding.upNextOverlay.text = upNextPillText()
+    binding.btnSkipSegment.text = endOfferPillText()
     // The pill shares the bottom-right corner with the controls bar's track buttons, and
     // showControls()/hideControls() treat the two as mutually exclusive - but at episode end
     // the bar can still be up. Take it down here or both render and its buttons compete with
     // the pill for the D-pad.
     binding.controlsOverlay.visibility = View.GONE
     mainHandler.removeCallbacks(hideControlsRunnable)
-    // The Skip pill is the end zone's other offer; a segment can arrive between ticks, so
-    // take it down now rather than leaving both in the corner until the next one.
-    binding.btnSkipSegment.visibility = View.GONE
+    // The end offer replaces the ordinary segment pill; an intro/recap marker can arrive
+    // between ticks, so clear it now rather than leaving two offers in the same corner.
     activeSkipSegment = null
-    binding.upNextOverlay.visibility = View.VISIBLE
+    val menuOpen = isPlayerSideMenuOpen()
+    binding.btnSkipSegment.visibility = if (menuOpen) View.GONE else View.VISIBLE
     // Focus only lands reliably once the view is laid out; a same-frame requestFocus after
     // flipping visibility can silently no-op, leaving focus on a control-bar button that is
-    // now GONE (or on the video), which is what made DOWN/UP walk the wrong tree.
-    binding.upNextOverlay.post { binding.upNextOverlay.requestFocus() }
-    mainHandler.post(upNextTickRunnable)
-}
-
-/** The pill's label: "Up Next · S01E06 · 27s", the episode marker when the episode states one. */
-private fun MainActivity.upNextPillText(): String {
-    val next = upNextEpisode
-    val marker = next?.episodeNum?.let { episode ->
-        val season = tileSeasonNumber(next)
-        if (season != null) "S%02dE%02d".format(season, episode) else "E%02d".format(episode)
+    // now GONE (or on the video), which is what made DOWN/UP walk the wrong tree. The side
+    // menu keeps its own focus; closeSideMenu shows the pill again.
+    if (!menuOpen) {
+        binding.btnSkipSegment.post { binding.btnSkipSegment.requestFocus() }
+        // Zero means "manual only": the offer is up but must not press itself. Text-detected
+        // credits use this, so a film's mid/post-credits scene is never skipped by a guess.
+        if (upNextCountdown > 0) mainHandler.post(upNextTickRunnable)
     }
-    return listOfNotNull(getString(R.string.up_next), marker, "${upNextCountdown}s").joinToString(" · ")
 }
 
-internal fun MainActivity.updateUpNextOverlay() {
-    binding.upNextOverlay.text = upNextPillText()
+/** "Play Next Episode · 15s" / "Skip Credits · 30s", or the bare label when manual-only. */
+private fun MainActivity.endOfferPillText(): String {
+    val label = if (upNextEpisode != null) getString(R.string.play_next_episode)
+        else getString(R.string.skip_credits)
+    return if (upNextCountdown > 0) "$label · ${upNextCountdown}s" else label
+}
+
+internal fun MainActivity.updateEndOfferText() {
+    binding.btnSkipSegment.text = endOfferPillText()
+}
+
+/** The single pill's click: the end offer acts, an intro/recap/preview segment skips. */
+internal fun MainActivity.onSkipPillClick() {
+    if (upNextActive) executeEndOffer() else skipActiveSegment()
 }
 
 /**
- * Moves playback to the episode after the one playing - the shared action behind the Up Next
- * countdown, the pill's own press, and pressing Skip Credits while the credits roll. False
- * when there is no next episode (last of the series, or playback outside a queue).
+ * Presses/expires the end offer. When the media has not ended yet the seek lands on its
+ * final second first, so STATE_ENDED can save the watched mark before the action runs.
+ */
+internal fun MainActivity.executeEndOffer() {
+    if (!upNextActive) return
+    val next = upNextEpisode
+    pendingEndOfferAction = if (next != null) EndOfferAction.PLAY_NEXT else EndOfferAction.BACK_TO_POSTER
+    pendingEndOfferEpisode = next
+    cancelUpNext()
+    val duration = playerManager.duration
+    if (playerManager.playbackState == Player.STATE_ENDED || duration <= 0) {
+        applyPendingEndOffer()
+    } else {
+        playerManager.seekTo((duration - 1000L).coerceAtLeast(0L))
+        // A paused player can land on the last frame without emitting STATE_ENDED. Give the
+        // seek a beat, then save and run the action anyway so the pill can never strand the
+        // viewer on a hidden offer. A live seek clears the pending action first, so this
+        // fallback is a no-op on the normal path.
+        mainHandler.postDelayed({
+            if (isPlayerVisible && pendingEndOfferAction != null) {
+                saveCurrentPlaybackPosition()
+                applyPendingEndOffer()
+            }
+        }, 1500)
+    }
+}
+
+/**
+ * Runs an end offer that was pressed before the media's end. STATE_ENDED calls this after
+ * saveCurrentPlaybackPosition, so the episode is marked watched before the next one starts
+ * or the poster returns.
+ */
+internal fun MainActivity.applyPendingEndOffer() {
+    val action = pendingEndOfferAction ?: return
+    val next = pendingEndOfferEpisode
+    pendingEndOfferAction = null
+    pendingEndOfferEpisode = null
+    when (action) {
+        EndOfferAction.PLAY_NEXT -> {
+            if (next == null) {
+                returnToPosterAfterPlayback()
+                return
+            }
+            upNextEpisode = next
+            if (!advanceToNextEpisode()) returnToPosterAfterPlayback()
+        }
+        EndOfferAction.BACK_TO_POSTER -> returnToPosterAfterPlayback()
+    }
+}
+
+/** hidePlayer() lands on the title's poster when detailReturnItem is set; make sure a VOD
+ *  play that started from somewhere else still has one. */
+internal fun MainActivity.returnToPosterAfterPlayback() {
+    val playing = nowPlayingChannel
+    if (detailReturnItem == null && playing != null) {
+        when (playing.mediaType) {
+            MediaType.SERIES -> currentSeriesVersionContext?.let { (series, group) ->
+                detailReturnItem = series
+                detailReturnGroup = group
+            }
+            MediaType.MOVIE -> {
+                detailReturnItem = playing
+                if (detailReturnGroup == null) detailReturnGroup = currentVersionGroup
+            }
+            else -> {}
+        }
+    }
+    hidePlayer()
+}
+
+/**
+ * Moves playback to the episode after the one playing - the shared action behind the end
+ * pill's "Play Next Episode" and the old auto-advance. False when there is no next episode
+ * (last of the series, or playback outside a queue).
  */
 internal fun MainActivity.advanceToNextEpisode(): Boolean {
     val idx = currentEpisodeQueueIndex
@@ -733,10 +809,6 @@ internal fun MainActivity.advanceToNextEpisode(): Boolean {
     return true
 }
 
-internal fun MainActivity.executeUpNextAdvance() {
-    if (!advanceToNextEpisode()) cancelUpNext()
-}
-
 /**
  * Back on the pill, and the controls bar taking over: the offer is refused for the episode
  * playing, not merely hidden. A plain [cancelUpNext] would have the trigger raise the pill
@@ -752,7 +824,7 @@ internal fun MainActivity.cancelUpNext() {
     cancelUpNextCountdown()
     upNextEpisode = null
     upNextActive = false
-    binding.upNextOverlay.visibility = View.GONE
+    binding.btnSkipSegment.visibility = View.GONE
 }
 
 internal fun MainActivity.cancelUpNextCountdown() {
@@ -1421,12 +1493,12 @@ internal fun MainActivity.showControls(takeFocus: Boolean = true) {
     // reveal path (center press, media key, gesture tap) dismisses the drawer
     // rather than stacking the bar over it.
     if (isPlayerSideMenuOpen()) closeSideMenu()
-    // Up Next shares the bottom-right corner with the controls bar's track buttons -
+    // The end pill shares the bottom-right corner with the controls bar's track buttons -
     // don't let both render at once. Showing the bar is a deliberate "I'm taking over"
     // act, so the offer is refused outright rather than only hidden: a plain hide had
-    // the trigger raise the card again a second later, which took the bar straight back
+    // the trigger raise the pill again a second later, which took the bar straight back
     // down and left no way to use the controls in the last minute. Refusing also clears
-    // upNextActive - leaving it set with the card gone kept every upNextActive guard in
+    // upNextActive - leaving it set with the pill gone kept every upNextActive guard in
     // onKeyDown active (the bar's keys dead) and parked the countdown.
     if (upNextActive) dismissUpNext()
     binding.controlsOverlay.visibility = View.VISIBLE
@@ -1460,10 +1532,10 @@ internal fun MainActivity.hideControls(force: Boolean = false) {
     if (!force && isPlayerEpgEngaged()) return
     closePlayerEpgDetails()
     binding.controlsOverlay.visibility = View.GONE
-    // Bar gone - Up Next can come back, and its countdown resumes where it paused
+    // Bar gone - the end pill can come back, and its countdown resumes where it paused
     // (removeCallbacks first so a resume can never double-schedule the tick).
     if (upNextActive) {
-        binding.upNextOverlay.visibility = View.VISIBLE
+        binding.btnSkipSegment.visibility = View.VISIBLE
         mainHandler.removeCallbacks(upNextTickRunnable)
         mainHandler.postDelayed(upNextTickRunnable, 1000)
     }
