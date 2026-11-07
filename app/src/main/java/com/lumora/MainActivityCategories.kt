@@ -254,14 +254,19 @@ internal fun MainActivity.toggleFavoriteChannel(channel: Channel) {
  *  grids). Live entries go through [toggleFavoriteChannel] so a favourited channel lands
  *  in the same set the Live TV Favourites category reads; films and series share the
  *  favourite-series set, which is what both the detail screen's star and the Home
- *  Favorites shelf use. */
-internal fun MainActivity.toggleFavoriteVodItem(item: Channel) {
-    if (item.id.isBlank()) return
+ *  Favorites shelf use.
+ *
+ *  [favoriteId] is the id the favourite is stored under, and defaults to the item's own.
+ *  The merged Series lead row passes the parent series id instead: an episode tile there
+ *  stands for a show the user starred as a whole, and toggling the episode's id would write
+ *  an id nothing else reads while leaving the star on the show untouched. */
+internal fun MainActivity.toggleFavoriteVodItem(item: Channel, favoriteId: String = item.id) {
+    if (favoriteId.isBlank()) return
     if (item.mediaType == MediaType.LIVE) {
         toggleFavoriteChannel(item)
         return
     }
-    val nowFavorite = FavoritesStore.toggleFavoriteSeries(this, item.id)
+    val nowFavorite = FavoritesStore.toggleFavoriteSeries(this, favoriteId)
     Toast.makeText(
         this,
         if (nowFavorite) getString(R.string.plug_added_to_favourites) else getString(R.string.plug_removed_from_favourites),
@@ -274,7 +279,7 @@ internal fun MainActivity.toggleFavoriteVodItem(item: Channel) {
         scope.launch {
             val client = jellyfinClientFor(item) ?: return@launch
             withContext(Dispatchers.IO) {
-                runCatching { client.setFavorite(com.lumora.util.rawMediaItemId(item.id), nowFavorite) }
+                runCatching { client.setFavorite(com.lumora.util.rawMediaItemId(favoriteId), nowFavorite) }
             }
         }
     }
@@ -2034,7 +2039,7 @@ internal fun MainActivity.openSideMenu() {
     // The drawer covers the bottom-right corner the end pill sits in - clear it and pause
     // its countdown so the menu opens over clean video, same as showControls does.
     if (upNextActive) {
-        binding.btnSkipSegment.visibility = View.GONE
+        hideSkipPill()
         mainHandler.removeCallbacks(upNextTickRunnable)
     }
     // The menu stays put until the user dismisses it - no auto-hide countdown.
@@ -2078,7 +2083,7 @@ internal fun MainActivity.closeSideMenu() {
     // exactly like hideControls does. The bottom bar stays hidden, so the video is
     // fullscreen again = "back to what's playing".
     if (upNextActive) {
-        binding.btnSkipSegment.visibility = View.VISIBLE
+        showSkipPill(cancel = true)
         mainHandler.removeCallbacks(upNextTickRunnable)
         mainHandler.postDelayed(upNextTickRunnable, 1000)
     }

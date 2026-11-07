@@ -642,11 +642,18 @@ internal fun MainActivity.clearDigitBuffer() {
 }
 
 // ── End-of-item offer (merged Skip Credits / Play Next Episode) ──
+/** A new stream can still report the previous item's near-end position/duration for a
+ *  moment. Do not interpret that as the new episode being at its end - the offer would
+ *  appear at the opening seconds, count down, and skip the episode that just started. */
+private const val END_OFFER_SETTLE_MS = 5_000L
+
 internal fun MainActivity.checkEndOfferTrigger() {
     if (upNextActive) return // already showing
     if (upNextDismissed) return // refused for this episode - see the field's kdoc
     if (pendingEndOfferAction != null) return // pressed; waiting for STATE_ENDED
     if (!playerManager.isPlaying) return
+    if (!currentStreamPlayed) return
+    if (System.currentTimeMillis() - currentStreamStartMs < END_OFFER_SETTLE_MS) return
     val duration = playerManager.duration
     val position = playerManager.currentPosition
     if (duration <= 0) return
@@ -654,8 +661,8 @@ internal fun MainActivity.checkEndOfferTrigger() {
     // start; this fallback is only for an episode with no such marker.
     if (currentSkipSegments.any { it.isEndCredits(duration) }) return
     val next = nextEpisodeInQueue() ?: return
-    if (duration - position > MainActivity.UP_NEXT_COUNTDOWN_SECONDS * 1000L) return
-    showEndOffer(next, MainActivity.UP_NEXT_COUNTDOWN_SECONDS)
+    if (duration - position > MainActivity.END_OFFER_LEAD_SECONDS * 1000L) return
+    showEndOffer(next, MainActivity.END_OFFER_LEAD_SECONDS)
 }
 
 /** The next playable episode after the one playing, or null outside a queue / at the end. */
@@ -665,8 +672,8 @@ internal fun MainActivity.nextEpisodeInQueue(): Channel? =
 /**
  * Raises the one pill the end zone offers. [next] non-null means "Play Next Episode"; null
  * means "Skip Credits", which seeks past the credits (when there are any) and returns to the
- * title's poster. [seconds] is the auto-press delay: 15 for the no-credits next-episode
- * window, 30 when an end-credits marker started the offer.
+ * title's poster. [seconds] is the auto-press delay: 45 for the no-credits pre-end window,
+ * 15 when the real end raised it, 30 when an end-credits marker started the offer.
  */
 internal fun MainActivity.showEndOffer(next: Channel?, seconds: Int) {
     if (upNextActive || upNextDismissed) return
@@ -684,7 +691,7 @@ internal fun MainActivity.showEndOffer(next: Channel?, seconds: Int) {
     // between ticks, so clear it now rather than leaving two offers in the same corner.
     activeSkipSegment = null
     val menuOpen = isPlayerSideMenuOpen()
-    binding.btnSkipSegment.visibility = if (menuOpen) View.GONE else View.VISIBLE
+    if (menuOpen) hideSkipPill() else showSkipPill(cancel = true)
     // Focus only lands reliably once the view is laid out; a same-frame requestFocus after
     // flipping visibility can silently no-op, leaving focus on a control-bar button that is
     // now GONE (or on the video), which is what made DOWN/UP walk the wrong tree. The side
@@ -824,7 +831,7 @@ internal fun MainActivity.cancelUpNext() {
     cancelUpNextCountdown()
     upNextEpisode = null
     upNextActive = false
-    binding.btnSkipSegment.visibility = View.GONE
+    hideSkipPill()
 }
 
 internal fun MainActivity.cancelUpNextCountdown() {
@@ -1535,7 +1542,7 @@ internal fun MainActivity.hideControls(force: Boolean = false) {
     // Bar gone - the end pill can come back, and its countdown resumes where it paused
     // (removeCallbacks first so a resume can never double-schedule the tick).
     if (upNextActive) {
-        binding.btnSkipSegment.visibility = View.VISIBLE
+        showSkipPill(cancel = true)
         mainHandler.removeCallbacks(upNextTickRunnable)
         mainHandler.postDelayed(upNextTickRunnable, 1000)
     }

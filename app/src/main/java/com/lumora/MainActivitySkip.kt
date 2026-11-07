@@ -92,7 +92,22 @@ internal fun MainActivity.resetSkipSegments() {
     // repeat across plays. Left set, the next episode's identical segment would match it and
     // the button would never be shown again.
     lastShownSkipSegmentKey = null
+    hideSkipPill()
+}
+
+/** Shows the pill row. [cancel] is true only for the merged end offer - an intro/recap
+ *  skip is a single action, while "Play Next Episode"/"Skip Credits" needs a way out that
+ *  does not stop the episode. */
+internal fun MainActivity.showSkipPill(cancel: Boolean) {
+    binding.skipPillRow.visibility = View.VISIBLE
+    binding.btnSkipSegment.visibility = View.VISIBLE
+    binding.btnSkipCancel.visibility = if (cancel) View.VISIBLE else View.GONE
+}
+
+internal fun MainActivity.hideSkipPill() {
+    binding.skipPillRow.visibility = View.GONE
     binding.btnSkipSegment.visibility = View.GONE
+    binding.btnSkipCancel.visibility = View.GONE
 }
 
 /** The once-a-second tick: works out whether playback is inside a segment right now and
@@ -111,12 +126,12 @@ internal fun MainActivity.updateSkipSegmentUi() {
     // save the watched mark. Do not raise a fresh offer during that gap.
     if (pendingEndOfferAction != null) return
     if (channel.mediaType == MediaType.LIVE || currentSkipSegments.isEmpty()) {
-        if (binding.btnSkipSegment.visibility != View.GONE) binding.btnSkipSegment.visibility = View.GONE
+        hideSkipPill()
         activeSkipSegment = null
         return
     }
     if (!prefs.getBoolean(PREF_SKIP_SEGMENTS, true)) {
-        binding.btnSkipSegment.visibility = View.GONE
+        hideSkipPill()
         activeSkipSegment = null
         return
     }
@@ -129,7 +144,7 @@ internal fun MainActivity.updateSkipSegmentUi() {
     }
     activeSkipSegment = segment
     if (segment == null) {
-        binding.btnSkipSegment.visibility = View.GONE
+        hideSkipPill()
         return
     }
     // End credits raise the merged offer immediately: "Play Next Episode" when the queue has
@@ -150,7 +165,7 @@ internal fun MainActivity.updateSkipSegmentUi() {
     }
     if (segment.key != lastShownSkipSegmentKey) {
         lastShownSkipSegmentKey = segment.key
-        binding.btnSkipSegment.visibility = View.VISIBLE
+        showSkipPill(cancel = false)
         // Highlight it for the press the moment it appears - the pill is the one thing to
         // press, and nothing ever moved focus onto it before, so OK did nothing until the
         // user found it with the D-pad. Deferred a frame: requestFocus on a view that just
@@ -214,7 +229,7 @@ private fun MainActivity.performSkipSegment(segment: SkipSegment) {
     if (!skipSegmentAllowedFor(channel, segment.type)) return
     dismissedSkipSegmentKey = segment.key
     activeSkipSegment = null
-    binding.btnSkipSegment.visibility = View.GONE
+    hideSkipPill()
     val duration = playerManager.duration
     val end = segment.effectiveEndMs(duration)
     // Stop a second short of the media's own end: landing exactly on it races the player's

@@ -649,6 +649,15 @@ internal suspend fun MainActivity.applyVodTabFilter(
     suspend fun commitInMemory(items: List<Channel>) {
         if (generation != categoryFilterGeneration) return
         if (items.isEmpty()) {
+            // The empty state is an overlay, not a replacement: whatever the previous row put
+            // in the recycler - usually the tab's shelves - was still painted underneath it,
+            // so "No titles in this category" floated over posters the row was supposed to
+            // have replaced. Clear the grid first, exactly as openVodGrid's empty branch does.
+            vodGridType = null
+            adapter.replaceAll(emptyList())
+            setGridSpan(recycler, adapter, topTarget)
+            recycler.adapter = adapter
+            recycler.scrollToPosition(0)
             showCategoryEmpty()
             return
         }
@@ -670,13 +679,21 @@ internal suspend fun MainActivity.applyVodTabFilter(
             return
         }
         FAVOURITES_CATEGORY_ID -> {
+            // The rail's count is favourites ∩ the tab's own list (buildCategoriesForActiveTab
+            // filters fullListForTab by the store), so the grid has to resolve from that same
+            // list. Paging the catalogue database instead meant a favourite the database does
+            // not return - a plugin/server title, a row ranked or filtered out - showed as
+            // "Favourites (1)" over an empty pane. The database page stays as the fallback for
+            // a favourite outside the bounded preview set.
             val ids = com.lumora.cache.FavoritesStore.getFavoriteSeriesIds(this)
-            val items = if (ids.isEmpty()) {
-                emptyList()
-            } else {
-                CatalogRepository.get(this).vodPageBySourceIds(
-                    type, ids, vodEnglishOnly(), vodHideAdult(), 0, 500
-                )
+            val items = fullListForTab(tab).filter { it.id in ids }.ifEmpty {
+                if (ids.isEmpty()) {
+                    emptyList()
+                } else {
+                    CatalogRepository.get(this).vodPageBySourceIds(
+                        type, ids, vodEnglishOnly(), vodHideAdult(), 0, 500
+                    )
+                }
             }
             rememberVodVersions(type, items)
             commitInMemory(items)

@@ -1168,12 +1168,6 @@ class MainActivity : AppCompatActivity() {
     /** Last segment the button was labelled for, so the label is only rewritten when the
      *  active segment actually changes rather than on every tick. */
     internal var lastShownSkipSegmentKey: String? = null
-    // ── OCR fallback when IntroDB has no credits marker ──
-    /** Created lazily on the first end-window sample; kept across plays and closed in onDestroy. */
-    internal var creditsTextDetector: com.lumora.skip.CreditsTextDetector? = null
-    /** Consecutive OCR samples that looked like a credits roll. Two in a row raise the pill. */
-    internal var creditsTextStreak = 0
-    internal val creditsTextScanRunnable = Runnable { checkForCreditsText() }
 
     /** The negotiated stream for whatever Jellyfin item is playing (see
      *  JellyfinProvider.resolveStream). Its PlaySessionId is what ties every progress report
@@ -1374,11 +1368,14 @@ class MainActivity : AppCompatActivity() {
         internal const val REQUEST_PICK_M3U = 2003
         private const val EDGE_SWIPE_ZONE_DP = 24f
         private const val EDGE_SWIPE_THRESHOLD_DP = 64f
-        /** How long "Play Next Episode" counts down when the fallback raises it because the
-         *  episode has no end-credits marker. It also appears this many seconds before the
-         *  real end, so the viewer can press it or back out without parking on the closing
-         *  frame. See checkEndOfferTrigger. */
+        /** How long "Play Next Episode" counts down when the fallback raises it at the
+         *  actual end, and the tolerance used to decide whether a credits marker owns the
+         *  end zone. See checkEndOfferTrigger. */
         internal const val UP_NEXT_COUNTDOWN_SECONDS = 15
+        /** How early the no-credits "Play Next Episode" fallback appears. The countdown
+         *  matches this so it reaches zero at the real end rather than skipping the last
+         *  half-minute. */
+        internal const val END_OFFER_LEAD_SECONDS = 45
         /** How long the merged end offer waits when an end-credits marker raised it, or when
          *  "Skip Credits" appears after the actual end. It pauses with the picture and, on
          *  expiry, seeks past the credits and starts the next episode or returns to the
@@ -1405,7 +1402,17 @@ class MainActivity : AppCompatActivity() {
         // and playItem's SERIES branch would open the episode itself as a dead detail page.
         // onHomeItemClick resolves an episode to its series (with direct-play fallback).
         onItemClick = { item -> onHomeItemClick(item) },
-        onItemLongClick = { item, _ -> toggleFavoriteVodItem(item) },
+        // The Series poster's lead shelf is the merged Continue Watching/Up Next/Favourites
+        // row. A hold there means "take this off the row", not "star it" - and because the
+        // row blends three lists under one label, the menu has to name the list the tile is
+        // actually in (see onMergedLeadLongClick) rather than always saying Continue Watching.
+        onItemLongClick = { item, shelf ->
+            if (shelf?.title == getString(R.string.category_continue_watching)) {
+                onMergedLeadLongClick(item)
+            } else {
+                toggleFavoriteVodItem(item)
+            }
+        },
         onPinClick = { shelf -> togglePinShelfCategory(1, shelf) },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenShelfCategory(1, shelf) },
         onSeeAllClick = { shelf -> showSeeAll(shelf) },
@@ -1413,7 +1420,16 @@ class MainActivity : AppCompatActivity() {
     ).apply { topRowFocusUpTargetId = R.id.tabSeries }
     internal val filmsShelfAdapter = ShelfAdapter(
         onItemClick = { item -> playItem(item) },
-        onItemLongClick = { item, _ -> toggleFavoriteVodItem(item) },
+        onItemLongClick = { item, shelf ->
+            // The Films lead shelf is Continue Watching alone, so a hold there is a removal
+            // (the same contract Home's Continue Watching shelf follows); every other Films
+            // shelf keeps the hold-to-favourite gesture.
+            if (shelf?.title == getString(R.string.category_continue_watching)) {
+                onContinueWatchingLongClick(item)
+            } else {
+                toggleFavoriteVodItem(item)
+            }
+        },
         onPinClick = { shelf -> togglePinShelfCategory(2, shelf) },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenShelfCategory(2, shelf) },
         onSeeAllClick = { shelf -> showSeeAll(shelf) },
@@ -1421,12 +1437,15 @@ class MainActivity : AppCompatActivity() {
     ).apply { topRowFocusUpTargetId = R.id.tabFilms }
     internal val homeShelfAdapter = ShelfAdapter(
         onItemClick = { item -> onHomeItemClick(item) },
-        // Hold on Home's Recently Played asks to take the channel off that row (the same
-        // contract the Continue Watching grid has); every other Home shelf keeps the
+        // Hold on Home's Continue Watching or Recently Played asks to take the title off that
+        // row (the same contract those grids have); every other Home shelf keeps the
         // hold-to-favourite gesture.
         onItemLongClick = { item, shelf ->
-            if (shelf?.title == getString(R.string.category_recently_played)) onRecentlyPlayedLongClick(item)
-            else toggleFavoriteVodItem(item)
+            when (shelf?.title) {
+                getString(R.string.category_recently_played) -> onRecentlyPlayedLongClick(item)
+                getString(R.string.category_continue_watching) -> onContinueWatchingLongClick(item)
+                else -> toggleFavoriteVodItem(item)
+            }
         },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenHomeShelf(shelf.title) },
         showPinButton = false,
@@ -2299,8 +2318,6 @@ class MainActivity : AppCompatActivity() {
             mainHandler.removeCallbacks(upNextTickRunnable)
             mainHandler.postDelayed(upNextTickRunnable, 1000)
         }
-        // The OCR fallback stopped rescheduling while the activity was not RESUMED.
-        if (isPlayerVisible && !upNextActive && !upNextDismissed) startCreditsTextWatch()
     }
 
     /**
@@ -2352,8 +2369,6 @@ class MainActivity : AppCompatActivity() {
                 // The Up Next countdown pauses too - otherwise the 15s window could elapse
                 // while the app is behind Home and start the next episode out of nowhere.
                 mainHandler.removeCallbacks(upNextTickRunnable)
-                // Same for the OCR sampler: no frame copies or recognition behind Home.
-                stopCreditsTextWatch()
                 // After the pause, so it reports the paused state: the play is still open
                 // (onResume resumes it), but the server's resume point should already be
                 // current if the process is killed while backgrounded and no stop ever lands.
@@ -2484,7 +2499,6 @@ class MainActivity : AppCompatActivity() {
         qrManager.stop()
         displayFrameRateController?.release()
         displayFrameRateController = null
-        closeCreditsTextWatch()
         epgQrReceived = null
         playerManager.release()
         if (::sleepTimer.isInitialized) sleepTimer.stop()
@@ -3171,7 +3185,9 @@ class MainActivity : AppCompatActivity() {
                 keyCode == android.view.KeyEvent.KEYCODE_ENTER) &&
             !binding.controlsOverlay.hasFocus()
         ) {
-            if (binding.btnSkipSegment.visibility == View.VISIBLE) {
+            if (binding.btnSkipSegment.visibility == View.VISIBLE &&
+                !binding.btnSkipCancel.hasFocus()
+            ) {
                 binding.btnSkipSegment.performClick()
                 return true
             }

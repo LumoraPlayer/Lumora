@@ -945,7 +945,7 @@ internal fun MainActivity.clearContinueWatching(onRebuilt: (() -> Unit)? = null)
     // an entry there needs the items that were on the row.
     val cleared = PlaybackPositionStore.getAllInProgress(this) + jellyfinResumeItems + plexResumeItems
     PlaybackPositionStore.clearAll(this)
-    traktRemovePlayback(cleared)
+    traktRemovePlayback(cleared, matchByTitle = true)
     clearUpNextMemo()
     // Grouped by the account each entry came from: with several media servers configured, an
     // item id only means anything to its own server, and clearing it against another would at
@@ -995,6 +995,11 @@ internal fun MainActivity.clearContinueWatching(onRebuilt: (() -> Unit)? = null)
  * immediately so the tile disappears on this frame rather than after the next catalog load.
  */
 internal fun MainActivity.removeFromContinueWatching(item: Channel) {
+    // The row's tile is a decorated copy ("Show · S01E02", series poster). Its stored
+    // snapshot is the original episode (or film) and is what Trakt's tmdb/season/episode
+    // match needs; resolving the decorated title could fail and leave the entry on Trakt,
+    // from where the next pull brought the tile straight back.
+    val removalSubject = PlaybackPositionStore.get(this, streamKey(item))?.channel ?: item
     PlaybackPositionStore.clear(this, streamKey(item))
     // One episode, several copies: the row shows one tile per episode (continueWatchingTiles),
     // but each copy keeps its own position entry - clearing just the tile's key lets the next
@@ -1003,13 +1008,13 @@ internal fun MainActivity.removeFromContinueWatching(item: Channel) {
     // clearSiblingCopyPositions), through the same shared watched keys a watched mark uses;
     // entries too old to yield a key (no episode number or resolvable series in the snapshot)
     // are matched by identical snapshot name.
-    val sharedKeys = watchedKeysFor(item)
+    val sharedKeys = watchedKeysFor(removalSubject)
     if (sharedKeys.isNotEmpty()) {
-        clearSiblingCopyPositions(item, sharedKeys)
+        clearSiblingCopyPositions(removalSubject, sharedKeys)
     } else {
         val ownKey = streamKey(item)
         for (sibling in PlaybackPositionStore.getAllInProgress(this)) {
-            if (sibling.mediaType != item.mediaType || sibling.name != item.name) continue
+            if (sibling.mediaType != removalSubject.mediaType || sibling.name != removalSubject.name) continue
             streamKey(sibling).takeIf { it != ownKey }?.let { PlaybackPositionStore.clear(this, it) }
         }
     }
@@ -1017,9 +1022,9 @@ internal fun MainActivity.removeFromContinueWatching(item: Channel) {
     // continueWatchingTiles), so the show's *other* in-progress episodes have to go too:
     // clearing only the named one left the same card to rebuild on the next frame under the
     // next episode's number, which reads as the removal having been ignored.
-    if (item.mediaType == MediaType.SERIES) {
-        val showId = item.categoryId?.takeIf { it.isNotBlank() }
-        val showTitle = normalizeTitleForGrouping(cleanVodTitle(item.name).substringBefore('·'))
+    if (removalSubject.mediaType == MediaType.SERIES) {
+        val showId = removalSubject.categoryId?.takeIf { it.isNotBlank() }
+        val showTitle = normalizeTitleForGrouping(cleanVodTitle(removalSubject.name).substringBefore('·'))
         val ownKey = streamKey(item)
         for ((key, snapshot) in PlaybackPositionStore.getAllWithSnapshots(this).toMap()) {
             if (key == ownKey || snapshot.mediaType != MediaType.SERIES) continue
@@ -1055,7 +1060,7 @@ internal fun MainActivity.removeFromContinueWatching(item: Channel) {
         val client = plexClients[serverId]
         if (client != null) scope.launch(Dispatchers.IO) { runCatching { client.clearUserData(rawId) } }
     }
-    traktRemovePlayback(listOf(item))
+    traktRemovePlayback(listOf(removalSubject), matchByTitle = true)
     refreshHomeShelvesIfShowing()
     refreshSeriesShelvesIfShowing()
     refreshFilmShelvesIfShowing()
@@ -1111,6 +1116,13 @@ internal fun MainActivity.onGridItemLongClick(item: Channel) {
         toggleFavoriteVodItem(item)
         return
     }
+    onContinueWatchingLongClick(item)
+}
+
+/** Hold on any Continue Watching tile - the grid or Home's shelf - offers the same
+ *  remove-this-title / clear-all menu. The Home shelf used to fall through to the favourite
+ *  toggle, so the removal action existed but was unreachable there. */
+internal fun MainActivity.onContinueWatchingLongClick(item: Channel) {
     LumoraDialog.Builder(this)
         .setTitle(item.name)
         .setItems(
@@ -1124,6 +1136,54 @@ internal fun MainActivity.onGridItemLongClick(item: Channel) {
                 1 -> confirmClearContinueWatching()
             }
         }
+        .show()
+}
+
+/**
+ * Hold on the Series poster's merged lead row - the one tile-per-show blend of what is
+ * part-watched, what is next up and what the user starred.
+ *
+ * A hold there has to name the list the tile is actually in. The row's label is always
+ * "Continue Watching", so every hold used to offer "Remove from Continue Watching" - under a
+ * poster that was only there because it had been starred, which removes nothing and reads as
+ * the control being broken. Every list the *show* is in is offered, in the row's own priority
+ * order (part-watched, next, starred), and the removal behind each one is the same one those
+ * grids run.
+ *
+ * Nothing to take it off falls back to the hold-to-favourite gesture the other shelves keep,
+ * so a tile in none of the three still does something predictable.
+ */
+internal fun MainActivity.onMergedLeadLongClick(item: Channel) {
+    val favIds = FavoritesStore.getFavoriteSeriesIds(this)
+    val parent = upNextSeriesId(item)
+    val actions = mutableListOf<Pair<String, () -> Unit>>()
+    // The favourites set is keyed by the *show*: an episode tile stands for its series, so
+    // the parent id is what has to be looked up (and, below, removed).
+    val isFavourite = parent in favIds || seriesList.any { it.id in favIds && sameShowAs(it, item) }
+    if (isFavourite) {
+        actions += (getString(R.string.list_fav_remove_item)) to {
+            toggleFavoriteVodItem(item, parent)
+        }
+    }
+    if (seriesUpNextItems().any { sameShowAs(it, item) }) {
+        actions += (getString(R.string.list_upnext_remove_item)) to {
+            removeFromUpNext(item)
+            Toast.makeText(this, R.string.list_upnext_removed, Toast.LENGTH_SHORT).show()
+        }
+    }
+    if (seriesContinueItems().any { sameShowAs(it, item) }) {
+        actions += (getString(R.string.list_cw_remove_item)) to {
+            removeFromContinueWatching(item)
+            Toast.makeText(this, R.string.list_cw_removed, Toast.LENGTH_SHORT).show()
+        }
+    }
+    if (actions.isEmpty()) {
+        toggleFavoriteVodItem(item, parent)
+        return
+    }
+    LumoraDialog.Builder(this)
+        .setTitle(item.name)
+        .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
         .show()
 }
 
@@ -1561,6 +1621,31 @@ internal fun MainActivity.restoreRemovedUpNext() {
  * its parent id, a top-level entry through its own. First tile in wins, which makes the
  * order above the priority order too.
  */
+/** The show a Series lead-row tile stands for - the key [seriesPosterLeadShelfItems]
+ *  dedupes on: the label's show half when the tile is decorated ("Show · S01E04"), the
+ *  parent id for an episode, the tile's own id for anything else. */
+internal fun leadRowShowKey(item: Channel): String {
+    val named = normalizeTitleForGrouping(cleanVodTitle(item.name).substringBefore('·'))
+    return named.ifBlank {
+        item.categoryId?.takeIf { it.isNotBlank() && item.episodeNum != null }
+            ?: item.id.ifBlank { item.url }
+    }
+}
+
+/** Whether two tiles stand for the same show, whatever order their labels were written in.
+ *
+ *  The name key alone misses a panel's marker-first labels ("S05E12 · Show", which keys as
+ *  the episode code) meeting a decorated one ("Show · S01E04"), and ids are provider-scoped,
+ *  so the same show reached through two sources never matches that way either. Same id, same
+ *  url, same parent series, or the same normalised name - any of those is enough. */
+internal fun sameShowAs(a: Channel, b: Channel): Boolean {
+    if (a.id.isNotBlank() && a.id == b.id) return true
+    if (a.url.isNotBlank() && a.url == b.url) return true
+    val parentA = upNextSeriesId(a)
+    if (parentA.isNotBlank() && parentA == upNextSeriesId(b)) return true
+    return leadRowShowKey(a) == leadRowShowKey(b)
+}
+
 internal fun MainActivity.seriesPosterLeadShelfItems(favourites: List<Channel>): List<Channel> {
     val claimed = HashSet<String>()
     return (seriesContinueItems() + seriesUpNextItems() + favourites).filter { item ->
@@ -1568,11 +1653,7 @@ internal fun MainActivity.seriesPosterLeadShelfItems(favourites: List<Channel>):
         // id: the same show reached through two providers carries two different series ids, so
         // an id-keyed dedupe let "Neagley S01E01" (part-watched) and "Neagley S01E02" (next up)
         // sit side by side on one row.
-        val named = normalizeTitleForGrouping(cleanVodTitle(item.name).substringBefore('·'))
-        val show = named.ifBlank {
-            item.categoryId?.takeIf { it.isNotBlank() && item.episodeNum != null }
-                ?: item.id.ifBlank { item.url }
-        }
+        val show = leadRowShowKey(item)
         show.isNotBlank() && claimed.add(show)
     }
 }

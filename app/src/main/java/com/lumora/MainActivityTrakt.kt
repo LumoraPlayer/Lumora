@@ -13,6 +13,7 @@ import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.pairing.QrPairingManager
 import com.lumora.util.cleanVodTitle
+import com.lumora.util.normalizeTitleForGrouping
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -225,12 +226,34 @@ private fun MainActivity.traktSend(
  * reach Trakt whether or not live reporting is currently switched on - entries can predate the
  * toggle being turned off, and silently skipping the delete is what left them stuck on Trakt.
  * Best effort and silent, like the rest of the Trakt path.
+ *
+ * [matchByTitle] adds a second, independent identity for the match. The tmdb-id path is exact
+ * but fragile: it needs a TMDB key, a title TMDB can find, a season number the panel agrees
+ * with and a resolvable series - miss any one of them and no delete is ever sent, which is how
+ * a title taken off the row here stayed on trakt.tv. The row being cleared is the same list
+ * Trakt feeds this app from, so the name it is labelled with is enough to recognise its own
+ * entry. Left off for the un-tick path, where only that one episode's resume point should go
+ * rather than every paused episode of the show.
  */
-internal fun MainActivity.traktRemovePlayback(items: List<Channel>) {
+internal fun MainActivity.traktRemovePlayback(
+    items: List<Channel>,
+    matchByTitle: Boolean = false
+) {
     if (items.isEmpty()) return
     if (!isTraktSignedIn()) return
     val subjects = items.filter { it.mediaType != MediaType.LIVE }
     if (subjects.isEmpty()) return
+    // (title key, year to compare or null). A show's episodes are matched by name alone: an
+    // episode tile's year is not the year Trakt stamps on the show, and requiring it would
+    // quietly miss every entry for a series.
+    val byTitle: List<Pair<String, String?>> = if (matchByTitle) {
+        subjects.mapNotNull { item ->
+            val key = continueWatchingTitleKey(item) ?: return@mapNotNull null
+            key to if (item.mediaType == MediaType.MOVIE) item.year else null
+        }
+    } else {
+        emptyList()
+    }
     scope.launch {
         val token = traktAccessToken() ?: return@launch
         // Read the list first: no resolution work is worth doing for an account with nothing
@@ -246,12 +269,42 @@ internal fun MainActivity.traktRemovePlayback(items: List<Channel>) {
             if (target in wanted) targets.add(target)
             if (targets.size == wanted.size) break
         }
-        if (targets.isEmpty()) return@launch
         for (entry in entries) {
-            if (entry.target in targets) traktClient.removePlayback(token, entry.id)
+            val matched = entry.target in targets ||
+                (byTitle.isNotEmpty() && entry.title.isNotBlank() &&
+                    byTitle.any { (key, year) ->
+                        key == normalizeTitleForGrouping(entry.title) &&
+                            (year == null || entry.year == null || year == entry.year.toString())
+                    })
+            if (matched) traktClient.removePlayback(token, entry.id)
         }
     }
 }
+
+/**
+ * The title a Continue Watching entry is known by on Trakt, or null when there is nothing to
+ * match on.
+ *
+ * Two decorations meet here: a tile on the row reads "Show · S01E02", while the episode
+ * snapshot stored behind it can read "S01E01 · Show". Whichever half carries the episode code
+ * is dropped, so both shapes reduce to the show's name - the form Trakt lists an entry under.
+ */
+private fun continueWatchingTitleKey(item: Channel): String? {
+    val cleaned = cleanVodTitle(item.name)
+    val separatorAt = cleaned.indexOf('·')
+    val title = when {
+        separatorAt <= 0 -> cleaned
+        CW_EPISODE_CODE.containsMatchIn(cleaned.substring(separatorAt + 1)) ->
+            cleaned.substring(0, separatorAt)
+        CW_EPISODE_CODE.containsMatchIn(cleaned.substring(0, separatorAt)) ->
+            cleaned.substring(separatorAt + 1)
+        else -> cleaned.substring(0, separatorAt)
+    }.trim()
+    if (title.isEmpty()) return null
+    return normalizeTitleForGrouping(title)
+}
+
+private val CW_EPISODE_CODE = Regex("""(?i)S\d{1,3}E\d{1,3}""")
 
 // ── Up Next ─────────────────────────────────────
 

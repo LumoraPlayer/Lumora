@@ -2878,31 +2878,70 @@
         </LinearLayout>
 
         <!-- The one pill for Skip Intro/Recap/Preview and the merged end-of-item offer
-             ("Play Next Episode" / "Skip Credits"). Transparent fill with an accent border,
-             so it reads as text over the picture without disappearing on bright scenes.
-             Bottom-end corner, above the controls bar - clear of the subtitles
-             (bottom-center) and the channel card (top-start). Focusable so a remote can
-             reach it; hidden (GONE) the rest of the time, which also takes it out of the
-             D-pad chain. -->
-        <Button
-            android:id="@+id/btnSkipSegment"
+             ("Play Next Episode" / "Skip Credits"). Transparent fill with a grey outline,
+             and white text drawn with a black stroke by OutlinedButton, so it stays legible
+             over bright scenes without putting a card over the picture. Bottom-end corner,
+             above the controls bar - clear of the subtitles (bottom-center) and the channel
+             card (top-start). Focusable so a remote can reach it; hidden (GONE) the rest of
+             the time, which also takes it out of the D-pad chain. -->
+        <LinearLayout
+            android:id="@+id/skipPillRow"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
             android:layout_marginEnd="24dp"
             android:layout_marginBottom="104dp"
-            android:background="@drawable/bg_outline_button"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingHorizontal="24dp"
-            android:stateListAnimator="@animator/focus_scale"
-            android:text="@string/skip_intro"
-            android:textAllCaps="false"
-            android:textColor="@color/text_primary"
-            android:textSize="@dimen/settings_text_body"
-            android:visibility="gone"
             android:clipChildren="false"
-    android:clipToPadding="false"/>
+            android:clipToPadding="false"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <com.lumora.view.OutlinedButton
+                android:id="@+id/btnSkipSegment"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:background="@drawable/bg_skip_pill"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="@font/inter_regular"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:nextFocusRight="@id/btnSkipCancel"
+                android:paddingHorizontal="14dp"
+                android:stateListAnimator="@animator/focus_scale"
+                android:text="@string/skip_intro"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/settings_text_body"
+                android:textStyle="normal"
+                android:visibility="gone"
+                android:clipChildren="false"
+                android:clipToPadding="false" />
+
+            <com.lumora.view.OutlinedButton
+                android:id="@+id/btnSkipCancel"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_skip_pill"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="@font/inter_regular"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:nextFocusLeft="@id/btnSkipSegment"
+                android:paddingHorizontal="14dp"
+                android:stateListAnimator="@animator/focus_scale"
+                android:text="@string/cancel"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/settings_text_body"
+                android:textStyle="normal"
+                android:visibility="gone"
+                android:clipChildren="false"
+                android:clipToPadding="false" />
+        </LinearLayout>
 
         <ProgressBar
             android:id="@+id/bufferingSpinner"

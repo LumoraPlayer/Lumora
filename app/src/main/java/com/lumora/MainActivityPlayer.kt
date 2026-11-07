@@ -160,6 +160,9 @@ internal fun MainActivity.setupPlayerControls() {
     binding.sideMenuCategoryList.layoutManager = LinearLayoutManager(this)
     binding.sideMenuCategoryList.adapter = sideMenuCategoryAdapter
     binding.btnSkipSegment.setOnClickListener { onSkipPillClick() }
+    // Only shown beside the merged end offer. Back already refuses it; this gives the
+    // remote a visible way out without stopping the episode.
+    binding.btnSkipCancel.setOnClickListener { if (upNextActive) dismissUpNext() }
     // Persisted subtitle text size (Small/Medium/Large, see MainActivitySubs) - applied at
     // setup so the very first subtitle this session renders at the chosen size.
     applySubtitleStyle()
@@ -867,9 +870,6 @@ internal fun MainActivity.showPlayerFor(
     startVodQualityWatch(channel)
     binding.playerAspectContainer.videoAspectRatio = 0f
     playerManager.setSurfaceView(binding.playerSurface)
-    // Text-detected end-of-item offer for titles with no IntroDB credits marker. It only
-    // samples in the final window and never auto-skips by itself (see MainActivityCreditsText).
-    startCreditsTextWatch()
     // No controls bar on start (it used to pop open on every play): it covered the opening
     // frames and fought the skip pill for focus the moment the pill appeared. The bar is one
     // press away - any direction reveals it (see onKeyDown's reveal branch) - and a media
@@ -2652,7 +2652,6 @@ internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
     mainHandler.removeCallbacks(longStallCheckRunnable)
     mainHandler.removeCallbacks(blackFrameCheckRunnable)
     mainHandler.removeCallbacks(vodQualityCheckRunnable)
-    stopCreditsTextWatch()
     // Full cancel, not just the tick: leaving upNextActive set with the pill gone made the
     // next player session's D-pad guards think an offer was on screen when none was, and
     // suppressed STATE_ENDED's auto-advance for it.
