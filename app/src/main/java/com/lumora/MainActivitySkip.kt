@@ -125,6 +125,19 @@ internal fun MainActivity.updateSkipSegmentUi() {
     // The pill was pressed/expired and the player is seeking to the end so STATE_ENDED can
     // save the watched mark. Do not raise a fresh offer during that gap.
     if (pendingEndOfferAction != null) return
+    // Nothing has played in THIS attempt yet, so position/duration can still be the previous
+    // item's near-end numbers - the stale window checkEndOfferTrigger() guards with
+    // END_OFFER_SETTLE_MS. A freshly fetched episode's credits marker would then "contain"
+    // that old end position and raise Play Next Episode during the opening seconds, and its
+    // countdown skips the episode that just started. The intro/recap pill has the same
+    // exposure: the previous item's position can sit inside the new episode's opener. Wait
+    // for READY: the segment attach (startSkipSegmentLookup) and the next progress tick
+    // re-run this once the stream is genuinely playing.
+    if (!currentStreamPlayed) {
+        hideSkipPill()
+        activeSkipSegment = null
+        return
+    }
     if (channel.mediaType == MediaType.LIVE || currentSkipSegments.isEmpty()) {
         hideSkipPill()
         activeSkipSegment = null

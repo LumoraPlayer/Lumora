@@ -434,6 +434,15 @@ internal fun MainActivity.setupPlayerControls() {
                     }
                     return@onPlaybackStateChanged
                 }
+                // STATE_ENDED can arrive a beat after this episode already handed playback to
+                // the next one: the seek-to-end fires it late, or the item being replaced
+                // reports it while the replacement loads. nowPlayingChannel is the new
+                // episode by then and the queue has been restored, so treating that "end" as
+                // this episode's would raise Play Next Episode over the new episode's opening
+                // seconds - and its countdown skips the episode. A stream this attempt never
+                // reached READY for did not finish an episode; the watched mark above is
+                // still saved, only the end zone is skipped.
+                if (!currentStreamPlayed) return@onPlaybackStateChanged
                 // A refused offer must not be second-guessed: Back means the episode ends
                 // here, with Next and Back left to the viewer - the next-episode entry saved
                 // above still keeps the series on the Continue Watching / Up Next shelves.
