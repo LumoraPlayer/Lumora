@@ -972,6 +972,8 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     val playButtonLabel = binding.detailPlayButtonLabel
     val favoriteButton = binding.detailFavoriteButton
     val favoriteIcon = binding.detailFavoriteIcon
+    val hideButton = binding.detailHideButton
+    val hideIcon = binding.detailHideIcon
     val versionsScroll = binding.detailVersionsScroll
     val versionsRow = binding.detailVersionsRow
     val moreLikeDivider = binding.detailMoreLikeDivider
@@ -1105,6 +1107,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // without a reset that tag stayed on the button when a *film* was opened next.
     playButtonLabel.text = getString(R.string.play)
     favoriteButton.visibility = View.GONE
+    hideButton.visibility = View.GONE
     downloadButton.visibility = View.GONE
     downloadButton.setOnClickListener(null)
     seasonScroll.visibility = View.GONE
@@ -1126,6 +1129,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // which is the "stuck on Play, can't reach the top" dead end.
     playButton.nextFocusUpId = binding.detailBackButton.id
     favoriteButton.nextFocusUpId = binding.detailBackButton.id
+    hideButton.nextFocusUpId = binding.detailBackButton.id
     downloadButton.nextFocusUpId = binding.detailBackButton.id
     binding.detailFindStreamButton.nextFocusUpId = binding.detailBackButton.id
     binding.detailTrailerButton.nextFocusUpId = binding.detailBackButton.id
@@ -1246,6 +1250,44 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 }
             }
             scope.launch { classifyAndShow() }
+        }
+    }
+
+    // Profile-level hide: this removes the title from the active viewer's catalogue only.
+    // Hidden titles are filtered from every list/search/continue-watching surface, and a
+    // series id also hides its episodes (they carry the series id as categoryId).
+    val profilesEnabled = com.lumora.data.ProfileStore.isEnabled(prefs)
+    hideButton.visibility = if (
+        profilesEnabled &&
+        com.lumora.data.ProfileStore.isHidableTitle(item) &&
+        item.id.isNotBlank()
+    ) {
+        View.VISIBLE
+    } else {
+        View.GONE
+    }
+    if (hideButton.visibility == View.VISIBLE) {
+        fun refreshHideIcon() {
+            val hidden = com.lumora.data.ProfileStore.isHiddenForActiveProfile(prefs, item)
+            hideIcon.alpha = if (hidden) 0.45f else 1f
+            hideIcon.contentDescription = getString(
+                if (hidden) R.string.sett_profile_show_title else R.string.sett_profile_hide_title
+            )
+        }
+        refreshHideIcon()
+        hideButton.setOnClickListener {
+            val hidden = com.lumora.data.ProfileStore.toggleHiddenItem(prefs, item)
+            Toast.makeText(
+                this,
+                getString(
+                    if (hidden) R.string.sett_profile_hidden_toast
+                    else R.string.sett_profile_shown_toast
+                ),
+                Toast.LENGTH_SHORT
+            ).show()
+            refreshHideIcon()
+            if (hidden) backOutOfContentDetail()
+            applyActiveProfileAndReload()
         }
     }
 
@@ -2392,6 +2434,10 @@ internal fun MainActivity.setupToolbar() {
     }
     binding.btnRefresh.setOnClickListener { promptProviderRefresh() }
     binding.btnSearch.setOnClickListener { showSearchDialog() }
+    // The active viewer's chip next to Refresh. Launch no longer asks "Who's watching?" -
+    // the last profile stays active and this is the deliberate way to switch.
+    binding.btnProfile.setOnClickListener { showProfilesDialog() }
+    renderProfileToolbarButton()
     // Hides the ingest narration, not the ingest. Reset by resetCatalogIngest() at the
     // start and end of every load, so the next one is visible again.
     binding.ingestHide.setOnClickListener { hideCatalogIngest() }

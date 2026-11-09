@@ -69,6 +69,10 @@ class BackupSettingsTest {
         assertEquals(SettingType.INT, BACKED_UP_SETTINGS["subtitle_text_size"])
         assertEquals(SettingType.INT, BACKED_UP_SETTINGS["av_offset_ms"])
         assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["update_checks_enabled"])
+        // Local profiles travel with the settings; a restored install keeps its viewers.
+        assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["user_profiles_enabled"])
+        assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["user_profiles_json"])
+        assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["user_profiles_active_id"])
         // The parental PIN is carried on purpose - see the allowlist's kdoc.
         assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["parental_pin"])
 

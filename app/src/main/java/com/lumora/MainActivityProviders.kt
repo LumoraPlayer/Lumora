@@ -173,11 +173,26 @@ internal fun MainActivity.updateSportsTabVisibility() {
 private fun MainActivity.nextVisibleTabAfter(after: View): Int {
     val row = listOf(
         binding.tabLive, binding.tabSeries, binding.tabFilms,
-        binding.tabHome, binding.tabDiscover, binding.btnSearch, binding.btnSettings
+        binding.tabHome, binding.tabDiscover, binding.tabDownloads, binding.btnSearch,
+        binding.btnSettings
     )
     val start = row.indexOf(after)
     if (start < 0) return after.id
     return row.drop(start + 1).firstOrNull { it.visibility == View.VISIBLE }?.id ?: after.id
+}
+
+/** The id of the last chrome tab actually on screen before [before] - the LEFT mirror of
+ *  [nextVisibleTabAfter]. Used for Home, whose left neighbour changes with simple mode and
+ *  with which browse tabs a provider/plugin setup leaves on screen. */
+private fun MainActivity.previousVisibleTabBefore(before: View): Int {
+    val row = listOf(
+        binding.tabLive, binding.tabSeries, binding.tabFilms,
+        binding.tabHome, binding.tabDiscover, binding.tabDownloads, binding.btnSearch,
+        binding.btnSettings
+    )
+    val start = row.indexOf(before)
+    if (start <= 0) return before.id
+    return row.take(start).lastOrNull { it.visibility == View.VISIBLE }?.id ?: before.id
 }
 
 /** Blanket show/hide of the scroller's browsing items - the tabs plus the Search pill.
@@ -243,6 +258,11 @@ internal fun MainActivity.updateChromeFocusChain() {
         else -> R.id.btnSearch
     }
     binding.btnSearch.nextFocusRightId = R.id.btnSettings
+    // Home sits between Films and Discover in the full row, but simple mode (and a
+    // provider/plugin change) can hide either neighbour. Re-resolve both sides from what
+    // is visible so LEFT from Home reaches Films, never the far end of the row.
+    binding.tabHome.nextFocusLeftId = previousVisibleTabBefore(binding.tabHome)
+    binding.tabHome.nextFocusRightId = nextVisibleTabAfter(binding.tabHome)
 }
 
 /** True when the search overlay has anything to walk: it searches the live, film and series
@@ -407,9 +427,12 @@ internal fun MainActivity.applySimpleModeUi() {
             binding.btnSearch.visibility =
                 if (hasSearchableCatalog()) View.VISIBLE else View.GONE
         }
-        // Back to the full-row chain: Live -> Series -> Films -> Home -> Discover.
-        binding.tabLive.nextFocusLeftId = R.id.tabDownloads
-        binding.tabLive.nextFocusRightId = R.id.tabSeries
+        // Back to the full-row chain. Live's LEFT has no visible tab before it on TV
+        // (Downloads is phone-only), so resolve it from what is actually on screen rather
+        // than from the XML default; Home's own links are refreshed in
+        // updateChromeFocusChain(), which runs next.
+        binding.tabLive.nextFocusLeftId = previousVisibleTabBefore(binding.tabLive)
+        binding.tabLive.nextFocusRightId = nextVisibleTabAfter(binding.tabLive)
     }
     updateSideMenuSearchVisibility()
     updateChromeFocusChain()

@@ -68,9 +68,11 @@ internal fun MainActivity.vodMediaType(tab: Int): MediaType? = when (tab) {
     else -> null
 }
 
-internal fun MainActivity.vodEnglishOnly(): Boolean = prefs.getBoolean(PREF_HIDE_NON_ENGLISH, true)
+internal fun MainActivity.vodEnglishOnly(): Boolean =
+    com.lumora.data.ProfileStore.effectiveHideNonEnglish(prefs)
 
-internal fun MainActivity.vodHideAdult(): Boolean = prefs.getBoolean(PREF_HIDE_ADULT, true)
+internal fun MainActivity.vodHideAdult(): Boolean =
+    com.lumora.data.ProfileStore.effectiveHideAdult(prefs)
 
 /** The provider-less channels that still live in memory: anime/plugin entries. They are a
  *  few dozen at most, and their category rows are built from the plugin's own sections. */
@@ -355,8 +357,9 @@ private suspend fun MainActivity.buildVodCacheKey(repo: CatalogRepository): Stri
     append('|')
     append(repo.vodVersionKey(MediaType.SERIES))
     append('|')
-    append(prefs.getBoolean(PREF_HIDE_NON_ENGLISH, true))
-    append(prefs.getBoolean(PREF_HIDE_ADULT, true))
+    append(vodEnglishOnly())
+    append(vodHideAdult())
+    append(com.lumora.data.ProfileStore.filterSignature(prefs))
     append(prefs.getBoolean(PREF_CATEGORIZE_VOD, true))
     append(isVodDisabled())
     append(prefs.getBoolean(PREF_GROUP_CHANNELS, true))
@@ -387,7 +390,9 @@ private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType, rowsOnly
     val englishOnly = vodEnglishOnly()
     val hideAdult = vodHideAdult()
     val categorize = prefs.getBoolean(PREF_CATEGORIZE_VOD, true)
+    val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
     val anime = inMemoryVodChannels()
+        .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
     val rows = buildVodRows(tab, type, englishOnly, hideAdult, categorize, anime)
     // First pass: the category rows are what the sidebar and the tab's filter need, and
     // they land before the per-category shelf queries that follow (see buildVodContent).
@@ -395,10 +400,12 @@ private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType, rowsOnly
     val catalogShelves = buildVodShelves(rows.rows, type, englishOnly, hideAdult, anime)
 
     val newest = repo.vodPage(type, null, englishOnly, hideAdult, 0, VOD_SHELF_PREVIEW)
+        .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
     val favoriteSeries = if (tab == 1) {
         val ids = FavoritesStore.getFavoriteSeriesIds(this)
         if (ids.isEmpty()) emptyList()
         else repo.vodPageBySourceIds(MediaType.SERIES, ids, englishOnly, hideAdult, 0, 120)
+            .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
     } else {
         emptyList()
     }
@@ -442,10 +449,13 @@ private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType, rowsOnly
     }
     if (keepIds.isNotEmpty()) {
         for (item in repo.vodPageBySourceIds(type, keepIds, englishOnly, hideAdult, 0, 500)) {
-            byId.putIfAbsent(CatalogMapping.uidOf(item), item)
+            if (com.lumora.data.ProfileStore.allowsChannel(profile, item)) {
+                byId.putIfAbsent(CatalogMapping.uidOf(item), item)
+            }
         }
     }
-    val list = byId.values.toList()
+    val list = byId.values
+        .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
 
     val versions = repo.vodVersionGroups(type, list)
     return VodTab(list, versions, shelves, rows.rows, rows.children)
@@ -505,9 +515,29 @@ internal suspend fun MainActivity.buildVodRows(
         } else {
             row
         }
+    val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
+    fun allowed(row: CategoryFilter): Boolean {
+        // The "All" row and the app's own synthetic rows are not provider categories, so a
+        // profile's category selection must never remove them: Kids still needs All, and
+        // Favourites/Newest are already item-filtered further down.
+        if (row.id == null) return true
+        if (row.id == NEWEST_CATEGORY_ID ||
+            row.id == CONTINUE_WATCHING_CATEGORY_ID ||
+            row.id == UP_NEXT_CATEGORY_ID ||
+            row.id == FAVOURITES_CATEGORY_ID ||
+            row.id == JELLYFIN_CATEGORY_ID ||
+            row.id == EMBY_CATEGORY_ID ||
+            row.id == SILO_CATEGORY_ID ||
+            row.id == PLEX_CATEGORY_ID
+        ) {
+            return true
+        }
+        return com.lumora.data.ProfileStore.allowsCategory(profile, row.name, null)
+    }
     return VodRows(
-        rows = result.rows.map(::strip),
-        children = result.childrenByParent.mapValues { (_, children) -> children.map(::strip) }
+        rows = result.rows.filter(::allowed).map(::strip),
+        children = result.childrenByParent
+            .mapValues { (_, children) -> children.filter(::allowed).map(::strip) }
     )
 }
 
@@ -519,6 +549,7 @@ private suspend fun MainActivity.buildVodShelves(
     anime: List<Channel>
 ): List<ContentShelf> = coroutineScope {
     val repo = CatalogRepository.get(this@buildVodShelves)
+    val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
     rows.mapNotNull { row ->
         if (row.isChild) return@mapNotNull null
         val id = row.id ?: return@mapNotNull null
@@ -543,7 +574,7 @@ private suspend fun MainActivity.buildVodShelves(
                 row.channelIds.isNotEmpty() ->
                     repo.vodPageBySourceIds(type, row.channelIds, englishOnly, hideAdult, 0, VOD_SHELF_PREVIEW)
                 else -> emptyList()
-            }
+            }.filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
             if (items.isEmpty()) {
                 null
             } else {
@@ -578,6 +609,7 @@ internal suspend fun MainActivity.vodGridPage(
     val repo = CatalogRepository.get(this)
     val englishOnly = vodEnglishOnly()
     val hideAdult = vodHideAdult()
+    val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
     return when {
         matchIds != null && matchIds.isNotEmpty() ->
             repo.vodPage(type, matchIds, englishOnly, hideAdult, offset, limit)
@@ -585,7 +617,7 @@ internal suspend fun MainActivity.vodGridPage(
             repo.vodPageBySourceIds(type, sourceIds, englishOnly, hideAdult, offset, limit)
         all -> repo.vodPage(type, null, englishOnly, hideAdult, offset, limit)
         else -> emptyList()
-    }
+    }.filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
 }
 
 internal suspend fun MainActivity.vodGridCount(    type: MediaType,

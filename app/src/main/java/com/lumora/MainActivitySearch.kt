@@ -479,7 +479,9 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
             } else {
                 inMemoryVodChannels()
             }
-            val source = liveSource + vodResults + inMemoryVod
+            val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
+            val source = (liveSource + vodResults + inMemoryVod)
+                .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
             // Normalise each title once: the comparator used to lowercase per comparison,
             // allocating a fresh String per element per compare - on a six-figure series
             // list that is seconds of GC churn for a single query. The key also folds the

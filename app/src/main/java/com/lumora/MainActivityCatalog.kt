@@ -388,12 +388,13 @@ internal fun MainActivity.renderLivePartial() {
  *  it's extracted first and reused by the paint-Live-ASAP path. */
 internal fun MainActivity.deriveLiveHalf(list: List<Channel>) {
     val startedAt = System.currentTimeMillis()
-    val hideAdult = prefs.getBoolean(PREF_HIDE_ADULT, true)
+    val hideAdult = vodHideAdult()
     val useClassic = prefs.getBoolean(PREF_CLASSIC_CATEGORY_LAYOUT, false)
     val groupChannels = prefs.getBoolean(PREF_GROUP_CHANNELS, true)
-    val localities = selectedLocalities()
+    val localities = com.lumora.data.ProfileStore.effectiveRegions(prefs)
     val showUntagged = prefs.getBoolean(PREF_LOCALITY_SHOW_UNTAGGED, true)
     val backupIds = backupSourceIds()
+    val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
 
     // Plugin-supplied entries (the anime catalogue) ride in allChannels as SERIES. They are
     // not in Room and arrive after the first paint, but this pass only consumes LIVE rows -
@@ -420,6 +421,7 @@ internal fun MainActivity.deriveLiveHalf(list: List<Channel>) {
         ch.mediaType == MediaType.LIVE &&
             !ch.name.contains("##") &&
             !(hideAdult && isAdultCategory(ch.categoryName, ch.group)) &&
+            com.lumora.data.ProfileStore.allowsChannel(profile, ch) &&
             isVisibleForLocality(ch, localities, showUntagged, fallbacks)
     }
     if (localities.isNotEmpty()) {
@@ -480,7 +482,8 @@ internal fun MainActivity.liveDerivedFingerprint(
     // post-fetch pass wrote a cache the catalogue-only cold start could never read.
     return DerivedCache.catalogFingerprint(
         list.filter { it.mediaType == MediaType.LIVE },
-        "live:$hideAdult:$useClassic:$groupChannels:$selectionKey:$showUntagged"
+        "live:$hideAdult:$useClassic:$groupChannels:$selectionKey:$showUntagged:" +
+            com.lumora.data.ProfileStore.filterSignature(prefs)
     )
 }
 
@@ -499,7 +502,11 @@ internal fun MainActivity.vodDerivedFingerprint(
     hideAdult: Boolean,
     hideNonEnglish: Boolean,
     groupChannels: Boolean
-): String = DerivedCache.catalogFingerprint(list, "vod:$hideAdult:$hideNonEnglish:$groupChannels")
+): String = DerivedCache.catalogFingerprint(
+    list,
+    "vod:$hideAdult:$hideNonEnglish:$groupChannels:" +
+        com.lumora.data.ProfileStore.filterSignature(prefs)
+)
 
 /** One cold-start budget line per pass (adb logcat -s LumoraPerf). Cheap enough to
  *  leave in a release build - a handful of calls per load - and the only way to tell

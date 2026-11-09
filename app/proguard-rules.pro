@@ -68,6 +68,12 @@
 # outright) on any other - including a debug build of the same version.
 -keep class com.lumora.data.backup.** { *; }
 
+# Local user profiles are Gson-serialised by name and live in `iptv_prefs` across app
+# updates. Unkept, R8 renamed their fields per build and every saved profile silently
+# deserialised as blank/none - the same failure the backup DTOs had.
+-keep class com.lumora.data.UserProfile { *; }
+-keep class com.lumora.data.ProfileType { *; }
+
 # The Films/Series screen snapshot (VodContentStore) is Gson-serialised directly from these
 # models. Unkept, R8 renamed their fields per build: a snapshot written by one 6.9 build was
 # discarded by the next with a ClassCastException, so Films/Series rebuilt every shelf on

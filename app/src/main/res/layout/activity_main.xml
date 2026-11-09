@@ -722,7 +722,7 @@
                     android:gravity="center"
                     android:layerType="none"
                     android:nextFocusLeft="@id/btnSettings"
-                    android:nextFocusRight="@id/btnRefresh"
+                    android:nextFocusRight="@id/btnProfile"
                     android:orientation="vertical"
                     android:minWidth="@dimen/chrome_button_min_size"
                     android:minHeight="@dimen/chrome_button_min_size"
@@ -738,6 +738,44 @@
                         android:layout_height="20dp"
                         android:src="@drawable/ic_refresh"
                         android:tint="@color/text_secondary" />
+                </LinearLayout>
+
+                <!-- Active profile chip: sits to the right of Refresh and is the only way
+                     back into the profile switcher once launch stops prompting. Hidden while
+                     profiles are off, so the single-user chrome is unchanged. -->
+                <LinearLayout
+                    android:id="@+id/btnProfile"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/toolbar_button_gap"
+                    android:background="@drawable/bg_tab_item"
+                    android:clickable="true"
+                    android:contentDescription="@string/sett_profiles_title"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:layerType="none"
+                    android:nextFocusLeft="@id/btnRefresh"
+                    android:nextFocusRight="@id/btnProfile"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    android:minWidth="@dimen/chrome_button_min_size"
+                    android:minHeight="@dimen/chrome_button_min_size"
+                    android:paddingHorizontal="@dimen/chrome_button_padding_h"
+                    android:paddingTop="@dimen/tab_padding_vertical"
+                    android:paddingBottom="@dimen/tab_padding_vertical"
+                    android:stateListAnimator="@animator/focus_scale_flat"
+                    android:clipChildren="false"
+                    android:clipToPadding="false">
+
+                    <ImageView
+                        android:id="@+id/btnProfileIcon"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:background="@drawable/bg_profile_avatar"
+                        android:clipToOutline="true"
+                        android:scaleType="centerCrop"
+                        android:src="@drawable/ic_person"
+                        android:tint="@color/text_primary" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -2001,6 +2039,32 @@
                                         android:contentDescription="@string/favourite"
                                         android:scaleType="centerInside"
                                         android:src="@drawable/ic_star"
+                                        android:tint="@color/text_primary" />
+                                </LinearLayout>
+
+                                <!-- Profile-only hide action: removes this film/series from the
+                                     active viewer's catalogue without touching the global one. -->
+                                <LinearLayout
+                                    android:id="@+id/detailHideButton"
+                                    android:layout_width="40dp"
+                                    android:layout_height="40dp"
+                                    android:layout_marginStart="8dp"
+                                    android:background="@drawable/bg_toolbar_button"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:gravity="center"
+                                    android:stateListAnimator="@animator/focus_scale"
+                                    android:visibility="gone"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false">
+
+                                    <ImageView
+                                        android:id="@+id/detailHideIcon"
+                                        android:layout_width="24dp"
+                                        android:layout_height="24dp"
+                                        android:contentDescription="@string/sett_profile_hide_title"
+                                        android:scaleType="centerInside"
+                                        android:src="@drawable/ic_hide"
                                         android:tint="@color/text_primary" />
                                 </LinearLayout>
                             </LinearLayout>

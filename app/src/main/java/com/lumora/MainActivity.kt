@@ -1345,6 +1345,8 @@ class MainActivity : AppCompatActivity() {
     /** M3U URL field awaiting the system file picker's result - set when "Browse local
      *  file" launches the picker, filled with the picked URI (or cleared) on result. */
     internal var pendingM3uUrlTarget: EditText? = null
+    /** Profile whose avatar is being chosen by the system image picker. */
+    internal var pendingProfileAvatarId: String? = null
     /** First-paint flag for the progressive render path (paint Live ASAP once, then surgical
      *  partial re-renders) - see renderLivePartial(). */
     internal var uiPainted: Boolean = false
@@ -1394,6 +1396,7 @@ class MainActivity : AppCompatActivity() {
         internal const val REQUEST_EXPORT_BACKUP = 2001
         internal const val REQUEST_IMPORT_BACKUP = 2002
         internal const val REQUEST_PICK_M3U = 2003
+        internal const val REQUEST_PICK_PROFILE_AVATAR = 2004
         private const val EDGE_SWIPE_ZONE_DP = 24f
         private const val EDGE_SWIPE_THRESHOLD_DP = 64f
         /** How long "Play Next Episode" counts down when the fallback raises it at the
@@ -1576,6 +1579,12 @@ class MainActivity : AppCompatActivity() {
         applySystemBarInsets()
 
         prefs = getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+        // A configured profile owns the active region/adult/language filters; write them
+        // before the catalogue starts loading so the very first query already sees them.
+        if (com.lumora.data.ProfileStore.isEnabled(prefs)) {
+            ensureProfilesReady()
+        }
+        com.lumora.data.ProfileStore.applyActiveProfilePrefs(prefs)
         // The storage pass runs off the main thread: it walks the package's files and opens
         // the catalogue database, neither of which belongs between the user and the first
         // frame. Its lines are diagnostic, not start-up input.
@@ -3326,6 +3335,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_PICK_PROFILE_AVATAR) {
+            handleProfileAvatarResult(if (resultCode == RESULT_OK) data else null)
+            return
+        }
         if (requestCode == REQUEST_PICK_M3U) {
             // Local .m3u pick: keep the URI (with a persisted read permission so the
             // playlist still opens after a restart) in the provider form's URL field -

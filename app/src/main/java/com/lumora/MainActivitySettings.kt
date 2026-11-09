@@ -2824,6 +2824,7 @@ internal fun MainActivity.showProviderSettings() {
     hideNonEnglish.isChecked = prefs.getBoolean(PREF_HIDE_NON_ENGLISH, true)
     hideNonEnglish.setOnCheckedChangeListener { _, checked ->
         prefs.edit().putBoolean(PREF_HIDE_NON_ENGLISH, checked).apply()
+        com.lumora.data.ProfileStore.syncActiveProfileFilters(prefs, hideNonEnglish = checked)
         if (allChannels.isNotEmpty() || filmList.isNotEmpty() || seriesList.isNotEmpty()) scope.launch { classifyAndShow() }
     }
 
@@ -2925,6 +2926,7 @@ internal fun MainActivity.showProviderSettings() {
             val next = selectedLocalities().toMutableSet()
             if (isChecked) next.add(locality.code) else next.remove(locality.code)
             setSelectedLocalities(next)
+            com.lumora.data.ProfileStore.syncActiveProfileFilters(prefs, regions = next)
             localitySelectionChanged = true
             refreshLocalitySummary()
             syncLocalityChecks()
@@ -2939,6 +2941,7 @@ internal fun MainActivity.showProviderSettings() {
             val next = selectedLocalities().toMutableSet()
             if (isChecked) next.add(locality.code) else next.remove(locality.code)
             setSelectedLocalities(next)
+            com.lumora.data.ProfileStore.syncActiveProfileFilters(prefs, regions = next)
             localitySelectionChanged = true
             refreshLocalitySummary()
             syncLocalityChecks()
@@ -2951,6 +2954,7 @@ internal fun MainActivity.showProviderSettings() {
         // All), so it snaps back rather than leaving an ambiguous state on screen.
         if (isChecked) {
             setSelectedLocalities(emptySet())
+            com.lumora.data.ProfileStore.syncActiveProfileFilters(prefs, regions = emptySet())
             localitySelectionChanged = true
             refreshLocalitySummary()
         }
@@ -2970,6 +2974,7 @@ internal fun MainActivity.showProviderSettings() {
             return@setOnClickListener
         }
         setSelectedLocalities(setOf(detected.code))
+        com.lumora.data.ProfileStore.syncActiveProfileFilters(prefs, regions = setOf(detected.code))
         localitySelectionChanged = true
         refreshLocalitySummary()
         syncLocalityChecks()
@@ -2999,6 +3004,7 @@ internal fun MainActivity.showProviderSettings() {
         hideAdult.isChecked = checked
         hideAdult.setOnCheckedChangeListener(hideAdultListener)
         prefs.edit().putBoolean(PREF_HIDE_ADULT, checked).apply()
+        com.lumora.data.ProfileStore.syncActiveProfileFilters(prefs, hideAdult = checked)
         if (allChannels.isNotEmpty() || filmList.isNotEmpty() || seriesList.isNotEmpty()) scope.launch { classifyAndShow() }
     }
     hideAdultListener = CompoundButton.OnCheckedChangeListener { _, checked ->
@@ -3043,6 +3049,10 @@ internal fun MainActivity.showProviderSettings() {
     // sideloaded subtitles on when a stream plays back with its dubbed audio track.
     // Both default off; the subtitles one is read by PlayerManager from the same prefs.
     val filtersPane = dialogView.findViewById<LinearLayout>(R.id.paneFilters)
+    // Per-viewer category visibility lives here as well as in the profile editor: Filters is
+    // where people look for it, and it is the same active-profile set either way.
+    filtersPane.addView(settingsSectionLabel(getString(R.string.sett_filters_categories_group)))
+    filtersPane.addView(categoriesFilterRow())
     filtersPane.addView(settingsSectionLabel(getString(R.string.settings_group_subtitles_audio)))
     filtersPane.addView(dubCheckBoxRow(
         getString(R.string.sett_prefer_dubbed_audio),
@@ -3142,6 +3152,20 @@ internal fun MainActivity.showProviderSettings() {
     // the whole app (which tabs exist, what gets fetched), not the catalogue filters.
     val generalPane = dialogView.findViewById<LinearLayout>(R.id.paneGeneral)
     lateinit var vodCheckBox: CheckBox
+    generalPane.addView(settingsSectionLabel(getString(R.string.sett_profiles_group)))
+    lateinit var profilesManageRow: TextView
+    val profilesEnabledBox = dubCheckBoxRow(
+        getString(R.string.sett_profiles_enable),
+        getString(R.string.sett_profiles_enable_caption),
+        com.lumora.data.ProfileStore.PREF_ENABLED,
+        default = false,
+    ) { checked ->
+        setProfilesEnabled(checked)
+        renderProfilesSettingsRow(profilesManageRow)
+    }
+    profilesManageRow = profilesSettingsRow()
+    generalPane.addView(profilesEnabledBox)
+    generalPane.addView(profilesManageRow)
     val simpleModeBox = dubCheckBoxRow(
         getString(R.string.sett_simple_mode),
         getString(R.string.sett_simple_mode_caption),

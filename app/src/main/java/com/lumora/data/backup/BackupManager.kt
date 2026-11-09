@@ -215,6 +215,16 @@ internal val BACKED_UP_SETTINGS: Map<String, SettingType> = mapOf(
     PREF_CATEGORIZE_VOD to SettingType.BOOLEAN,
     PREF_GROUP_CHANNELS to SettingType.BOOLEAN,
     PREF_CLASSIC_CATEGORY_LAYOUT to SettingType.BOOLEAN,
+    // Local user profiles: names, pictures, per-profile filters and hidden titles. These
+    // live in the same prefs file as everything else and are user configuration, not
+    // credentials or runtime state.
+    com.lumora.data.ProfileStore.PREF_ENABLED to SettingType.BOOLEAN,
+    com.lumora.data.ProfileStore.PREF_JSON to SettingType.STRING,
+    com.lumora.data.ProfileStore.PREF_ACTIVE_ID to SettingType.STRING,
+    com.lumora.data.ProfileStore.PREF_BASE_HIDE_ADULT to SettingType.BOOLEAN,
+    com.lumora.data.ProfileStore.PREF_BASE_HIDE_NON_ENGLISH to SettingType.BOOLEAN,
+    com.lumora.data.ProfileStore.PREF_BASE_LOCALITIES to SettingType.STRING_SET,
+    com.lumora.data.ProfileStore.PREF_BASE_CAPTURED to SettingType.BOOLEAN,
     PREF_PREFER_DUB_AUDIO to SettingType.BOOLEAN,
     PREF_SUBTITLES_WITH_DUB to SettingType.BOOLEAN,
     PREF_SUBTITLES_ENABLED to SettingType.BOOLEAN,

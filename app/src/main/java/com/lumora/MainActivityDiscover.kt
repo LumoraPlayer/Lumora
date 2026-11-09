@@ -1696,6 +1696,7 @@ internal fun MainActivity.seriesPersonalShelves(favourites: List<Channel>): List
 internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     val shelves = mutableListOf<ContentShelf>()
     val hidden = getHiddenHomeShelves()
+    val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
 
     // The media servers' own resume lists lead Continue Watching: they know about playback
     // from every other client, which a purely local position store never can. Local
@@ -1728,6 +1729,7 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     val off = disabledSourceIds()
     val nextUpItems = (jellyfinNextUpItems + plexNextUpItems + upNext)
         .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
+        .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
         .distinctBy { it.id.ifBlank { it.url } }
         .filterNot(::isAdultHomeItem)
     if (nextUpItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_next_up), nextUpItems))
@@ -1757,6 +1759,7 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     // entries) on the main thread, just to filter it by a handful of ids.
     val favIds = FavoritesStore.getFavoriteSeriesIds(this)
     val favItems = (seriesList.filter { it.id in favIds } + filmList.filter { it.id in favIds })
+        .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
         .filterNot(::isAdultHomeItem)
     if (favItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_favourites), favItems))
 
@@ -1860,8 +1863,10 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
     // snapshots without provenance can't be attributed, and guessing by host risks
     // hiding another source's tile. See disabledSourceIds.
     val off = disabledSourceIds() + backupSourceIds()
-    val live = if (off.isEmpty()) items
-        else items.filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
+    val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
+    val live = items
+        .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
+        .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
     val wanted = live.mapNotNullTo(HashSet()) { item ->
         item.categoryId?.takeIf { it.isNotBlank() && item.episodeNum != null }
     }

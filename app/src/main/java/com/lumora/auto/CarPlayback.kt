@@ -27,6 +27,9 @@ class CarPlayback(private val context: Context) {
 
     private val player = PlayerManager(context)
 
+    /** The same prefs file the Activity and the workers share; profiles live there too. */
+    private val prefs = context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
+
     var channels: List<Channel> = emptyList()
         private set
 
@@ -50,9 +53,11 @@ class CarPlayback(private val context: Context) {
             com.lumora.data.catalog.CatalogRepository.get(context)
                 .live(com.lumora.data.catalog.liveSourceIds(context))
         }
+        val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
         channels = stored.filter {
             it.mediaType == MediaType.LIVE && it.url.isNotBlank() &&
-                it.stalkerCmd.isNullOrBlank() && it.pluginToken.isNullOrBlank()
+                it.stalkerCmd.isNullOrBlank() && it.pluginToken.isNullOrBlank() &&
+                com.lumora.data.ProfileStore.allowsChannel(profile, it)
         }
         return channels
     }

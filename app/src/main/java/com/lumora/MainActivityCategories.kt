@@ -707,15 +707,21 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
                 val type = if (tab == 1) com.lumora.model.MediaType.SERIES else com.lumora.model.MediaType.MOVIE
                 val built = buildVodRows(
                     tab, type, vodEnglishOnly(), vodHideAdult(), categorize,
-                    inMemoryVodChannels()
+                    inMemoryVodChannels().filter {
+                        com.lumora.data.ProfileStore.allowsChannel(
+                            com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs), it
+                        )
+                    }
                 )
                 MainActivity.CategoryBuildResult(built.rows, built.children)
             }
         }
+        val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
         val newest = if (tab != 0) {
             val type = if (tab == 1) com.lumora.model.MediaType.SERIES else com.lumora.model.MediaType.MOVIE
             com.lumora.data.catalog.CatalogRepository.get(this@buildCategoriesForActiveTab)
                 .vodPage(type, null, vodEnglishOnly(), vodHideAdult(), 0, VOD_SHELF_PREVIEW)
+                .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
         } else {
             emptyList()
         }

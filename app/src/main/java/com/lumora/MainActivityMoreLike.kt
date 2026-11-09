@@ -84,7 +84,11 @@ private fun MainActivity.populateMoreLikeRow(
 ) {
     val row = binding.detailMoreLikeRow
     row.removeAllViews()
+    val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
     val tiles = moreLikeTiles(opened, recommendations)
+        // TMDB recommendations carry no provider category, which a Kids profile cannot
+        // vouch for - drop them there rather than leak an unvetted poster row.
+        .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
     if (tiles.isEmpty()) {
         binding.detailMoreLikeDivider.visibility = View.GONE
         binding.detailMoreLikeLabel.visibility = View.GONE
