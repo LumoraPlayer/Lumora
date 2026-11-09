@@ -3,6 +3,7 @@ package com.lumora.data
 
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -39,12 +40,19 @@ class ProfileStoreTest {
     }
 
     @Test
-    fun `a kids profile only allows the children's allowlist`() {
+    fun `a kids profile only allows categories containing kids by default`() {
         assertTrue(ProfileStore.allowsCategory(kids, "UK | Kids", null))
-        assertTrue(ProfileStore.allowsCategory(kids, "Disney+ Movies", null))
-        assertTrue(ProfileStore.allowsCategory(kids, "Cartoon Network", null))
+        assertTrue(ProfileStore.allowsCategory(kids, "Kids & Family", null))
+        assertFalse(ProfileStore.allowsCategory(kids, "Disney+ Movies", null))
+        assertFalse(ProfileStore.allowsCategory(kids, "Cartoon Network", null))
         assertFalse(ProfileStore.allowsCategory(kids, "UK | Sports", null))
         assertFalse(ProfileStore.allowsCategory(kids, "Movies", null))
+    }
+
+    @Test
+    fun `kids defaults list only the categories whose name contains kids`() {
+        val categories = listOf("UK | KIDS", "Disney+", "Kids & Family", "Movies")
+        assertEquals(setOf("uk | kids", "kids & family"), ProfileStore.defaultsForKids(categories))
     }
 
     @Test

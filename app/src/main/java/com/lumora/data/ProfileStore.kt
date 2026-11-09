@@ -26,6 +26,8 @@ data class UserProfile(
     val type: ProfileType = ProfileType.ADULT,
     /** A persisted content:// URI chosen from the system image picker. */
     val avatarUri: String? = null,
+    /** A built-in Lumora avatar key (see the profile editor's preset list); null for a photo. */
+    val avatarPreset: String? = null,
     /** A Trakt account name/id the profile is associated with. */
     val traktId: String? = null,
     /** Empty means every region. */
@@ -59,14 +61,13 @@ object ProfileStore {
     internal const val PREF_BASE_HIDE_NON_ENGLISH = "user_profiles_base_hide_non_english"
     internal const val PREF_BASE_LOCALITIES = "user_profiles_base_localities"
     internal const val PREF_BASE_CAPTURED = "user_profiles_base_captured"
+    /** One-shot rewrite of Kids category lists saved under the old brand/genre allowlist. */
+    private const val PREF_KIDS_CATEGORIES_MIGRATED = "user_profiles_kids_categories_migrated_v2"
 
-    /** Default children's-category markers. Matched against the normalised category/group
-     *  name, so a panel's "UK| KIDS" or "Disney+ Movies" also qualifies. */
-    private val KIDS_KEYWORDS = listOf(
-        "disney", "cartoon network", "cartoon", "nickelodeon", "nick jr", "nicktoons",
-        "cbeebies", "cbbc", "boomerang", "pbs kids", "kids", "junior", "children",
-        "child", "family", "baby", "toddler", "toon",
-    )
+    /** The default children's-category rule: only a category whose normalised name contains
+     *  "kids" is enabled on a new Kids profile. Parents can add other categories explicitly;
+     *  the default intentionally does not guess from brands or genres. */
+    private val KIDS_KEYWORDS = listOf("kids")
 
     private val gson = Gson()
     private val listType = TypeToken.getParameterized(List::class.java, UserProfile::class.java).type
@@ -115,12 +116,39 @@ object ProfileStore {
         return next
     }
 
+    /**
+     * Kids profiles created before the default was narrowed may carry the old brand/genre
+     * allowlist (Disney, Nickelodeon, Cartoon Network, ...) as an explicit allowed set.
+     * Rewrite those once so "only categories containing KIDS" is the actual default. An
+     * empty result is intentional: empty means the built-in `KIDS` keyword rule, which
+     * stays dynamic as the catalogue grows.
+     */
+    private fun migrateLegacyKidsCategories(prefs: SharedPreferences) {
+        if (prefs.getBoolean(PREF_KIDS_CATEGORIES_MIGRATED, false)) return
+        val current = profiles(prefs)
+        if (current.isEmpty()) return
+        val migrated = current.map { profile ->
+            if (profile.type == ProfileType.KIDS && profile.allowedCategories.isNotEmpty()) {
+                profile.copy(
+                    allowedCategories = profile.allowedCategories
+                        .filter { "kids" in it.lowercase() }
+                        .toSet()
+                )
+            } else {
+                profile
+            }
+        }
+        if (migrated != current) saveProfiles(prefs, migrated)
+        prefs.edit().putBoolean(PREF_KIDS_CATEGORIES_MIGRATED, true).apply()
+    }
+
     /** Creates an Adult and a Kids profile the first time profiles are enabled. */
     fun ensureDefaultProfiles(
         prefs: SharedPreferences,
         adultName: String = "Adult",
         kidsName: String = "Kids",
     ): List<UserProfile> {
+        migrateLegacyKidsCategories(prefs)
         val existing = profiles(prefs)
         if (existing.isNotEmpty()) {
             val activeId = prefs.getString(PREF_ACTIVE_ID, null)

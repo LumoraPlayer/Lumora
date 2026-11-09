@@ -212,6 +212,18 @@
     <string name="sett_profile_picture_set">Picture set</string>
     <string name="sett_profile_picture_unavailable">No image picker is available on this device</string>
     <string name="sett_profile_choose_picture">Choose profile picture…</string>
+    <string name="sett_profile_choose_photo">Choose a photo…</string>
+    <string name="sett_profile_remove_picture">Remove picture</string>
+    <string name="sett_profile_avatars">Lumora avatars</string>
+    <string name="sett_avatar_fox">Fox</string>
+    <string name="sett_avatar_panda">Panda</string>
+    <string name="sett_avatar_cat">Cat</string>
+    <string name="sett_avatar_robot">Robot</string>
+    <string name="sett_avatar_astronaut">Astronaut</string>
+    <string name="sett_avatar_lion">Lion</string>
+    <string name="sett_avatar_rocket">Rocket</string>
+    <string name="sett_avatar_star">Star</string>
+    <string name="sett_profile_switched">Switched to %1$s</string>
     <string name="sett_profile_hide_adult">Hide adult categories</string>
     <string name="sett_profile_hide_non_english">Hide non-English titles</string>
     <string name="sett_profile_regions">Regions</string>
@@ -222,6 +234,8 @@
     <string name="sett_profile_categories_kids_default">Built-in kids categories</string>
     <string name="sett_profile_categories_empty">No categories are loaded yet</string>
     <string name="sett_profile_summary">%1$s · %2$s · %3$s</string>
+    <string name="sett_profile_summary_no_type">%1$s · %2$s</string>
+    <string name="sett_profile_add_caption">Create another local viewer</string>
     <string name="sett_profile_hide_title">Hide from this profile</string>
     <string name="sett_profile_show_title">Show in this profile</string>
     <string name="sett_profile_hidden_toast">Hidden from this profile</string>

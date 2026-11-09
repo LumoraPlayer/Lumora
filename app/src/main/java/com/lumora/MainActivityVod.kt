@@ -516,24 +516,7 @@ internal suspend fun MainActivity.buildVodRows(
             row
         }
     val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
-    fun allowed(row: CategoryFilter): Boolean {
-        // The "All" row and the app's own synthetic rows are not provider categories, so a
-        // profile's category selection must never remove them: Kids still needs All, and
-        // Favourites/Newest are already item-filtered further down.
-        if (row.id == null) return true
-        if (row.id == NEWEST_CATEGORY_ID ||
-            row.id == CONTINUE_WATCHING_CATEGORY_ID ||
-            row.id == UP_NEXT_CATEGORY_ID ||
-            row.id == FAVOURITES_CATEGORY_ID ||
-            row.id == JELLYFIN_CATEGORY_ID ||
-            row.id == EMBY_CATEGORY_ID ||
-            row.id == SILO_CATEGORY_ID ||
-            row.id == PLEX_CATEGORY_ID
-        ) {
-            return true
-        }
-        return com.lumora.data.ProfileStore.allowsCategory(profile, row.name, null)
-    }
+    fun allowed(row: CategoryFilter): Boolean = profileAllowsCategoryRow(profile, row)
     return VodRows(
         rows = result.rows.filter(::allowed).map(::strip),
         children = result.childrenByParent

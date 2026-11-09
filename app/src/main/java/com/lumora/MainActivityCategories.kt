@@ -674,6 +674,7 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
     // cards. All three prepend ABOVE Jellyfin, so the sidebar leads
     // Up Next > Continue Watching > Newest > Jellyfin > the real categories.
     val synthetic = withContext(Dispatchers.Default) {
+        val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
         val rows = if (tab == 0) {
             buildCategoryRows(
                 list = list,
@@ -716,7 +717,18 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
                 MainActivity.CategoryBuildResult(built.rows, built.children)
             }
         }
-        val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
+        // The live cache holds unfiltered rows; apply the active profile after the cache so
+        // every viewer shares one build and Kids only sees its KIDS categories.
+        val visibleRows = if (profile == null) {
+            rows
+        } else {
+            MainActivity.CategoryBuildResult(
+                rows.rows.filter { profileAllowsCategoryRow(profile, it) },
+                rows.childrenByParent.mapValues { (_, children) ->
+                    children.filter { profileAllowsCategoryRow(profile, it) }
+                }
+            )
+        }
         val newest = if (tab != 0) {
             val type = if (tab == 1) com.lumora.model.MediaType.SERIES else com.lumora.model.MediaType.MOVIE
             com.lumora.data.catalog.CatalogRepository.get(this@buildCategoriesForActiveTab)
@@ -726,7 +738,7 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
             emptyList()
         }
         MainActivity.SyntheticCategoryRows(
-            result = rows,
+            result = visibleRows,
             newest = newest,
             continueWatching = when (tab) {
                 1 -> seriesContinueItems()
