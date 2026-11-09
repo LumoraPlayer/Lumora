@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">اپنی لائبریری سے باہر عنوانات براؤز کرنے کے لیے اسٹریم پلگ ان فعال کریں۔</string>
     <string name="plug_loading_series">سیریز لوڈ ہو رہی ہے…</string>
     <string name="plug_loading_movies">فلمیں لوڈ ہو رہی ہیں…</string>
-    <string name="plug_enable_stream_plugin_or_sites">دریافت کریں کے عنوانات چلانے کے لیے اسٹریم پلگ ان فعال کریں، یا ترتیبات میں اسٹریمنگ سائٹس آن کریں۔</string>
     <string name="plug_loading_episodes">ایپیسوڈز لوڈ ہو رہے ہیں…</string>
     <string name="plug_choose_season">%1$s — سیزن منتخب کریں</string>
     <string name="plug_episode">ایپیسوڈ %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">یاد دہانی منسوخ ہو گئی</string>
     <string name="plug_reminder_set_for">\"%1$s\" کے لیے یاد دہانی مقرر ہو گئی</string>
     <string name="plug_program_starts_too_soon">پروگرام بہت جلد شروع ہو رہا ہے - یاد دہانی مقرر نہیں ہوئی</string>
-    <string name="plug_update_available">اپ ڈیٹ دستیاب</string>
-    <string name="plug_update_available_message">Lumora v%1$s دستیاب ہے۔\nموجودہ: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">یہ ایپ پرانی ہو چکی ہے اور اسے اپ ڈیٹ کرنا ضروری ہے۔ Lumora v%1$s دستیاب ہے (آپ کے پاس v%2$s ہے)۔</string>
     <string name="plug_force_update_title">اپ ڈیٹ ضروری</string>
     <string name="plug_force_update_message">Lumora v%1$s تازہ ترین ریلیز سے %3$d ورژن پیچھے ہے (v%2$s)۔ اپ ڈیٹ ہونے تک ایپ استعمال نہیں کی جا سکتی - انسٹال کرنے کے لیے «ابھی اپ ڈیٹ کریں» پر ٹیپ کریں۔</string>
     <string name="plug_force_update_unrecognised_message">یہ بلڈ (v%1$s) Lumora کی شائع شدہ ریلیز نہیں ہے۔ ایپ استعمال جاری رکھنے کے لیے سرکاری ریلیز (v%2$s) انسٹال کریں۔</string>
     <string name="plug_update_now">ابھی اپ ڈیٹ کریں</string>
     <string name="plug_update_dismiss">نظر انداز کریں</string>
-    <string name="plug_later">بعد میں</string>
     <string name="plug_downloading_update">اپ ڈیٹ ڈاؤن لوڈ ہو رہا ہے…</string>
     <string name="plug_update_download_failed">اپ ڈیٹ ڈاؤن لوڈ ناکام</string>
     <string name="plug_backup_exported">بیک اپ برآمد ہو گیا</string>
     <string name="plug_export_failed">برآمد ناکام</string>
     <string name="plug_imported_summary">درآمد شدہ: %1$d فراہم کنندگان، %2$d EPG ذرائع، %3$d گروپس، %4$d ترتیبات</string>
-    <string name="plug_import_failed">درآمد ناکام</string>
     <string name="plug_import_failed_reason">درآمد ناکام: %1$s</string>
 </resources>

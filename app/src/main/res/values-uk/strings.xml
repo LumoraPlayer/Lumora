@@ -42,8 +42,6 @@
     <!-- Помилки -->
     <!-- Введення цифр -->
     <!-- Далі / Автоперехід -->
-    <string name="up_next">Далі</string>
-    <string name="play_now">Відтворити зараз</string>
 
     <!-- Інкрементальний пошук -->
     <!-- Синхронізація A/V -->
@@ -78,7 +76,6 @@
     <string name="downloads_tab">Завантаження</string>
     <string name="no_provider_configured">Постачальника не налаштовано</string>
     <string name="press_settings_to_add_playlist">Натисніть «Налаштування», щоб додати URL плейлиста</string>
-    <string name="add_a_provider">Додати постачальника</string>
     <string name="startup_choose_provider">ПОСТАЧАЛЬНИК IPTV/JELLYFIN</string>
     <string name="startup_choose_public">ПУБЛІЧНИЙ СТРИМІНГОВИЙ КОНТЕНТ</string>
     <string name="startup_choose_both">ОБИДВА</string>
@@ -90,8 +87,6 @@
     <string name="find_stream">Знайти та відтворити</string>
     <string name="trailer">Трейлер</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Сон</string>
-    <string name="diag">Діагностика</string>
     <string name="open_in_external_player_short">Відкрити в</string>
 
     <!-- Показується на екрані автомобіля на початку кожної сесії та в налаштуваннях на телефоні.
@@ -275,7 +270,6 @@
     <string name="scraper_sites_header">Сайти для пошуку</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Розв\'язує домени сайтів через зашифрований резолвер, а не через DNS вашого провайдера</string>
-    <string name="scraper_doh_system">Системний DNS</string>
     <string name="scraper_extra_buffering_title">Додаткове буферизування</string>
     <string name="scraper_extra_buffering_subtitle">Буферизує до 5 хвилин наперед для хостерів, які віддають контент порціями. Використовує більше пам\'яті; застосовується після перезапуску</string>
     <string name="category_newest">Найновіші</string>
@@ -349,7 +343,6 @@
     <string name="sports_finished">ЗАВЕРШЕНО</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Спорт</string>
-    <string name="sports_settings_subtitle">Вкладка «Спорт» показує матчі на сьогодні та канал кожного з них, зіставлений із вашими джерелами EPG. Матчі надходять із API-Sports і SportAPI.ai; ключі вбудовано в застосунок, тож входити тут нікуди не потрібно.</string>
     <string name="sports_settings_subtitle_with_keys">Матчі на сьогодні надходять із %1$s. Канал для кожного рядка зіставляється з вашими джерелами EPG, тож матч можна знайти лише на каналі, який охоплює ваша телепрограма.</string>
     <string name="sports_settings_sport_feed">через API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Показувати вкладку «Спорт»</string>
@@ -542,12 +535,8 @@
     <string name="sett_locality_detect">Визначити за пристроєм</string>
     <string name="sett_locality_detected">Регіон пристрою: %1$s</string>
     <string name="sett_locality_detect_failed">Не вдалося визначити регіон цього пристрою</string>
-    <string name="sett_locality_apply">Застосувати</string>
     <string name="sett_locality_grouping_label">%1$s (група)</string>
-    <string name="sett_locality_none_title">Немає каналів для цього регіону</string>
     <string name="sett_locality_empty">У ваших постачальників немає каналів для %1$s.</string>
-    <string name="sett_locality_change">Змінити регіони</string>
-    <string name="sett_locality_hidden_hint">Приховано каналів: %1$d (позначка %2$s).</string>
     <string name="settings_nav_group_library">Ваша бібліотека</string>
     <string name="settings_nav_group_browsing">Перегляд</string>
     <string name="settings_nav_group_connections">Підключення</string>
@@ -644,7 +633,6 @@
     <string name="mv_panes_value">Екранів: %1$d</string>
     <string name="mv_provider_max_conn">Макс. з\'єднань</string>
     <string name="mv_provider_max_conn_hint">Скільки потоків ця підписка дозволяє одночасно (порожньо = невідомо)</string>
-    <string name="mv_provider_max_conn_label">Одночасні з\'єднання</string>
     <string name="ingest_connecting">%1$s — З\'єднання…</string>
     <string name="ingest_progress">%1$s — Імпорт: %2$s · елементів: %3$s · %4$s</string>
     <string name="ingest_size_of">%1$s з %2$s</string>

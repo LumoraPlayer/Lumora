@@ -38,7 +38,6 @@
     <string name="stalker_device_identity_hint">À remplir uniquement si votre fournisseur a enregistré un boîtier précis. Laissez vide pour générer un profil d\'appareil à partir de l\'adresse MAC.</string>
     <string name="sett_type_summary">Type : %1$s</string>
     <string name="sett_editing_provider">Modification de %1$s</string>
-    <string name="sett_editing_jellyfin">Modification de Jellyfin</string>
     <string name="sett_editing_plex">Modification de Plex</string>
     <string name="sett_plex_starting">Démarrage de la connexion…</string>
     <string name="sett_plex_scan_code">Allez sur plex.tv/link et saisissez %1$s</string>
@@ -54,9 +53,7 @@
     <string name="sett_provider_row_detail">%1$s · %2$s</string>
     <string name="sett_remove_provider_confirm">Supprimer %1$s ?</string>
     <string name="sett_remove_provider_message">Les chaînes de ce fournisseur n\'apparaîtront plus.</string>
-    <string name="sett_remove_plex_confirm">Supprimer Plex ?</string>
     <string name="sett_remove_plex_message">Ses films et séries n\'apparaîtront plus.</string>
-    <string name="sett_remove_jellyfin_confirm">Supprimer Jellyfin ?</string>
     <string name="sett_remove_jellyfin_message">Ses chaînes n\'apparaîtront plus.</string>
     <string name="sett_choose_provider_type_first">Choisissez d\'abord un type de fournisseur</string>
     <string name="sett_enter_m3u_url">Entrez une URL M3U</string>
@@ -76,7 +73,6 @@
     <string name="sett_provider_received">Fournisseur reçu ! Chargement...</string>
 
     <!-- MainActivitySettings.kt - sauvegarde et restauration -->
-    <string name="sett_backup_saved_to">Sauvegarde enregistrée dans %1$s</string>
     <string name="sett_export_failed">Échec de l\'exportation</string>
     <string name="sett_no_backup_file">Aucun fichier de sauvegarde trouvé à %1$s</string>
     <string name="sett_imported_summary">Importés : %1$d fournisseurs, %2$d sources EPG, %3$d groupes, %4$d paramètres</string>
@@ -132,7 +128,6 @@
     <string name="sett_external_player_summary">Lecteur externe : %1$s</string>
     <string name="sett_suggest_external_player_on_problems">Proposer un lecteur externe en cas de problème : %1$s</string>
     <string name="sett_suggest_external_player">Proposer un lecteur externe : %1$s</string>
-    <string name="sett_live_preview">Aperçu des chaînes en direct : %1$s</string>
     <string name="sett_on">ON</string>
     <string name="sett_off">OFF</string>
     <string name="sett_playback_settings_title">Paramètres de lecture</string>

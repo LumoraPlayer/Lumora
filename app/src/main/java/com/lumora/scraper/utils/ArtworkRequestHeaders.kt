@@ -2,7 +2,6 @@
 package com.lumora.scraper.utils
 
 import android.util.Base64
-import okhttp3.HttpUrl
 import org.json.JSONObject
 
 object ArtworkRequestHeaders {
@@ -33,33 +32,4 @@ object ArtworkRequestHeaders {
         return "$imageUrl$separator$FRAGMENT_KEY=$encoded"
     }
 
-    fun headersFor(url: HttpUrl): Map<String, String> {
-        val encoded = headerPayload(url) ?: return emptyMap()
-        val decoded = runCatching {
-            String(Base64.decode(encoded, Base64.URL_SAFE or Base64.NO_WRAP), Charsets.UTF_8)
-        }.getOrNull() ?: return emptyMap()
-        val json = runCatching { JSONObject(decoded) }.getOrNull() ?: return emptyMap()
-        return json.keys().asSequence()
-            .mapNotNull { key ->
-                json.optString(key).takeIf { it.isNotBlank() }?.let { value -> key to value }
-            }
-            .toMap()
-    }
-
-    fun stripHeaders(url: HttpUrl): HttpUrl {
-        val fragment = url.fragment ?: return url
-        val remaining = fragment.split("&")
-            .filterNot { it.startsWith("$FRAGMENT_KEY=") }
-            .joinToString("&")
-            .takeIf { it.isNotBlank() }
-        return url.newBuilder().fragment(remaining).build()
-    }
-
-    private fun headerPayload(url: HttpUrl): String? {
-        return url.fragment
-            ?.split("&")
-            ?.firstOrNull { it.startsWith("$FRAGMENT_KEY=") }
-            ?.substringAfter("=")
-            ?.takeIf { it.isNotBlank() }
-    }
 }

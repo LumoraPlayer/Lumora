@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Aktivera ett streamingplugin för att bläddra bland titlar utanför ditt bibliotek.</string>
     <string name="plug_loading_series">Laddar serier…</string>
     <string name="plug_loading_movies">Laddar filmer…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Aktivera ett streamingplugin eller slå på Streamingwebbplatser i Inställningar för att spela upp titlar från Upptäck.</string>
     <string name="plug_loading_episodes">Laddar avsnitt…</string>
     <string name="plug_choose_season">%1$s — välj en säsong</string>
     <string name="plug_episode">Avsnitt %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Påminnelsen avbröts</string>
     <string name="plug_reminder_set_for">Påminnelse inställd för \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Programmet börjar för snart - påminnelsen ställdes inte in</string>
-    <string name="plug_update_available">Uppdatering tillgänglig</string>
-    <string name="plug_update_available_message">Lumora v%1$s är tillgänglig.\nNuvarande: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Den här appen är föråldrad och måste uppdateras. Lumora v%1$s är tillgänglig (du har v%2$s).</string>
     <string name="plug_force_update_title">Uppdatering krävs</string>
     <string name="plug_force_update_message">Lumora v%1$s ligger %3$d versioner efter den senaste utgåvan (v%2$s). Appen kan inte användas förrän den har uppdaterats - tryck på Uppdatera nu för att installera den.</string>
     <string name="plug_force_update_unrecognised_message">Den här versionen (v%1$s) är inte en publicerad Lumora-utgåva. Installera den officiella utgåvan (v%2$s) för att fortsätta använda appen.</string>
     <string name="plug_update_now">Uppdatera nu</string>
     <string name="plug_update_dismiss">Avfärda</string>
-    <string name="plug_later">Senare</string>
     <string name="plug_downloading_update">Laddar ner uppdatering…</string>
     <string name="plug_update_download_failed">Nedladdningen av uppdateringen misslyckades</string>
     <string name="plug_backup_exported">Säkerhetskopian har exporterats</string>
     <string name="plug_export_failed">Exporten misslyckades</string>
     <string name="plug_imported_summary">Importerade: %1$d leverantörer, %2$d EPG-källor, %3$d grupper, %4$d inställningar</string>
-    <string name="plug_import_failed">Importen misslyckades</string>
     <string name="plug_import_failed_reason">Importen misslyckades: %1$s</string>
 </resources>

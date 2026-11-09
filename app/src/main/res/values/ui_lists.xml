@@ -83,7 +83,6 @@
     <string name="list_off">Off</string>
     <string name="list_no_alt_audio">No alternate audio tracks</string>
     <string name="list_no_alt_video">No alternate video quality</string>
-    <string name="list_no_subtitles">No subtitles available</string>
 
     <!-- Toolbar refresh picker (MainActivityProviders.kt) -->
     <string name="list_refresh_title">Refresh providers</string>

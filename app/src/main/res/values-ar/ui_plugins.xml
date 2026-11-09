@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">فعّل إضافة بث لتصفح عناوين خارج مكتبتك.</string>
     <string name="plug_loading_series">جارٍ تحميل المسلسلات…</string>
     <string name="plug_loading_movies">جارٍ تحميل الأفلام…</string>
-    <string name="plug_enable_stream_plugin_or_sites">فعّل إضافة بث، أو شغّل «مواقع البث» في الإعدادات، لتشغيل عناوين «اكتشف».</string>
     <string name="plug_loading_episodes">جارٍ تحميل الحلقات…</string>
     <string name="plug_choose_season">%1$s — اختر موسماً</string>
     <string name="plug_episode">الحلقة %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">تم إلغاء التذكير</string>
     <string name="plug_reminder_set_for">تم ضبط تذكير لـ \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">يبدأ البرنامج قريباً جداً - لم يُضبط التذكير</string>
-    <string name="plug_update_available">يتوفر تحديث</string>
-    <string name="plug_update_available_message">يتوفر Lumora v%1$s.\nالحالي: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">هذا التطبيق قديم ويحتاج إلى تحديث. يتوفر Lumora v%1$s (لديك v%2$s).</string>
     <string name="plug_force_update_title">التحديث مطلوب</string>
     <string name="plug_force_update_message">يتخلف Lumora v%1$s بـ %3$d إصدارات عن أحدث إصدار (v%2$s). لا يمكن استخدام التطبيق حتى يُحدَّث - انقر «تحديث الآن» لتثبيته.</string>
     <string name="plug_force_update_unrecognised_message">هذه البنية (v%1$s) ليست إصداراً منشوراً من Lumora. ثبّت الإصدار الرسمي (v%2$s) لمواصلة استخدام التطبيق.</string>
     <string name="plug_update_now">تحديث الآن</string>
     <string name="plug_update_dismiss">تجاهل</string>
-    <string name="plug_later">لاحقاً</string>
     <string name="plug_downloading_update">جارٍ تنزيل التحديث…</string>
     <string name="plug_update_download_failed">فشل تنزيل التحديث</string>
     <string name="plug_backup_exported">تم تصدير النسخة الاحتياطية</string>
     <string name="plug_export_failed">فشل التصدير</string>
     <string name="plug_imported_summary">تم الاستيراد: %1$d مزوّد، %2$d مصدر EPG، %3$d مجموعة، %4$d إعداد</string>
-    <string name="plug_import_failed">فشل الاستيراد</string>
     <string name="plug_import_failed_reason">فشل الاستيراد: %1$s</string>
 </resources>

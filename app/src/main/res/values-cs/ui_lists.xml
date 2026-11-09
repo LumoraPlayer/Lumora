@@ -67,7 +67,6 @@
     <string name="list_off">Vypnuto</string>
     <string name="list_no_alt_audio">Žádné alternativní zvukové stopy</string>
     <string name="list_no_alt_video">Žádná alternativní kvalita videa</string>
-    <string name="list_no_subtitles">Nejsou dostupné žádné titulky</string>
     <string name="list_refresh_title">Obnovit poskytovatele</string>
     <string name="list_refresh_message">Vyberte, co se má znovu stáhnout. Nevybrané zdroje si ponechají stávající katalog.</string>
     <string name="list_refresh_all">Všichni poskytovatelé</string>

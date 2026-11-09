@@ -2,7 +2,6 @@
 package com.lumora.scraper.utils
 
 import android.util.Log
-import androidx.media3.common.MimeTypes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -78,13 +77,6 @@ fun <T> List<T>.safeSubList(fromIndex: Int, toIndex: Int): List<T> {
 
 @Suppress("UNCHECKED_CAST")
 fun <K, V> Map<K, V?>.filterNotNullValues() = filterValues { it != null } as Map<K, V>
-
-fun String.toSubtitleMimeType(): String = when {
-    endsWith("vtt", true) -> MimeTypes.TEXT_VTT
-    endsWith("srt", true) -> MimeTypes.APPLICATION_SUBRIP
-    endsWith("xml", true) || endsWith("ttml", true) -> MimeTypes.APPLICATION_TTML
-    else -> MimeTypes.APPLICATION_SUBRIP
-}
 
 /**
  * [async] that yields null instead of cancelling its parent scope on failure. Scraper fan-out

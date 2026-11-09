@@ -67,7 +67,6 @@
     <string name="list_off">Wyłączone</string>
     <string name="list_no_alt_audio">Brak alternatywnych ścieżek audio</string>
     <string name="list_no_alt_video">Brak alternatywnej jakości wideo</string>
-    <string name="list_no_subtitles">Brak dostępnych napisów</string>
     <string name="list_refresh_title">Odśwież dostawców</string>
     <string name="list_refresh_message">Wybierz, co pobrać ponownie. Niewybrane źródła zachowają obecny katalog.</string>
     <string name="list_refresh_all">Wszyscy dostawcy</string>

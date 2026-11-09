@@ -64,7 +64,6 @@
     <string name="list_off">Nonaktif</string>
     <string name="list_no_alt_audio">Tidak ada trek audio alternatif</string>
     <string name="list_no_alt_video">Tidak ada kualitas video alternatif</string>
-    <string name="list_no_subtitles">Tidak ada subtitle tersedia</string>
     <string name="list_refresh_title">Perbarui penyedia</string>
     <string name="list_refresh_message">Pilih apa yang akan diunduh ulang. Sumber yang tidak dipilih tetap mempertahankan katalognya saat ini.</string>
     <string name="list_refresh_all">Semua penyedia</string>

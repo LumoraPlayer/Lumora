@@ -69,7 +69,6 @@
     <string name="list_off">إيقاف</string>
     <string name="list_no_alt_audio">لا توجد مسارات صوتية بديلة</string>
     <string name="list_no_alt_video">لا توجد جودة فيديو بديلة</string>
-    <string name="list_no_subtitles">لا تتوفر ترجمات نصية</string>
     <string name="list_refresh_title">تحديث المزوّدين</string>
     <string name="list_refresh_message">اختر ما تريد إعادة تنزيله. تحتفظ المصادر غير المحددة بكتالوجها الحالي.</string>
     <string name="list_refresh_all">كل المزوّدين</string>

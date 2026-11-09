@@ -42,8 +42,6 @@
     <!-- غلطیاں -->
     <!-- عددی اندراج -->
     <!-- اگلا / خودکار پیش رفت -->
-    <string name="up_next">اگلا</string>
-    <string name="play_now">ابھی چلائیں</string>
 
     <!-- بڑھتی ہوئی تلاش -->
     <!-- A/V ہم آہنگی -->
@@ -76,7 +74,6 @@
     <string name="downloads_tab">ڈاؤن لوڈز</string>
     <string name="no_provider_configured">کوئی فراہم کنندہ ترتیب شدہ نہیں</string>
     <string name="press_settings_to_add_playlist">پلے لسٹ کا URL شامل کرنے کے لیے ترتیبات دبائیں</string>
-    <string name="add_a_provider">فراہم کنندہ شامل کریں</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN فراہم کنندہ</string>
     <string name="startup_choose_public">عوامی اسٹریمنگ مواد</string>
     <string name="startup_choose_both">دونوں</string>
@@ -88,8 +85,6 @@
     <string name="find_stream">تلاش کریں اور چلائیں</string>
     <string name="trailer">ٹریلر</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">سلیپ</string>
-    <string name="diag">ڈائیگ</string>
     <string name="open_in_external_player_short">کھولیں</string>
 
     <!-- ہر سیشن کے آغاز پر کار اسکرین پر اور فون پر ترتیبات میں دکھایا جاتا ہے۔
@@ -270,7 +265,6 @@
     <string name="scraper_sites_header">تلاش کرنے کے لیے سائٹس</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">آپ کے ISP کے بجائے ایک خفیہ کردہ ریزالور کے ذریعے سائٹ ڈومینز حل کرتا ہے</string>
-    <string name="scraper_doh_system">سسٹم DNS</string>
     <string name="scraper_extra_buffering_title">اضافی بفرنگ</string>
     <string name="scraper_extra_buffering_subtitle">ان میزبانوں کے لیے 5 منٹ تک آگے بفر کرتا ہے جو برسٹ میں ڈیلیور کرتے ہیں۔ زیادہ میموری استعمال کرتا ہے؛ ری اسٹارٹ کے بعد لاگو ہوتا ہے</string>
     <string name="category_newest">تازہ ترین</string>
@@ -342,7 +336,6 @@
     <string name="sports_finished">ختم</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">کھیل</string>
-    <string name="sports_settings_subtitle">کھیل ٹیب آج کے میچ اور ہر میچ کا چینل دکھاتا ہے، جو آپ کے EPG ذرائع سے میچ کیے جاتے ہیں۔ میچ API-Sports اور SportAPI.ai سے آتے ہیں؛ کلیدیں ایپ میں شامل ہیں، اس لیے یہاں سائن ان کرنے کی ضرورت نہیں۔</string>
     <string name="sports_settings_subtitle_with_keys">آج کے میچ %1$s سے آتے ہیں۔ ہر صف کا چینل آپ کے EPG ذرائع سے میچ کیا جاتا ہے، اس لیے کوئی میچ صرف اسی چینل پر مل سکتا ہے جس کا احاطہ آپ کی گائیڈ کرتی ہو۔</string>
     <string name="sports_settings_sport_feed">API-Sports / SportAPI.ai کے ذریعے</string>
     <string name="sports_settings_show_tab">کھیل ٹیب دکھائیں</string>
@@ -531,12 +524,8 @@
     <string name="sett_locality_detect">ڈیوائس سے پتہ لگائیں</string>
     <string name="sett_locality_detected">ڈیوائس کا علاقہ: %1$s</string>
     <string name="sett_locality_detect_failed">اس ڈیوائس سے علاقہ نہیں پتہ چل سکا</string>
-    <string name="sett_locality_apply">لاگو کریں</string>
     <string name="sett_locality_grouping_label">%1$s (گروہ بندی)</string>
-    <string name="sett_locality_none_title">اس علاقے کے لیے کوئی چینل نہیں</string>
     <string name="sett_locality_empty">آپ کے فراہم کنندگان میں کوئی چینل %1$s سے مطابقت نہیں رکھتا۔</string>
-    <string name="sett_locality_change">علاقے تبدیل کریں</string>
-    <string name="sett_locality_hidden_hint">%1$d چینلز پر %2$s کا ٹیگ ہے اور وہ چھپے ہوئے ہیں۔</string>
     <string name="settings_nav_group_library">آپ کی لائبریری</string>
     <string name="settings_nav_group_browsing">براؤزنگ</string>
     <string name="settings_nav_group_connections">کنکشنز</string>
@@ -633,7 +622,6 @@
     <string name="mv_panes_value">%1$d اسکرینیں</string>
     <string name="mv_provider_max_conn">زیادہ سے زیادہ کنکشنز</string>
     <string name="mv_provider_max_conn_hint">یہ سبسکرپشن ایک وقت میں کتنی اسٹریمز کی اجازت دیتی ہے (خالی = نامعلوم)</string>
-    <string name="mv_provider_max_conn_label">بیک وقت کنکشنز</string>
     <string name="ingest_connecting">%1$s — کنیکٹ ہو رہا ہے…</string>
     <string name="ingest_progress">%1$s — درآمد جاری: %2$s · %3$s آئٹمز · %4$s</string>
     <string name="ingest_size_of">%1$s از %2$s</string>

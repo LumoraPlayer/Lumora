@@ -4,10 +4,6 @@ package com.lumora.scraper.providers
 import com.lumora.scraper.bridge.HostScopedService
 import com.lumora.scraper.bridge.ScraperHosts
 import android.content.Context
-import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.tanasi.retrofit_jsoup.converter.JsoupConverterFactory
 import com.lumora.scraper.adapters.AppAdapter
@@ -22,7 +18,6 @@ import com.lumora.scraper.models.People
 import com.lumora.scraper.models.Season
 import com.lumora.scraper.models.TvShow
 import com.lumora.scraper.models.Video
-import com.lumora.scraper.providers.SerienStreamProvider.SerienStreamService
 import com.lumora.scraper.utils.DnsResolver
 import com.lumora.scraper.utils.TmdbUtils
 import kotlinx.coroutines.CoroutineScope
@@ -32,11 +27,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okhttp3.Cache
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.ResponseBody
-import okhttp3.dnsoverhttps.DnsOverHttps
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import retrofit2.Response
 import retrofit2.Retrofit
@@ -505,25 +497,6 @@ object AniWorldProvider : Provider {
 
         scheduleUpdateWorker(appContext)
     }
-
-    fun invalidateCache() {
-        synchronized(cacheLock) {
-            seriesCache.clear()
-            isSeriesCacheLoaded = false
-        }
-    }
-
-    fun getSeriesChunk(pageIndex: Int): List<TvShow> {
-        val fromIndex = pageIndex * chunkSize
-        if (fromIndex >= seriesCache.size) return emptyList()
-        val toIndex = minOf(fromIndex + chunkSize, seriesCache.size)
-        return seriesCache.subList(fromIndex, toIndex)
-    }
-
-    fun getTotalPages(): Int {
-        return (seriesCache.size + chunkSize - 1) / chunkSize
-    }
-
 
     private interface Service {
         companion object {

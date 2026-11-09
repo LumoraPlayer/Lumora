@@ -844,11 +844,6 @@ object SportsChannelMatcher {
         return out
     }
 
-    /** Whole-string lowercasing and diacritic fold, the same fold [normalise] applies per
-     *  token - multi-word keys and their haystacks go through this so "Fútbol Americano" and
-     *  "Futbol Americano" are one key, and an accented keyword can hit unaccented text. */
-    internal fun foldForMatch(text: String): String = foldDiacritics(text.lowercase())
-
     private fun addToken(raw: String, out: MutableList<String>) {
         val token = foldDiacritics(raw)
         if (token.isEmpty()) return

@@ -42,8 +42,6 @@
     <!-- Erros -->
     <!-- Entrada numérica -->
     <!-- A seguir / Avanço automático -->
-    <string name="up_next">A seguir</string>
-    <string name="play_now">Reproduzir agora</string>
 
     <!-- Busca incremental -->
     <!-- Sincronização A/V -->
@@ -77,7 +75,6 @@
     <string name="downloads_tab">Downloads</string>
     <string name="no_provider_configured">Nenhum provedor configurado</string>
     <string name="press_settings_to_add_playlist">Pressione Configurações para adicionar uma URL de lista de reprodução</string>
-    <string name="add_a_provider">Adicionar um provedor</string>
     <string name="startup_choose_provider">PROVEDOR IPTV/JELLYFIN</string>
     <string name="startup_choose_public">CONTEÚDO DE STREAMING PÚBLICO</string>
     <string name="startup_choose_both">AMBOS</string>
@@ -89,8 +86,6 @@
     <string name="find_stream">Encontrar &amp; reproduzir</string>
     <string name="trailer">Trailer</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Dormir</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Abrir em</string>
 
     <!-- Exibido na tela do carro no início de cada sessão e nas Configurações no
@@ -275,7 +270,6 @@
     <string name="scraper_sites_header">Sites para pesquisar</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Resolve os domínios dos sites por meio de um resolvedor criptografado em vez do seu ISP</string>
-    <string name="scraper_doh_system">DNS do sistema</string>
     <string name="scraper_extra_buffering_title">Buffer extra</string>
     <string name="scraper_extra_buffering_subtitle">Armazena em buffer até 5 minutos de antecedência para hosts que entregam em rajadas. Usa mais memória; entra em vigor após uma reinicialização</string>
     <string name="category_newest">Mais recentes</string>
@@ -348,7 +342,6 @@
     <string name="sports_finished">Fim</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Esportes</string>
-    <string name="sports_settings_subtitle">A aba Esportes lista os jogos de hoje e o canal em que cada um passa, combinados a partir das suas fontes de EPG. Os jogos vêm da API-Sports e da SportAPI.ai; as chaves são integradas ao aplicativo, então não há nada com que fazer login aqui.</string>
     <string name="sports_settings_subtitle_with_keys">Os jogos de hoje vêm de %1$s. O canal de cada linha é encontrado nas suas fontes de EPG, então um jogo só pode ser encontrado em um canal que seu guia cobre.</string>
     <string name="sports_settings_sport_feed">via API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Mostrar a aba Esportes</string>
@@ -539,12 +532,8 @@
     <string name="sett_locality_detect">Detectar do dispositivo</string>
     <string name="sett_locality_detected">Região do dispositivo: %1$s</string>
     <string name="sett_locality_detect_failed">Não foi possível detectar uma região deste dispositivo</string>
-    <string name="sett_locality_apply">Aplicar</string>
     <string name="sett_locality_grouping_label">%1$s (agrupamento)</string>
-    <string name="sett_locality_none_title">Nenhum canal para esta região</string>
     <string name="sett_locality_empty">Nenhum canal corresponde a %1$s nos seus provedores.</string>
-    <string name="sett_locality_change">Alterar regiões</string>
-    <string name="sett_locality_hidden_hint">%1$d canal(es) com a marcação %2$s estão ocultos.</string>
     <string name="settings_nav_group_library">Sua biblioteca</string>
     <string name="settings_nav_group_browsing">Navegação</string>
     <string name="settings_nav_group_connections">Conexões</string>
@@ -641,7 +630,6 @@
     <string name="mv_panes_value">%1$d telas</string>
     <string name="mv_provider_max_conn">Máximo de conexões</string>
     <string name="mv_provider_max_conn_hint">Quantos streams esta assinatura permite ao mesmo tempo (vazio = desconhecido)</string>
-    <string name="mv_provider_max_conn_label">Conexões simultâneas</string>
     <string name="ingest_connecting">%1$s — Conectando…</string>
     <string name="ingest_progress">%1$s — Importando %2$s · %3$s itens · %4$s</string>
     <string name="ingest_size_of">%1$s de %2$s</string>

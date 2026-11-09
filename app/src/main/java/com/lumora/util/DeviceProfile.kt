@@ -106,13 +106,6 @@ object DeviceProfile {
         Tier.HIGH -> 5_000
     }
 
-    /** Threads for CPU-bound derive passes (grouping/duplicate folding). */
-    fun deriveParallelism(context: Context): Int = when (tier(context)) {
-        Tier.LOW -> 2
-        Tier.MID -> 3
-        Tier.HIGH -> 4
-    }
-
     /**
      * True when a background download/parse should wait: the process is already under memory
      * pressure and the catalogue or the player needs the headroom more than the guide does.

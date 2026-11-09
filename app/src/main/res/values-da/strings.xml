@@ -42,8 +42,6 @@
     <!-- Fejl -->
     <!-- Numerisk indtastning -->
     <!-- Næste / automatisk videre -->
-    <string name="up_next">Næste</string>
-    <string name="play_now">Afspil nu</string>
 
     <!-- Inkrementel søgning -->
     <!-- A/V-synkronisering -->
@@ -76,7 +74,6 @@
     <string name="downloads_tab">Downloads</string>
     <string name="no_provider_configured">Ingen udbyder konfigureret</string>
     <string name="press_settings_to_add_playlist">Tryk på Indstillinger for at tilføje en afspilningsliste-URL</string>
-    <string name="add_a_provider">Tilføj en udbyder</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN-UDBYDER</string>
     <string name="startup_choose_public">OFFENTLIGT STREAMINGINDHOLD</string>
     <string name="startup_choose_both">BEGGE</string>
@@ -88,8 +85,6 @@
     <string name="find_stream">Find &amp; afspil</string>
     <string name="trailer">Trailer</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Søvn</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Åbn i</string>
 
     <!-- Vises på bilskærmen i starten af hver session og i Indstillinger på telefonen.
@@ -271,7 +266,6 @@
     <string name="scraper_sites_header">Sider at søge i</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Opløser sidedomæner gennem en krypteret opløser i stedet for din ISP\'s</string>
-    <string name="scraper_doh_system">System-DNS</string>
     <string name="scraper_extra_buffering_title">Ekstra buffering</string>
     <string name="scraper_extra_buffering_subtitle">Buffer op til 5 minutter i forvejen for værter, der leverer i rykk. Bruger mere hukommelse; gælder efter en genstart</string>
     <string name="category_newest">Nyeste</string>
@@ -343,7 +337,6 @@
     <string name="sports_finished">Slut</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sport</string>
-    <string name="sports_settings_subtitle">Fanen Sport viser dagens kampe og den kanal, hver kamp er på, matchet fra dine EPG-kilder. Kampene kommer fra API-Sports og SportAPI.ai; nøglerne er indbygget i appen, så der er intet at logge ind på her.</string>
     <string name="sports_settings_subtitle_with_keys">Dagens kampe kommer fra %1$s. Hver rækkes kanal matches ud fra dine EPG-kilder, så en kamp kan kun findes på en kanal, din guide dækker.</string>
     <string name="sports_settings_sport_feed">via API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Vis fanen Sport</string>
@@ -532,12 +525,8 @@
     <string name="sett_locality_detect">Find ud fra enheden</string>
     <string name="sett_locality_detected">Enhedens region: %1$s</string>
     <string name="sett_locality_detect_failed">Kunne ikke finde en region ud fra denne enhed</string>
-    <string name="sett_locality_apply">Anvend</string>
     <string name="sett_locality_grouping_label">%1$s (gruppering)</string>
-    <string name="sett_locality_none_title">Ingen kanaler for denne region</string>
     <string name="sett_locality_empty">Ingen kanaler hos dine udbydere matcher %1$s.</string>
-    <string name="sett_locality_change">Skift regioner</string>
-    <string name="sett_locality_hidden_hint">%1$d kanal(er) er mærket %2$s og vises ikke.</string>
     <string name="settings_nav_group_library">Dit bibliotek</string>
     <string name="settings_nav_group_browsing">Gennemsyn</string>
     <string name="settings_nav_group_connections">Forbindelser</string>
@@ -634,7 +623,6 @@
     <string name="mv_panes_value">%1$d skærme</string>
     <string name="mv_provider_max_conn">Maks. forbindelser</string>
     <string name="mv_provider_max_conn_hint">Hvor mange streams dette abonnement tillader på én gang (tomt = ukendt)</string>
-    <string name="mv_provider_max_conn_label">Samtidige forbindelser</string>
     <string name="ingest_connecting">%1$s — Forbinder…</string>
     <string name="ingest_progress">%1$s — Importerer %2$s · %3$s elementer · %4$s</string>
     <string name="ingest_size_of">%1$s af %2$s</string>

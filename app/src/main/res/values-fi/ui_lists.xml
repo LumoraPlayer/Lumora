@@ -65,7 +65,6 @@
     <string name="list_off">Pois</string>
     <string name="list_no_alt_audio">Ei vaihtoehtoisia ääniraitoja</string>
     <string name="list_no_alt_video">Ei vaihtoehtoista videolaatua</string>
-    <string name="list_no_subtitles">Tekstityksiä ei ole saatavilla</string>
     <string name="list_refresh_title">Päivitä palveluntarjoajat</string>
     <string name="list_refresh_message">Valitse, mitä ladataan uudelleen. Valitsematta jätetyt lähteet säilyttävät nykyisen luettelonsa.</string>
     <string name="list_refresh_all">Kaikki palveluntarjoajat</string>

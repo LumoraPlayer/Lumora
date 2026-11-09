@@ -1257,8 +1257,6 @@ object AnimeOnlineNinjaProvider : Provider {
         return !clearanceToken(syncClearanceCookieState()).isNullOrBlank()
     }
 
-    fun clearanceCookieForCronet(): String? = currentClearanceCookie()
-
     private suspend fun fetchDocumentDirect(url: String): Document? {
         val headers = pageHeaders(baseUrl)
         val response = AnimeOnlineNinjaCronetClient.get(

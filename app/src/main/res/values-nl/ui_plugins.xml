@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Schakel een streamplugin in om titels buiten je bibliotheek te bekijken.</string>
     <string name="plug_loading_series">Series laden…</string>
     <string name="plug_loading_movies">Films laden…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Schakel een streamplugin in, of zet Streaming-sites aan in Instellingen, om Ontdekken-titels af te spelen.</string>
     <string name="plug_loading_episodes">Afleveringen laden…</string>
     <string name="plug_choose_season">%1$s — kies een seizoen</string>
     <string name="plug_episode">Aflevering %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Herinnering geannuleerd</string>
     <string name="plug_reminder_set_for">Herinnering ingesteld voor \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Programma begint te snel - herinnering niet ingesteld</string>
-    <string name="plug_update_available">Update beschikbaar</string>
-    <string name="plug_update_available_message">Lumora v%1$s is beschikbaar.\nHuidige versie: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Deze app is verouderd en moet worden bijgewerkt. Lumora v%1$s is beschikbaar (je hebt v%2$s).</string>
     <string name="plug_force_update_title">Update vereist</string>
     <string name="plug_force_update_message">Lumora v%1$s loopt %3$d versies achter op de nieuwste release (v%2$s). De app kan pas worden gebruikt na een update - tik op Nu bijwerken om die te installeren.</string>
     <string name="plug_force_update_unrecognised_message">Deze build (v%1$s) is geen gepubliceerde Lumora-release. Installeer de officiële release (v%2$s) om de app te blijven gebruiken.</string>
     <string name="plug_update_now">Nu bijwerken</string>
     <string name="plug_update_dismiss">Sluiten</string>
-    <string name="plug_later">Later</string>
     <string name="plug_downloading_update">Update downloaden…</string>
     <string name="plug_update_download_failed">Downloaden van update mislukt</string>
     <string name="plug_backup_exported">Back-up geëxporteerd</string>
     <string name="plug_export_failed">Exporteren mislukt</string>
     <string name="plug_imported_summary">Geïmporteerd: %1$d providers, %2$d EPG-bronnen, %3$d groepen, %4$d instellingen</string>
-    <string name="plug_import_failed">Importeren mislukt</string>
     <string name="plug_import_failed_reason">Importeren mislukt: %1$s</string>
 </resources>

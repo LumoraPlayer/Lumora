@@ -65,7 +65,6 @@
     <string name="list_off">Fra</string>
     <string name="list_no_alt_audio">Ingen alternative lydspor</string>
     <string name="list_no_alt_video">Ingen alternativ videokvalitet</string>
-    <string name="list_no_subtitles">Ingen undertekster tilgængelige</string>
     <string name="list_refresh_title">Opdater udbydere</string>
     <string name="list_refresh_message">Vælg, hvad der skal downloades igen. Kilder, du ikke vælger, beholder deres nuværende katalog.</string>
     <string name="list_refresh_all">Alle udbydere</string>

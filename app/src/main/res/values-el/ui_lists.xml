@@ -65,7 +65,6 @@
     <string name="list_off">Ανενεργό</string>
     <string name="list_no_alt_audio">Δεν υπάρχουν εναλλακτικά κομμάτια ήχου</string>
     <string name="list_no_alt_video">Δεν υπάρχει εναλλακτική ποιότητα βίντεο</string>
-    <string name="list_no_subtitles">Δεν υπάρχουν διαθέσιμοι υπότιτλοι</string>
     <string name="list_refresh_title">Ανανέωση παρόχων</string>
     <string name="list_refresh_message">Επιλέξτε τι θα ληφθεί ξανά. Όσες πηγές αφήσετε χωρίς επιλογή διατηρούν τον τρέχοντα κατάλογό τους.</string>
     <string name="list_refresh_all">Όλοι οι πάροχοι</string>

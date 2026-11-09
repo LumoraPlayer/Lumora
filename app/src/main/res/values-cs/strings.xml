@@ -42,8 +42,6 @@
     <!-- Chyby -->
     <!-- Číselný vstup -->
     <!-- Následující / Automatické pokračování -->
-    <string name="up_next">Následuje</string>
-    <string name="play_now">Přehrát nyní</string>
 
     <!-- Postupné vyhledávání -->
     <!-- Synchronizace A/V -->
@@ -78,7 +76,6 @@
     <string name="downloads_tab">Stažené</string>
     <string name="no_provider_configured">Není nakonfigurován žádný poskytovatel</string>
     <string name="press_settings_to_add_playlist">Stiskněte Nastavení a přidejte URL playlistu</string>
-    <string name="add_a_provider">Přidat poskytovatele</string>
     <string name="startup_choose_provider">POSKYTOVATEL IPTV/JELLYFIN</string>
     <string name="startup_choose_public">VEŘEJNÝ STREAMOVACÍ OBSAH</string>
     <string name="startup_choose_both">OBOJÍ</string>
@@ -90,8 +87,6 @@
     <string name="find_stream">Najít a přehrát</string>
     <string name="trailer">Upoutávka</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Spánek</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Otevřít v</string>
 
     <!-- Zobrazuje se na obrazovce auta na začátku každé relace a v Nastavení v telefonu.
@@ -274,7 +269,6 @@
     <string name="scraper_sites_header">Weby k prohledání</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Domény webů řeší přes šifrovaný resolver místo resolveru vašeho ISP</string>
-    <string name="scraper_doh_system">Systémový DNS</string>
     <string name="scraper_extra_buffering_title">Extra vyrovnávací paměť</string>
     <string name="scraper_extra_buffering_subtitle">Načítá až 5 minut dopředu pro hostitele, kteří doručují po dávkách. Využívá více paměti; projeví se po restartu</string>
     <string name="category_newest">Nejnovější</string>
@@ -348,7 +342,6 @@
     <string name="sports_finished">FT</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sport</string>
-    <string name="sports_settings_subtitle">Karta Sport uvádí dnešní zápasy a kanál, na kterém každý z nich běží, spárovaný z vašich zdrojů EPG. Zápasy pocházejí z API-Sports a SportAPI.ai; klíče jsou zabudované v aplikaci, takže se tu není kam přihlašovat.</string>
     <string name="sports_settings_subtitle_with_keys">Dnešní zápasy pocházejí z %1$s. Kanál každého řádku je spárován z vašich zdrojů EPG, takže zápas lze najít jen na kanálu, který váš průvodce pokrývá.</string>
     <string name="sports_settings_sport_feed">přes API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Zobrazit kartu Sport</string>
@@ -541,12 +534,8 @@
     <string name="sett_locality_detect">Zjistit ze zařízení</string>
     <string name="sett_locality_detected">Region zařízení: %1$s</string>
     <string name="sett_locality_detect_failed">Region tohoto zařízení se nepodařilo zjistit</string>
-    <string name="sett_locality_apply">Použít</string>
     <string name="sett_locality_grouping_label">%1$s (seskupení)</string>
-    <string name="sett_locality_none_title">Pro tento region nejsou žádné kanály</string>
     <string name="sett_locality_empty">Žádné kanály ve vašich poskytovatelích neodpovídají výběru: %1$s.</string>
-    <string name="sett_locality_change">Změnit regiony</string>
-    <string name="sett_locality_hidden_hint">Skryté kanály: %1$d (označení %2$s).</string>
     <string name="settings_nav_group_library">Vaše knihovna</string>
     <string name="settings_nav_group_browsing">Procházení</string>
     <string name="settings_nav_group_connections">Připojení</string>
@@ -643,7 +632,6 @@
     <string name="mv_panes_value">Počet obrazovek: %1$d</string>
     <string name="mv_provider_max_conn">Max. připojení</string>
     <string name="mv_provider_max_conn_hint">Kolik streamů toto předplatné povoluje najednou (prázdné = neznámé)</string>
-    <string name="mv_provider_max_conn_label">Souběžná připojení</string>
     <string name="ingest_connecting">%1$s — Připojování…</string>
     <string name="ingest_progress">%1$s — Import: %2$s · %3$s položek · %4$s</string>
     <string name="ingest_size_of">%1$s z %2$s</string>

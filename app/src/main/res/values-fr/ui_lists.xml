@@ -72,7 +72,6 @@
     <string name="list_off">Désactivé</string>
     <string name="list_no_alt_audio">Aucune piste audio alternative</string>
     <string name="list_no_alt_video">Aucune autre qualité vidéo</string>
-    <string name="list_no_subtitles">Aucun sous-titre disponible</string>
 
     <!-- Sélecteur d'actualisation de la barre d'outils (MainActivityProviders.kt) -->
     <string name="list_refresh_title">Actualiser les fournisseurs</string>

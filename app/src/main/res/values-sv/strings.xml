@@ -42,8 +42,6 @@
     <!-- Fel -->
     <!-- Numerisk inmatning -->
     <!-- Härnäst / Automatisk fortsättning -->
-    <string name="up_next">Härnäst</string>
-    <string name="play_now">Spela nu</string>
 
     <!-- Inkrementell sökning -->
     <!-- A/V-synk -->
@@ -76,7 +74,6 @@
     <string name="downloads_tab">Nedladdningar</string>
     <string name="no_provider_configured">Ingen leverantör konfigurerad</string>
     <string name="press_settings_to_add_playlist">Tryck på Inställningar för att lägga till en spellista-URL</string>
-    <string name="add_a_provider">Lägg till en leverantör</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN-LEVERANTÖR</string>
     <string name="startup_choose_public">OFFENTLIGT STREAMINGINNEHÅLL</string>
     <string name="startup_choose_both">BÅDA</string>
@@ -88,8 +85,6 @@
     <string name="find_stream">Hitta &amp; spela</string>
     <string name="trailer">Trailer</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Sömn</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Öppna i</string>
 
     <!-- Visas på bilskärmen i början av varje session och i inställningarna på
@@ -271,7 +266,6 @@
     <string name="scraper_sites_header">Webbplatser att söka i</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Löser webbplatsdomäner via en krypterad resolver istället för din ISP:s</string>
-    <string name="scraper_doh_system">System-DNS</string>
     <string name="scraper_extra_buffering_title">Extra buffring</string>
     <string name="scraper_extra_buffering_subtitle">Buffrar upp till 5 minuter i förväg för värdar som levererar i skurar. Använder mer minne; gäller efter en omstart</string>
     <string name="category_newest">Nyaste</string>
@@ -343,7 +337,6 @@
     <string name="sports_finished">FT</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sport</string>
-    <string name="sports_settings_subtitle">Sportfliken listar dagens matcher och kanalen som var och en går på, matchade från dina EPG-källor. Matcherna kommer från API-Sports och SportAPI.ai; nycklarna är inbyggda i appen, så det finns inget att logga in på här.</string>
     <string name="sports_settings_subtitle_with_keys">Dagens matcher kommer från %1$s. Varje rads kanal matchas fram ur dina EPG-källor, så en match kan bara hittas på en kanal som din guide täcker.</string>
     <string name="sports_settings_sport_feed">via API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Visa fliken Sport</string>
@@ -532,12 +525,8 @@
     <string name="sett_locality_detect">Identifiera från enheten</string>
     <string name="sett_locality_detected">Enhetens region: %1$s</string>
     <string name="sett_locality_detect_failed">Kunde inte identifiera någon region från den här enheten</string>
-    <string name="sett_locality_apply">Använd</string>
     <string name="sett_locality_grouping_label">%1$s (gruppering)</string>
-    <string name="sett_locality_none_title">Inga kanaler för den här regionen</string>
     <string name="sett_locality_empty">Inga kanaler matchar %1$s hos dina leverantörer.</string>
-    <string name="sett_locality_change">Ändra regioner</string>
-    <string name="sett_locality_hidden_hint">%1$d kanal(er) är taggade %2$s och är dolda.</string>
     <string name="settings_nav_group_library">Ditt bibliotek</string>
     <string name="settings_nav_group_browsing">Bläddring</string>
     <string name="settings_nav_group_connections">Anslutningar</string>
@@ -634,7 +623,6 @@
     <string name="mv_panes_value">%1$d skärmar</string>
     <string name="mv_provider_max_conn">Max anslutningar</string>
     <string name="mv_provider_max_conn_hint">Hur många strömmar den här prenumerationen tillåter samtidigt (tomt = okänt)</string>
-    <string name="mv_provider_max_conn_label">Samtidiga anslutningar</string>
     <string name="ingest_connecting">%1$s — Ansluter…</string>
     <string name="ingest_progress">%1$s — Importerar %2$s · %3$s objekt · %4$s</string>
     <string name="ingest_size_of">%1$s av %2$s</string>

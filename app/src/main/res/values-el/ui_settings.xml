@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Συμπληρώστε τα μόνο αν ο πάροχός σας έχει καταχωρίσει συγκεκριμένη συσκευή. Αφήστε τα κενά για να δημιουργηθεί προφίλ συσκευής από τη διεύθυνση MAC.</string>
     <string name="sett_type_summary">Τύπος: %1$s</string>
     <string name="sett_editing_provider">Επεξεργασία %1$s</string>
-    <string name="sett_editing_jellyfin">Επεξεργασία Jellyfin</string>
     <string name="sett_editing_plex">Επεξεργασία Plex</string>
     <string name="sett_plex_starting">Έναρξη σύνδεσης…</string>
     <string name="sett_plex_scan_code">Πηγαίνετε στο plex.tv/link και εισαγάγετε %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Κρυφή από την περιήγηση. Εξακολουθεί να αναπαράγεται αν αποτύχει η κύρια πηγή.</string>
     <string name="sett_provider_backup_badge">Εφεδρικός</string>
     <string name="sett_provider_backup_needed">Διατηρήστε τουλάχιστον μία ορατή πηγή</string>
-    <string name="sett_remove_plex_confirm">Αφαίρεση Plex;</string>
     <string name="sett_remove_plex_message">Οι ταινίες και οι σειρές του δεν θα εμφανίζονται πλέον.</string>
-    <string name="sett_remove_jellyfin_confirm">Αφαίρεση Jellyfin;</string>
     <string name="sett_remove_jellyfin_message">Τα κανάλια του δεν θα εμφανίζονται πλέον.</string>
     <string name="sett_choose_provider_type_first">Επιλέξτε πρώτα τύπο παρόχου</string>
     <string name="sett_enter_m3u_url">Εισαγάγετε ένα URL M3U</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Έληξε</string>
     <string name="sett_could_not_start_server">Δεν ήταν δυνατή η έναρξη του διακομιστή</string>
     <string name="sett_provider_received">Ο πάροχος ελήφθη! Φόρτωση...</string>
-    <string name="sett_backup_saved_to">Το αντίγραφο ασφαλείας αποθηκεύτηκε στο %1$s</string>
     <string name="sett_backup_secrets_note">Το αρχείο αντιγράφου ασφαλείας περιέχει στοιχεία σύνδεσης παρόχων και διακριτικά συνεδρίας διακομιστή πολυμέσων ως αναγνώσιμο κείμενο — φυλάξτε το σε ιδιωτικό μέρος.</string>
     <string name="sett_export_failed">Η εξαγωγή απέτυχε</string>
     <string name="sett_no_backup_file">Δεν βρέθηκε αρχείο αντιγράφου ασφαλείας στο %1$s</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Πρόταση εξωτερικού προγράμματος αναπαραγωγής: %1$s</string>
     <string name="sett_fast_zap">Γρηγορότερη αλλαγή καναλιού: %1$s</string>
     <string name="sett_frame_rate_match">Αντιστοίχιση ρυθμού ανανέωσης οθόνης: %1$s</string>
-    <string name="sett_live_preview">Προεπισκόπηση ζωντανού καναλιού: %1$s</string>
     <string name="sett_on">ΕΝΕΡΓΟ</string>
     <string name="sett_off">ΑΝΕΝΕΡΓΟ</string>
     <string name="sett_playback_settings_title">Ρυθμίσεις αναπαραγωγής</string>

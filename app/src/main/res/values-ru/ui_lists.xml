@@ -67,7 +67,6 @@
     <string name="list_off">Выкл.</string>
     <string name="list_no_alt_audio">Нет альтернативных аудиодорожек</string>
     <string name="list_no_alt_video">Нет альтернативного качества видео</string>
-    <string name="list_no_subtitles">Субтитры недоступны</string>
     <string name="list_refresh_title">Обновить провайдеров</string>
     <string name="list_refresh_message">Выберите, что загрузить заново. Источники, которые вы не отметите, сохранят текущий каталог.</string>
     <string name="list_refresh_all">Все провайдеры</string>

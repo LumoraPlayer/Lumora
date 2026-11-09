@@ -20,14 +20,10 @@ import com.lumora.scraper.models.People
 import com.lumora.scraper.models.Season
 import com.lumora.scraper.models.TvShow
 import com.lumora.scraper.models.Video
-import com.lumora.scraper.utils.DnsResolver
 import com.lumora.scraper.utils.NetworkClient
 import com.lumora.scraper.utils.TmdbUtils
 import com.lumora.scraper.utils.UserPreferences
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.ResponseBody
@@ -36,11 +32,8 @@ import org.jsoup.nodes.Element
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.Field
-import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
 import retrofit2.http.Headers
-import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Url
@@ -89,11 +82,6 @@ object SerienStreamProvider : Provider {
 
     private fun getDao(): TvShowDao {
         return tvShowDao ?: throw IllegalStateException("SerienStreamProvider not initialized")
-    }
-
-    fun reloadService() {
-        service = null
-        serviceBaseUrl = null
     }
 
     private fun currentDomain(): String {
@@ -538,9 +526,6 @@ object SerienStreamProvider : Provider {
 
         @GET("suche?tab=genres")
         suspend fun getSeriesListWithCategories(): Document
-
-        @GET("serien-alphabet")
-        suspend fun getSeriesListAlphabet(): Document
 
         @GET("suche")
         suspend fun search(

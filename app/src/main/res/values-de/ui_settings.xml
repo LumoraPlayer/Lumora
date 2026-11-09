@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Füllen Sie diese Felder nur aus, wenn Ihr Anbieter ein bestimmtes Gerät registriert hat. Lassen Sie sie leer, um ein Geräteprofil aus der MAC-Adresse zu erzeugen.</string>
     <string name="sett_type_summary">Typ: %1$s</string>
     <string name="sett_editing_provider">%1$s wird bearbeitet</string>
-    <string name="sett_editing_jellyfin">Jellyfin wird bearbeitet</string>
     <string name="sett_editing_plex">Plex wird bearbeitet</string>
     <string name="sett_plex_starting">Anmeldung wird gestartet…</string>
     <string name="sett_plex_scan_code">Gehen Sie zu plex.tv/link und geben Sie %1$s ein</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Beim Durchsuchen ausgeblendet. Wird trotzdem abgespielt, wenn die Hauptquelle ausfällt.</string>
     <string name="sett_provider_backup_badge">Backup</string>
     <string name="sett_provider_backup_needed">Behalten Sie mindestens eine sichtbare Quelle</string>
-    <string name="sett_remove_plex_confirm">Plex entfernen?</string>
     <string name="sett_remove_plex_message">Filme und Serien werden nicht mehr angezeigt.</string>
-    <string name="sett_remove_jellyfin_confirm">Jellyfin entfernen?</string>
     <string name="sett_remove_jellyfin_message">Die Kanäle werden nicht mehr angezeigt.</string>
     <string name="sett_choose_provider_type_first">Wählen Sie zuerst einen Anbietertyp</string>
     <string name="sett_enter_m3u_url">Geben Sie eine M3U-URL ein</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Abgelaufen</string>
     <string name="sett_could_not_start_server">Server konnte nicht gestartet werden</string>
     <string name="sett_provider_received">Anbieter empfangen! Wird geladen...</string>
-    <string name="sett_backup_saved_to">Backup gespeichert unter %1$s</string>
     <string name="sett_backup_secrets_note">Die Backup-Datei enthält Anmeldedaten von Anbietern und Sitzungstoken von Medienservern als lesbaren Text — bewahren Sie sie an einem privaten Ort auf.</string>
     <string name="sett_export_failed">Export fehlgeschlagen</string>
     <string name="sett_no_backup_file">Keine Backup-Datei unter %1$s gefunden</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Externen Player vorschlagen: %1$s</string>
     <string name="sett_fast_zap">Schnellerer Kanalwechsel: %1$s</string>
     <string name="sett_frame_rate_match">An Bildwiederholrate des Displays anpassen: %1$s</string>
-    <string name="sett_live_preview">Live-Kanalvorschau: %1$s</string>
     <string name="sett_on">AN</string>
     <string name="sett_off">AUS</string>
     <string name="sett_playback_settings_title">Wiedergabeeinstellungen</string>

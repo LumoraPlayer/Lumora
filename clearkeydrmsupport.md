@@ -193,7 +193,7 @@ the manifest's full path). The UA still applies to every request via `setUserAge
 | Generic M3U/Xtream/Stalker play | `MainActivityPlayer.kt` `else ->` (~1042) | pass `startVersion.drm` |
 | Live quality failover | `MainActivityPlayer.kt` `switchToVersionIndex()` (~1389) | pass `next.drm` |
 | Live preview pane | `MainActivityEpg.kt` `loadPreview()` (~565) | pass DRM, or skip preview for DRM channels (else it just spins) |
-| Android Auto | `auto/CarPlayback.kt` `play()` (~77) | pass `channel.drm` |
+| Android Auto (projected Activity) | `MainActivityPlayer.kt` play path | pass `startVersion.drm` |
 | External player hand-off | `player/ExternalPlayer.kt` | DRM cannot be handed off (no KODIPROP to VLC). Optionally refuse with a clear message instead of a silent failure |
 | Downloads | `download/VodDownloader.kt`, `download/HlsDownloads.kt` | Media3 download of encrypted tracks needs the same `DrmSessionManager`; for now **block/deny** ClearKey VOD downloads with a message (OTT also notes DRM recording caveats) |
 | Resume snapshot | `cache/PlaybackPositionStore.kt` | add `drmType`/`drmKeys` to the JSON write+read so direct-URL ClearKey VOD resumes with its key |
@@ -286,7 +286,6 @@ New JUnit4 tests (existing style: plain parser tests, no Robolectric):
 - `app/src/main/java/com/lumora/player/ClearKeyDrm.kt` *(new — JWK/DrmSessionManager builder)*
 - `app/src/main/java/com/lumora/MainActivityPlayer.kt` (`else ->`, `switchToVersionIndex`)
 - `app/src/main/java/com/lumora/MainActivityEpg.kt` (`loadPreview`)
-- `app/src/main/java/com/lumora/auto/CarPlayback.kt`
 - `app/src/main/java/com/lumora/cache/ChannelCache.kt`
 - `app/src/main/java/com/lumora/cache/PlaybackPositionStore.kt`
 - `app/src/main/java/com/lumora/adapter/PosterGridAdapter.kt` (diff subset)

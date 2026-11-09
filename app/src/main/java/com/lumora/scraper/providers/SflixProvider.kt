@@ -5,7 +5,6 @@ import com.lumora.scraper.bridge.HostScopedService
 import com.lumora.scraper.bridge.ScraperExtras
 import com.lumora.scraper.bridge.ScraperHosts
 import com.tanasi.retrofit_jsoup.converter.JsoupConverterFactory
-import com.lumora.scraper.ScraperConfig
 import com.lumora.scraper.adapters.AppAdapter
 import com.lumora.scraper.extractors.Extractor
 import com.lumora.scraper.models.Category
@@ -16,9 +15,7 @@ import com.lumora.scraper.models.People
 import com.lumora.scraper.models.Season
 import com.lumora.scraper.models.TvShow
 import com.lumora.scraper.models.Video
-import com.lumora.scraper.utils.DnsResolver
 import com.lumora.scraper.utils.NetworkClient
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
@@ -27,7 +24,6 @@ import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
-import retrofit2.http.Url
 import java.util.concurrent.TimeUnit
 
 object SflixProvider : Provider {
@@ -795,11 +791,6 @@ object SflixProvider : Provider {
 
         @GET("ajax/episode/sources/{id}")
         suspend fun getLink(@Path("id") id: String): Link
-
-        @GET
-        suspend fun getEmbed(
-            @Url url: String,
-        ): Embed
 
 
         data class Link(

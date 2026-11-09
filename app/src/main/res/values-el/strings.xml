@@ -42,8 +42,6 @@
     <!-- Σφάλματα -->
     <!-- Αριθμητική εισαγωγή -->
     <!-- Επόμενο / Αυτόματη μετάβαση -->
-    <string name="up_next">Επόμενο</string>
-    <string name="play_now">Αναπαραγωγή τώρα</string>
 
     <!-- Προοδευτική αναζήτηση -->
     <!-- Συγχρονισμός A/V -->
@@ -76,7 +74,6 @@
     <string name="downloads_tab">Λήψεις</string>
     <string name="no_provider_configured">Δεν έχει διαμορφωθεί πάροχος</string>
     <string name="press_settings_to_add_playlist">Πατήστε Ρυθμίσεις για να προσθέσετε μια διεύθυνση URL λίστας αναπαραγωγής</string>
-    <string name="add_a_provider">Προσθήκη παρόχου</string>
     <string name="startup_choose_provider">ΠΑΡΟΧΟΣ IPTV/JELLYFIN</string>
     <string name="startup_choose_public">ΔΗΜΟΣΙΟ ΠΕΡΙΕΧΟΜΕΝΟ ΡΟΗΣ</string>
     <string name="startup_choose_both">ΚΑΙ ΤΑ ΔΥΟ</string>
@@ -88,8 +85,6 @@
     <string name="find_stream">Εύρεση &amp; αναπαραγωγή</string>
     <string name="trailer">Τρέιλερ</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Ύπνος</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Άνοιγμα σε</string>
 
     <!-- Εμφανίζεται στην οθόνη του αυτοκινήτου στην αρχή κάθε συνεδρίας, και στις ρυθμίσεις στο
@@ -275,7 +270,6 @@
     <string name="scraper_sites_header">Ιστότοποι προς αναζήτηση</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Επιλύει τα ονόματα τομέων των ιστοτόπων μέσω κρυπτογραφημένου επιλυτή αντί για αυτόν του ISP σας</string>
-    <string name="scraper_doh_system">DNS συστήματος</string>
     <string name="scraper_extra_buffering_title">Επιπλέον προσωρινή αποθήκευση</string>
     <string name="scraper_extra_buffering_subtitle">Προσωρινά αποθηκεύει έως και 5 λεπτά μπροστά για οικοδεσπότες που παραδίδουν κατά ριπές. Χρησιμοποιεί περισσότερη μνήμη· εφαρμόζεται μετά από επανεκκίνηση</string>
     <string name="category_newest">Νεότερα</string>
@@ -347,7 +341,6 @@
     <string name="sports_finished">ΤΕΛΟΣ</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Αθλητικά</string>
-    <string name="sports_settings_subtitle">Η καρτέλα Αθλητικά εμφανίζει τους σημερινούς αγώνες και το κανάλι του καθενός, αντιστοιχισμένους από τις πηγές EPG σας. Οι αγώνες προέρχονται από τα API-Sports και SportAPI.ai - τα κλειδιά είναι ενσωματωμένα στην εφαρμογή, οπότε δεν χρειάζεται σύνδεση εδώ.</string>
     <string name="sports_settings_subtitle_with_keys">Οι σημερινοί αγώνες προέρχονται από το %1$s. Το κανάλι κάθε γραμμής αντιστοιχίζεται από τις πηγές EPG σας, οπότε ένας αγώνας μπορεί να βρεθεί μόνο σε κανάλι που καλύπτει ο οδηγός σας.</string>
     <string name="sports_settings_sport_feed">μέσω API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Εμφάνιση της καρτέλας Αθλητικά</string>
@@ -536,12 +529,8 @@
     <string name="sett_locality_detect">Ανίχνευση από τη συσκευή</string>
     <string name="sett_locality_detected">Περιοχή συσκευής: %1$s</string>
     <string name="sett_locality_detect_failed">Δεν ήταν δυνατή η ανίχνευση περιοχής από αυτή τη συσκευή</string>
-    <string name="sett_locality_apply">Εφαρμογή</string>
     <string name="sett_locality_grouping_label">%1$s (ομαδοποίηση)</string>
-    <string name="sett_locality_none_title">Δεν υπάρχουν κανάλια για αυτή την περιοχή</string>
     <string name="sett_locality_empty">Κανένα κανάλι από τους παρόχους σας δεν αντιστοιχεί σε %1$s.</string>
-    <string name="sett_locality_change">Αλλαγή περιοχών</string>
-    <string name="sett_locality_hidden_hint">Κρυμμένα κανάλια (%1$d) φέρουν την ετικέτα %2$s.</string>
     <string name="settings_nav_group_library">Η βιβλιοθήκη σας</string>
     <string name="settings_nav_group_browsing">Περιήγηση</string>
     <string name="settings_nav_group_connections">Συνδέσεις</string>
@@ -638,7 +627,6 @@
     <string name="mv_panes_value">%1$d οθόνες</string>
     <string name="mv_provider_max_conn">Μέγιστες συνδέσεις</string>
     <string name="mv_provider_max_conn_hint">Πόσες ροές επιτρέπει ταυτόχρονα αυτή η συνδρομή (κενό = άγνωστο)</string>
-    <string name="mv_provider_max_conn_label">Ταυτόχρονες συνδέσεις</string>
     <string name="ingest_connecting">%1$s — Σύνδεση…</string>
     <string name="ingest_progress">%1$s — Εισαγωγή: %2$s · %3$s στοιχεία · %4$s</string>
     <string name="ingest_size_of">%1$s από %2$s</string>

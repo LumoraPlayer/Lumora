@@ -7,7 +7,6 @@ import com.tanasi.retrofit_jsoup.converter.JsoupConverterFactory
 import com.lumora.scraper.adapters.AppAdapter
 import com.lumora.scraper.extractors.Extractor
 import com.lumora.scraper.models.*
-import com.lumora.scraper.utils.DnsResolver
 import com.lumora.scraper.utils.NetworkClient
 import com.lumora.scraper.utils.TMDb3
 import com.lumora.scraper.utils.TMDb3.original
@@ -109,21 +108,6 @@ object CuevanaEuProvider : Provider {
         @GET
         suspend fun getPage(@Url url: String): Document
     }
-
-    @Serializable
-    private data class RyusakiServersResponse(
-        val success: Boolean,
-        val servers: List<RyusakiServer>? = null
-    )
-
-    @Serializable
-    private data class RyusakiServer(
-        val id: String,
-        val serverName: String,
-        val language: String,
-        val type: String, // "embed" or "download"
-        val url: String? = null
-    )
 
     @Serializable
     private data class RyusakiStreamResponse(

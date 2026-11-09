@@ -42,8 +42,6 @@
     <!-- Pogreške -->
     <!-- Numerički unos -->
     <!-- Sljedeće / automatsko napredovanje -->
-    <string name="up_next">Sljedeće</string>
-    <string name="play_now">Reproduciraj sada</string>
 
     <!-- Postupno pretraživanje -->
     <!-- A/V sinkronizacija -->
@@ -77,7 +75,6 @@
     <string name="downloads_tab">Preuzimanja</string>
     <string name="no_provider_configured">Nije konfiguriran nijedan pružatelj</string>
     <string name="press_settings_to_add_playlist">Pritisnite Postavke za dodavanje URL-a popisa</string>
-    <string name="add_a_provider">Dodaj pružatelja</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN PRUŽATELJ</string>
     <string name="startup_choose_public">JAVNI STREAMING SADRŽAJ</string>
     <string name="startup_choose_both">OBOJE</string>
@@ -89,8 +86,6 @@
     <string name="find_stream">Pronađi &amp; reproduciraj</string>
     <string name="trailer">Najava</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Spavanje</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Otvori u</string>
 
     <!-- Prikazuje se na zaslonu automobila na početku svake sesije i u postavkama na telefonu.
@@ -271,7 +266,6 @@
     <string name="scraper_sites_header">Stranice za pretraživanje</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Razrješava domene stranica putem šifriranog razrješivača umjesto preko vašeg ISP-a</string>
-    <string name="scraper_doh_system">Sustavni DNS</string>
     <string name="scraper_extra_buffering_title">Dodatno međuspremanje</string>
     <string name="scraper_extra_buffering_subtitle">Međusprema do 5 minuta unaprijed za poslužitelje koji isporučuju u serijama. Koristi više memorije; primjenjuje se nakon ponovnog pokretanja</string>
     <string name="category_newest">Najnovije</string>
@@ -344,7 +338,6 @@
     <string name="sports_finished">KRAJ</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sport</string>
-    <string name="sports_settings_subtitle">Kartica Sport prikazuje današnje utakmice i kanal na kojem je svaka, povezane iz vaših EPG izvora. Utakmice dolaze s API-Sports i SportAPI.ai; ključevi su ugrađeni u aplikaciju pa se ovdje ne treba nigdje prijavljivati.</string>
     <string name="sports_settings_subtitle_with_keys">Današnje utakmice dolaze s %1$s. Kanal svakog retka povezuje se iz vaših EPG izvora, pa se utakmica može pronaći samo na kanalu koji vaš vodič pokriva.</string>
     <string name="sports_settings_sport_feed">putem API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Prikaži karticu Sport</string>
@@ -535,12 +528,8 @@
     <string name="sett_locality_detect">Prepoznaj s uređaja</string>
     <string name="sett_locality_detected">Regija uređaja: %1$s</string>
     <string name="sett_locality_detect_failed">Nije moguće prepoznati regiju s ovog uređaja</string>
-    <string name="sett_locality_apply">Primijeni</string>
     <string name="sett_locality_grouping_label">%1$s (skupina)</string>
-    <string name="sett_locality_none_title">Nema kanala za ovu regiju</string>
     <string name="sett_locality_empty">Nijedan se kanal u vašim pružateljima ne podudara s %1$s.</string>
-    <string name="sett_locality_change">Promijeni regije</string>
-    <string name="sett_locality_hidden_hint">Skriveno je %1$d kanala s oznakom %2$s.</string>
     <string name="settings_nav_group_library">Vaša biblioteka</string>
     <string name="settings_nav_group_browsing">Pregledavanje</string>
     <string name="settings_nav_group_connections">Veze</string>
@@ -637,7 +626,6 @@
     <string name="mv_panes_value">%1$d zaslona</string>
     <string name="mv_provider_max_conn">Maksimalan broj veza</string>
     <string name="mv_provider_max_conn_hint">Koliko tokova ova pretplata dopušta istovremeno (prazno = nepoznato)</string>
-    <string name="mv_provider_max_conn_label">Istovremene veze</string>
     <string name="ingest_connecting">%1$s — Povezivanje…</string>
     <string name="ingest_progress">%1$s — uvoz: %2$s · %3$s stavki · %4$s</string>
     <string name="ingest_size_of">%1$s od %2$s</string>

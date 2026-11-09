@@ -65,7 +65,6 @@
     <string name="list_off">Kapalı</string>
     <string name="list_no_alt_audio">Alternatif ses parçası yok</string>
     <string name="list_no_alt_video">Alternatif video kalitesi yok</string>
-    <string name="list_no_subtitles">Kullanılabilir altyazı yok</string>
     <string name="list_refresh_title">Sağlayıcıları yenile</string>
     <string name="list_refresh_message">Neyin yeniden indirileceğini seçin. Seçmediğiniz kaynaklar mevcut kataloglarını korur.</string>
     <string name="list_refresh_all">Tüm sağlayıcılar</string>

@@ -66,7 +66,6 @@
     <string name="list_off">Isključeno</string>
     <string name="list_no_alt_audio">Nema drugih zvučnih zapisa</string>
     <string name="list_no_alt_video">Nema druge kvalitete videa</string>
-    <string name="list_no_subtitles">Titlovi nisu dostupni</string>
     <string name="list_refresh_title">Osvježi pružatelje</string>
     <string name="list_refresh_message">Odaberite što će se ponovno preuzeti. Izvori koje ostavite neoznačene zadržavaju trenutačni katalog.</string>
     <string name="list_refresh_all">Svi pružatelji</string>

@@ -42,8 +42,6 @@
     <!-- Feil -->
     <!-- Numerisk inntasting -->
     <!-- Neste / automatisk avspilling -->
-    <string name="up_next">Neste</string>
-    <string name="play_now">Spill nå</string>
 
     <!-- Inkrementelt søk -->
     <!-- A/V-synkronisering -->
@@ -76,7 +74,6 @@
     <string name="downloads_tab">Nedlastinger</string>
     <string name="no_provider_configured">Ingen leverandør konfigurert</string>
     <string name="press_settings_to_add_playlist">Trykk på Innstillinger for å legge til en spilleliste-URL</string>
-    <string name="add_a_provider">Legg til en leverandør</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN-LEVERANDØR</string>
     <string name="startup_choose_public">OFFENTLIG STREAMINGINNHOLD</string>
     <string name="startup_choose_both">BEGGE</string>
@@ -88,8 +85,6 @@
     <string name="find_stream">Finn &amp; spill</string>
     <string name="trailer">Trailer</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Søvn</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Åpne i</string>
 
     <!-- Vises på bilskjermen ved starten av hver økt, og i Innstillinger på telefonen.
@@ -271,7 +266,6 @@
     <string name="scraper_sites_header">Nettsteder å søke i</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Løser nettsteddomener gjennom en kryptert oppløser i stedet for din ISP\'s</string>
-    <string name="scraper_doh_system">System-DNS</string>
     <string name="scraper_extra_buffering_title">Ekstra buffering</string>
     <string name="scraper_extra_buffering_subtitle">Buffer opptil 5 minutter i forveien for verter som leverer i rykk. Bruker mer minne; gjelder etter en omstart</string>
     <string name="category_newest">Nyeste</string>
@@ -343,7 +337,6 @@
     <string name="sports_finished">Ferdig</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sport</string>
-    <string name="sports_settings_subtitle">Fanen Sport viser dagens kamper og kanalen hver kamp er på, matchet fra EPG-kildene dine. Kampene kommer fra API-Sports og SportAPI.ai; nøklene er innebygd i appen, så det er ingenting å logge inn på her.</string>
     <string name="sports_settings_subtitle_with_keys">Dagens kamper kommer fra %1$s. Kanalen til hver rad matches ut fra EPG-kildene dine, så en kamp kan bare finnes på en kanal guiden din dekker.</string>
     <string name="sports_settings_sport_feed">via API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Vis fanen Sport</string>
@@ -532,12 +525,8 @@
     <string name="sett_locality_detect">Finn fra enheten</string>
     <string name="sett_locality_detected">Enhetens region: %1$s</string>
     <string name="sett_locality_detect_failed">Kunne ikke finne en region for denne enheten</string>
-    <string name="sett_locality_apply">Bruk</string>
     <string name="sett_locality_grouping_label">%1$s (gruppering)</string>
-    <string name="sett_locality_none_title">Ingen kanaler for denne regionen</string>
     <string name="sett_locality_empty">Ingen kanaler fra leverandørene dine samsvarer med %1$s.</string>
-    <string name="sett_locality_change">Endre regioner</string>
-    <string name="sett_locality_hidden_hint">%1$d kanal(er) er merket %2$s og er skjult.</string>
     <string name="settings_nav_group_library">Ditt bibliotek</string>
     <string name="settings_nav_group_browsing">Bla gjennom</string>
     <string name="settings_nav_group_connections">Tilkoblinger</string>
@@ -634,7 +623,6 @@
     <string name="mv_panes_value">%1$d skjermer</string>
     <string name="mv_provider_max_conn">Maks tilkoblinger</string>
     <string name="mv_provider_max_conn_hint">Hvor mange strømmer dette abonnementet tillater samtidig (tomt = ukjent)</string>
-    <string name="mv_provider_max_conn_label">Samtidige tilkoblinger</string>
     <string name="ingest_connecting">%1$s — Kobler til…</string>
     <string name="ingest_progress">%1$s — Importerer %2$s · %3$s elementer · %4$s</string>
     <string name="ingest_size_of">%1$s av %2$s</string>

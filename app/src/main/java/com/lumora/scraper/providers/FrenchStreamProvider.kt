@@ -17,7 +17,6 @@ import com.lumora.scraper.models.Video
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import okhttp3.OkHttpClient
 import org.jsoup.nodes.Document
 import retrofit2.HttpException
 import retrofit2.Retrofit
@@ -27,7 +26,6 @@ import retrofit2.http.Path
 import retrofit2.http.Url
 import retrofit2.Response
 import okhttp3.ResponseBody
-import com.lumora.scraper.utils.DnsResolver
 import com.lumora.scraper.utils.NetworkClient
 import com.lumora.scraper.utils.UserPreferences
 import org.jsoup.nodes.Element
@@ -624,28 +622,6 @@ object FrenchStreamProvider : Provider, ProviderPortalUrl, ProviderConfigUrl {
         return people
     }
 
-    fun extractTvShowVersions(document: Document, episodesData: EpisodesData? = null): MutableList<String> {
-        val versions = listOf("vostfr", "vf", "vo")
-        val found = mutableListOf<String>()
-
-        for (version in versions) {
-            val hasAtLeastOneEpInJson = episodesData?.let {
-                when (version) {
-                    "vf" -> !it.vf.isNullOrEmpty()
-                    "vostfr" -> !it.vostfr.isNullOrEmpty()
-                    "vo" -> !it.vo.isNullOrEmpty()
-                    else -> false
-                }
-            } ?: false
-
-            if (hasAtLeastOneEpInJson) {
-                found.add(version)
-            }
-        }
-
-        return found
-    }
-
     suspend fun extractActors(document: Document): List<List<String>> {
         val scriptContent = document.select("script").joinToString("\n") { it.data() }
         val arrayContentRegex = Regex("""actorData\s*=\s*\[(.*?)];""", RegexOption.DOT_MATCHES_ALL)
@@ -663,14 +639,6 @@ object FrenchStreamProvider : Provider, ProviderPortalUrl, ProviderConfigUrl {
                     .toList()
             } ?: emptyList()
     }
-
-    data class VideoProvider(
-        val id: Number,
-        val order: Int,
-        val name: String,
-        val lang: String,
-        val url: String
-    )
 
     data class EpisodesData(
         val vf: Map<String, Map<String, String>>? = null,

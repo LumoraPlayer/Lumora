@@ -697,21 +697,6 @@ object AnimeWorldProvider : Provider {
         )
     }
 
-    private fun getCookieValue(document: Document): String{
-        val scriptContent = document.select("script").first()?.data();
-
-        if(scriptContent != null) {
-            val pattern = Pattern.compile("""document\.cookie\s*=\s*"([^";]+)""")
-
-            val matcher = pattern.matcher(scriptContent)
-            if (matcher.find()) {
-                return matcher.group(1) ?: ""
-            }
-        }
-
-        return "";
-    }
-
     private interface AnimeWorldService {
 
         companion object {

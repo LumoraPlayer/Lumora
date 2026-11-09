@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Aktiver et strømplugin for å bla gjennom titler utenfor biblioteket ditt.</string>
     <string name="plug_loading_series">Laster inn serier…</string>
     <string name="plug_loading_movies">Laster inn filmer…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Aktiver et strømplugin, eller slå på Strømmenettsteder i Innstillinger, for å spille av Oppdag-titler.</string>
     <string name="plug_loading_episodes">Laster inn episoder…</string>
     <string name="plug_choose_season">%1$s — velg en sesong</string>
     <string name="plug_episode">Episode %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Påminnelse avbrutt</string>
     <string name="plug_reminder_set_for">Påminnelse satt for \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Programmet starter for snart - påminnelsen ble ikke satt</string>
-    <string name="plug_update_available">Oppdatering tilgjengelig</string>
-    <string name="plug_update_available_message">Lumora v%1$s er tilgjengelig.\nGjeldende: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Denne appen er utdatert og må oppdateres. Lumora v%1$s er tilgjengelig (du har v%2$s).</string>
     <string name="plug_force_update_title">Oppdatering kreves</string>
     <string name="plug_force_update_message">Lumora v%1$s er %3$d versjoner bak den nyeste utgivelsen (v%2$s). Appen kan ikke brukes før den er oppdatert - trykk på Oppdater nå for å installere den.</string>
     <string name="plug_force_update_unrecognised_message">Dette bygget (v%1$s) er ikke en publisert Lumora-utgivelse. Installer den offisielle utgivelsen (v%2$s) for å fortsette å bruke appen.</string>
     <string name="plug_update_now">Oppdater nå</string>
     <string name="plug_update_dismiss">Avvis</string>
-    <string name="plug_later">Senere</string>
     <string name="plug_downloading_update">Laster ned oppdatering…</string>
     <string name="plug_update_download_failed">Nedlasting av oppdatering mislyktes</string>
     <string name="plug_backup_exported">Sikkerhetskopi eksportert</string>
     <string name="plug_export_failed">Eksport mislyktes</string>
     <string name="plug_imported_summary">Importert: %1$d leverandører, %2$d EPG-kilder, %3$d grupper, %4$d innstillinger</string>
-    <string name="plug_import_failed">Import mislyktes</string>
     <string name="plug_import_failed_reason">Import mislyktes: %1$s</string>
 </resources>

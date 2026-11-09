@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">プロバイダーが特定のボックスを登録している場合にのみ入力してください。空欄のままにすると、MAC からデバイスプロファイルが生成されます。</string>
     <string name="sett_type_summary">タイプ: %1$s</string>
     <string name="sett_editing_provider">%1$s を編集</string>
-    <string name="sett_editing_jellyfin">Jellyfin を編集</string>
     <string name="sett_editing_plex">Plex を編集</string>
     <string name="sett_plex_starting">サインインを開始中…</string>
     <string name="sett_plex_scan_code">plex.tv/link にアクセスして %1$s を入力してください</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">閲覧時は非表示になります。メインソースが失敗した場合は引き続き再生されます。</string>
     <string name="sett_provider_backup_badge">バックアップ</string>
     <string name="sett_provider_backup_needed">表示中のソースを少なくとも 1 つ残してください</string>
-    <string name="sett_remove_plex_confirm">Plex を削除しますか？</string>
     <string name="sett_remove_plex_message">その映画と番組は表示されなくなります。</string>
-    <string name="sett_remove_jellyfin_confirm">Jellyfin を削除しますか？</string>
     <string name="sett_remove_jellyfin_message">そのチャンネルは表示されなくなります。</string>
     <string name="sett_choose_provider_type_first">先にプロバイダーの種類を選択してください</string>
     <string name="sett_enter_m3u_url">M3U URL を入力してください</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">期限切れ</string>
     <string name="sett_could_not_start_server">サーバーを起動できませんでした</string>
     <string name="sett_provider_received">プロバイダーを受信しました！読み込み中...</string>
-    <string name="sett_backup_saved_to">バックアップを %1$s に保存しました</string>
     <string name="sett_backup_secrets_note">バックアップファイルには、プロバイダーのログイン情報とメディアサーバーのセッショントークンが読み取り可能なテキストとして含まれます — 誰にも見られない場所に保管してください。</string>
     <string name="sett_export_failed">エクスポートに失敗しました</string>
     <string name="sett_no_backup_file">%1$s にバックアップファイルが見つかりません</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">外部プレイヤーを提案: %1$s</string>
     <string name="sett_fast_zap">チャンネル切り替えを高速化: %1$s</string>
     <string name="sett_frame_rate_match">ディスプレイのリフレッシュレートに合わせる: %1$s</string>
-    <string name="sett_live_preview">ライブチャンネルのプレビュー: %1$s</string>
     <string name="sett_on">オン</string>
     <string name="sett_off">オフ</string>
     <string name="sett_playback_settings_title">再生設定</string>

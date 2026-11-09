@@ -77,7 +77,6 @@
     <string name="plug_enable_stream_plugin_browse">Activez un plugin de flux pour parcourir les titres hors de votre bibliothèque.</string>
     <string name="plug_loading_series">Chargement des séries…</string>
     <string name="plug_loading_movies">Chargement des films…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Activez un plugin de flux ou les sites de streaming dans les Réglages pour lire les titres de Discover.</string>
     <string name="plug_loading_episodes">Chargement des épisodes…</string>
     <string name="plug_choose_season">%1$s — choisissez une saison</string>
     <string name="plug_episode">Épisode %1$d</string>
@@ -117,15 +116,11 @@
     <string name="plug_program_starts_too_soon">Le programme commence trop tôt - rappel non défini</string>
 
     <!-- Update & backup toasts (MainActivity) -->
-    <string name="plug_update_available">Mise à jour disponible</string>
-    <string name="plug_update_available_message">Lumora v%1$s est disponible.\nVersion actuelle : v%2$s\n\n%3$s</string>
-    <string name="plug_later">Plus tard</string>
     <string name="plug_downloading_update">Téléchargement de la mise à jour…</string>
     <string name="plug_update_download_failed">Échec du téléchargement de la mise à jour</string>
     <string name="plug_backup_exported">Sauvegarde exportée</string>
     <string name="plug_export_failed">Échec de l\'exportation</string>
     <string name="plug_imported_summary">Importé : %1$d fournisseurs, %2$d sources EPG, %3$d groupes, %4$d paramètres</string>
-    <string name="plug_import_failed">Échec de l\'importation</string>
 
     <!-- Stremio addon store & phone QR install -->
     <string name="plug_stremio_store">Boutique d\'extensions Stremio</string>

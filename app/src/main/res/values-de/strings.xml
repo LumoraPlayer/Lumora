@@ -43,8 +43,6 @@
     <!-- Fehler -->
     <!-- Numerische Eingabe -->
     <!-- Als Nächstes / Automatische Fortsetzung -->
-    <string name="up_next">Als Nächstes</string>
-    <string name="play_now">Jetzt abspielen</string>
 
     <!-- Inkrementelle Suche -->
     <!-- A/V-Synchronisierung -->
@@ -77,7 +75,6 @@
     <string name="downloads_tab">Downloads</string>
     <string name="no_provider_configured">Kein Anbieter konfiguriert</string>
     <string name="press_settings_to_add_playlist">Drücken Sie Einstellungen, um eine Playlist-URL hinzuzufügen</string>
-    <string name="add_a_provider">Anbieter hinzufügen</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN-ANBIETER</string>
     <string name="startup_choose_public">ÖFFENTLICHE STREAMING-INHALTE</string>
     <string name="startup_choose_both">BEIDES</string>
@@ -89,8 +86,6 @@
     <string name="find_stream">Finden &amp; Abspielen</string>
     <string name="trailer">Trailer</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Einschlafen</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Öffnen in</string>
 
     <!-- Wird zu Beginn jeder Sitzung auf dem Auto-Bildschirm und unter Einstellungen auf dem
@@ -274,7 +269,6 @@
     <string name="scraper_sites_header">Zu durchsuchende Websites</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Löst die Domains der Websites über einen verschlüsselten Resolver auf, statt über den Ihres Internetanbieters</string>
-    <string name="scraper_doh_system">System-DNS</string>
     <string name="scraper_extra_buffering_title">Zusätzliche Pufferung</string>
     <string name="scraper_extra_buffering_subtitle">Puffert bis zu 5 Minuten im Voraus für Hosts, die in Stößen liefern. Verbraucht mehr Speicher; gilt nach einem Neustart</string>
     <string name="category_newest">Neueste</string>
@@ -346,7 +340,6 @@
     <string name="sports_finished">Ende</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sport</string>
-    <string name="sports_settings_subtitle">Der Sport-Tab listet die heutigen Begegnungen und den Kanal, auf dem jede läuft - abgeglichen mit Ihren EPG-Quellen. Die Begegnungen stammen von API-Sports und SportAPI.ai; die Schlüssel sind in die App eingebaut, hier ist also nichts anzumelden.</string>
     <string name="sports_settings_subtitle_with_keys">Die heutigen Spiele stammen von %1$s. Der Kanal jeder Zeile wird aus Ihren EPG-Quellen ermittelt, eine Begegnung ist also nur auf einem Kanal zu finden, den Ihr Guide abdeckt.</string>
     <string name="sports_settings_sport_feed">via API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Sport-Tab anzeigen</string>
@@ -535,12 +528,8 @@
     <string name="sett_locality_detect">Vom Gerät ermitteln</string>
     <string name="sett_locality_detected">Geräteregion: %1$s</string>
     <string name="sett_locality_detect_failed">Die Region dieses Geräts konnte nicht ermittelt werden</string>
-    <string name="sett_locality_apply">Anwenden</string>
     <string name="sett_locality_grouping_label">%1$s (Gruppierung)</string>
-    <string name="sett_locality_none_title">Keine Kanäle für diese Region</string>
     <string name="sett_locality_empty">Keine Kanäle in Ihren Anbietern passen zu %1$s.</string>
-    <string name="sett_locality_change">Regionen ändern</string>
-    <string name="sett_locality_hidden_hint">%1$d Kanal/Kanäle sind mit %2$s markiert und ausgeblendet.</string>
     <string name="settings_nav_group_library">Ihre Bibliothek</string>
     <string name="settings_nav_group_browsing">Durchsuchen</string>
     <string name="settings_nav_group_connections">Verbindungen</string>
@@ -637,7 +626,6 @@
     <string name="mv_panes_value">%1$d Bildschirme</string>
     <string name="mv_provider_max_conn">Max. Verbindungen</string>
     <string name="mv_provider_max_conn_hint">Wie viele Streams dieses Abonnement gleichzeitig erlaubt (leer = unbekannt)</string>
-    <string name="mv_provider_max_conn_label">Gleichzeitige Verbindungen</string>
     <string name="ingest_connecting">%1$s — Verbinden…</string>
     <string name="ingest_progress">%1$s — %2$s wird importiert · %3$s Einträge · %4$s</string>
     <string name="ingest_size_of">%1$s von %2$s</string>

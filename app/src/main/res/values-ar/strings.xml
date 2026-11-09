@@ -42,8 +42,6 @@
     <!-- الأخطاء -->
     <!-- إدخال رقمي -->
     <!-- التالي / التشغيل التلقائي -->
-    <string name="up_next">التالي</string>
-    <string name="play_now">تشغيل الآن</string>
 
     <!-- بحث تدريجي -->
     <!-- مزامنة الصوت/الفيديو -->
@@ -80,7 +78,6 @@
     <string name="downloads_tab">التنزيلات</string>
     <string name="no_provider_configured">لم يتم إعداد أي مزوّد</string>
     <string name="press_settings_to_add_playlist">اضغط الإعدادات لإضافة رابط قائمة تشغيل</string>
-    <string name="add_a_provider">إضافة مزوّد</string>
     <string name="startup_choose_provider">مزوّد IPTV/JELLYFIN</string>
     <string name="startup_choose_public">محتوى بث عام</string>
     <string name="startup_choose_both">كليهما</string>
@@ -92,8 +89,6 @@
     <string name="find_stream">البحث والتشغيل</string>
     <string name="trailer">العرض الترويجي</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">سكون</string>
-    <string name="diag">تشخيص</string>
     <string name="open_in_external_player_short">فتح في</string>
 
     <!-- يُعرض على شاشة السيارة في بداية كل جلسة، وفي الإعدادات على الهاتف.
@@ -277,7 +272,6 @@
     <string name="scraper_sites_header">مواقع للبحث</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">يحلّ نطاقات المواقع عبر محلل مشفر بدلاً من محلل مزوّد الإنترنت لديك</string>
-    <string name="scraper_doh_system">DNS النظام</string>
     <string name="scraper_extra_buffering_title">تخزين مؤقت إضافي</string>
     <string name="scraper_extra_buffering_subtitle">يخزن ما يصل إلى 5 دقائق مقدماً للمواقع التي ترسل على دفعات. يستهلك ذاكرة أكبر؛ يُطبق بعد إعادة التشغيل</string>
     <string name="category_newest">الأحدث</string>
@@ -353,7 +347,6 @@
     <string name="sports_finished">انتهت</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">الرياضة</string>
-    <string name="sports_settings_subtitle">تسرد تبويبة الرياضة مباريات اليوم والقناة التي تُعرض عليها، مطابقةً من مصادر EPG لديك. تأتي المباريات من API-Sports وSportAPI.ai؛ والمفاتيح مدمجة في التطبيق، لذا لا يوجد ما تسجّل الدخول إليه هنا.</string>
     <string name="sports_settings_subtitle_with_keys">تأتي مباريات اليوم من %1$s. تُطابق قناة كل صف من مصادر EPG لديك، لذا لا يمكن العثور على مباراة إلا على قناة يغطيها دليلك.</string>
     <string name="sports_settings_sport_feed">عبر API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">إظهار تبويبة الرياضة</string>
@@ -550,12 +543,8 @@
     <string name="sett_locality_detect">الكشف من الجهاز</string>
     <string name="sett_locality_detected">منطقة الجهاز: %1$s</string>
     <string name="sett_locality_detect_failed">تعذّر اكتشاف منطقة من هذا الجهاز</string>
-    <string name="sett_locality_apply">تطبيق</string>
     <string name="sett_locality_grouping_label">%1$s (تجميع)</string>
-    <string name="sett_locality_none_title">لا قنوات لهذه المنطقة</string>
     <string name="sett_locality_empty">لا توجد قنوات تطابق %1$s لدى مزوّديك.</string>
-    <string name="sett_locality_change">تغيير المناطق</string>
-    <string name="sett_locality_hidden_hint">%1$d قناة موسومة بـ %2$s ومخفية.</string>
     <string name="settings_nav_group_library">مكتبتك</string>
     <string name="settings_nav_group_browsing">التصفح</string>
     <string name="settings_nav_group_connections">الاتصالات</string>
@@ -652,7 +641,6 @@
     <string name="mv_panes_value">%1$d شاشات</string>
     <string name="mv_provider_max_conn">الحد الأقصى للاتصالات</string>
     <string name="mv_provider_max_conn_hint">عدد البثوث التي يسمح بها هذا الاشتراك في وقت واحد (فارغ = غير معروف)</string>
-    <string name="mv_provider_max_conn_label">الاتصالات المتزامنة</string>
     <string name="ingest_connecting">%1$s — جارٍ الاتصال…</string>
     <string name="ingest_progress">%1$s — جارٍ استيراد %2$s · %3$s عنصراً · %4$s</string>
     <string name="ingest_size_of">%1$s من %2$s</string>

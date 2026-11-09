@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Fyll bare ut disse hvis leverandøren din registrerte en bestemt boks. La dem stå tomme for å generere en enhetsprofil fra MAC-adressen.</string>
     <string name="sett_type_summary">Type: %1$s</string>
     <string name="sett_editing_provider">Redigerer %1$s</string>
-    <string name="sett_editing_jellyfin">Redigerer Jellyfin</string>
     <string name="sett_editing_plex">Redigerer Plex</string>
     <string name="sett_plex_starting">Starter pålogging…</string>
     <string name="sett_plex_scan_code">Gå til plex.tv/link og skriv inn %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Skjult når du blar. Spilles fortsatt av hvis hovedkilden feiler.</string>
     <string name="sett_provider_backup_badge">Reserve</string>
     <string name="sett_provider_backup_needed">Behold minst én synlig kilde</string>
-    <string name="sett_remove_plex_confirm">Fjerne Plex?</string>
     <string name="sett_remove_plex_message">Filmene og seriene vises ikke lenger.</string>
-    <string name="sett_remove_jellyfin_confirm">Fjerne Jellyfin?</string>
     <string name="sett_remove_jellyfin_message">Kanalene vises ikke lenger.</string>
     <string name="sett_choose_provider_type_first">Velg en leverandørtype først</string>
     <string name="sett_enter_m3u_url">Skriv inn en M3U-URL</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Utløpt</string>
     <string name="sett_could_not_start_server">Kunne ikke starte serveren</string>
     <string name="sett_provider_received">Leverandør mottatt! Laster inn...</string>
-    <string name="sett_backup_saved_to">Sikkerhetskopi lagret i %1$s</string>
     <string name="sett_backup_secrets_note">Sikkerhetskopifilen inneholder leverandørpålogginger og økt-tokener for medieservere som lesbar tekst — oppbevar den på et privat sted.</string>
     <string name="sett_export_failed">Eksport mislyktes</string>
     <string name="sett_no_backup_file">Fant ingen sikkerhetskopifil på %1$s</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Foreslå ekstern avspiller: %1$s</string>
     <string name="sett_fast_zap">Raskere kanalbytte: %1$s</string>
     <string name="sett_frame_rate_match">Tilpass skjermens oppdateringsfrekvens: %1$s</string>
-    <string name="sett_live_preview">Forhåndsvisning av direktekanal: %1$s</string>
     <string name="sett_on">PÅ</string>
     <string name="sett_off">AV</string>
     <string name="sett_playback_settings_title">Avspillingsinnstillinger</string>

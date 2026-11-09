@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">املأ هذه الحقول فقط إذا كان مزوّدك قد سجّل جهازاً محدداً. اتركها فارغة لإنشاء ملف تعريف جهاز من MAC.</string>
     <string name="sett_type_summary">النوع: %1$s</string>
     <string name="sett_editing_provider">تعديل %1$s</string>
-    <string name="sett_editing_jellyfin">تعديل Jellyfin</string>
     <string name="sett_editing_plex">تعديل Plex</string>
     <string name="sett_plex_starting">جارٍ بدء تسجيل الدخول…</string>
     <string name="sett_plex_scan_code">انتقل إلى plex.tv/link وأدخل %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">مخفي من التصفح. يظل التشغيل ممكناً إذا فشل المصدر الرئيسي.</string>
     <string name="sett_provider_backup_badge">احتياطي</string>
     <string name="sett_provider_backup_needed">أبقِ مصدراً واحداً ظاهراً على الأقل</string>
-    <string name="sett_remove_plex_confirm">إزالة Plex؟</string>
     <string name="sett_remove_plex_message">لن تظهر أفلامه وعروضه بعد الآن.</string>
-    <string name="sett_remove_jellyfin_confirm">إزالة Jellyfin؟</string>
     <string name="sett_remove_jellyfin_message">لن تظهر قنواته بعد الآن.</string>
     <string name="sett_choose_provider_type_first">اختر نوع المزوّد أولاً</string>
     <string name="sett_enter_m3u_url">أدخل رابط M3U</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">منتهية الصلاحية</string>
     <string name="sett_could_not_start_server">تعذّر بدء الخادم</string>
     <string name="sett_provider_received">تم استلام المزوّد! جارٍ التحميل...</string>
-    <string name="sett_backup_saved_to">تم حفظ النسخة الاحتياطية في %1$s</string>
     <string name="sett_backup_secrets_note">يحمل ملف النسخة الاحتياطية بيانات دخول المزوّدين ورموز جلسات خوادم الوسائط كنص مقروء — احتفظ به في مكان خاص.</string>
     <string name="sett_export_failed">فشل التصدير</string>
     <string name="sett_no_backup_file">لم يُعثر على ملف نسخة احتياطية في %1$s</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">اقتراح مشغل خارجي: %1$s</string>
     <string name="sett_fast_zap">تبديل أسرع للقنوات: %1$s</string>
     <string name="sett_frame_rate_match">مطابقة معدل تحديث الشاشة: %1$s</string>
-    <string name="sett_live_preview">معاينة القناة المباشرة: %1$s</string>
     <string name="sett_on">مفعّل</string>
     <string name="sett_off">معطّل</string>
     <string name="sett_playback_settings_title">إعدادات التشغيل</string>

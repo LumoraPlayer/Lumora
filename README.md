@@ -201,7 +201,6 @@ Then run:
 app/src/main/java/com/lumora/
 ├── adapter/       RecyclerView adapters (channels, categories, shelves, episodes, ...)
 ├── anime/         Anime catalogue client
-├── auto/          Android Auto car-app classes
 ├── cache/         Local caches (derived catalogue rows, favorites, playback position, watch history, ...)
 ├── data/          Providers, Room database, backup, sync workers, update checker
 │   ├── local/     Room database, DAOs, entities

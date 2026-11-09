@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Povolte plugin pro streamy, abyste mohli procházet tituly mimo svou knihovnu.</string>
     <string name="plug_loading_series">Načítání seriálů…</string>
     <string name="plug_loading_movies">Načítání filmů…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Chcete-li přehrávat tituly z Objevovat, povolte plugin pro streamy nebo zapněte Streamovací weby v Nastavení.</string>
     <string name="plug_loading_episodes">Načítání epizod…</string>
     <string name="plug_choose_season">%1$s — vyberte sezónu</string>
     <string name="plug_episode">Epizoda %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Připomenutí zrušeno</string>
     <string name="plug_reminder_set_for">Připomenutí nastaveno na \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Pořad začíná příliš brzy - připomenutí nebylo nastaveno</string>
-    <string name="plug_update_available">Je dostupná aktualizace</string>
-    <string name="plug_update_available_message">Je dostupná Lumora v%1$s.\nAktuální verze: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Tato aplikace je zastaralá a vyžaduje aktualizaci. Je dostupná Lumora v%1$s (vy máte v%2$s).</string>
     <string name="plug_force_update_title">Vyžadována aktualizace</string>
     <string name="plug_force_update_message">Lumora v%1$s zaostává o %3$d verzí za nejnovějším vydáním (v%2$s). Aplikaci nelze používat, dokud ji neaktualizujete - klepnutím na Aktualizovat nyní ji nainstalujete.</string>
     <string name="plug_force_update_unrecognised_message">Toto sestavení (v%1$s) není publikované vydání Lumory. Chcete-li aplikaci dál používat, nainstalujte oficiální vydání (v%2$s).</string>
     <string name="plug_update_now">Aktualizovat nyní</string>
     <string name="plug_update_dismiss">Zavřít</string>
-    <string name="plug_later">Později</string>
     <string name="plug_downloading_update">Stahování aktualizace…</string>
     <string name="plug_update_download_failed">Stažení aktualizace se nezdařilo</string>
     <string name="plug_backup_exported">Záloha exportována</string>
     <string name="plug_export_failed">Export se nezdařil</string>
     <string name="plug_imported_summary">Importováno: poskytovatelé %1$d, zdroje EPG %2$d, skupiny %3$d, nastavení %4$d</string>
-    <string name="plug_import_failed">Import se nezdařil</string>
     <string name="plug_import_failed_reason">Import se nezdařil: %1$s</string>
 </resources>

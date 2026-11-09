@@ -42,8 +42,6 @@
     <!-- Błędy -->
     <!-- Wprowadzanie numeryczne -->
     <!-- Dalej / Auto-odtwarzanie -->
-    <string name="up_next">Dalej</string>
-    <string name="play_now">Odtwórz teraz</string>
 
     <!-- Wyszukiwanie przyrostowe -->
     <!-- Synchronizacja A/V -->
@@ -78,7 +76,6 @@
     <string name="downloads_tab">Pobrane</string>
     <string name="no_provider_configured">Nie skonfigurowano dostawcy</string>
     <string name="press_settings_to_add_playlist">Naciśnij Ustawienia, aby dodać URL listy odtwarzania</string>
-    <string name="add_a_provider">Dodaj dostawcę</string>
     <string name="startup_choose_provider">DOSTAWCA IPTV/JELLYFIN</string>
     <string name="startup_choose_public">PUBLICZNE TREŚCI STRUMIENIOWE</string>
     <string name="startup_choose_both">OBA</string>
@@ -90,8 +87,6 @@
     <string name="find_stream">Znajdź &amp; odtwórz</string>
     <string name="trailer">Zwiastun</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Uśpij</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Otwórz w</string>
 
     <!-- Wyświetlany na ekranie samochodu na początku każdej sesji oraz w Ustawieniach na
@@ -274,7 +269,6 @@
     <string name="scraper_sites_header">Strony do przeszukania</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Rozwiązuje domeny stron przez szyfrowany resolver zamiast resolvera Twojego ISP</string>
-    <string name="scraper_doh_system">DNS systemowy</string>
     <string name="scraper_extra_buffering_title">Dodatkowe buforowanie</string>
     <string name="scraper_extra_buffering_subtitle">Buforuje do 5 minut do przodu dla hostów dostarczających w seriach. Zużywa więcej pamięci; obowiązuje po restarcie</string>
     <string name="category_newest">Najnowsze</string>
@@ -348,7 +342,6 @@
     <string name="sports_finished">FT</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sport</string>
-    <string name="sports_settings_subtitle">Karta Sport zawiera dzisiejsze spotkania i kanał, na którym jest każde z nich, dopasowany z Twoich źródeł EPG. Spotkania pochodzą z API-Sports i SportAPI.ai; klucze są wbudowane w aplikację, więc nie ma tu się na co logować.</string>
     <string name="sports_settings_subtitle_with_keys">Dzisiejsze mecze pochodzą z %1$s. Kanał każdego wiersza jest dopasowywany z Twoich źródeł EPG, więc spotkanie można znaleźć tylko na kanale objętym przez Twój przewodnik.</string>
     <string name="sports_settings_sport_feed">przez API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Pokaż kartę Sport</string>
@@ -541,12 +534,8 @@
     <string name="sett_locality_detect">Wykryj z urządzenia</string>
     <string name="sett_locality_detected">Region urządzenia: %1$s</string>
     <string name="sett_locality_detect_failed">Nie udało się wykryć regionu tego urządzenia</string>
-    <string name="sett_locality_apply">Zastosuj</string>
     <string name="sett_locality_grouping_label">%1$s (grupa)</string>
-    <string name="sett_locality_none_title">Brak kanałów w tym regionie</string>
     <string name="sett_locality_empty">Żaden kanał u Twoich dostawców nie pasuje do %1$s.</string>
-    <string name="sett_locality_change">Zmień regiony</string>
-    <string name="sett_locality_hidden_hint">Ukryto %1$d kanałów z tagiem %2$s.</string>
     <string name="settings_nav_group_library">Twoja biblioteka</string>
     <string name="settings_nav_group_browsing">Przeglądanie</string>
     <string name="settings_nav_group_connections">Połączenia</string>
@@ -643,7 +632,6 @@
     <string name="mv_panes_value">%1$d ekranów</string>
     <string name="mv_provider_max_conn">Maks. połączeń</string>
     <string name="mv_provider_max_conn_hint">Ile strumieni ta subskrypcja pozwala jednocześnie (puste = nieznane)</string>
-    <string name="mv_provider_max_conn_label">Jednoczesne połączenia</string>
     <string name="ingest_connecting">%1$s — łączenie…</string>
     <string name="ingest_progress">%1$s — importowanie: %2$s · %3$s elementów · %4$s</string>
     <string name="ingest_size_of">%1$s z %2$s</string>

@@ -65,7 +65,6 @@
     <string name="list_off">Ki</string>
     <string name="list_no_alt_audio">Nincsenek alternatív hangsávok</string>
     <string name="list_no_alt_video">Nincs alternatív videóminőség</string>
-    <string name="list_no_subtitles">Nem érhetők el feliratok</string>
     <string name="list_refresh_title">Szolgáltatók frissítése</string>
     <string name="list_refresh_message">Válassza ki, mit töltsön le újra. A kijelöletlen források megtartják a jelenlegi katalógusukat.</string>
     <string name="list_refresh_all">Minden szolgáltató</string>

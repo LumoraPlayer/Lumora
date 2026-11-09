@@ -82,10 +82,6 @@ interface CatalogChannelDao {
     @Query("DELETE FROM catalog_channels WHERE providerId = :providerId AND mediaType = :mediaType")
     suspend fun deleteForProviderType(providerId: String, mediaType: String): Int
 
-    /** Blocking twin for the streaming ingest path. Call only off the main thread. */
-    @Query("DELETE FROM catalog_channels WHERE providerId = :providerId AND mediaType = :mediaType")
-    fun deleteForProviderTypeBlocking(providerId: String, mediaType: String): Int
-
     /** Drops the rows this ingest did not see, once the new token's rows are all written. */
     @Query(
         "DELETE FROM catalog_channels WHERE providerId = :providerId " +

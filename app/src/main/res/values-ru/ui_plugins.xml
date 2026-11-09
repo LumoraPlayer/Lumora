@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Включите плагин потоков, чтобы просматривать названия вне вашей библиотеки.</string>
     <string name="plug_loading_series">Загрузка сериалов…</string>
     <string name="plug_loading_movies">Загрузка фильмов…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Включите плагин потоков или стриминговые сайты в «Настройках», чтобы воспроизводить названия из «Обзора».</string>
     <string name="plug_loading_episodes">Загрузка серий…</string>
     <string name="plug_choose_season">%1$s — выберите сезон</string>
     <string name="plug_episode">Серия %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Напоминание отменено</string>
     <string name="plug_reminder_set_for">Напоминание установлено: \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Программа начнётся слишком скоро — напоминание не установлено</string>
-    <string name="plug_update_available">Доступно обновление</string>
-    <string name="plug_update_available_message">Доступна Lumora v%1$s.\nТекущая версия: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Это приложение устарело и требует обновления. Доступна Lumora v%1$s (у вас v%2$s).</string>
     <string name="plug_force_update_title">Требуется обновление</string>
     <string name="plug_force_update_message">Lumora v%1$s отстаёт на %3$d версий от последнего выпуска (v%2$s). Приложением нельзя пользоваться до обновления — нажмите «Обновить сейчас», чтобы установить его.</string>
     <string name="plug_force_update_unrecognised_message">Эта сборка (v%1$s) не является официальным выпуском Lumora. Установите официальный выпуск (v%2$s), чтобы продолжить пользоваться приложением.</string>
     <string name="plug_update_now">Обновить сейчас</string>
     <string name="plug_update_dismiss">Закрыть</string>
-    <string name="plug_later">Позже</string>
     <string name="plug_downloading_update">Загрузка обновления…</string>
     <string name="plug_update_download_failed">Не удалось скачать обновление</string>
     <string name="plug_backup_exported">Резервная копия экспортирована</string>
     <string name="plug_export_failed">Не удалось экспортировать</string>
     <string name="plug_imported_summary">Импортировано — провайдеров: %1$d, источников EPG: %2$d, групп: %3$d, настроек: %4$d</string>
-    <string name="plug_import_failed">Не удалось импортировать</string>
     <string name="plug_import_failed_reason">Не удалось импортировать: %1$s</string>
 </resources>

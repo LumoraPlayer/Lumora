@@ -318,23 +318,8 @@ object FilmyOnlineCcProvider : Provider {
         return collected.values.toList()
     }
 
-    private fun parsedMovieId(id: String): Int? {
-        return parseEncodedId(id).primaryVideoId
-    }
-
     override suspend fun getVideo(server: Video.Server): Video {
         return Extractor.extract(server.id, server)
-    }
-
-    private suspend fun getChannelItems(url: String): List<AppAdapter.Item> {
-        val root = getBootstrapRoot(getDocument(url))
-        return root.optJSONObject("loaders")
-            ?.optJSONObject("channelPage")
-            ?.optJSONObject("channel")
-            ?.optJSONObject("content")
-            ?.optJSONArray("data")
-            ?.toTitleItems()
-            .orEmpty()
     }
 
     private fun getBootstrapRoot(document: Document): JSONObject {
@@ -504,16 +489,6 @@ object FilmyOnlineCcProvider : Provider {
         }
     }
 
-    private fun JSONArray.toGenres(): List<Genre> {
-        return (0 until length()).mapNotNull { index ->
-            val genre = optJSONObject(index) ?: return@mapNotNull null
-            Genre(
-                id = genre.optString("name").ifBlank { return@mapNotNull null },
-                name = genre.optString("display_name").ifBlank { genre.optString("name") }
-            )
-        }
-    }
-
     private fun JSONArray?.toRecommendationItems(): List<Show> {
         if (this == null) return emptyList()
         val mapped = mutableListOf<Show>()
@@ -527,71 +502,6 @@ object FilmyOnlineCcProvider : Provider {
             }
         }
         return mapped.distinctBy(::itemKey)
-    }
-
-    private fun collectTitleObjects(root: JSONObject): List<JSONObject> {
-        val results = mutableListOf<JSONObject>()
-
-        fun walk(value: Any?) {
-            when (value) {
-                is JSONObject -> {
-                    if (value.optString("model_type") == "title") {
-                        results += value
-                    }
-                    val keys = value.keys()
-                    while (keys.hasNext()) {
-                        walk(value.opt(keys.next()))
-                    }
-                }
-
-                is JSONArray -> {
-                    for (index in 0 until value.length()) {
-                        walk(value.opt(index))
-                    }
-                }
-            }
-        }
-
-        walk(root)
-        return results
-    }
-
-    private fun collectChannelObjects(root: JSONObject): List<JSONObject> {
-        val results = mutableListOf<JSONObject>()
-
-        fun walk(value: Any?) {
-            when (value) {
-                is JSONObject -> {
-                    val type = value.optString("type")
-                    val modelType = value.optString("model_type")
-                    val hasTitleData = value.optJSONObject("content")
-                        ?.optJSONArray("data")
-                        ?.let { data ->
-                            (0 until data.length()).any { index ->
-                                data.optJSONObject(index)?.optString("model_type") == "title"
-                            }
-                        } == true
-
-                    if ((type == "channel" || modelType == "channel") && hasTitleData) {
-                        results += value
-                    }
-
-                    val keys = value.keys()
-                    while (keys.hasNext()) {
-                        walk(value.opt(keys.next()))
-                    }
-                }
-
-                is JSONArray -> {
-                    for (index in 0 until value.length()) {
-                        walk(value.opt(index))
-                    }
-                }
-            }
-        }
-
-        walk(root)
-        return results.distinctBy { it.optInt("id").toString() + ":" + it.optString("name") }
     }
 
     private fun JSONArray.toJsonObjectList(): List<JSONObject> {
@@ -748,55 +658,8 @@ object FilmyOnlineCcProvider : Provider {
             .distinctBy(::itemKey)
     }
 
-    private suspend fun fetchSeasonEpisodes(
-        titleId: Int,
-        titleSlug: String,
-        seasonNumber: Int,
-        title: JSONObject
-    ): List<Episode> {
-        val root = getBootstrapRoot(getDocument(buildSeasonUrl(titleId, titleSlug, seasonNumber)))
-        val seasonPage = root.optJSONObject("loaders")?.optJSONObject("seasonPage") ?: return emptyList()
-        val seasonPoster = seasonPage.optJSONObject("season")?.optString("poster")
-        val fallbackPoster = seasonPoster?.takeIf { it.isNotBlank() }
-            ?: title.optString("poster").takeIf { it.isNotBlank() }
-
-        return seasonPage.optJSONObject("episodes")
-            ?.optJSONArray("data")
-            ?.toEpisodeItems(fallbackPoster)
-            .orEmpty()
-            .sortedBy { it.number }
-    }
-
     private fun buildSeasonId(titleId: Int, titleSlug: String, seasonNumber: Int): String {
         return listOf(titleId.toString(), titleSlug, seasonNumber.toString()).joinToString("|")
-    }
-
-    private fun buildTitleUrl(titleId: Int, titleSlug: String): String {
-        return "$baseUrl/titles/$titleId/$titleSlug"
-    }
-
-    private fun buildSeasonUrl(titleId: Int, titleSlug: String, seasonNumber: Int): String {
-        return "${buildTitleUrl(titleId, titleSlug)}/season/$seasonNumber"
-    }
-
-    private suspend fun resolveTitleSlug(parsed: ParsedId): String? {
-        parsed.titleSlug?.let { return it }
-
-        val watchId = parsed.primaryVideoId ?: return null
-        val root = getBootstrapRoot(getDocument("$baseUrl/watch/$watchId"))
-        val watchTitle = root.optJSONObject("loaders")
-            ?.optJSONObject("watchPage")
-            ?.optJSONObject("title")
-            ?.optString("name")
-            ?.takeIf { it.isNotBlank() }
-            ?: root.optJSONObject("loaders")
-                ?.optJSONObject("watchPage")
-                ?.optJSONObject("video")
-                ?.optJSONObject("title")
-                ?.optString("name")
-                ?.takeIf { it.isNotBlank() }
-
-        return slugifyTitle(watchTitle)
     }
 
     private fun slugifyTitle(value: String?): String? {

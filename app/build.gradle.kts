@@ -255,11 +255,6 @@ dependencies {
     // wrapper is bound to the plugin sandbox's lifecycle, not callable as a bare evaluator.
     implementation("org.mozilla:rhino:1.8.0")
 
-    // LAN WebSocket bridge for the scraper's Cloudflare bypass: a TV that cannot clear a
-    // challenge in its own WebView hands the URL to a phone browser and gets the cookies back
-    // (scraper/utils/BypassWebSocket*.kt).
-    implementation("org.java-websocket:Java-WebSocket:1.5.3")
-
     // JSON
     implementation("com.google.code.gson:gson:2.10.1")
     // 1.6.3 is the last line compatible with Kotlin 1.9.22 - the 1.8.x releases the upstream
@@ -308,19 +303,8 @@ dependencies {
     implementation("androidx.profileinstaller:profileinstaller:1.3.1")
     baselineProfile(project(":benchmark"))
 
-    // Media session / browse tree - what Android Auto's media category binds to (auto/).
-    implementation("androidx.media3:media3-session:1.4.1")
-
-    // Android Auto (see auto/ - CarAppService).
+    // Android Auto projection: CarConnection tells the Activity when it is on a car display.
     implementation("androidx.car.app:app:1.7.0")
-
-    // Legacy projected Android Auto SDK (com.google.android.apps.auto.sdk), used by
-    // auto/legacy/ for hosts that only list activity-based car apps. Not on any Maven
-    // repository any more, so the AAR is vendored in app/libs.
-    implementation(files("libs/aauto.aar"))
-
-    // Android TV
-    implementation("androidx.tvprovider:tvprovider:1.1.0")
 
     // Tests
     testImplementation("junit:junit:4.13.2")

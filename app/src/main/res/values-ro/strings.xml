@@ -42,8 +42,6 @@
     <!-- Erori -->
     <!-- Introducere numerică -->
     <!-- În continuare / redare automată -->
-    <string name="up_next">În continuare</string>
-    <string name="play_now">Redă acum</string>
 
     <!-- Căutare incrementală -->
     <!-- Sincronizare A/V -->
@@ -77,7 +75,6 @@
     <string name="downloads_tab">Descărcări</string>
     <string name="no_provider_configured">Niciun furnizor configurat</string>
     <string name="press_settings_to_add_playlist">Apăsați Setări pentru a adăuga un URL de listă de redare</string>
-    <string name="add_a_provider">Adaugă un furnizor</string>
     <string name="startup_choose_provider">FURNIZOR IPTV/JELLYFIN</string>
     <string name="startup_choose_public">CONȚINUT DE STREAMING PUBLIC</string>
     <string name="startup_choose_both">AMBELE</string>
@@ -89,8 +86,6 @@
     <string name="find_stream">Găsește &amp; redă</string>
     <string name="trailer">Trailer</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Somn</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Deschide în</string>
 
     <!-- Afișat pe ecranul mașinii la începutul fiecărei sesiuni și în Setări pe telefon.
@@ -274,7 +269,6 @@
     <string name="scraper_sites_header">Site-uri de căutat</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Rezolvă domeniile site-urilor printr-un rezolvator criptat în locul ISP-ului dvs.</string>
-    <string name="scraper_doh_system">DNS de sistem</string>
     <string name="scraper_extra_buffering_title">Buffer suplimentar</string>
     <string name="scraper_extra_buffering_subtitle">Face buffer cu până la 5 minute în avans pentru gazdele care livrează în rafale. Folosește mai multă memorie; se aplică după o repornire</string>
     <string name="category_newest">Cele mai noi</string>
@@ -347,7 +341,6 @@
     <string name="sports_finished">FINAL</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sport</string>
-    <string name="sports_settings_subtitle">Fila Sport listează meciurile de azi și canalul fiecăruia, potrivite din sursele dvs. EPG. Meciurile provin de la API-Sports și SportAPI.ai; cheile sunt incluse în aplicație, așa că nu este nimic de conectat aici.</string>
     <string name="sports_settings_subtitle_with_keys">Meciurile de azi provin de la %1$s. Canalul fiecărui rând este potrivit din sursele dvs. EPG, așa că un meci poate fi găsit doar pe un canal acoperit de ghidul dvs.</string>
     <string name="sports_settings_sport_feed">prin API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Afișează fila Sport</string>
@@ -538,12 +531,8 @@
     <string name="sett_locality_detect">Detectează de pe dispozitiv</string>
     <string name="sett_locality_detected">Regiunea dispozitivului: %1$s</string>
     <string name="sett_locality_detect_failed">Nu s-a putut detecta o regiune de pe acest dispozitiv</string>
-    <string name="sett_locality_apply">Aplică</string>
     <string name="sett_locality_grouping_label">%1$s (grupare)</string>
-    <string name="sett_locality_none_title">Niciun canal pentru această regiune</string>
     <string name="sett_locality_empty">Niciun canal din furnizorii dvs. nu se potrivește cu %1$s.</string>
-    <string name="sett_locality_change">Schimbă regiunile</string>
-    <string name="sett_locality_hidden_hint">%1$d canale au eticheta %2$s și sunt ascunse.</string>
     <string name="settings_nav_group_library">Biblioteca dvs.</string>
     <string name="settings_nav_group_browsing">Navigare</string>
     <string name="settings_nav_group_connections">Conexiuni</string>
@@ -640,7 +629,6 @@
     <string name="mv_panes_value">%1$d ecrane</string>
     <string name="mv_provider_max_conn">Conexiuni maxime</string>
     <string name="mv_provider_max_conn_hint">Câte fluxuri permite acest abonament simultan (gol = necunoscut)</string>
-    <string name="mv_provider_max_conn_label">Conexiuni simultane</string>
     <string name="ingest_connecting">%1$s — Se conectează…</string>
     <string name="ingest_progress">%1$s — Se importă %2$s · %3$s elemente · %4$s</string>
     <string name="ingest_size_of">%1$s din %2$s</string>

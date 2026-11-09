@@ -65,7 +65,6 @@
     <string name="list_off">Av</string>
     <string name="list_no_alt_audio">Inga alternativa ljudspår</string>
     <string name="list_no_alt_video">Ingen alternativ videokvalitet</string>
-    <string name="list_no_subtitles">Inga undertexter tillgängliga</string>
     <string name="list_refresh_title">Uppdatera leverantörer</string>
     <string name="list_refresh_message">Välj vad som ska laddas ner igen. Källor som du lämnar omarkerade behåller sin nuvarande katalog.</string>
     <string name="list_refresh_all">Alla leverantörer</string>

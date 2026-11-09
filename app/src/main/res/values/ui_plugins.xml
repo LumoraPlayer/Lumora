@@ -98,7 +98,6 @@
     <string name="plug_enable_stream_plugin_browse">Enable a stream plugin to browse titles outside your library.</string>
     <string name="plug_loading_series">Loading series…</string>
     <string name="plug_loading_movies">Loading movies…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Enable a stream plugin, or turn on Streaming sites in Settings, to play Discover titles.</string>
     <string name="plug_loading_episodes">Loading episodes…</string>
     <string name="plug_choose_season">%1$s — choose a season</string>
     <string name="plug_episode">Episode %1$d</string>
@@ -139,20 +138,16 @@
     <string name="plug_program_starts_too_soon">Program starts too soon - reminder not set</string>
 
     <!-- Update & backup toasts (MainActivity) -->
-    <string name="plug_update_available">Update available</string>
-    <string name="plug_update_available_message">Lumora v%1$s is available.\nCurrent: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">This app is out of date and requires updating. Lumora v%1$s is available (you have v%2$s).</string>
     <string name="plug_force_update_title">Update required</string>
     <string name="plug_force_update_message">Lumora v%1$s is %3$d versions behind the latest release (v%2$s). The app can\'t be used until it\'s updated - tap Update now to install it.</string>
     <string name="plug_force_update_unrecognised_message">This build (v%1$s) isn\'t a published Lumora release. Install the official release (v%2$s) to keep using the app.</string>
     <string name="plug_update_now">Update now</string>
     <string name="plug_update_dismiss">Dismiss</string>
-    <string name="plug_later">Later</string>
     <string name="plug_downloading_update">Downloading update…</string>
     <string name="plug_update_download_failed">Update download failed</string>
     <string name="plug_backup_exported">Backup exported</string>
     <string name="plug_export_failed">Export failed</string>
     <string name="plug_imported_summary">Imported: %1$d providers, %2$d EPG sources, %3$d groups, %4$d settings</string>
-    <string name="plug_import_failed">Import failed</string>
     <string name="plug_import_failed_reason">Import failed: %1$s</string>
 </resources>

@@ -725,14 +725,8 @@ class CatalogRepository private constructor(
                 ).also { instance = it }
             }
 
-        /** Test seam: a repository over an explicit database. */
-        internal fun forDatabase(db: CatalogDatabase): CatalogRepository = CatalogRepository(db)
     }
 }
-
-/** Convenience for the row's media type when the caller only has the stored string. */
-internal fun CatalogChannelEntity.mediaTypeOrNull(): MediaType? =
-    runCatching { MediaType.valueOf(mediaType) }.getOrNull()
 
 /** SQLite builds older than 3.32 cap bound variables at 999; stay well under it. */
 private const val SQL_VARIABLE_CHUNK = 900

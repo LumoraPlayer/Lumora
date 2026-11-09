@@ -54,7 +54,6 @@ object UserPreferences {
     private const val KEY_ENABLE_TMDB = "enable_tmdb"
     private const val KEY_SERVER_AUTO_SUBTITLES_DISABLED = "server_auto_subtitles_disabled"
     private const val KEY_AUTO_UPDATE_PLUGINS = "auto_update_plugins"
-    private const val KEY_BYPASS_WS_ADVERTISED_HOST = "bypass_ws_advertised_host"
     private const val KEY_STREAMINGCOMMUNITY_DOMAIN = "streamingcommunity_domain"
     private const val KEY_SERIENSTREAM_DOMAIN = "serienstream_domain"
     private const val KEY_CUEVANA_DOMAIN = "cuevana_domain"
@@ -186,15 +185,6 @@ object UserPreferences {
         set(value) {
             prefs?.edit()?.putBoolean(KEY_AUTO_UPDATE_PLUGINS, value)?.apply()
         }
-
-    /**
-     * Host/IP this device advertises in the QR code for the phone-assisted challenge bypass.
-     * Empty means "work it out from the active network interface" - only needed when the TV has
-     * several interfaces and picks the wrong one (see [BypassWebSocketEndpointHelper]).
-     */
-    var bypassWsAdvertisedHost: String
-        get() = getString(KEY_BYPASS_WS_ADVERTISED_HOST) ?: ""
-        set(value) = setString(KEY_BYPASS_WS_ADVERTISED_HOST, value.trim())
 
     var streamingcommunityDomain: String
         get() = domain(KEY_STREAMINGCOMMUNITY_DOMAIN, DEFAULT_STREAMINGCOMMUNITY_DOMAIN)

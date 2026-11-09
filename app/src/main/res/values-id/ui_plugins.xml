@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Aktifkan plugin stream untuk menjelajahi judul di luar pustaka Anda.</string>
     <string name="plug_loading_series">Memuat serial…</string>
     <string name="plug_loading_movies">Memuat film…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Aktifkan plugin stream, atau nyalakan Situs streaming di Pengaturan, untuk memutar judul Jelajah.</string>
     <string name="plug_loading_episodes">Memuat episode…</string>
     <string name="plug_choose_season">%1$s — pilih musim</string>
     <string name="plug_episode">Episode %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Pengingat dibatalkan</string>
     <string name="plug_reminder_set_for">Pengingat disetel untuk \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Program dimulai terlalu cepat - pengingat tidak disetel</string>
-    <string name="plug_update_available">Pembaruan tersedia</string>
-    <string name="plug_update_available_message">Lumora v%1$s tersedia.\nSaat ini: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Aplikasi ini sudah usang dan perlu diperbarui. Lumora v%1$s tersedia (Anda memiliki v%2$s).</string>
     <string name="plug_force_update_title">Pembaruan diperlukan</string>
     <string name="plug_force_update_message">Lumora v%1$s tertinggal %3$d versi dari rilis terbaru (v%2$s). Aplikasi tidak dapat digunakan sampai diperbarui - ketuk Perbarui sekarang untuk memasangnya.</string>
     <string name="plug_force_update_unrecognised_message">Build ini (v%1$s) bukan rilis Lumora yang diterbitkan. Pasang rilis resmi (v%2$s) untuk terus menggunakan aplikasi.</string>
     <string name="plug_update_now">Perbarui sekarang</string>
     <string name="plug_update_dismiss">Abaikan</string>
-    <string name="plug_later">Nanti</string>
     <string name="plug_downloading_update">Mengunduh pembaruan…</string>
     <string name="plug_update_download_failed">Unduhan pembaruan gagal</string>
     <string name="plug_backup_exported">Cadangan diekspor</string>
     <string name="plug_export_failed">Ekspor gagal</string>
     <string name="plug_imported_summary">Diimpor: %1$d penyedia, %2$d sumber EPG, %3$d grup, %4$d pengaturan</string>
-    <string name="plug_import_failed">Impor gagal</string>
     <string name="plug_import_failed_reason">Impor gagal: %1$s</string>
 </resources>

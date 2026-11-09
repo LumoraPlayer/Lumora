@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Active un complemento de streams para explorar títulos fuera de su biblioteca.</string>
     <string name="plug_loading_series">Cargando series…</string>
     <string name="plug_loading_movies">Cargando películas…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Active un complemento de streams o habilite los sitios de streaming en Ajustes para reproducir títulos de Descubrir.</string>
     <string name="plug_loading_episodes">Cargando episodios…</string>
     <string name="plug_choose_season">%1$s — elija una temporada</string>
     <string name="plug_episode">Episodio %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Recordatorio cancelado</string>
     <string name="plug_reminder_set_for">Recordatorio establecido para \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">El programa empieza demasiado pronto: no se ha establecido el recordatorio</string>
-    <string name="plug_update_available">Actualización disponible</string>
-    <string name="plug_update_available_message">Lumora v%1$s ya está disponible.\nActual: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Esta aplicación está desactualizada y requiere una actualización. Lumora v%1$s ya está disponible (tiene la v%2$s).</string>
     <string name="plug_force_update_title">Actualización obligatoria</string>
     <string name="plug_force_update_message">Lumora v%1$s está %3$d versiones por detrás de la última versión publicada (v%2$s). La aplicación no se puede usar hasta que se actualice: pulse Actualizar ahora para instalarla.</string>
     <string name="plug_force_update_unrecognised_message">Esta compilación (v%1$s) no es una versión publicada de Lumora. Instale la versión oficial (v%2$s) para seguir usando la aplicación.</string>
     <string name="plug_update_now">Actualizar ahora</string>
     <string name="plug_update_dismiss">Descartar</string>
-    <string name="plug_later">Más tarde</string>
     <string name="plug_downloading_update">Descargando actualización…</string>
     <string name="plug_update_download_failed">Error al descargar la actualización</string>
     <string name="plug_backup_exported">Copia de seguridad exportada</string>
     <string name="plug_export_failed">Error al exportar</string>
     <string name="plug_imported_summary">Importado: %1$d proveedores, %2$d fuentes EPG, %3$d grupos, %4$d ajustes</string>
-    <string name="plug_import_failed">Error al importar</string>
     <string name="plug_import_failed_reason">Error al importar: %1$s</string>
 </resources>

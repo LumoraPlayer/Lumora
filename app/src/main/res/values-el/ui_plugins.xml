@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Ενεργοποιήστε ένα πρόσθετο ροών για να περιηγηθείτε σε τίτλους εκτός της βιβλιοθήκης σας.</string>
     <string name="plug_loading_series">Φόρτωση σειρών…</string>
     <string name="plug_loading_movies">Φόρτωση ταινιών…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Ενεργοποιήστε ένα πρόσθετο ροών ή ενεργοποιήστε τους Ιστότοπους ροής στις Ρυθμίσεις, για να αναπαράγετε τίτλους της Ανακάλυψης.</string>
     <string name="plug_loading_episodes">Φόρτωση επεισοδίων…</string>
     <string name="plug_choose_season">%1$s — επιλέξτε σεζόν</string>
     <string name="plug_episode">Επεισόδιο %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Η υπενθύμιση ακυρώθηκε</string>
     <string name="plug_reminder_set_for">Ορίστηκε υπενθύμιση για \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Το πρόγραμμα ξεκινά πολύ σύντομα - δεν ορίστηκε υπενθύμιση</string>
-    <string name="plug_update_available">Διαθέσιμη ενημέρωση</string>
-    <string name="plug_update_available_message">Η Lumora v%1$s είναι διαθέσιμη.\nΤρέχουσα: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Αυτή η εφαρμογή είναι παρωχημένη και απαιτεί ενημέρωση. Η Lumora v%1$s είναι διαθέσιμη (έχετε την v%2$s).</string>
     <string name="plug_force_update_title">Απαιτείται ενημέρωση</string>
     <string name="plug_force_update_message">Η Lumora v%1$s είναι %3$d εκδόσεις πίσω από την πιο πρόσφατη έκδοση (v%2$s). Η εφαρμογή δεν μπορεί να χρησιμοποιηθεί μέχρι να ενημερωθεί - πατήστε Ενημέρωση τώρα για να την εγκαταστήσετε.</string>
     <string name="plug_force_update_unrecognised_message">Αυτή η έκδοση (v%1$s) δεν είναι δημοσιευμένη έκδοση της Lumora. Εγκαταστήστε την επίσημη έκδοση (v%2$s) για να συνεχίσετε να χρησιμοποιείτε την εφαρμογή.</string>
     <string name="plug_update_now">Ενημέρωση τώρα</string>
     <string name="plug_update_dismiss">Παράβλεψη</string>
-    <string name="plug_later">Αργότερα</string>
     <string name="plug_downloading_update">Λήψη ενημέρωσης…</string>
     <string name="plug_update_download_failed">Η λήψη της ενημέρωσης απέτυχε</string>
     <string name="plug_backup_exported">Το αντίγραφο ασφαλείας εξήχθη</string>
     <string name="plug_export_failed">Η εξαγωγή απέτυχε</string>
     <string name="plug_imported_summary">Εισήχθησαν: %1$d πάροχοι, %2$d πηγές EPG, %3$d ομάδες, %4$d ρυθμίσεις</string>
-    <string name="plug_import_failed">Η εισαγωγή απέτυχε</string>
     <string name="plug_import_failed_reason">Η εισαγωγή απέτυχε: %1$s</string>
 </resources>

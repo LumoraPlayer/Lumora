@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Aktivér et stream-plugin for at gennemse titler uden for dit bibliotek.</string>
     <string name="plug_loading_series">Indlæser serier…</string>
     <string name="plug_loading_movies">Indlæser film…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Aktivér et stream-plugin, eller slå Streaming-sider til i Indstillinger, for at afspille Opdag-titler.</string>
     <string name="plug_loading_episodes">Indlæser afsnit…</string>
     <string name="plug_choose_season">%1$s — vælg en sæson</string>
     <string name="plug_episode">Afsnit %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Påmindelse annulleret</string>
     <string name="plug_reminder_set_for">Påmindelse sat for \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Programmet starter for snart - påmindelse ikke sat</string>
-    <string name="plug_update_available">Opdatering tilgængelig</string>
-    <string name="plug_update_available_message">Lumora v%1$s er tilgængelig.\nNuværende: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Denne app er forældet og skal opdateres. Lumora v%1$s er tilgængelig (du har v%2$s).</string>
     <string name="plug_force_update_title">Opdatering påkrævet</string>
     <string name="plug_force_update_message">Lumora v%1$s er %3$d versioner bagud i forhold til den nyeste udgivelse (v%2$s). Appen kan ikke bruges, før den er opdateret - tryk på Opdater nu for at installere den.</string>
     <string name="plug_force_update_unrecognised_message">Dette build (v%1$s) er ikke en udgivet Lumora-version. Installér den officielle udgivelse (v%2$s) for at fortsætte med at bruge appen.</string>
     <string name="plug_update_now">Opdater nu</string>
     <string name="plug_update_dismiss">Afvis</string>
-    <string name="plug_later">Senere</string>
     <string name="plug_downloading_update">Downloader opdatering…</string>
     <string name="plug_update_download_failed">Download af opdatering mislykkedes</string>
     <string name="plug_backup_exported">Sikkerhedskopi eksporteret</string>
     <string name="plug_export_failed">Eksport mislykkedes</string>
     <string name="plug_imported_summary">Importeret: %1$d udbydere, %2$d EPG-kilder, %3$d grupper, %4$d indstillinger</string>
-    <string name="plug_import_failed">Import mislykkedes</string>
     <string name="plug_import_failed_reason">Import mislykkedes: %1$s</string>
 </resources>

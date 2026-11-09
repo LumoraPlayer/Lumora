@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Csak akkor töltse ki ezeket, ha a szolgáltatója egy adott eszközt regisztrált. Hagyja üresen, hogy az eszközprofilt a MAC-címből állítsa elő.</string>
     <string name="sett_type_summary">Típus: %1$s</string>
     <string name="sett_editing_provider">%1$s szerkesztése</string>
-    <string name="sett_editing_jellyfin">Jellyfin szerkesztése</string>
     <string name="sett_editing_plex">Plex szerkesztése</string>
     <string name="sett_plex_starting">Bejelentkezés indítása…</string>
     <string name="sett_plex_scan_code">Lépjen a plex.tv/link oldalra, és adja meg a következőt: %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">A böngészésből elrejtve. Akkor is lejátszik, ha a fő forrás meghibásodik.</string>
     <string name="sett_provider_backup_badge">Tartalék</string>
     <string name="sett_provider_backup_needed">Tartson meg legalább egy látható forrást</string>
-    <string name="sett_remove_plex_confirm">Eltávolítja a Plexet?</string>
     <string name="sett_remove_plex_message">A filmjei és sorozatai többé nem jelennek meg.</string>
-    <string name="sett_remove_jellyfin_confirm">Eltávolítja a Jellyfint?</string>
     <string name="sett_remove_jellyfin_message">A csatornái többé nem jelennek meg.</string>
     <string name="sett_choose_provider_type_first">Először válasszon szolgáltatótípust</string>
     <string name="sett_enter_m3u_url">Adjon meg egy M3U URL-t</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Lejárt</string>
     <string name="sett_could_not_start_server">Nem sikerült elindítani a szervert</string>
     <string name="sett_provider_received">Szolgáltató megérkezett! Betöltés...</string>
-    <string name="sett_backup_saved_to">Biztonsági mentés mentve ide: %1$s</string>
     <string name="sett_backup_secrets_note">A biztonsági mentés fájlja olvasható szövegként tartalmazza a szolgáltatói bejelentkezéseket és a médiaszerver-munkamenetek tokenjeit — tartsa biztonságos helyen.</string>
     <string name="sett_export_failed">Az exportálás nem sikerült</string>
     <string name="sett_no_backup_file">Nem található biztonsági mentés itt: %1$s</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Külső lejátszó ajánlása: %1$s</string>
     <string name="sett_fast_zap">Gyorsabb csatornaváltás: %1$s</string>
     <string name="sett_frame_rate_match">Kijelző frissítési gyakoriságának illesztése: %1$s</string>
-    <string name="sett_live_preview">Élő csatorna előnézete: %1$s</string>
     <string name="sett_on">BE</string>
     <string name="sett_off">KI</string>
     <string name="sett_playback_settings_title">Lejátszási beállítások</string>

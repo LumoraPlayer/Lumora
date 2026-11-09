@@ -42,8 +42,6 @@
     <!-- 错误 -->
     <!-- 数字输入 -->
     <!-- 接下来播放 / 自动续播 -->
-    <string name="up_next">接下来播放</string>
-    <string name="play_now">立即播放</string>
 
     <!-- 增量搜索 -->
     <!-- 音视频同步 -->
@@ -75,7 +73,6 @@
     <string name="downloads_tab">下载</string>
     <string name="no_provider_configured">未配置提供商</string>
     <string name="press_settings_to_add_playlist">打开设置以添加播放列表 URL</string>
-    <string name="add_a_provider">添加提供商</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN 提供商</string>
     <string name="startup_choose_public">公共流媒体内容</string>
     <string name="startup_choose_both">两者都要</string>
@@ -87,8 +84,6 @@
     <string name="find_stream">查找并播放</string>
     <string name="trailer">预告片</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">睡眠</string>
-    <string name="diag">诊断</string>
     <string name="open_in_external_player_short">打开方式</string>
 
     <!-- 每次会话开始时显示在车载屏幕上，也显示在手机上的设置中。
@@ -267,7 +262,6 @@
     <string name="scraper_sites_header">要搜索的站点</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">通过加密解析器解析站点域名，而非使用您的 ISP 的解析器</string>
-    <string name="scraper_doh_system">系统 DNS</string>
     <string name="scraper_extra_buffering_title">额外缓冲</string>
     <string name="scraper_extra_buffering_subtitle">为分批投递内容的主机提前缓冲最多 5 分钟。占用更多内存；重启后生效</string>
     <string name="category_newest">最新</string>
@@ -339,7 +333,6 @@
     <string name="sports_finished">完场</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">体育</string>
-    <string name="sports_settings_subtitle">体育标签页列出今日赛事以及每场比赛所在的频道，频道从你的 EPG 源匹配得出。赛事数据来自 API-Sports 和 SportAPI.ai；密钥已内置在应用中，无需在此登录。</string>
     <string name="sports_settings_subtitle_with_keys">今日比赛来自 %1$s。每一行的频道都从你的 EPG 源中匹配，因此只有在节目单覆盖的频道上才能找到赛事。</string>
     <string name="sports_settings_sport_feed">通过 API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">显示体育标签页</string>
@@ -528,12 +521,8 @@
     <string name="sett_locality_detect">从设备检测</string>
     <string name="sett_locality_detected">设备地区：%1$s</string>
     <string name="sett_locality_detect_failed">无法从此设备检测地区</string>
-    <string name="sett_locality_apply">应用</string>
     <string name="sett_locality_grouping_label">%1$s（分组）</string>
-    <string name="sett_locality_none_title">此地区没有频道</string>
     <string name="sett_locality_empty">你的提供商中没有匹配 %1$s 的频道。</string>
-    <string name="sett_locality_change">更改地区</string>
-    <string name="sett_locality_hidden_hint">%1$d 个频道标记为 %2$s，已隐藏。</string>
     <string name="settings_nav_group_library">我的媒体库</string>
     <string name="settings_nav_group_browsing">浏览</string>
     <string name="settings_nav_group_connections">连接</string>
@@ -630,7 +619,6 @@
     <string name="mv_panes_value">%1$d 个画面</string>
     <string name="mv_provider_max_conn">最大连接数</string>
     <string name="mv_provider_max_conn_hint">此订阅允许同时播放多少个流（留空表示未知）</string>
-    <string name="mv_provider_max_conn_label">同时连接数</string>
     <string name="ingest_connecting">%1$s —— 正在连接\u2026</string>
     <string name="ingest_progress">%1$s —— 正在导入 %2$s \u00b7 %3$s 个项目 \u00b7 %4$s</string>
     <string name="ingest_size_of">%1$s / %2$s</string>

@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Ota striimi-plugin käyttöön selataksesi nimikkeitä kirjastosi ulkopuolella.</string>
     <string name="plug_loading_series">Ladataan sarjoja…</string>
     <string name="plug_loading_movies">Ladataan elokuvia…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Ota striimi-plugin käyttöön tai kytke Suoratoistosivustot päälle Asetuksissa, jotta voit toistaa Tutki-nimikkeitä.</string>
     <string name="plug_loading_episodes">Ladataan jaksoja…</string>
     <string name="plug_choose_season">%1$s — valitse kausi</string>
     <string name="plug_episode">Jakso %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Muistutus peruutettu</string>
     <string name="plug_reminder_set_for">Muistutus asetettu: \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Ohjelma alkaa liian pian - muistutusta ei asetettu</string>
-    <string name="plug_update_available">Päivitys saatavilla</string>
-    <string name="plug_update_available_message">Lumora v%1$s on saatavilla.\nNykyinen: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Tämä sovellus on vanhentunut ja vaatii päivityksen. Lumora v%1$s on saatavilla (sinulla on v%2$s).</string>
     <string name="plug_force_update_title">Päivitys vaaditaan</string>
     <string name="plug_force_update_message">Lumora v%1$s on %3$d versiota uusimman julkaisun (v%2$s) jäljessä. Sovellusta ei voi käyttää ennen päivitystä - napauta Päivitä nyt asentaaksesi sen.</string>
     <string name="plug_force_update_unrecognised_message">Tämä koontiversio (v%1$s) ei ole virallinen Lumora-julkaisu. Asenna virallinen julkaisu (v%2$s), jotta voit jatkaa sovelluksen käyttöä.</string>
     <string name="plug_update_now">Päivitä nyt</string>
     <string name="plug_update_dismiss">Ohita</string>
-    <string name="plug_later">Myöhemmin</string>
     <string name="plug_downloading_update">Ladataan päivitystä…</string>
     <string name="plug_update_download_failed">Päivityksen lataus epäonnistui</string>
     <string name="plug_backup_exported">Varmuuskopio viety</string>
     <string name="plug_export_failed">Vienti epäonnistui</string>
     <string name="plug_imported_summary">Tuotu: %1$d palveluntarjoajaa, %2$d EPG-lähdettä, %3$d ryhmää, %4$d asetusta</string>
-    <string name="plug_import_failed">Tuonti epäonnistui</string>
     <string name="plug_import_failed_reason">Tuonti epäonnistui: %1$s</string>
 </resources>

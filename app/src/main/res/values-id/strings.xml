@@ -42,8 +42,6 @@
     <!-- Kesalahan -->
     <!-- Masukan Angka -->
     <!-- Berikutnya / Lanjut Otomatis -->
-    <string name="up_next">Berikutnya</string>
-    <string name="play_now">Putar sekarang</string>
 
     <!-- Pencarian Inkremental -->
     <!-- Sinkronisasi A/V -->
@@ -75,7 +73,6 @@
     <string name="downloads_tab">Unduhan</string>
     <string name="no_provider_configured">Tidak ada penyedia yang dikonfigurasi</string>
     <string name="press_settings_to_add_playlist">Tekan Pengaturan untuk menambahkan URL daftar putar</string>
-    <string name="add_a_provider">Tambah Penyedia</string>
     <string name="startup_choose_provider">PENYEDIA IPTV/JELLYFIN</string>
     <string name="startup_choose_public">KONTEN STREAMING PUBLIK</string>
     <string name="startup_choose_both">KEDUANYA</string>
@@ -87,8 +84,6 @@
     <string name="find_stream">Temukan &amp; putar</string>
     <string name="trailer">Trailer</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Tidur</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Buka di</string>
 
     <!-- Ditampilkan di layar mobil di awal setiap sesi, dan di Pengaturan di ponsel. Dibuat cukup
@@ -268,7 +263,6 @@
     <string name="scraper_sites_header">Situs untuk dicari</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Menyelesaikan domain situs melalui resolver terenkripsi, bukan resolver ISP Anda</string>
-    <string name="scraper_doh_system">DNS sistem</string>
     <string name="scraper_extra_buffering_title">Buffering ekstra</string>
     <string name="scraper_extra_buffering_subtitle">Menyangga hingga 5 menit ke depan untuk host yang mengirimkan dalam ledakan. Menggunakan lebih banyak memori; berlaku setelah memulai ulang</string>
     <string name="category_newest">Terbaru</string>
@@ -340,7 +334,6 @@
     <string name="sports_finished">FT</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Olahraga</string>
-    <string name="sports_settings_subtitle">Tab Olahraga mencantumkan jadwal pertandingan hari ini dan saluran untuk masing-masing, dicocokkan dari sumber EPG Anda. Jadwal pertandingan berasal dari API-Sports dan SportAPI.ai; kuncinya sudah terpasang di aplikasi, jadi tidak ada proses masuk yang diperlukan di sini.</string>
     <string name="sports_settings_subtitle_with_keys">Pertandingan hari ini berasal dari %1$s. Saluran setiap baris dicocokkan dari sumber EPG Anda, jadi pertandingan hanya dapat ditemukan di saluran yang tercakup panduan Anda.</string>
     <string name="sports_settings_sport_feed">via API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Tampilkan tab Olahraga</string>
@@ -529,12 +522,8 @@
     <string name="sett_locality_detect">Deteksi dari perangkat</string>
     <string name="sett_locality_detected">Wilayah perangkat: %1$s</string>
     <string name="sett_locality_detect_failed">Tidak dapat mendeteksi wilayah dari perangkat ini</string>
-    <string name="sett_locality_apply">Terapkan</string>
     <string name="sett_locality_grouping_label">%1$s (pengelompokan)</string>
-    <string name="sett_locality_none_title">Tidak ada saluran untuk wilayah ini</string>
     <string name="sett_locality_empty">Tidak ada saluran yang cocok dengan %1$s di penyedia Anda.</string>
-    <string name="sett_locality_change">Ubah wilayah</string>
-    <string name="sett_locality_hidden_hint">%1$d saluran diberi tag %2$s dan disembunyikan.</string>
     <string name="settings_nav_group_library">Pustaka Anda</string>
     <string name="settings_nav_group_browsing">Penjelajahan</string>
     <string name="settings_nav_group_connections">Koneksi</string>
@@ -631,7 +620,6 @@
     <string name="mv_panes_value">%1$d layar</string>
     <string name="mv_provider_max_conn">Koneksi maksimum</string>
     <string name="mv_provider_max_conn_hint">Berapa banyak stream yang diizinkan langganan ini sekaligus (kosong = tidak diketahui)</string>
-    <string name="mv_provider_max_conn_label">Koneksi bersamaan</string>
     <string name="ingest_connecting">%1$s — Menghubungkan…</string>
     <string name="ingest_progress">%1$s — Mengimpor %2$s · %3$s item · %4$s</string>
     <string name="ingest_size_of">%1$s dari %2$s</string>

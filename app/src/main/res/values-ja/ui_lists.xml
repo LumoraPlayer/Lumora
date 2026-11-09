@@ -64,7 +64,6 @@
     <string name="list_off">オフ</string>
     <string name="list_no_alt_audio">代替オーディオトラックはありません</string>
     <string name="list_no_alt_video">代替の画質はありません</string>
-    <string name="list_no_subtitles">利用可能な字幕はありません</string>
     <string name="list_refresh_title">プロバイダーを更新</string>
     <string name="list_refresh_message">再ダウンロードするものを選択してください。選択しないソースは現在のカタログを維持します。</string>
     <string name="list_refresh_all">すべてのプロバイダー</string>

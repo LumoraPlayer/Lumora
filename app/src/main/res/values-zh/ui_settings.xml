@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">仅当您的提供商注册了特定机顶盒时才需填写。留空将根据 MAC 生成设备配置文件。</string>
     <string name="sett_type_summary">类型：%1$s</string>
     <string name="sett_editing_provider">正在编辑 %1$s</string>
-    <string name="sett_editing_jellyfin">正在编辑 Jellyfin</string>
     <string name="sett_editing_plex">正在编辑 Plex</string>
     <string name="sett_plex_starting">正在启动登录…</string>
     <string name="sett_plex_scan_code">前往 plex.tv/link 并输入 %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">浏览时隐藏。主源失败时仍可播放。</string>
     <string name="sett_provider_backup_badge">备用</string>
     <string name="sett_provider_backup_needed">请至少保留一个可见的源</string>
-    <string name="sett_remove_plex_confirm">移除 Plex？</string>
     <string name="sett_remove_plex_message">其中的电影和节目将不再显示。</string>
-    <string name="sett_remove_jellyfin_confirm">移除 Jellyfin？</string>
     <string name="sett_remove_jellyfin_message">其中的频道将不再显示。</string>
     <string name="sett_choose_provider_type_first">请先选择提供商类型</string>
     <string name="sett_enter_m3u_url">请输入 M3U URL</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">已过期</string>
     <string name="sett_could_not_start_server">无法启动服务器</string>
     <string name="sett_provider_received">已收到提供商！正在加载...</string>
-    <string name="sett_backup_saved_to">备份已保存至 %1$s</string>
     <string name="sett_backup_secrets_note">备份文件以可读文本包含提供商登录信息和媒体服务器会话令牌 — 请将其保存在私密位置。</string>
     <string name="sett_export_failed">导出失败</string>
     <string name="sett_no_backup_file">在 %1$s 未找到备份文件</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">建议使用外部播放器：%1$s</string>
     <string name="sett_fast_zap">快速换台：%1$s</string>
     <string name="sett_frame_rate_match">匹配屏幕刷新率：%1$s</string>
-    <string name="sett_live_preview">直播频道预览：%1$s</string>
     <string name="sett_on">开</string>
     <string name="sett_off">关</string>
     <string name="sett_playback_settings_title">播放设置</string>

@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Włącz wtyczkę streamingową, aby przeglądać tytuły spoza swojej biblioteki.</string>
     <string name="plug_loading_series">Wczytywanie seriali…</string>
     <string name="plug_loading_movies">Wczytywanie filmów…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Włącz wtyczkę streamingową lub włącz Strony streamingowe w Ustawieniach, aby odtwarzać tytuły z Odkrywaj.</string>
     <string name="plug_loading_episodes">Wczytywanie odcinków…</string>
     <string name="plug_choose_season">%1$s — wybierz sezon</string>
     <string name="plug_episode">Odcinek %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Anulowano przypomnienie</string>
     <string name="plug_reminder_set_for">Ustawiono przypomnienie dla \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Program zaczyna się za chwilę - nie ustawiono przypomnienia</string>
-    <string name="plug_update_available">Dostępna aktualizacja</string>
-    <string name="plug_update_available_message">Dostępna jest Lumora v%1$s.\nBieżąca wersja: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Ta aplikacja jest nieaktualna i wymaga aktualizacji. Dostępna jest Lumora v%1$s (masz v%2$s).</string>
     <string name="plug_force_update_title">Wymagana aktualizacja</string>
     <string name="plug_force_update_message">Lumora v%1$s ma zaległość %3$d wersji względem najnowszego wydania (v%2$s). Aplikacji nie można używać, dopóki nie zostanie zaktualizowana - dotknij Aktualizuj teraz, aby ją zainstalować.</string>
     <string name="plug_force_update_unrecognised_message">Ta kompilacja (v%1$s) nie jest opublikowanym wydaniem Lumory. Zainstaluj oficjalne wydanie (v%2$s), aby dalej korzystać z aplikacji.</string>
     <string name="plug_update_now">Aktualizuj teraz</string>
     <string name="plug_update_dismiss">Odrzuć</string>
-    <string name="plug_later">Później</string>
     <string name="plug_downloading_update">Pobieranie aktualizacji…</string>
     <string name="plug_update_download_failed">Nie udało się pobrać aktualizacji</string>
     <string name="plug_backup_exported">Wyeksportowano kopię zapasową</string>
     <string name="plug_export_failed">Eksport nie powiódł się</string>
     <string name="plug_imported_summary">Zaimportowano: %1$d dostawców, %2$d źródeł EPG, %3$d grup, %4$d ustawień</string>
-    <string name="plug_import_failed">Import nie powiódł się</string>
     <string name="plug_import_failed_reason">Import nie powiódł się: %1$s</string>
 </resources>

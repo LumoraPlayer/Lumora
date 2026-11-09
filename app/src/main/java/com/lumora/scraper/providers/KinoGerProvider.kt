@@ -14,7 +14,6 @@ import com.lumora.scraper.models.TvShow
 import com.lumora.scraper.models.Video
 import com.lumora.scraper.utils.DnsResolver
 import com.lumora.scraper.utils.TmdbUtils
-import com.lumora.scraper.utils.UserPreferences
 import com.tanasi.retrofit_jsoup.converter.JsoupConverterFactory
 import okhttp3.OkHttpClient
 import okhttp3.Interceptor
@@ -27,7 +26,6 @@ import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Url
-import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 object KinoGerProvider : Provider {
@@ -809,46 +807,6 @@ object KinoGerProvider : Provider {
     private fun year(doc: Document, raw: String): String? =
         Regex("\\b(?:19|20)\\d{2}\\b").find(raw)?.value ?: Regex("\\b(?:19|20)\\d{2}\\b").find(doc.text())?.value
 
-    private fun isKinoGerVideoCandidate(
-        url: String,
-    ): Boolean {
-
-        if (!isStreamCandidate(url)) {
-            return false
-        }
-
-        val host =
-            runCatching {
-                java.net.URI(url)
-                    .host
-                    ?.lowercase()
-                    ?.removePrefix("www.")
-            }.getOrNull()
-                ?: return false
-
-        val blockedHosts =
-            listOf(
-                "disqus.com",
-                "disquscdn.com",
-                "facebook.com",
-                "instagram.com",
-                "twitter.com",
-                "x.com",
-                "google.com",
-                "googleapis.com",
-                "gstatic.com",
-                "doubleclick.net",
-                "googlesyndication.com",
-                "recaptcha.net",
-                "gravatar.com",
-            )
-
-        return blockedHosts.none { blocked ->
-            host == blocked ||
-                host.endsWith(".$blocked")
-        }
-    }
-
     private fun quality(
         text: String,
     ): String? {
@@ -1000,15 +958,6 @@ object KinoGerProvider : Provider {
         }
 
         return result.toList()
-    }
-
-    private fun isStreamCandidate(url: String): Boolean {
-        if (!url.startsWith("http")) return false
-        val l = url.lowercase()
-        if (l.contains("youtube.") || l.contains("youtu.be") || l.contains("imdb.com") || l.contains("tmdb.org")) return false
-        return listOf("voe", "vidoza", "streamtape", "dood", "luluvdo", "veo", "vidmoly", "filemoon",
-            "streamwish", "mixdrop", "upstream", "uqload", "supervideo", "mcloud", "meinecloud",
-            ".m3u8", ".mp4", "/embed", "/e/").any { l.contains(it) }
     }
 
     private fun hostName(url: String): String =

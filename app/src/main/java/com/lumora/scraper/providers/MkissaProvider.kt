@@ -17,14 +17,12 @@ import com.lumora.scraper.models.Season
 import com.lumora.scraper.models.TvShow
 import com.lumora.scraper.models.Video
 import com.lumora.scraper.utils.ArtworkRequestHeaders
-import com.lumora.scraper.utils.DnsResolver
 import com.lumora.scraper.utils.NetworkClient
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import okhttp3.Cache
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -477,20 +475,6 @@ object MkissaProvider : Provider {
             .filter { it.sourceUrl().isNotBlank() }
 //            .filterNot { it.isKnownDeadEmbedSource() }
             .toList()
-    }
-
-    private suspend fun popularShows(page: Int, size: Int): List<TvShow> {
-        val variables = JSONObject()
-            .put(
-                "search",
-                JSONObject()
-                    .put("page", page)
-                    .put("size", size)
-                    .put("sortBy", "Popular")
-                    .put("allowAdult", false)
-                    .put("allowUnknown", false)
-            )
-        return parseShows(api(variables, POPULAR_HASH, SEARCH_QUERY))
     }
 
     private suspend fun popularByDateRange(dateRange: Int, page: Int, size: Int): List<TvShow> {

@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Isi hanya jika penyedia Anda mendaftarkan box tertentu. Biarkan kosong untuk membuat profil perangkat dari MAC.</string>
     <string name="sett_type_summary">Tipe: %1$s</string>
     <string name="sett_editing_provider">Mengedit %1$s</string>
-    <string name="sett_editing_jellyfin">Mengedit Jellyfin</string>
     <string name="sett_editing_plex">Mengedit Plex</string>
     <string name="sett_plex_starting">Memulai proses masuk…</string>
     <string name="sett_plex_scan_code">Buka plex.tv/link dan masukkan %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Disembunyikan dari penjelajahan. Tetap diputar jika sumber utama gagal.</string>
     <string name="sett_provider_backup_badge">Cadangan</string>
     <string name="sett_provider_backup_needed">Pertahankan setidaknya satu sumber yang terlihat</string>
-    <string name="sett_remove_plex_confirm">Hapus Plex?</string>
     <string name="sett_remove_plex_message">Film dan acaranya tidak akan muncul lagi.</string>
-    <string name="sett_remove_jellyfin_confirm">Hapus Jellyfin?</string>
     <string name="sett_remove_jellyfin_message">Salurannya tidak akan muncul lagi.</string>
     <string name="sett_choose_provider_type_first">Pilih jenis penyedia dulu</string>
     <string name="sett_enter_m3u_url">Masukkan URL M3U</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Kedaluwarsa</string>
     <string name="sett_could_not_start_server">Tidak dapat memulai server</string>
     <string name="sett_provider_received">Penyedia diterima! Memuat...</string>
-    <string name="sett_backup_saved_to">Cadangan disimpan ke %1$s</string>
     <string name="sett_backup_secrets_note">Berkas cadangan menyimpan info masuk penyedia dan token sesi server media sebagai teks yang dapat dibaca — simpan di tempat yang privat.</string>
     <string name="sett_export_failed">Ekspor gagal</string>
     <string name="sett_no_backup_file">Tidak ada berkas cadangan di %1$s</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Sarankan pemutar eksternal: %1$s</string>
     <string name="sett_fast_zap">Perpindahan saluran lebih cepat: %1$s</string>
     <string name="sett_frame_rate_match">Cocokkan laju penyegaran layar: %1$s</string>
-    <string name="sett_live_preview">Pratinjau saluran langsung: %1$s</string>
     <string name="sett_on">AKTIF</string>
     <string name="sett_off">NONAKTIF</string>
     <string name="sett_playback_settings_title">Pengaturan pemutaran</string>

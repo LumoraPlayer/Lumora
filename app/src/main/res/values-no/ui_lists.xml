@@ -65,7 +65,6 @@
     <string name="list_off">Av</string>
     <string name="list_no_alt_audio">Ingen alternative lydspor</string>
     <string name="list_no_alt_video">Ingen alternativ videokvalitet</string>
-    <string name="list_no_subtitles">Ingen undertekster tilgjengelig</string>
     <string name="list_refresh_title">Oppdater leverandører</string>
     <string name="list_refresh_message">Velg hva som skal lastes ned på nytt. Kilder du lar være umerket, beholder den gjeldende katalogen.</string>
     <string name="list_refresh_all">Alle leverandører</string>

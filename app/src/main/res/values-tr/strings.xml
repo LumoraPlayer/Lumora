@@ -42,8 +42,6 @@
     <!-- Hatalar -->
     <!-- Sayısal Giriş -->
     <!-- Sıradaki / Otomatik İlerleme -->
-    <string name="up_next">Sırada</string>
-    <string name="play_now">Şimdi Oynat</string>
 
     <!-- Artımlı Arama -->
     <!-- A/V Senkronu -->
@@ -76,7 +74,6 @@
     <string name="downloads_tab">İndirilenler</string>
     <string name="no_provider_configured">Sağlayıcı yapılandırılmamış</string>
     <string name="press_settings_to_add_playlist">Oynatma listesi URL\'si eklemek için Ayarlar\'a basın</string>
-    <string name="add_a_provider">Sağlayıcı Ekle</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN SAĞLAYICISI</string>
     <string name="startup_choose_public">GENEL AKIŞ İÇERİĞİ</string>
     <string name="startup_choose_both">HER İKİSİ</string>
@@ -88,8 +85,6 @@
     <string name="find_stream">Akışı Bul &amp; Oynat</string>
     <string name="trailer">Fragman</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Uyku</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Şurada aç</string>
 
     <!-- Her oturumun başında araç ekranında ve telefonda Ayarlar'da gösterilir.
@@ -271,7 +266,6 @@
     <string name="scraper_sites_header">Aranacak siteler</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Site alan adlarını ISP\'nizin yerine şifreli bir çözümleyici üzerinden çözer</string>
-    <string name="scraper_doh_system">Sistem DNS\'i</string>
     <string name="scraper_extra_buffering_title">Ekstra arabellek</string>
     <string name="scraper_extra_buffering_subtitle">Aralıklı teslim eden sunucular için 5 dakikaya kadar önden arabellek oluşturur. Daha fazla bellek kullanır; yeniden başlatma sonrasında uygulanır</string>
     <string name="category_newest">En Yeni</string>
@@ -343,7 +337,6 @@
     <string name="sports_finished">MS</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Spor</string>
-    <string name="sports_settings_subtitle">Spor sekmesi bugünün müsabakalarını ve her birinin hangi kanalda olduğunu, EPG kaynaklarınızdan eşleştirerek listeler. Müsabakalar API-Sports ve SportAPI.ai\'den gelir; anahtarlar uygulamaya gömülü olduğundan burada oturum açmanız gerekmez.</string>
     <string name="sports_settings_subtitle_with_keys">Bugünün maçları %1$s kaynağından gelir. Her satırın kanalı EPG kaynaklarınızdan eşleştirilir; bu yüzden bir müsabaka yalnızca rehberinizin kapsadığı bir kanalda bulunabilir.</string>
     <string name="sports_settings_sport_feed">API-Sports / SportAPI.ai ile</string>
     <string name="sports_settings_show_tab">Spor sekmesini göster</string>
@@ -532,12 +525,8 @@
     <string name="sett_locality_detect">Cihazdan algıla</string>
     <string name="sett_locality_detected">Cihaz bölgesi: %1$s</string>
     <string name="sett_locality_detect_failed">Bu cihazdan bölge algılanamadı</string>
-    <string name="sett_locality_apply">Uygula</string>
     <string name="sett_locality_grouping_label">%1$s (grup)</string>
-    <string name="sett_locality_none_title">Bu bölgede kanal yok</string>
     <string name="sett_locality_empty">Sağlayıcılarınızda %1$s ile eşleşen kanal yok.</string>
-    <string name="sett_locality_change">Bölgeleri değiştir</string>
-    <string name="sett_locality_hidden_hint">%1$d kanal %2$s olarak etiketli ve gizli.</string>
     <string name="settings_nav_group_library">Kitaplığınız</string>
     <string name="settings_nav_group_browsing">Gözatma</string>
     <string name="settings_nav_group_connections">Bağlantılar</string>
@@ -634,7 +623,6 @@
     <string name="mv_panes_value">%1$d ekran</string>
     <string name="mv_provider_max_conn">Maksimum bağlantı</string>
     <string name="mv_provider_max_conn_hint">Bu aboneliğin aynı anda kaç akışa izin verdiği (boş = bilinmiyor)</string>
-    <string name="mv_provider_max_conn_label">Eşzamanlı bağlantılar</string>
     <string name="ingest_connecting">%1$s — Bağlanıyor…</string>
     <string name="ingest_progress">%1$s — %2$s içe aktarılıyor · %3$s öğe · %4$s</string>
     <string name="ingest_size_of">%1$s / %2$s</string>

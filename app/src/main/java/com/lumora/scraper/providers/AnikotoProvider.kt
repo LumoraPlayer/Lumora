@@ -15,10 +15,8 @@ import com.lumora.scraper.models.Season
 import com.lumora.scraper.models.Show
 import com.lumora.scraper.models.TvShow
 import com.lumora.scraper.models.Video
-import com.lumora.scraper.utils.DnsResolver
 import com.lumora.scraper.utils.NetworkClient
 import com.tanasi.retrofit_jsoup.converter.JsoupConverterFactory
-import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -522,11 +520,6 @@ object AnikotoProvider : Provider {
             @Header("Cookie") cookie: String = COUNTRY_COOKIE,
         ): AjaxHtmlResponse
 
-        @GET
-        suspend fun getStreamSources(
-            @Url url: String,
-            @retrofit2.http.Header("Referer") referer: String,
-        ): StreamSourcesResponse
     }
 
     private data class AjaxHtmlResponse(
@@ -540,22 +533,6 @@ object AnikotoProvider : Provider {
     ) {
         data class ServerLink(
             val url: String? = null,
-        )
-    }
-
-    private data class StreamSourcesResponse(
-        val sources: Sources? = null,
-        val tracks: List<Track>? = null,
-    ) {
-        data class Sources(
-            val file: String? = null,
-        )
-
-        data class Track(
-            val file: String,
-            val label: String? = null,
-            val kind: String? = null,
-            val default: Boolean? = null,
         )
     }
 

@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Engedélyezzen egy streamelő bővítményt a könyvtárán kívüli címek böngészéséhez.</string>
     <string name="plug_loading_series">Sorozatok betöltése…</string>
     <string name="plug_loading_movies">Filmek betöltése…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Engedélyezzen egy streamelő bővítményt, vagy kapcsolja be a Streamelő webhelyeket a Beállításokban, hogy lejátszhassa a Felfedezés címeit.</string>
     <string name="plug_loading_episodes">Epizódok betöltése…</string>
     <string name="plug_choose_season">%1$s — válasszon évadot</string>
     <string name="plug_episode">%1$d. epizód</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Emlékeztető törölve</string>
     <string name="plug_reminder_set_for">Emlékeztető beállítva erre: \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">A műsor túl hamar kezdődik - az emlékeztető nem lett beállítva</string>
-    <string name="plug_update_available">Frissítés érhető el</string>
-    <string name="plug_update_available_message">A Lumora v%1$s elérhető.\nJelenlegi: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Ez az alkalmazás elavult, és frissítést igényel. A Lumora v%1$s elérhető (Önnél v%2$s van).</string>
     <string name="plug_force_update_title">Frissítés szükséges</string>
     <string name="plug_force_update_message">A Lumora v%1$s %3$d verzióval van lemaradva a legújabb kiadás (v%2$s) mögött. Az alkalmazás nem használható, amíg nem frissül - koppintson a Frissítés most elemre a telepítéshez.</string>
     <string name="plug_force_update_unrecognised_message">Ez az összeállítás (v%1$s) nem közzétett Lumora-kiadás. A használat folytatásához telepítse a hivatalos kiadást (v%2$s).</string>
     <string name="plug_update_now">Frissítés most</string>
     <string name="plug_update_dismiss">Elvetés</string>
-    <string name="plug_later">Később</string>
     <string name="plug_downloading_update">Frissítés letöltése…</string>
     <string name="plug_update_download_failed">A frissítés letöltése nem sikerült</string>
     <string name="plug_backup_exported">Biztonsági mentés exportálva</string>
     <string name="plug_export_failed">Az exportálás nem sikerült</string>
     <string name="plug_imported_summary">Importálva: %1$d szolgáltató, %2$d EPG-forrás, %3$d csoport, %4$d beállítás</string>
-    <string name="plug_import_failed">Az importálás nem sikerült</string>
     <string name="plug_import_failed_reason">Az importálás nem sikerült: %1$s</string>
 </resources>

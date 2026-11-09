@@ -89,8 +89,6 @@ internal fun MainActivity.jellyfinServers(): List<MediaServerConfig> =
 internal fun MainActivity.plexServers(): List<MediaServerConfig> =
     mediaServers().filter { it.isPlex }
 
-internal fun MainActivity.hasJellyfinConfigured(): Boolean = jellyfinServers().isNotEmpty()
-
 internal fun MainActivity.hasPlexConfigured(): Boolean = plexServers().isNotEmpty()
 
 internal fun MainActivity.hasProviderConfigured(): Boolean =

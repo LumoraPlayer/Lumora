@@ -42,8 +42,6 @@
     <!-- Hibák -->
     <!-- Számbevitel -->
     <!-- Következik / Automatikus továbblépés -->
-    <string name="up_next">Következik</string>
-    <string name="play_now">Lejátszás most</string>
 
     <!-- Növekményes keresés -->
     <!-- A/V-szinkron -->
@@ -76,7 +74,6 @@
     <string name="downloads_tab">Letöltések</string>
     <string name="no_provider_configured">Nincs szolgáltató beállítva</string>
     <string name="press_settings_to_add_playlist">Nyomja meg a Beállításokat egy lejátszási lista URL hozzáadásához</string>
-    <string name="add_a_provider">Szolgáltató hozzáadása</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN SZOLGÁLTATÓ</string>
     <string name="startup_choose_public">NYILVÁNOS STREAMELT TARTALOM</string>
     <string name="startup_choose_both">MINDKETTŐ</string>
@@ -88,8 +85,6 @@
     <string name="find_stream">Keresés és lejátszás</string>
     <string name="trailer">Előzetes</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Alvás</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Megnyitás itt:</string>
 
     <!-- Minden munkamenet elején megjelenik az autós képernyőn, valamint a telefon Beállításai között.
@@ -271,7 +266,6 @@
     <string name="scraper_sites_header">Keresendő webhelyek</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">A webhelyek domainjeit titkosított resolverrel oldja fel az internetszolgáltatóé helyett</string>
-    <string name="scraper_doh_system">Rendszer-DNS</string>
     <string name="scraper_extra_buffering_title">Extra pufferelés</string>
     <string name="scraper_extra_buffering_subtitle">Akár 5 percet is előre pufferel azoknál a hosztoknál, amelyek adagokban szállítanak. Több memóriát használ; újraindítás után lép életbe</string>
     <string name="category_newest">Legújabb</string>
@@ -343,7 +337,6 @@
     <string name="sports_finished">VÉGE</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sport</string>
-    <string name="sports_settings_subtitle">A Sport fül a mai mérkőzéseket és az egyes mérkőzésekhez tartozó csatornát listázza, az EPG-forrásai alapján párosítva. A mérkőzések az API-Sports és a SportAPI.ai szolgáltatásból származnak; a kulcsok be vannak építve az alkalmazásba, így itt nincs mit bejelentkezni.</string>
     <string name="sports_settings_subtitle_with_keys">A mai mérkőzések innen származnak: %1$s. Minden sor csatornája az EPG-forrásai közül kerül kiválasztásra, így egy mérkőzés csak olyan csatornán található meg, amelyet a műsorújságja lefed.</string>
     <string name="sports_settings_sport_feed">via API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Sport fül megjelenítése</string>
@@ -532,12 +525,8 @@
     <string name="sett_locality_detect">Felismerés az eszközről</string>
     <string name="sett_locality_detected">Eszköz régiója: %1$s</string>
     <string name="sett_locality_detect_failed">Nem sikerült régiót felismerni ezen az eszközön</string>
-    <string name="sett_locality_apply">Alkalmaz</string>
     <string name="sett_locality_grouping_label">%1$s (csoportosítás)</string>
-    <string name="sett_locality_none_title">Nincs csatorna ebben a régióban</string>
     <string name="sett_locality_empty">Nincs csatorna a(z) %1$s régióban a szolgáltatóinál.</string>
-    <string name="sett_locality_change">Régiók módosítása</string>
-    <string name="sett_locality_hidden_hint">%1$d csatorna %2$s címkével rejtve van.</string>
     <string name="settings_nav_group_library">Az Ön könyvtára</string>
     <string name="settings_nav_group_browsing">Böngészés</string>
     <string name="settings_nav_group_connections">Kapcsolatok</string>
@@ -634,7 +623,6 @@
     <string name="mv_panes_value">%1$d képernyő</string>
     <string name="mv_provider_max_conn">Maximális kapcsolatok</string>
     <string name="mv_provider_max_conn_hint">Hány streamet engedélyez ez az előfizetés egyszerre (üresen = ismeretlen)</string>
-    <string name="mv_provider_max_conn_label">Egyidejű kapcsolatok</string>
     <string name="ingest_connecting">%1$s — Csatlakozás…</string>
     <string name="ingest_progress">%1$s — %2$s importálása · %3$s elem · %4$s</string>
     <string name="ingest_size_of">%1$s / %2$s</string>

@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Kitaplığınız dışındaki başlıklara göz atmak için bir akış eklentisi etkinleştirin.</string>
     <string name="plug_loading_series">Diziler yükleniyor…</string>
     <string name="plug_loading_movies">Filmler yükleniyor…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Keşfet başlıklarını oynatmak için bir akış eklentisi etkinleştirin veya Ayarlar\'dan Akış sitelerini açın.</string>
     <string name="plug_loading_episodes">Bölümler yükleniyor…</string>
     <string name="plug_choose_season">%1$s — bir sezon seçin</string>
     <string name="plug_episode">Bölüm %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Hatırlatıcı iptal edildi</string>
     <string name="plug_reminder_set_for">\"%1$s\" için hatırlatıcı ayarlandı</string>
     <string name="plug_program_starts_too_soon">Program çok yakında başlıyor - hatırlatıcı ayarlanmadı</string>
-    <string name="plug_update_available">Güncelleme mevcut</string>
-    <string name="plug_update_available_message">Lumora v%1$s mevcut.\nMevcut sürüm: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Bu uygulama güncel değil ve güncellenmesi gerekiyor. Lumora v%1$s mevcut (sizde v%2$s var).</string>
     <string name="plug_force_update_title">Güncelleme gerekli</string>
     <string name="plug_force_update_message">Lumora v%1$s, en son sürümün (v%2$s) %3$d sürüm gerisinde. Uygulama güncellenene kadar kullanılamaz - yüklemek için Şimdi güncelle\'ye dokunun.</string>
     <string name="plug_force_update_unrecognised_message">Bu derleme (v%1$s) yayımlanmış bir Lumora sürümü değil. Uygulamayı kullanmaya devam etmek için resmi sürümü (v%2$s) yükleyin.</string>
     <string name="plug_update_now">Şimdi güncelle</string>
     <string name="plug_update_dismiss">Yoksay</string>
-    <string name="plug_later">Daha sonra</string>
     <string name="plug_downloading_update">Güncelleme indiriliyor…</string>
     <string name="plug_update_download_failed">Güncelleme indirilemedi</string>
     <string name="plug_backup_exported">Yedek dışa aktarıldı</string>
     <string name="plug_export_failed">Dışa aktarma başarısız</string>
     <string name="plug_imported_summary">İçe aktarıldı: %1$d sağlayıcı, %2$d EPG kaynağı, %3$d grup, %4$d ayar</string>
-    <string name="plug_import_failed">İçe aktarma başarısız</string>
     <string name="plug_import_failed_reason">İçe aktarma başarısız: %1$s</string>
 </resources>

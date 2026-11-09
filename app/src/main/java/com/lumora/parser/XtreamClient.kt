@@ -153,14 +153,6 @@ class XtreamClient(private val client: OkHttpClient) {
     suspend fun getSeriesCategories(provider: Provider): List<Pair<String, String>> =
         fetchCategoryList(provider, "series")
 
-    /** Fetch live streams. */
-    suspend fun getLiveStreams(provider: Provider, categoryId: String? = null): List<Channel> =
-        fetchStreamList(provider, "get_live_streams", categoryId, MediaType.LIVE)
-
-    /** Fetch VOD streams. */
-    suspend fun getVodStreams(provider: Provider, categoryId: String? = null): List<Channel> =
-        fetchStreamList(provider, "get_vod_streams", categoryId, MediaType.MOVIE)
-
     /** Fetch series list. */
     suspend fun getSeries(provider: Provider, categoryId: String? = null): List<Channel> =
         fetchSeriesList(provider, categoryId)
@@ -431,27 +423,6 @@ class XtreamClient(private val client: OkHttpClient) {
             .replace(Regex("\\s+"), " ")
             .trim()
         return id to name
-    }
-
-    private suspend fun fetchStreamList(
-        provider: Provider,
-        action: String,
-        categoryId: String?,
-        mediaType: MediaType
-    ): List<Channel> = withContext(Dispatchers.IO) {
-        val params = StringBuilder("action=$action")
-        if (!categoryId.isNullOrBlank()) params.append("&category_id=$categoryId")
-        val url = buildApiUrl(provider, params.toString())
-        val key = when (action) {
-            "get_live_streams" -> "live_streams"
-            "get_vod_streams" -> "vod_streams"
-            else -> ""
-        }
-        // Many Xtream servers return a bare JSON array at the root instead of
-        // {"live_streams": [...]}; the streaming reader accepts both shapes.
-        streamBulkArray(url, key) { map, firstCategoryId ->
-            streamFromMap(map, firstCategoryId, mediaType, provider)
-        }
     }
 
     private suspend fun fetchSeriesList(provider: Provider, categoryId: String?): List<Channel> =

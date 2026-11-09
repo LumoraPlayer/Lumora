@@ -62,9 +62,7 @@
     <!-- Errors -->
     <!-- Numeric Input -->
     <!-- Up Next / Auto-Advance -->
-    <string name="up_next">Up Next</string>
     <string name="play_next_episode">Play Next Episode</string>
-    <string name="play_now">Play Now</string>
 
     <!-- Incremental Search -->
     <!-- A/V Sync -->
@@ -111,7 +109,6 @@
     <string name="sports_finished">FT</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sports</string>
-    <string name="sports_settings_subtitle">The Sports board lists today\'s fixtures and the channel each one is on, matched from your EPG sources. Fixtures come from API-Sports and SportAPI.ai; the keys are built into the app, so there is nothing to sign in to here.</string>
     <string name="sports_settings_subtitle_with_keys">Today\'s games come from %1$s. Every row\'s channel is matched out of your EPG sources, so a fixture can only be found on a channel your guide covers.</string>
     <string name="sports_settings_sport_feed">via API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Show Sports in Live TV</string>
@@ -167,7 +164,6 @@
     <string name="downloads_tab">Downloads</string>
     <string name="no_provider_configured">No provider configured</string>
     <string name="press_settings_to_add_playlist">Press Settings to add a playlist URL</string>
-    <string name="add_a_provider">Add a Provider</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN PROVIDER</string>
     <string name="startup_choose_public">PUBLIC STREAMING CONTENT</string>
     <string name="startup_choose_both">BOTH</string>
@@ -182,8 +178,6 @@
          TalkBack nothing. Deliberately generic: it serves films and series alike. -->
     <string name="download">Download</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Sleep</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Open in</string>
 
     <!-- Shown on the car screen at the start of every session, and in Settings on the phone.
@@ -297,12 +291,8 @@
     <string name="sett_locality_detect">Detect from device</string>
     <string name="sett_locality_detected">Device region: %1$s</string>
     <string name="sett_locality_detect_failed">Couldn\'t detect a region from this device</string>
-    <string name="sett_locality_apply">Apply</string>
     <string name="sett_locality_grouping_label">%1$s (grouping)</string>
-    <string name="sett_locality_none_title">No channels for this region</string>
     <string name="sett_locality_empty">No channels match %1$s in your providers.</string>
-    <string name="sett_locality_change">Change regions</string>
-    <string name="sett_locality_hidden_hint">%1$d channel(s) are tagged %2$s and are hidden.</string>
     <string name="hide_adult_categories">Hide adult categories</string>
     <!-- Collapsed category rail: the pill that brings it back, and the one-shot hint shown
          at the moment of collapse so the way back is never something to hunt for. -->
@@ -514,7 +504,6 @@
     <string name="scraper_sites_header">Sites to search</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Resolves site domains through an encrypted resolver instead of your ISP\'s</string>
-    <string name="scraper_doh_system">System DNS</string>
     <string name="scraper_extra_buffering_title">Extra buffering</string>
     <string name="scraper_extra_buffering_subtitle">Buffers up to 5 minutes ahead for hosts that deliver in bursts. Uses more memory; applies after a restart</string>
     <string name="category_newest">Newest</string>
@@ -689,7 +678,6 @@
     <string name="mv_panes_value">%1$d screens</string>
     <string name="mv_provider_max_conn">Max connections</string>
     <string name="mv_provider_max_conn_hint">How many streams this subscription allows at once (blank = unknown)</string>
-    <string name="mv_provider_max_conn_label">Simultaneous connections</string>
 
     <!-- Catalog ingest: the status row while a provider's catalogue streams in, and the
          size badge in the provider list. A panel past CATALOGUE_TOO_LARGE_BYTES (50 MB)

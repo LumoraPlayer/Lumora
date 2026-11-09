@@ -67,7 +67,6 @@
     <string name="list_off">Вимк.</string>
     <string name="list_no_alt_audio">Немає альтернативних аудіодоріжок</string>
     <string name="list_no_alt_video">Немає альтернативної якості відео</string>
-    <string name="list_no_subtitles">Субтитри недоступні</string>
     <string name="list_refresh_title">Оновити постачальників</string>
     <string name="list_refresh_message">Виберіть, що завантажити повторно. Джерела, які ви не позначили, збережуть поточний каталог.</string>
     <string name="list_refresh_all">Усі постачальники</string>

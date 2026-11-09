@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Rellene estos campos solo si su proveedor registró un dispositivo concreto. Déjelos en blanco para generar un perfil de dispositivo a partir de la MAC.</string>
     <string name="sett_type_summary">Tipo: %1$s</string>
     <string name="sett_editing_provider">Editando %1$s</string>
-    <string name="sett_editing_jellyfin">Editando Jellyfin</string>
     <string name="sett_editing_plex">Editando Plex</string>
     <string name="sett_plex_starting">Iniciando sesión…</string>
     <string name="sett_plex_scan_code">Vaya a plex.tv/link e introduzca %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Oculto al navegar. Se seguirá reproduciendo si falla la fuente principal.</string>
     <string name="sett_provider_backup_badge">Respaldo</string>
     <string name="sett_provider_backup_needed">Mantenga al menos una fuente visible</string>
-    <string name="sett_remove_plex_confirm">¿Quitar Plex?</string>
     <string name="sett_remove_plex_message">Sus películas y series dejarán de aparecer.</string>
-    <string name="sett_remove_jellyfin_confirm">¿Quitar Jellyfin?</string>
     <string name="sett_remove_jellyfin_message">Sus canales dejarán de aparecer.</string>
     <string name="sett_choose_provider_type_first">Elija primero un tipo de proveedor</string>
     <string name="sett_enter_m3u_url">Introduzca una URL M3U</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Caducado</string>
     <string name="sett_could_not_start_server">No se pudo iniciar el servidor</string>
     <string name="sett_provider_received">¡Proveedor recibido! Cargando...</string>
-    <string name="sett_backup_saved_to">Copia de seguridad guardada en %1$s</string>
     <string name="sett_backup_secrets_note">El archivo de copia de seguridad contiene los inicios de sesión de los proveedores y los tokens de sesión de los servidores multimedia como texto legible — guárdelo en un lugar privado.</string>
     <string name="sett_export_failed">Error al exportar</string>
     <string name="sett_no_backup_file">No se ha encontrado ningún archivo de copia de seguridad en %1$s</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Sugerir reproductor externo: %1$s</string>
     <string name="sett_fast_zap">Cambio de canal más rápido: %1$s</string>
     <string name="sett_frame_rate_match">Igualar la frecuencia de actualización de la pantalla: %1$s</string>
-    <string name="sett_live_preview">Vista previa del canal en directo: %1$s</string>
     <string name="sett_on">SÍ</string>
     <string name="sett_off">NO</string>
     <string name="sett_playback_settings_title">Ajustes de reproducción</string>

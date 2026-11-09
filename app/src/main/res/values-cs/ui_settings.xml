@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Vyplňte je jen v případě, že váš poskytovatel zaregistroval konkrétní zařízení. Ponechte je prázdné a profil zařízení se vygeneruje z MAC.</string>
     <string name="sett_type_summary">Typ: %1$s</string>
     <string name="sett_editing_provider">Úprava: %1$s</string>
-    <string name="sett_editing_jellyfin">Úprava Jellyfinu</string>
     <string name="sett_editing_plex">Úprava Plexu</string>
     <string name="sett_plex_starting">Spouštění přihlášení…</string>
     <string name="sett_plex_scan_code">Přejděte na plex.tv/link a zadejte %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Skrytý při procházení. Přehrává se i v případě, že hlavní zdroj selže.</string>
     <string name="sett_provider_backup_badge">Záloha</string>
     <string name="sett_provider_backup_needed">Ponechte alespoň jeden viditelný zdroj</string>
-    <string name="sett_remove_plex_confirm">Odebrat Plex?</string>
     <string name="sett_remove_plex_message">Jeho filmy a seriály se už nebudou zobrazovat.</string>
-    <string name="sett_remove_jellyfin_confirm">Odebrat Jellyfin?</string>
     <string name="sett_remove_jellyfin_message">Jeho kanály se už nebudou zobrazovat.</string>
     <string name="sett_choose_provider_type_first">Nejprve vyberte typ poskytovatele</string>
     <string name="sett_enter_m3u_url">Zadejte URL M3U</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Vypršelo</string>
     <string name="sett_could_not_start_server">Server se nepodařilo spustit</string>
     <string name="sett_provider_received">Poskytovatel přijat! Načítání...</string>
-    <string name="sett_backup_saved_to">Záloha uložena do %1$s</string>
     <string name="sett_backup_secrets_note">Soubor zálohy obsahuje přihlašovací údaje poskytovatelů a tokeny relací mediálních serverů jako čitelný text — uchovávejte jej na soukromém místě.</string>
     <string name="sett_export_failed">Export se nezdařil</string>
     <string name="sett_no_backup_file">Na %1$s nebyl nalezen žádný soubor zálohy</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Nabídnout externí přehrávač: %1$s</string>
     <string name="sett_fast_zap">Rychlejší přepínání kanálů: %1$s</string>
     <string name="sett_frame_rate_match">Přizpůsobit obnovovací frekvenci displeje: %1$s</string>
-    <string name="sett_live_preview">Náhled živého kanálu: %1$s</string>
     <string name="sett_on">ZAP</string>
     <string name="sett_off">VYP</string>
     <string name="sett_playback_settings_title">Nastavení přehrávání</string>

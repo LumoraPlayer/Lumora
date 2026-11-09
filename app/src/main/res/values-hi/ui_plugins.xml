@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">अपनी लाइब्रेरी से बाहर के शीर्षक ब्राउज़ करने के लिए स्ट्रीम प्लगइन सक्षम करें।</string>
     <string name="plug_loading_series">सीरीज़ लोड हो रही हैं…</string>
     <string name="plug_loading_movies">फ़िल्में लोड हो रही हैं…</string>
-    <string name="plug_enable_stream_plugin_or_sites">डिस्कवर शीर्षक चलाने के लिए स्ट्रीम प्लगइन सक्षम करें, या सेटिंग्स में स्ट्रीमिंग साइटें चालू करें।</string>
     <string name="plug_loading_episodes">एपिसोड लोड हो रहे हैं…</string>
     <string name="plug_choose_season">%1$s — सीज़न चुनें</string>
     <string name="plug_episode">एपिसोड %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">रिमाइंडर रद्द किया गया</string>
     <string name="plug_reminder_set_for">\"%1$s\" के लिए रिमाइंडर सेट किया गया</string>
     <string name="plug_program_starts_too_soon">कार्यक्रम बहुत जल्दी शुरू होगा - रिमाइंडर सेट नहीं हुआ</string>
-    <string name="plug_update_available">अपडेट उपलब्ध है</string>
-    <string name="plug_update_available_message">Lumora v%1$s उपलब्ध है।\nवर्तमान: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">यह ऐप पुराना हो गया है और इसे अपडेट करना ज़रूरी है। Lumora v%1$s उपलब्ध है (आपके पास v%2$s है)।</string>
     <string name="plug_force_update_title">अपडेट आवश्यक</string>
     <string name="plug_force_update_message">Lumora v%1$s नवीनतम रिलीज़ (v%2$s) से %3$d संस्करण पीछे है। अपडेट होने तक ऐप का उपयोग नहीं किया जा सकता - इंस्टॉल करने के लिए अभी अपडेट करें पर टैप करें।</string>
     <string name="plug_force_update_unrecognised_message">यह बिल्ड (v%1$s) कोई प्रकाशित Lumora रिलीज़ नहीं है। ऐप का उपयोग जारी रखने के लिए आधिकारिक रिलीज़ (v%2$s) इंस्टॉल करें।</string>
     <string name="plug_update_now">अभी अपडेट करें</string>
     <string name="plug_update_dismiss">खारिज करें</string>
-    <string name="plug_later">बाद में</string>
     <string name="plug_downloading_update">अपडेट डाउनलोड हो रहा है…</string>
     <string name="plug_update_download_failed">अपडेट डाउनलोड विफल</string>
     <string name="plug_backup_exported">बैकअप निर्यात हो गया</string>
     <string name="plug_export_failed">निर्यात विफल</string>
     <string name="plug_imported_summary">आयात किया गया: %1$d प्रोवाइडर, %2$d EPG स्रोत, %3$d समूह, %4$d सेटिंग</string>
-    <string name="plug_import_failed">आयात विफल</string>
     <string name="plug_import_failed_reason">आयात विफल: %1$s</string>
 </resources>

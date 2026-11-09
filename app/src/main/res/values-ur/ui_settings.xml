@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">یہ صرف اس صورت میں بھریں جب آپ کے فراہم کنندہ نے کوئی مخصوص باکس رجسٹر کیا ہو۔ MAC سے ڈیوائس پروفائل بنانے کے لیے انہیں خالی چھوڑیں۔</string>
     <string name="sett_type_summary">قسم: %1$s</string>
     <string name="sett_editing_provider">%1$s میں ترمیم</string>
-    <string name="sett_editing_jellyfin">Jellyfin میں ترمیم</string>
     <string name="sett_editing_plex">Plex میں ترمیم</string>
     <string name="sett_plex_starting">سائن ان شروع ہو رہا ہے…</string>
     <string name="sett_plex_scan_code">plex.tv/link پر جائیں اور %1$s درج کریں</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">براؤزنگ سے چھپا ہوا۔ اگر مرکزی ذریعہ ناکام ہو جائے تو پھر بھی چلتا ہے۔</string>
     <string name="sett_provider_backup_badge">بیک اپ</string>
     <string name="sett_provider_backup_needed">کم از کم ایک نظر آنے والا ذریعہ رکھیں</string>
-    <string name="sett_remove_plex_confirm">Plex ہٹائیں؟</string>
     <string name="sett_remove_plex_message">اس کی فلمیں اور شوز اب ظاہر نہیں ہوں گے۔</string>
-    <string name="sett_remove_jellyfin_confirm">Jellyfin ہٹائیں؟</string>
     <string name="sett_remove_jellyfin_message">اس کے چینلز اب ظاہر نہیں ہوں گے۔</string>
     <string name="sett_choose_provider_type_first">پہلے فراہم کنندہ کی قسم منتخب کریں</string>
     <string name="sett_enter_m3u_url">M3U URL درج کریں</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">میعاد ختم</string>
     <string name="sett_could_not_start_server">سرور شروع نہیں ہو سکا</string>
     <string name="sett_provider_received">فراہم کنندہ موصول ہو گیا! لوڈ ہو رہا ہے...</string>
-    <string name="sett_backup_saved_to">بیک اپ %1$s میں محفوظ ہو گیا</string>
     <string name="sett_backup_secrets_note">بیک اپ فائل میں فراہم کنندگان کے لاگ ان اور میڈیا سرور سیشن ٹوکنز سادہ متن میں ہوتے ہیں — اسے کسی نجی جگہ رکھیں۔</string>
     <string name="sett_export_failed">برآمد ناکام</string>
     <string name="sett_no_backup_file">%1$s پر کوئی بیک اپ فائل نہیں ملی</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">بیرونی پلیئر تجویز کریں: %1$s</string>
     <string name="sett_fast_zap">تیز تر چینل تبدیلی: %1$s</string>
     <string name="sett_frame_rate_match">ڈسپلے ریفریش ریٹ سے مطابقت: %1$s</string>
-    <string name="sett_live_preview">لائیو چینل پیش نظارہ: %1$s</string>
     <string name="sett_on">آن</string>
     <string name="sett_off">بند</string>
     <string name="sett_playback_settings_title">پلے بیک ترتیبات</string>

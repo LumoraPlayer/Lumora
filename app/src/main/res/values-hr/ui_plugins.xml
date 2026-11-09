@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Omogućite dodatak za tokove kako biste pregledavali naslove izvan svoje biblioteke.</string>
     <string name="plug_loading_series">Učitavanje serija…</string>
     <string name="plug_loading_movies">Učitavanje filmova…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Omogućite dodatak za tokove ili uključite Stranice za strujanje u Postavkama da biste reproducirali naslove s Otkrij.</string>
     <string name="plug_loading_episodes">Učitavanje epizoda…</string>
     <string name="plug_choose_season">%1$s — odaberite sezonu</string>
     <string name="plug_episode">Epizoda %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Podsjetnik je otkazan</string>
     <string name="plug_reminder_set_for">Podsjetnik postavljen za \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Program počinje preuskoro - podsjetnik nije postavljen</string>
-    <string name="plug_update_available">Dostupno ažuriranje</string>
-    <string name="plug_update_available_message">Dostupna je Lumora v%1$s.\nTrenutačno: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Ova je aplikacija zastarjela i potrebno ju je ažurirati. Dostupna je Lumora v%1$s (imate v%2$s).</string>
     <string name="plug_force_update_title">Ažuriranje je obavezno</string>
     <string name="plug_force_update_message">Lumora v%1$s zaostaje %3$d verzija za najnovijim izdanjem (v%2$s). Aplikacija se ne može koristiti dok se ne ažurira - dodirnite Ažuriraj sada da biste je instalirali.</string>
     <string name="plug_force_update_unrecognised_message">Ova verzija (v%1$s) nije objavljeno izdanje Lumore. Instalirajte službeno izdanje (v%2$s) da biste nastavili koristiti aplikaciju.</string>
     <string name="plug_update_now">Ažuriraj sada</string>
     <string name="plug_update_dismiss">Odbaci</string>
-    <string name="plug_later">Kasnije</string>
     <string name="plug_downloading_update">Preuzimanje ažuriranja…</string>
     <string name="plug_update_download_failed">Preuzimanje ažuriranja nije uspjelo</string>
     <string name="plug_backup_exported">Sigurnosna kopija je izvezena</string>
     <string name="plug_export_failed">Izvoz nije uspio</string>
     <string name="plug_imported_summary">Uvezeno: %1$d pružatelja, %2$d EPG izvora, %3$d grupa, %4$d postavki</string>
-    <string name="plug_import_failed">Uvoz nije uspio</string>
     <string name="plug_import_failed_reason">Uvoz nije uspio: %1$s</string>
 </resources>

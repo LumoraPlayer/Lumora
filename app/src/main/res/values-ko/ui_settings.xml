@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">제공업체에 특정 기기를 등록한 경우에만 입력하세요. 비워 두면 MAC에서 기기 프로필을 생성합니다.</string>
     <string name="sett_type_summary">유형: %1$s</string>
     <string name="sett_editing_provider">%1$s 편집 중</string>
-    <string name="sett_editing_jellyfin">Jellyfin 편집 중</string>
     <string name="sett_editing_plex">Plex 편집 중</string>
     <string name="sett_plex_starting">로그인 시작 중…</string>
     <string name="sett_plex_scan_code">plex.tv/link에 접속해 %1$s을(를) 입력하세요</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">탐색에서는 숨겨지지만 기본 소스가 실패하면 계속 재생됩니다.</string>
     <string name="sett_provider_backup_badge">백업</string>
     <string name="sett_provider_backup_needed">표시되는 소스를 하나 이상 유지하세요</string>
-    <string name="sett_remove_plex_confirm">Plex를 제거할까요?</string>
     <string name="sett_remove_plex_message">해당 영화와 시리즈가 더 이상 표시되지 않습니다.</string>
-    <string name="sett_remove_jellyfin_confirm">Jellyfin을 제거할까요?</string>
     <string name="sett_remove_jellyfin_message">해당 채널이 더 이상 표시되지 않습니다.</string>
     <string name="sett_choose_provider_type_first">먼저 제공업체 유형을 선택하세요</string>
     <string name="sett_enter_m3u_url">M3U URL 입력</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">만료됨</string>
     <string name="sett_could_not_start_server">서버를 시작할 수 없습니다</string>
     <string name="sett_provider_received">제공업체를 받았습니다! 로드 중...</string>
-    <string name="sett_backup_saved_to">백업을 %1$s에 저장했습니다</string>
     <string name="sett_backup_secrets_note">백업 파일에는 제공업체 로그인 정보와 미디어 서버 세션 토큰이 읽을 수 있는 텍스트로 포함되어 있습니다 — 안전한 곳에 보관하세요.</string>
     <string name="sett_export_failed">내보내기 실패</string>
     <string name="sett_no_backup_file">%1$s에서 백업 파일을 찾을 수 없습니다</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">외부 플레이어 제안: %1$s</string>
     <string name="sett_fast_zap">빠른 채널 전환: %1$s</string>
     <string name="sett_frame_rate_match">디스플레이 주사율 일치: %1$s</string>
-    <string name="sett_live_preview">실시간 채널 미리보기: %1$s</string>
     <string name="sett_on">켜짐</string>
     <string name="sett_off">꺼짐</string>
     <string name="sett_playback_settings_title">재생 설정</string>

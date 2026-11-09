@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Täytä nämä vain, jos palveluntarjoajasi rekisteröi tietyn laitteen. Jätä ne tyhjäksi, niin laiteprofiili luodaan MAC-osoitteesta.</string>
     <string name="sett_type_summary">Tyyppi: %1$s</string>
     <string name="sett_editing_provider">Muokataan: %1$s</string>
-    <string name="sett_editing_jellyfin">Muokataan Jellyfiniä</string>
     <string name="sett_editing_plex">Muokataan Pleksiä</string>
     <string name="sett_plex_starting">Aloitetaan kirjautumista…</string>
     <string name="sett_plex_scan_code">Siirry osoitteeseen plex.tv/link ja anna %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Piilotettu selauksesta. Toistetaan silti, jos päälähde epäonnistuu.</string>
     <string name="sett_provider_backup_badge">Varalähde</string>
     <string name="sett_provider_backup_needed">Pidä vähintään yksi näkyvä lähde</string>
-    <string name="sett_remove_plex_confirm">Poistetaanko Plex?</string>
     <string name="sett_remove_plex_message">Sen elokuvat ja sarjat eivät enää näy.</string>
-    <string name="sett_remove_jellyfin_confirm">Poistetaanko Jellyfin?</string>
     <string name="sett_remove_jellyfin_message">Sen kanavat eivät enää näy.</string>
     <string name="sett_choose_provider_type_first">Valitse ensin palveluntarjoajan tyyppi</string>
     <string name="sett_enter_m3u_url">Anna M3U-URL-osoite</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Vanhentunut</string>
     <string name="sett_could_not_start_server">Palvelinta ei voitu käynnistää</string>
     <string name="sett_provider_received">Palveluntarjoaja vastaanotettu! Ladataan...</string>
-    <string name="sett_backup_saved_to">Varmuuskopio tallennettu: %1$s</string>
     <string name="sett_backup_secrets_note">Varmuuskopiotiedosto sisältää palveluntarjoajien kirjautumistiedot ja mediaserverien istuntotunnukset luettavana tekstinä — pidä se yksityisessä paikassa.</string>
     <string name="sett_export_failed">Vienti epäonnistui</string>
     <string name="sett_no_backup_file">Varmuuskopiotiedostoa ei löytynyt kohteesta %1$s</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Ehdota ulkoista soitinta: %1$s</string>
     <string name="sett_fast_zap">Nopeampi kanavanvaihto: %1$s</string>
     <string name="sett_frame_rate_match">Sovita näytön virkistystaajuuteen: %1$s</string>
-    <string name="sett_live_preview">Live-kanavan esikatselu: %1$s</string>
     <string name="sett_on">PÄÄLLÄ</string>
     <string name="sett_off">POIS</string>
     <string name="sett_playback_settings_title">Toistoasetukset</string>

@@ -264,12 +264,7 @@
     <dimen name="text_subhead_l">15sp</dimen>
     <dimen name="text_title_s">16sp</dimen>
     <dimen name="text_title">18sp</dimen>
-    <dimen name="text_display">24sp</dimen>
     <dimen name="text_hero">48sp</dimen>
-    <!-- Up Next card's countdown number. Deliberately smaller than text_display: the card
-         is a corner overlay over live video, not a headline. -->
-    <dimen name="up_next_countdown_text">13sp</dimen>
-
     <!-- Square icon buttons in the toolbar (settings/refresh/back). These are the tallest
          thing in the toolbar, so they set its (wrap_content) height. 48dp here is the
          minimum comfortable touch target on a phone. -->
@@ -303,7 +298,6 @@
          one control a thumb reaches for with the screen already moving. -->
     <dimen name="player_transport_button_size">44dp</dimen>
     <dimen name="player_play_button_size">56dp</dimen>
-    <dimen name="player_transport_gap">4dp</dimen>
     <dimen name="player_seek_height">32dp</dimen>
     <dimen name="player_quick_action_height">56dp</dimen>
     <dimen name="player_quick_action_gap">4dp</dimen>

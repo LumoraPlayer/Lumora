@@ -5,7 +5,6 @@ import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import com.lumora.ui.dialog.LumoraDialog
 import androidx.core.content.ContextCompat
@@ -44,10 +43,6 @@ import kotlinx.coroutines.launch
 
 private const val SCRAPER_PREFS = "lumora_scraper_prefs"
 private const val KEY_LAST_GOOD_SOURCE = "last_good_source"
-
-/** True when the scrapers can be offered for [item] at all. */
-internal fun MainActivity.scraperCanSource(item: Channel): Boolean =
-    (item.mediaType == MediaType.MOVIE || item.mediaType == MediaType.SERIES) && scrapersUsable()
 
 /** True when at least one site is switched on and the master switch is up. */
 internal fun MainActivity.scrapersUsable(): Boolean =

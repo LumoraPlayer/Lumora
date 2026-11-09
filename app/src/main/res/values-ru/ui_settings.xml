@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Заполняйте это, только если ваш провайдер зарегистрировал конкретную приставку. Оставьте поля пустыми, чтобы создать профиль устройства на основе MAC-адреса.</string>
     <string name="sett_type_summary">Тип: %1$s</string>
     <string name="sett_editing_provider">Редактирование: %1$s</string>
-    <string name="sett_editing_jellyfin">Редактирование Jellyfin</string>
     <string name="sett_editing_plex">Редактирование Plex</string>
     <string name="sett_plex_starting">Запуск входа…</string>
     <string name="sett_plex_scan_code">Перейдите на plex.tv/link и введите %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Не отображается в списках. Всё равно воспроизводится, если основной источник не работает.</string>
     <string name="sett_provider_backup_badge">Резерв</string>
     <string name="sett_provider_backup_needed">Оставьте хотя бы один видимый источник</string>
-    <string name="sett_remove_plex_confirm">Удалить Plex?</string>
     <string name="sett_remove_plex_message">Его фильмы и сериалы больше не будут отображаться.</string>
-    <string name="sett_remove_jellyfin_confirm">Удалить Jellyfin?</string>
     <string name="sett_remove_jellyfin_message">Его каналы больше не будут отображаться.</string>
     <string name="sett_choose_provider_type_first">Сначала выберите тип провайдера</string>
     <string name="sett_enter_m3u_url">Введите URL M3U</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Истекло</string>
     <string name="sett_could_not_start_server">Не удалось запустить сервер</string>
     <string name="sett_provider_received">Провайдер получен! Загрузка...</string>
-    <string name="sett_backup_saved_to">Резервная копия сохранена в %1$s</string>
     <string name="sett_backup_secrets_note">Файл резервной копии содержит логины провайдеров и токены сеансов медиасерверов в открытом виде — храните его в надёжном месте.</string>
     <string name="sett_export_failed">Не удалось экспортировать</string>
     <string name="sett_no_backup_file">В %1$s файл резервной копии не найден</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Предлагать внешний плеер: %1$s</string>
     <string name="sett_fast_zap">Быстрое переключение каналов: %1$s</string>
     <string name="sett_frame_rate_match">Подстраивать частоту обновления экрана: %1$s</string>
-    <string name="sett_live_preview">Предпросмотр прямого канала: %1$s</string>
     <string name="sett_on">ВКЛ</string>
     <string name="sett_off">ВЫКЛ</string>
     <string name="sett_playback_settings_title">Настройки воспроизведения</string>

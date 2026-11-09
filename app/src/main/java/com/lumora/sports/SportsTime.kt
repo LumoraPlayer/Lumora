@@ -40,8 +40,6 @@ internal object SportsTime {
         "yyyy-MM-dd HH:mm"
     )
 
-    fun utcDayKey(millis: Long): String = format(millis, UTC, DAY_KEY)
-
     /** The calendar date the feed should be asked for: the local date, which is what "today"
      *  means to the viewer even though the provider files it by its own calendar. */
     fun localDayKey(millis: Long): String = format(millis, TimeZone.getDefault(), DAY_KEY)

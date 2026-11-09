@@ -19,11 +19,9 @@ import com.lumora.scraper.models.People
 import com.lumora.scraper.models.Season
 import com.lumora.scraper.models.Show
 import com.lumora.scraper.extractors.Extractor
-import com.lumora.scraper.utils.DnsResolver
 import com.lumora.scraper.utils.NetworkClient
 import com.lumora.scraper.utils.TmdbUtils
 import com.lumora.scraper.utils.WebViewResolver
-import okhttp3.OkHttpClient
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -34,7 +32,6 @@ import retrofit2.http.Url
 import retrofit2.http.Headers
 import retrofit2.http.Query
 import retrofit2.http.Path
-import java.util.concurrent.TimeUnit
 import java.net.URLEncoder
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -95,10 +92,6 @@ object GuardaSerieProvider : Provider {
         @Headers(USER_AGENT)
         @GET("serie/page/{page}/")
         suspend fun getSerie(@Path("page") page: Int): Document
-
-        @Headers(USER_AGENT)
-        @GET("turche/")
-        suspend fun getTurche(): Document
 
         @Headers(USER_AGENT)
         @GET("guarda-film-streaming-ita/")

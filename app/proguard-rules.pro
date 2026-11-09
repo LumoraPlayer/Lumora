@@ -95,12 +95,9 @@
 -keep class com.lumora.scraper.providers.** { *; }
 -keep class com.lumora.scraper.extractors.** { *; }
 
-# Java-WebSocket (the LAN challenge-bypass bridge) reflects over its handler methods, and
-# logs through slf4j - whose runtime binder is chosen reflectively from whatever binding is on
-# the classpath. There is no binding here (Android has its own logging), so slf4j no-ops; the
-# dangling reference to the binder it looked for still fails the R8 build without this.
--keep class org.java_websocket.** { *; }
--dontwarn org.java_websocket.**
+# slf4j's runtime binder is chosen reflectively from whatever binding is on the classpath.
+# There is no binding here (Android has its own logging), so slf4j no-ops; the dangling
+# reference to the binder it looked for still fails the R8 build without this.
 -dontwarn org.slf4j.**
 
 # ── SMB share provider (com.lumora.shares: smbj + BouncyCastle + mbassador) ────

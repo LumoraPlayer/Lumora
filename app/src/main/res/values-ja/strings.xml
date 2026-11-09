@@ -42,8 +42,6 @@
     <!-- エラー -->
     <!-- 数値入力 -->
     <!-- 次に再生 / 自動再生 -->
-    <string name="up_next">次に再生</string>
-    <string name="play_now">今すぐ再生</string>
 
     <!-- インクリメンタル検索 -->
     <!-- A/V 同期 -->
@@ -75,7 +73,6 @@
     <string name="downloads_tab">ダウンロード</string>
     <string name="no_provider_configured">プロバイダーが設定されていません</string>
     <string name="press_settings_to_add_playlist">設定を押してプレイリスト URL を追加</string>
-    <string name="add_a_provider">プロバイダーを追加</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN プロバイダー</string>
     <string name="startup_choose_public">パブリックストリーミングコンテンツ</string>
     <string name="startup_choose_both">両方</string>
@@ -87,8 +84,6 @@
     <string name="find_stream">検索して再生</string>
     <string name="trailer">予告編</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">スリープ</string>
-    <string name="diag">診断</string>
     <string name="open_in_external_player_short">開く</string>
 
     <!-- 車載画面に各セッションの開始時に表示され、電話の設定にも表示されます。
@@ -268,7 +263,6 @@
     <string name="scraper_sites_header">検索するサイト</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">ISP の代わりに暗号化リゾルバーでサイトのドメインを解決します</string>
-    <string name="scraper_doh_system">システム DNS</string>
     <string name="scraper_extra_buffering_title">追加バッファリング</string>
     <string name="scraper_extra_buffering_subtitle">バースト配信するホスト向けに最大 5 分先までバッファリングします。メモリを多く使用します。再起動後に適用されます</string>
     <string name="category_newest">最新</string>
@@ -340,7 +334,6 @@
     <string name="sports_finished">試合終了</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">スポーツ</string>
-    <string name="sports_settings_subtitle">スポーツタブには今日の試合と、それぞれの放送チャンネルが EPG ソースから照合して表示されます。試合情報は API-Sports と SportAPI.ai から取得され、キーはアプリに組み込まれているため、ここでサインインするものはありません。</string>
     <string name="sports_settings_subtitle_with_keys">今日の試合は %1$s から取得されます。各行のチャンネルは EPG ソースから照合されるため、試合はガイドがカバーするチャンネルでのみ見つかります。</string>
     <string name="sports_settings_sport_feed">API-Sports / SportAPI.ai 経由</string>
     <string name="sports_settings_show_tab">スポーツタブを表示</string>
@@ -529,12 +522,8 @@
     <string name="sett_locality_detect">デバイスから検出</string>
     <string name="sett_locality_detected">デバイスの地域: %1$s</string>
     <string name="sett_locality_detect_failed">このデバイスから地域を検出できませんでした</string>
-    <string name="sett_locality_apply">適用</string>
     <string name="sett_locality_grouping_label">%1$s（地域グループ）</string>
-    <string name="sett_locality_none_title">この地域のチャンネルはありません</string>
     <string name="sett_locality_empty">プロバイダー内に %1$s と一致するチャンネルはありません。</string>
-    <string name="sett_locality_change">地域を変更</string>
-    <string name="sett_locality_hidden_hint">%1$d 件のチャンネルは「%2$s」タグが付いており、非表示です。</string>
     <string name="settings_nav_group_library">マイライブラリ</string>
     <string name="settings_nav_group_browsing">ブラウジング</string>
     <string name="settings_nav_group_connections">接続</string>
@@ -631,7 +620,6 @@
     <string name="mv_panes_value">%1$d 画面</string>
     <string name="mv_provider_max_conn">最大接続数</string>
     <string name="mv_provider_max_conn_hint">このサブスクリプションで同時に許可されるストリーム数（空欄 = 不明）</string>
-    <string name="mv_provider_max_conn_label">同時接続数</string>
     <string name="ingest_connecting">%1$s — 接続中…</string>
     <string name="ingest_progress">%1$s — %2$s をインポート中 · %3$s 件 · %4$s</string>
     <string name="ingest_size_of">%1$s / %2$s</string>

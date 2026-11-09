@@ -10,7 +10,6 @@
     <string name="sett_epg_source_add_failed">Couldn\'t add EPG source</string>
     <string name="sett_epg_add_via_qr">Add via QR code</string>
     <string name="sett_epg_qr_hint">Scan this with your phone to type the EPG address there</string>
-    <string name="sett_epg_qr_waiting">Waiting for your phone…</string>
     <string name="sett_epg_qr_failed">Couldn\'t start the QR code - check this device\'s Wi-Fi</string>
 
     <!-- MainActivitySettings.kt - Jellyfin Quick Connect status -->
@@ -43,7 +42,6 @@
     <string name="stalker_device_identity_hint">Only fill these in if your provider registered a specific box. Leave them blank to generate a device profile from the MAC.</string>
     <string name="sett_type_summary">Type: %1$s</string>
     <string name="sett_editing_provider">Editing %1$s</string>
-    <string name="sett_editing_jellyfin">Editing Jellyfin</string>
     <string name="sett_editing_plex">Editing Plex</string>
     <string name="sett_plex_starting">Starting sign-in…</string>
     <string name="sett_plex_scan_code">Go to plex.tv/link and enter %1$s</string>
@@ -63,9 +61,7 @@
     <string name="sett_provider_backup_hint">Hidden from browsing. Still plays if the main source fails.</string>
     <string name="sett_provider_backup_badge">Backup</string>
     <string name="sett_provider_backup_needed">Keep at least one visible source</string>
-    <string name="sett_remove_plex_confirm">Remove Plex?</string>
     <string name="sett_remove_plex_message">Its films and shows will no longer appear.</string>
-    <string name="sett_remove_jellyfin_confirm">Remove Jellyfin?</string>
     <string name="sett_remove_jellyfin_message">Its channels will no longer appear.</string>
     <string name="sett_remove_emby_message">Its films and shows will no longer appear.</string>
     <string name="sett_media_server_username">Username</string>
@@ -88,7 +84,6 @@
     <string name="sett_provider_received">Provider received! Loading...</string>
 
     <!-- MainActivitySettings.kt - backup & restore -->
-    <string name="sett_backup_saved_to">Backup saved to %1$s</string>
     <string name="sett_backup_secrets_note">The backup file carries provider logins and media-server session tokens as readable text — keep it somewhere private.</string>
     <string name="sett_export_failed">Export failed</string>
     <string name="sett_no_backup_file">No backup file found at %1$s</string>
@@ -152,7 +147,6 @@
     <string name="sett_suggest_external_player">Suggest external player: %1$s</string>
     <string name="sett_fast_zap">Faster channel change: %1$s</string>
     <string name="sett_frame_rate_match">Match display refresh rate: %1$s</string>
-    <string name="sett_live_preview">Live channel preview: %1$s</string>
     <string name="sett_on">ON</string>
     <string name="sett_off">OFF</string>
     <string name="sett_playback_settings_title">Playback Settings</string>
@@ -191,7 +185,6 @@
     <string name="sett_profiles_title">Profiles</string>
     <string name="sett_profile_toolbar">Profile: %1$s</string>
     <string name="sett_profiles_who">Who\'s watching?</string>
-    <string name="sett_profiles_continue">Continue as %1$s</string>
     <string name="sett_profiles_manage">Manage profiles</string>
     <string name="sett_profiles_manage_row">Active: %1$s  ·  %2$d profile(s)</string>
     <string name="sett_profiles_disabled_hint">Turn on User profiles first</string>

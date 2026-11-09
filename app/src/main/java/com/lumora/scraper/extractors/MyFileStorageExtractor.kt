@@ -16,24 +16,6 @@ class MyFileStorageExtractor : Extractor() {
     override val name = "MyFileStorage"
     override val mainUrl = "https://myfilestorage.xyz"
 
-    fun nowTvServer(videoType: Video.Type): Video.Server {
-        return Video.Server(
-            id = name,
-            name = name,
-            src = when (videoType) {
-                is Video.Type.Episode -> {
-                    val episode = when {
-                        videoType.number < 10 -> "0${videoType.number}"
-                        else -> "${videoType.number}"
-                    }
-                    "$mainUrl/tv/${videoType.id}/s${videoType.season.number}e${episode}.mp4"
-                }
-
-                is Video.Type.Movie -> "$mainUrl/${videoType.id}.mp4"
-            },
-        )
-    }
-
     override suspend fun extract(link: String): Video {
         val service = Service.build(mainUrl)
 

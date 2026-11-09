@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Preencha estes campos somente se seu provedor registrou um aparelho específico. Deixe-os em branco para gerar um perfil de dispositivo a partir do MAC.</string>
     <string name="sett_type_summary">Tipo: %1$s</string>
     <string name="sett_editing_provider">Editando %1$s</string>
-    <string name="sett_editing_jellyfin">Editando Jellyfin</string>
     <string name="sett_editing_plex">Editando Plex</string>
     <string name="sett_plex_starting">Iniciando a entrada…</string>
     <string name="sett_plex_scan_code">Acesse plex.tv/link e insira %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Oculto na navegação. Ainda reproduz se a fonte principal falhar.</string>
     <string name="sett_provider_backup_badge">Backup</string>
     <string name="sett_provider_backup_needed">Mantenha pelo menos uma fonte visível</string>
-    <string name="sett_remove_plex_confirm">Remover o Plex?</string>
     <string name="sett_remove_plex_message">Seus filmes e séries não aparecerão mais.</string>
-    <string name="sett_remove_jellyfin_confirm">Remover o Jellyfin?</string>
     <string name="sett_remove_jellyfin_message">Seus canais não aparecerão mais.</string>
     <string name="sett_choose_provider_type_first">Escolha um tipo de provedor primeiro</string>
     <string name="sett_enter_m3u_url">Insira uma URL M3U</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Expirou</string>
     <string name="sett_could_not_start_server">Não foi possível iniciar o servidor</string>
     <string name="sett_provider_received">Provedor recebido! Carregando...</string>
-    <string name="sett_backup_saved_to">Backup salvo em %1$s</string>
     <string name="sett_backup_secrets_note">O arquivo de backup contém logins de provedores e tokens de sessão de servidores de mídia em texto legível — guarde-o em um local privado.</string>
     <string name="sett_export_failed">Falha na exportação</string>
     <string name="sett_no_backup_file">Nenhum arquivo de backup encontrado em %1$s</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Sugerir reprodutor externo: %1$s</string>
     <string name="sett_fast_zap">Troca de canal mais rápida: %1$s</string>
     <string name="sett_frame_rate_match">Igualar à taxa de atualização da tela: %1$s</string>
-    <string name="sett_live_preview">Prévia do canal ao vivo: %1$s</string>
     <string name="sett_on">ATIVADO</string>
     <string name="sett_off">DESATIVADO</string>
     <string name="sett_playback_settings_title">Configurações de reprodução</string>

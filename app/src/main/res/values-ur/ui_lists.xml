@@ -65,7 +65,6 @@
     <string name="list_off">بند</string>
     <string name="list_no_alt_audio">کوئی متبادل آڈیو ٹریک نہیں</string>
     <string name="list_no_alt_video">کوئی متبادل ویڈیو معیار نہیں</string>
-    <string name="list_no_subtitles">کوئی سب ٹائٹل دستیاب نہیں</string>
     <string name="list_refresh_title">فراہم کنندگان ریفریش کریں</string>
     <string name="list_refresh_message">منتخب کریں کہ کیا دوبارہ ڈاؤن لوڈ کرنا ہے۔ جو ذرائع آپ غیر منتخب چھوڑیں گے وہ اپنا موجودہ کیٹلاگ برقرار رکھیں گے۔</string>
     <string name="list_refresh_all">تمام فراہم کنندگان</string>

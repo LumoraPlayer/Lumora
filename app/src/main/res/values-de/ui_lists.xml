@@ -65,7 +65,6 @@
     <string name="list_off">Aus</string>
     <string name="list_no_alt_audio">Keine alternativen Audiospuren</string>
     <string name="list_no_alt_video">Keine alternative Videoqualität</string>
-    <string name="list_no_subtitles">Keine Untertitel verfügbar</string>
     <string name="list_refresh_title">Anbieter aktualisieren</string>
     <string name="list_refresh_message">Wählen Sie aus, was erneut heruntergeladen werden soll. Nicht ausgewählte Anbieter behalten ihren aktuellen Katalog.</string>
     <string name="list_refresh_all">Alle Anbieter</string>

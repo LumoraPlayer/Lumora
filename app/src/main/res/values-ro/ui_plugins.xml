@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Activați un plugin de fluxuri pentru a răsfoi titluri din afara bibliotecii dvs.</string>
     <string name="plug_loading_series">Se încarcă serialele…</string>
     <string name="plug_loading_movies">Se încarcă filmele…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Activați un plugin de fluxuri sau porniți site-urile de streaming din Setări pentru a reda titluri din Descoperă.</string>
     <string name="plug_loading_episodes">Se încarcă episoadele…</string>
     <string name="plug_choose_season">%1$s — alegeți un sezon</string>
     <string name="plug_episode">Episodul %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Memento anulat</string>
     <string name="plug_reminder_set_for">Memento setat pentru \"%1$s\"</string>
     <string name="plug_program_starts_too_soon">Programul începe prea curând - mementoul nu a fost setat</string>
-    <string name="plug_update_available">Actualizare disponibilă</string>
-    <string name="plug_update_available_message">Lumora v%1$s este disponibilă.\nActuală: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Această aplicație este învechită și necesită actualizare. Lumora v%1$s este disponibilă (aveți v%2$s).</string>
     <string name="plug_force_update_title">Actualizare necesară</string>
     <string name="plug_force_update_message">Lumora v%1$s este cu %3$d versiuni în urma celei mai recente lansări (v%2$s). Aplicația nu poate fi folosită până nu este actualizată - atingeți Actualizează acum pentru a o instala.</string>
     <string name="plug_force_update_unrecognised_message">Această versiune (v%1$s) nu este o lansare publicată de Lumora. Instalați versiunea oficială (v%2$s) pentru a continua să folosiți aplicația.</string>
     <string name="plug_update_now">Actualizează acum</string>
     <string name="plug_update_dismiss">Închide</string>
-    <string name="plug_later">Mai târziu</string>
     <string name="plug_downloading_update">Se descarcă actualizarea…</string>
     <string name="plug_update_download_failed">Descărcarea actualizării a eșuat</string>
     <string name="plug_backup_exported">Backup exportat</string>
     <string name="plug_export_failed">Exportul a eșuat</string>
     <string name="plug_imported_summary">Importat: %1$d furnizori, %2$d surse EPG, %3$d grupuri, %4$d setări</string>
-    <string name="plug_import_failed">Importul a eșuat</string>
     <string name="plug_import_failed_reason">Importul a eșuat: %1$s</string>
 </resources>

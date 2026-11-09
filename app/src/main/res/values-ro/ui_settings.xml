@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Completați-le doar dacă furnizorul dvs. a înregistrat un aparat anume. Lăsați-le goale pentru a genera un profil de dispozitiv din MAC.</string>
     <string name="sett_type_summary">Tip: %1$s</string>
     <string name="sett_editing_provider">Se editează %1$s</string>
-    <string name="sett_editing_jellyfin">Se editează Jellyfin</string>
     <string name="sett_editing_plex">Se editează Plex</string>
     <string name="sett_plex_starting">Se pornește conectarea…</string>
     <string name="sett_plex_scan_code">Accesați plex.tv/link și introduceți %1$s</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Ascunsă din navigare. Se redă totuși dacă sursa principală eșuează.</string>
     <string name="sett_provider_backup_badge">Rezervă</string>
     <string name="sett_provider_backup_needed">Păstrați cel puțin o sursă vizibilă</string>
-    <string name="sett_remove_plex_confirm">Eliminați Plex?</string>
     <string name="sett_remove_plex_message">Filmele și serialele sale nu vor mai apărea.</string>
-    <string name="sett_remove_jellyfin_confirm">Eliminați Jellyfin?</string>
     <string name="sett_remove_jellyfin_message">Canalele sale nu vor mai apărea.</string>
     <string name="sett_choose_provider_type_first">Alegeți mai întâi un tip de furnizor</string>
     <string name="sett_enter_m3u_url">Introduceți un URL M3U</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Expirat</string>
     <string name="sett_could_not_start_server">Serverul nu a putut porni</string>
     <string name="sett_provider_received">Furnizor primit! Se încarcă...</string>
-    <string name="sett_backup_saved_to">Backup salvat în %1$s</string>
     <string name="sett_backup_secrets_note">Fișierul de backup conține datele de autentificare ale furnizorilor și tokenurile de sesiune ale serverelor media ca text lizibil — păstrați-l într-un loc privat.</string>
     <string name="sett_export_failed">Exportul a eșuat</string>
     <string name="sett_no_backup_file">Niciun fișier de backup găsit la %1$s</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Sugerează player extern: %1$s</string>
     <string name="sett_fast_zap">Schimbare mai rapidă a canalelor: %1$s</string>
     <string name="sett_frame_rate_match">Potrivește rata de reîmprospătare a ecranului: %1$s</string>
-    <string name="sett_live_preview">Previzualizare canal în direct: %1$s</string>
     <string name="sett_on">PORNIT</string>
     <string name="sett_off">OPRIT</string>
     <string name="sett_playback_settings_title">Setări de redare</string>

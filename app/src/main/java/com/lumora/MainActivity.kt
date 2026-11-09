@@ -1900,8 +1900,8 @@ class MainActivity : AppCompatActivity() {
     /**
      * The driving warning, once per launch on the car screen.
      *
-     * Android Auto projects this Activity itself (parked-only, immersive) rather than the
-     * template car app, so the warning has to live here - nothing in auto/ runs on that path.
+     * Android Auto projects this Activity itself (parked-only, immersive) rather than a
+     * template car app, so the warning has to live here.
      * Keyed off the display rather than [CarConnection]: a phone opened while the car is
      * connected is still a phone in someone's hand, and only the Activity actually placed on
      * the projected display is the one being watched from a driver's seat.

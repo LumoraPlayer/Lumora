@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">इन्हें केवल तब भरें जब आपके प्रोवाइडर ने कोई विशिष्ट बॉक्स पंजीकृत किया हो। MAC से डिवाइस प्रोफ़ाइल बनाने के लिए इन्हें खाली छोड़ें।</string>
     <string name="sett_type_summary">प्रकार: %1$s</string>
     <string name="sett_editing_provider">%1$s संपादित किया जा रहा है</string>
-    <string name="sett_editing_jellyfin">Jellyfin संपादित किया जा रहा है</string>
     <string name="sett_editing_plex">Plex संपादित किया जा रहा है</string>
     <string name="sett_plex_starting">साइन-इन शुरू हो रहा है…</string>
     <string name="sett_plex_scan_code">plex.tv/link पर जाएँ और %1$s दर्ज करें</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">ब्राउज़िंग में छिपा रहता है। मुख्य स्रोत विफल होने पर भी चलता है।</string>
     <string name="sett_provider_backup_badge">बैकअप</string>
     <string name="sett_provider_backup_needed">कम से कम एक स्रोत दिखता रहे</string>
-    <string name="sett_remove_plex_confirm">Plex हटाएँ?</string>
     <string name="sett_remove_plex_message">इसकी फ़िल्में और शो अब नहीं दिखेंगे।</string>
-    <string name="sett_remove_jellyfin_confirm">Jellyfin हटाएँ?</string>
     <string name="sett_remove_jellyfin_message">इसके चैनल अब नहीं दिखेंगे।</string>
     <string name="sett_choose_provider_type_first">पहले प्रोवाइडर प्रकार चुनें</string>
     <string name="sett_enter_m3u_url">M3U URL दर्ज करें</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">समाप्त</string>
     <string name="sett_could_not_start_server">सर्वर शुरू नहीं हो सका</string>
     <string name="sett_provider_received">प्रोवाइडर मिल गया! लोड हो रहा है...</string>
-    <string name="sett_backup_saved_to">बैकअप %1$s में सहेजा गया</string>
     <string name="sett_backup_secrets_note">बैकअप फ़ाइल में प्रोवाइडर लॉगिन और मीडिया-सर्वर सत्र टोकन पठनीय पाठ के रूप में होते हैं — इसे कहीं निजी रखें।</string>
     <string name="sett_export_failed">निर्यात विफल</string>
     <string name="sett_no_backup_file">%1$s पर कोई बैकअप फ़ाइल नहीं मिली</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">बाहरी प्लेयर सुझाएँ: %1$s</string>
     <string name="sett_fast_zap">तेज़ चैनल बदलाव: %1$s</string>
     <string name="sett_frame_rate_match">डिस्प्ले रीफ़्रेश रेट मिलाएँ: %1$s</string>
-    <string name="sett_live_preview">लाइव चैनल पूर्वावलोकन: %1$s</string>
     <string name="sett_on">चालू</string>
     <string name="sett_off">बंद</string>
     <string name="sett_playback_settings_title">प्लेबैक सेटिंग्स</string>

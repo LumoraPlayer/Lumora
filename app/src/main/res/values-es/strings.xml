@@ -42,8 +42,6 @@
     <!-- Errores -->
     <!-- Entrada numérica -->
     <!-- A continuación / Avance automático -->
-    <string name="up_next">A continuación</string>
-    <string name="play_now">Reproducir ahora</string>
 
     <!-- Búsqueda incremental -->
     <!-- Sincronización A/V -->
@@ -77,7 +75,6 @@
     <string name="downloads_tab">Descargas</string>
     <string name="no_provider_configured">No hay ningún proveedor configurado</string>
     <string name="press_settings_to_add_playlist">Pulse Ajustes para añadir una URL de lista</string>
-    <string name="add_a_provider">Añadir un proveedor</string>
     <string name="startup_choose_provider">PROVEEDOR IPTV/JELLYFIN</string>
     <string name="startup_choose_public">CONTENIDO DE STREAMING PÚBLICO</string>
     <string name="startup_choose_both">AMBOS</string>
@@ -89,8 +86,6 @@
     <string name="find_stream">Buscar y reproducir</string>
     <string name="trailer">Tráiler</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Dormir</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Abrir en</string>
 
     <!-- Se muestra en la pantalla del coche al inicio de cada sesión y en Ajustes en el teléfono.
@@ -276,7 +271,6 @@
     <string name="scraper_sites_header">Sitios que buscar</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Resuelve los dominios de los sitios mediante un resolutor cifrado en lugar del de su proveedor de Internet</string>
-    <string name="scraper_doh_system">DNS del sistema</string>
     <string name="scraper_extra_buffering_title">Almacenamiento en búfer adicional</string>
     <string name="scraper_extra_buffering_subtitle">Almacena en búfer hasta 5 minutos por adelantado para hosts que entregan a ráfagas. Usa más memoria; se aplica tras un reinicio</string>
     <string name="category_newest">Más recientes</string>
@@ -349,7 +343,6 @@
     <string name="sports_finished">FINAL</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Deportes</string>
-    <string name="sports_settings_subtitle">La pestaña Deportes lista los partidos de hoy y el canal en el que se emite cada uno, emparejados con sus fuentes EPG. Los partidos proceden de API-Sports y SportAPI.ai; las claves vienen integradas en la aplicación, así que aquí no hay nada con lo que iniciar sesión.</string>
     <string name="sports_settings_subtitle_with_keys">Los partidos de hoy proceden de %1$s. El canal de cada fila se busca en sus fuentes EPG, así que un partido solo puede encontrarse en un canal cubierto por su guía.</string>
     <string name="sports_settings_sport_feed">vía API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Mostrar la pestaña Deportes</string>
@@ -540,12 +533,8 @@
     <string name="sett_locality_detect">Detectar desde el dispositivo</string>
     <string name="sett_locality_detected">Región del dispositivo: %1$s</string>
     <string name="sett_locality_detect_failed">No se pudo detectar una región desde este dispositivo</string>
-    <string name="sett_locality_apply">Aplicar</string>
     <string name="sett_locality_grouping_label">%1$s (agrupación)</string>
-    <string name="sett_locality_none_title">No hay canales para esta región</string>
     <string name="sett_locality_empty">Ningún canal coincide con %1$s en sus proveedores.</string>
-    <string name="sett_locality_change">Cambiar regiones</string>
-    <string name="sett_locality_hidden_hint">%1$d canales tienen la etiqueta %2$s y están ocultos.</string>
     <string name="settings_nav_group_library">Su biblioteca</string>
     <string name="settings_nav_group_browsing">Navegación</string>
     <string name="settings_nav_group_connections">Conexiones</string>
@@ -642,7 +631,6 @@
     <string name="mv_panes_value">%1$d pantallas</string>
     <string name="mv_provider_max_conn">Conexiones máximas</string>
     <string name="mv_provider_max_conn_hint">Cuántos streams permite esta suscripción a la vez (en blanco = desconocido)</string>
-    <string name="mv_provider_max_conn_label">Conexiones simultáneas</string>
     <string name="ingest_connecting">%1$s — Conectando…</string>
     <string name="ingest_progress">%1$s — Importando %2$s · %3$s elementos · %4$s</string>
     <string name="ingest_size_of">%1$s de %2$s</string>

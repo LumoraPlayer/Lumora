@@ -64,7 +64,6 @@
     <string name="list_off">关闭</string>
     <string name="list_no_alt_audio">没有其他音轨</string>
     <string name="list_no_alt_video">没有其他视频画质</string>
-    <string name="list_no_subtitles">没有可用字幕</string>
     <string name="list_refresh_title">刷新提供商</string>
     <string name="list_refresh_message">选择要重新下载的内容。未选中的源将保留当前目录。</string>
     <string name="list_refresh_all">所有提供商</string>

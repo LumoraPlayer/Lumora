@@ -185,12 +185,6 @@ internal fun MainActivity.checkForUndecodableAudio(tracks: Tracks) {
     )
 }
 
-/** Wires the OPEN IN button in the player controls. */
-internal fun MainActivity.setupExternalPlayerButton(button: View) {
-    button.setOnClickListener { openInExternalPlayer() }
-    button.setOnLongClickListener { chooseDefaultExternalPlayer(); true }
-}
-
 /** Package-visibility-safe label for the settings row. */
 internal fun MainActivity.externalPlayerSummary(context: Context): String =
     prefs.getString(PREF_EXTERNAL_PLAYER_PACKAGE, null)

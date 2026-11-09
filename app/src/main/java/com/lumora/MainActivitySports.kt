@@ -22,7 +22,6 @@ import com.lumora.sports.Sport
 import com.lumora.sports.SportsRepository
 import com.lumora.sports.SportsSection
 import com.lumora.sports.SportsSectionRows
-import com.lumora.sports.SportsStatus
 import com.lumora.sports.SportsTime
 import com.lumora.sports.sectionFixtures
 import com.lumora.sports.sportFilterRow
@@ -311,10 +310,6 @@ private fun MainActivity.logSportsMatching(
         )
     }
 }
-
-/** Competition (or sport, when the provider named no competition) for a fixture's row. */
-private fun MainActivity.leagueLabel(fixture: SportsFixture): String =
-    fixture.league.takeIf { it.isNotBlank() } ?: getString(fixture.sport.labelRes)
 
 /** The guide rows a board is matched against, capped and never throwing into the screen: a
  *  missing or unreadable guide is an empty board section, not a crash. */
@@ -982,9 +977,6 @@ internal fun MainActivity.focusFirstSportsRow() {
         }
     }
 }
-
-internal fun MainActivity.formatSportsTime(millis: Long): String =
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(millis))
 
 /**
  * OK on a fixture: watch the channel the guide matched, or - when it matched more than one,

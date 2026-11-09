@@ -42,8 +42,6 @@
     <!-- Ошибки -->
     <!-- Числовой ввод -->
     <!-- Далее / Автовоспроизведение -->
-    <string name="up_next">Далее</string>
-    <string name="play_now">Смотреть сейчас</string>
 
     <!-- Инкрементальный поиск -->
     <!-- Синхронизация А/В -->
@@ -78,7 +76,6 @@
     <string name="downloads_tab">Загрузки</string>
     <string name="no_provider_configured">Провайдер не настроен</string>
     <string name="press_settings_to_add_playlist">Нажмите «Настройки», чтобы добавить URL плейлиста</string>
-    <string name="add_a_provider">Добавить провайдера</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN ПРОВАЙДЕР</string>
     <string name="startup_choose_public">ПУБЛИЧНЫЙ СТРИМИНГОВЫЙ КОНТЕНТ</string>
     <string name="startup_choose_both">ОБА</string>
@@ -90,8 +87,6 @@
     <string name="find_stream">Найти и воспроизвести</string>
     <string name="trailer">Трейлер</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Сон</string>
-    <string name="diag">Диагностика</string>
     <string name="open_in_external_player_short">Открыть в</string>
 
     <!-- Показывается на экране автомобиля в начале каждого сеанса и в настройках на телефоне.
@@ -275,7 +270,6 @@
     <string name="scraper_sites_header">Сайты для поиска</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Разрешает домены сайтов через зашифрованный резолвер вместо DNS вашего провайдера</string>
-    <string name="scraper_doh_system">Системный DNS</string>
     <string name="scraper_extra_buffering_title">Дополнительная буферизация</string>
     <string name="scraper_extra_buffering_subtitle">Буферизует до 5 минут вперёд для сайтов, отдающих контент порциями. Использует больше памяти; применяется после перезапуска</string>
     <string name="category_newest">Новинки</string>
@@ -349,7 +343,6 @@
     <string name="sports_finished">ЗАВЕРШЁН</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Спорт</string>
-    <string name="sports_settings_subtitle">Вкладка «Спорт» перечисляет матчи на сегодня и канал каждого из них, сопоставленный с вашими источниками EPG. Матчи поступают из API-Sports и SportAPI.ai; ключи встроены в приложение, так что входить здесь никуда не нужно.</string>
     <string name="sports_settings_subtitle_with_keys">Матчи на сегодня поступают из %1$s. Канал для каждой строки сопоставляется с вашими источниками EPG, поэтому матч можно найти только на канале, который охватывает ваша программа.</string>
     <string name="sports_settings_sport_feed">через API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Показывать вкладку «Спорт»</string>
@@ -542,12 +535,8 @@
     <string name="sett_locality_detect">Определить по устройству</string>
     <string name="sett_locality_detected">Регион устройства: %1$s</string>
     <string name="sett_locality_detect_failed">Не удалось определить регион этого устройства</string>
-    <string name="sett_locality_apply">Применить</string>
     <string name="sett_locality_grouping_label">%1$s (группа)</string>
-    <string name="sett_locality_none_title">Нет каналов для этого региона</string>
     <string name="sett_locality_empty">В ваших провайдерах нет каналов для «%1$s».</string>
-    <string name="sett_locality_change">Изменить регионы</string>
-    <string name="sett_locality_hidden_hint">Скрыто %1$d каналов с меткой «%2$s».</string>
     <string name="settings_nav_group_library">Ваша библиотека</string>
     <string name="settings_nav_group_browsing">Просмотр</string>
     <string name="settings_nav_group_connections">Подключения</string>
@@ -644,7 +633,6 @@
     <string name="mv_panes_value">Экранов: %1$d</string>
     <string name="mv_provider_max_conn">Макс. подключений</string>
     <string name="mv_provider_max_conn_hint">Сколько потоков допускает эта подписка одновременно (пусто = неизвестно)</string>
-    <string name="mv_provider_max_conn_label">Одновременные подключения</string>
     <string name="ingest_connecting">%1$s — Подключение…</string>
     <string name="ingest_progress">%1$s — Импорт: %2$s · %3$s элементов · %4$s</string>
     <string name="ingest_size_of">%1$s из %2$s</string>

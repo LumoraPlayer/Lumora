@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">ライブラリ外のタイトルを閲覧するには、ストリームプラグインを有効にしてください。</string>
     <string name="plug_loading_series">シリーズを読み込み中…</string>
     <string name="plug_loading_movies">映画を読み込み中…</string>
-    <string name="plug_enable_stream_plugin_or_sites">発見のタイトルを再生するには、ストリームプラグインを有効にするか、設定でストリーミングサイトをオンにしてください。</string>
     <string name="plug_loading_episodes">エピソードを読み込み中…</string>
     <string name="plug_choose_season">%1$s — シーズンを選択</string>
     <string name="plug_episode">エピソード %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">リマインダーをキャンセルしました</string>
     <string name="plug_reminder_set_for">\"%1$s\" のリマインダーを設定しました</string>
     <string name="plug_program_starts_too_soon">番組の開始が近すぎるため、リマインダーは設定されませんでした</string>
-    <string name="plug_update_available">更新があります</string>
-    <string name="plug_update_available_message">Lumora v%1$s が利用可能です。\n現在: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">このアプリは古くなっており、更新が必要です。Lumora v%1$s が利用可能です（現在は v%2$s）。</string>
     <string name="plug_force_update_title">更新が必要です</string>
     <string name="plug_force_update_message">Lumora v%1$s は最新リリースより %3$d バージョン遅れています（最新: v%2$s）。更新するまでアプリは使用できません - 「今すぐ更新」をタップしてインストールしてください。</string>
     <string name="plug_force_update_unrecognised_message">このビルド（v%1$s）は公開されている Lumora リリースではありません。アプリを使い続けるには公式リリース（v%2$s）をインストールしてください。</string>
     <string name="plug_update_now">今すぐ更新</string>
     <string name="plug_update_dismiss">閉じる</string>
-    <string name="plug_later">後で</string>
     <string name="plug_downloading_update">更新をダウンロード中…</string>
     <string name="plug_update_download_failed">更新のダウンロードに失敗しました</string>
     <string name="plug_backup_exported">バックアップをエクスポートしました</string>
     <string name="plug_export_failed">エクスポートに失敗しました</string>
     <string name="plug_imported_summary">インポートしました: プロバイダー %1$d 件、EPG ソース %2$d 件、グループ %3$d 件、設定 %4$d 件</string>
-    <string name="plug_import_failed">インポートに失敗しました</string>
     <string name="plug_import_failed_reason">インポートに失敗しました: %1$s</string>
 </resources>

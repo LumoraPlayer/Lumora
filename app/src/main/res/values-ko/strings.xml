@@ -42,8 +42,6 @@
     <!-- 오류 -->
     <!-- 숫자 입력 -->
     <!-- 다음에 볼 콘텐츠 / 자동 재생 -->
-    <string name="up_next">다음에 볼 콘텐츠</string>
-    <string name="play_now">지금 재생</string>
 
     <!-- 증분 검색 -->
     <!-- A/V 동기화 -->
@@ -75,7 +73,6 @@
     <string name="downloads_tab">다운로드</string>
     <string name="no_provider_configured">구성된 제공업체 없음</string>
     <string name="press_settings_to_add_playlist">재생목록 URL을 추가하려면 설정을 누르세요</string>
-    <string name="add_a_provider">제공업체 추가</string>
     <string name="startup_choose_provider">IPTV/JELLYFIN 제공업체</string>
     <string name="startup_choose_public">공개 스트리밍 콘텐츠</string>
     <string name="startup_choose_both">둘 다</string>
@@ -87,8 +84,6 @@
     <string name="find_stream">찾기 &amp; 재생</string>
     <string name="trailer">예고편</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">절전</string>
-    <string name="diag">진단</string>
     <string name="open_in_external_player_short">다음에서 열기</string>
 
     <!-- 모든 세션이 시작될 때 차량 화면과 휴대전화의 설정에 표시됩니다. 차량 내비게이션이 문장
@@ -268,7 +263,6 @@
     <string name="scraper_sites_header">검색할 사이트</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">ISP의 리졸버 대신 암호화된 리졸버를 통해 사이트 도메인을 확인합니다</string>
-    <string name="scraper_doh_system">시스템 DNS</string>
     <string name="scraper_extra_buffering_title">추가 버퍼링</string>
     <string name="scraper_extra_buffering_subtitle">버스트로 전송하는 호스트를 위해 최대 5분까지 미리 버퍼링합니다. 더 많은 메모리를 사용하며, 재시작 후 적용됩니다</string>
     <string name="category_newest">최신</string>
@@ -340,7 +334,6 @@
     <string name="sports_finished">종료</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">스포츠</string>
-    <string name="sports_settings_subtitle">스포츠 탭에는 오늘의 경기와 각 경기가 방송되는 채널이 EPG 소스에서 일치된 상태로 표시됩니다. 경기 정보는 API-Sports와 SportAPI.ai에서 제공되며, 키는 앱에 내장되어 있어 여기서 로그인할 것은 없습니다.</string>
     <string name="sports_settings_subtitle_with_keys">오늘의 경기는 %1$s에서 제공됩니다. 각 행의 채널은 EPG 소스에서 일치되므로, 가이드가 포함하는 채널에서만 경기를 찾을 수 있습니다.</string>
     <string name="sports_settings_sport_feed">API-Sports / SportAPI.ai 경유</string>
     <string name="sports_settings_show_tab">스포츠 탭 표시</string>
@@ -529,12 +522,8 @@
     <string name="sett_locality_detect">기기에서 감지</string>
     <string name="sett_locality_detected">기기 지역: %1$s</string>
     <string name="sett_locality_detect_failed">이 기기에서 지역을 감지할 수 없습니다</string>
-    <string name="sett_locality_apply">적용</string>
     <string name="sett_locality_grouping_label">%1$s(그룹)</string>
-    <string name="sett_locality_none_title">이 지역의 채널 없음</string>
     <string name="sett_locality_empty">제공업체에서 %1$s에 해당하는 채널이 없습니다.</string>
-    <string name="sett_locality_change">지역 변경</string>
-    <string name="sett_locality_hidden_hint">%1$d개 채널이 %2$s 태그로 숨겨져 있습니다.</string>
     <string name="settings_nav_group_library">내 라이브러리</string>
     <string name="settings_nav_group_browsing">둘러보기</string>
     <string name="settings_nav_group_connections">연결</string>
@@ -631,7 +620,6 @@
     <string name="mv_panes_value">화면 %1$d개</string>
     <string name="mv_provider_max_conn">최대 연결</string>
     <string name="mv_provider_max_conn_hint">이 구독에서 동시에 허용되는 스트림 수(비워 두면 알 수 없음)</string>
-    <string name="mv_provider_max_conn_label">동시 연결</string>
     <string name="ingest_connecting">%1$s — 연결 중…</string>
     <string name="ingest_progress">%1$s — %2$s 가져오는 중 · 항목 %3$s개 · %4$s</string>
     <string name="ingest_size_of">%1$s / %2$s</string>

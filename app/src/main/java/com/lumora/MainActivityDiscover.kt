@@ -2,11 +2,8 @@
 package com.lumora
 
 import com.lumora.ui.dialog.LumoraDialog
-import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
-import android.graphics.Typeface
 import android.view.View
-import android.view.ViewGroup
 import android.widget.*
 import com.lumora.cache.FavoritesStore
 import com.lumora.cache.PlaybackPositionStore
@@ -521,22 +518,6 @@ internal fun MainActivity.onDiscoverItemClick(item: Channel) {
             showContentDetail(item)
         }
     }
-}
-
-internal fun MainActivity.startDiscoverStreamSearch(item: Channel) {
-    if (!canFindStream(item)) {
-        Toast.makeText(
-            this,
-            getString(R.string.plug_enable_stream_plugin_or_sites),
-            Toast.LENGTH_LONG
-        ).show()
-        return
-    }
-    val search: (Int?, Int?) -> Unit = { season, episode ->
-        showFindStreamDialog(item, season, episode)
-    }
-    if (item.mediaType == MediaType.SERIES) showSeriesEpisodePicker(item, search)
-    else search(null, null)
 }
 
 /** Every copy of a Discover title the library holds, best first.

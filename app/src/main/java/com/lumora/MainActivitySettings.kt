@@ -37,9 +37,7 @@ import com.lumora.player.PlayerManager
 import com.lumora.ui.KeyboardLanguages
 import com.lumora.util.normalizeServerUrl
 import com.lumora.util.isLocalFileUrl
-import com.lumora.util.catalogueTagOf
 import com.lumora.util.duplicateProviderIds
-import com.lumora.util.catalogueTagLabel
 import com.lumora.util.Locality
 import com.lumora.util.LocalityCatalog
 import com.lumora.util.isVisibleForLocality
@@ -3897,7 +3895,7 @@ internal fun MainActivity.showSetPinDialog(label: TextView) {
 }
 
 /** The full disclaimer. The car screen shows a condensed version at the start of every
- *  session (see auto/CarDisclaimerScreen.kt); this is the readable-at-leisure copy. */
+ *  session (see MainActivity.showCarDisclaimerIfProjected); this is the readable-at-leisure copy. */
 internal fun MainActivity.showLegalNotice() {
     LumoraDialog.Builder(this)
         .setTitle(R.string.legal_notice_title)

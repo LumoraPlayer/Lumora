@@ -66,7 +66,6 @@
     <string name="list_off">Desactivado</string>
     <string name="list_no_alt_audio">No hay pistas de audio alternativas</string>
     <string name="list_no_alt_video">No hay calidades de vídeo alternativas</string>
-    <string name="list_no_subtitles">No hay subtítulos disponibles</string>
     <string name="list_refresh_title">Actualizar proveedores</string>
     <string name="list_refresh_message">Elija qué volver a descargar. Las fuentes que no seleccione conservarán su catálogo actual.</string>
     <string name="list_refresh_all">Todos los proveedores</string>

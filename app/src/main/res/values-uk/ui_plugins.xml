@@ -86,7 +86,6 @@
     <string name="plug_enable_stream_plugin_browse">Увімкніть плагін потоків, щоб переглядати заголовки поза вашою бібліотекою.</string>
     <string name="plug_loading_series">Завантаження серіалів…</string>
     <string name="plug_loading_movies">Завантаження фільмів…</string>
-    <string name="plug_enable_stream_plugin_or_sites">Увімкніть плагін потоків або стримінгові сайти в налаштуваннях, щоб відтворювати заголовки з «Відкриттів».</string>
     <string name="plug_loading_episodes">Завантаження серій…</string>
     <string name="plug_choose_season">%1$s — оберіть сезон</string>
     <string name="plug_episode">Серія %1$d</string>
@@ -116,20 +115,16 @@
     <string name="plug_reminder_cancelled">Нагадування скасовано</string>
     <string name="plug_reminder_set_for">Нагадування встановлено для «%1$s»</string>
     <string name="plug_program_starts_too_soon">Програма почнеться надто скоро — нагадування не встановлено</string>
-    <string name="plug_update_available">Доступне оновлення</string>
-    <string name="plug_update_available_message">Доступна Lumora v%1$s.\nПоточна: v%2$s\n\n%3$s</string>
     <string name="plug_update_required_message">Цей застосунок застарів і потребує оновлення. Доступна Lumora v%1$s (у вас v%2$s).</string>
     <string name="plug_force_update_title">Потрібне оновлення</string>
     <string name="plug_force_update_message">Lumora v%1$s відстає на %3$d версій від останнього випуску (v%2$s). Застосунком не можна користуватися, доки його не оновлено — торкніться «Оновити зараз», щоб установити оновлення.</string>
     <string name="plug_force_update_unrecognised_message">Ця збірка (v%1$s) не є опублікованим випуском Lumora. Установіть офіційний випуск (v%2$s), щоб і далі користуватися застосунком.</string>
     <string name="plug_update_now">Оновити зараз</string>
     <string name="plug_update_dismiss">Закрити</string>
-    <string name="plug_later">Пізніше</string>
     <string name="plug_downloading_update">Завантаження оновлення…</string>
     <string name="plug_update_download_failed">Не вдалося завантажити оновлення</string>
     <string name="plug_backup_exported">Резервну копію експортовано</string>
     <string name="plug_export_failed">Не вдалося експортувати</string>
     <string name="plug_imported_summary">Імпортовано: постачальників — %1$d, джерел EPG — %2$d, груп — %3$d, налаштувань — %4$d</string>
-    <string name="plug_import_failed">Не вдалося імпортувати</string>
     <string name="plug_import_failed_reason">Не вдалося імпортувати: %1$s</string>
 </resources>

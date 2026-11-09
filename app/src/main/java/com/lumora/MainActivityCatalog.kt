@@ -11,18 +11,12 @@ import com.lumora.model.CategoryFilter
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
 import com.lumora.model.MediaType
-import com.lumora.util.newestByDate
-import com.lumora.util.releaseDateSortKey
 import com.lumora.util.isAdultCategory
-import com.lumora.util.groupDuplicateMovies
-import com.lumora.util.groupDuplicateSeries
 import com.lumora.util.groupLiveQualityVersions
 import com.lumora.util.withoutBackupOnlyGroups
-import com.lumora.util.isNonEnglishTitle
 import com.lumora.util.isVisibleForLocality
 import com.lumora.util.localityFallbacks
 import com.lumora.util.localityKey
-import com.lumora.util.withResolvedYear
 import com.lumora.diagnostics.SessionLog
 import kotlinx.coroutines.*
 import java.util.Locale
@@ -495,18 +489,6 @@ internal fun MainActivity.selectedLocalities(): Set<String> =
 internal fun MainActivity.setSelectedLocalities(codes: Set<String>) {
     prefs.edit().putStringSet(PREF_LOCALITY_FILTER, codes).apply()
 }
-
-/** Cache key for the films/series derive - see [liveDerivedFingerprint]. */
-internal fun MainActivity.vodDerivedFingerprint(
-    list: List<Channel>,
-    hideAdult: Boolean,
-    hideNonEnglish: Boolean,
-    groupChannels: Boolean
-): String = DerivedCache.catalogFingerprint(
-    list,
-    "vod:$hideAdult:$hideNonEnglish:$groupChannels:" +
-        com.lumora.data.ProfileStore.filterSignature(prefs)
-)
 
 /** One cold-start budget line per pass (adb logcat -s LumoraPerf). Cheap enough to
  *  leave in a release build - a handful of calls per load - and the only way to tell

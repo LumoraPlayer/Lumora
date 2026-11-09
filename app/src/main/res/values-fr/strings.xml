@@ -42,8 +42,6 @@
     <!-- Erreurs -->
     <!-- Saisie numérique -->
     <!-- À suivre / Lecture automatique -->
-    <string name="up_next">À suivre</string>
-    <string name="play_now">Lire maintenant</string>
 
     <!-- Recherche incrémentale -->
     <!-- Synchro A/V -->
@@ -77,7 +75,6 @@
     <string name="downloads_tab">Téléchargements</string>
     <string name="no_provider_configured">Aucun fournisseur configuré</string>
     <string name="press_settings_to_add_playlist">Appuyez sur Paramètres pour ajouter une URL de playlist</string>
-    <string name="add_a_provider">Ajouter un fournisseur</string>
     <string name="startup_choose_provider">FOURNISSEUR IPTV/JELLYFIN</string>
     <string name="startup_choose_public">CONTENU DE STREAMING PUBLIC</string>
     <string name="startup_choose_both">LES DEUX</string>
@@ -89,8 +86,6 @@
     <string name="find_stream">Trouver et lire</string>
     <string name="trailer">Bande-annonce</string>
     <string name="speed_default">1.0x</string>
-    <string name="sleep_timer_button">Veille</string>
-    <string name="diag">Diag</string>
     <string name="open_in_external_player_short">Ouvrir dans</string>
 
     <!-- Affiché sur l'écran voiture au début de chaque session, et dans les paramètres sur
@@ -287,7 +282,6 @@
     <string name="scraper_sites_header">Sites à rechercher</string>
     <string name="scraper_doh_title">DNS-over-HTTPS</string>
     <string name="scraper_doh_subtitle">Résout les domaines des sites via un résolveur chiffré au lieu de celui de votre FAI</string>
-    <string name="scraper_doh_system">DNS système</string>
     <string name="scraper_extra_buffering_title">Mise en mémoire tampon supplémentaire</string>
     <string name="scraper_extra_buffering_subtitle">Met en mémoire tampon jusqu\'à 5 minutes d\'avance pour les hébergeurs qui livrent par rafales. Utilise plus de mémoire ; s\'applique après un redémarrage</string>
     <string name="category_newest">Plus récents</string>
@@ -353,7 +347,6 @@
     <string name="sports_finished">Terminé</string>
     <string name="sports_channel_more">%1$s +%2$d</string>
     <string name="sports_settings_title">Sports</string>
-    <string name="sports_settings_subtitle">L\'onglet Sports liste les matchs du jour et la chaîne sur laquelle chacun est diffusé, mis en correspondance depuis vos sources EPG. Les matchs proviennent d\'API-Sports et de SportAPI.ai ; les clés sont intégrées à l\'application, aucun identifiant n\'est donc à saisir ici.</string>
     <string name="sports_settings_subtitle_with_keys">Les matchs du jour proviennent de %1$s. La chaîne de chaque ligne est mise en correspondance depuis vos sources EPG, donc un match ne peut être trouvé que sur une chaîne couverte par votre guide.</string>
     <string name="sports_settings_sport_feed">via API-Sports / SportAPI.ai</string>
     <string name="sports_settings_show_tab">Afficher l\'onglet Sports</string>
@@ -537,12 +530,8 @@
     <string name="sett_locality_detect">Détecter depuis l\'appareil</string>
     <string name="sett_locality_detected">Région de l\'appareil : %1$s</string>
     <string name="sett_locality_detect_failed">Impossible de détecter une région depuis cet appareil</string>
-    <string name="sett_locality_apply">Appliquer</string>
     <string name="sett_locality_grouping_label">%1$s (regroupement)</string>
-    <string name="sett_locality_none_title">Aucune chaîne pour cette région</string>
     <string name="sett_locality_empty">Aucune chaîne ne correspond à %1$s dans vos fournisseurs.</string>
-    <string name="sett_locality_change">Modifier les régions</string>
-    <string name="sett_locality_hidden_hint">%1$d chaîne(s) portent l\'étiquette %2$s et sont masquées.</string>
     <string name="settings_nav_group_library">Votre bibliothèque</string>
     <string name="settings_nav_group_browsing">Navigation</string>
     <string name="settings_nav_group_connections">Connexions</string>
@@ -635,7 +624,6 @@
     <string name="mv_panes_value">%1$d écrans</string>
     <string name="mv_provider_max_conn">Connexions max.</string>
     <string name="mv_provider_max_conn_hint">Nombre de flux que cet abonnement autorise simultanément (vide = inconnu)</string>
-    <string name="mv_provider_max_conn_label">Connexions simultanées</string>
     <string name="ingest_connecting">%1$s — Connexion…</string>
     <string name="ingest_progress">%1$s — Importation : %2$s · %3$s éléments · %4$s</string>
     <string name="ingest_size_of">%1$s sur %2$s</string>

@@ -70,9 +70,6 @@ class SmbShareSession(private val config: MediaServerConfig) : Closeable {
         password = config.password.orEmpty()
     }
 
-    /** The share a stored `smb://` URL points at, if the URL is well-formed. */
-    fun parseLocation(url: String): SmbLocation? = SmbUrl.parse(url)
-
     /** Lists folders + playable media in [location]'s directory. Never returns "." / ".." or
      *  non-media files: this is a media browser, not a file manager. */
     fun list(location: SmbLocation): List<ShareEntry> = synchronized(this) {

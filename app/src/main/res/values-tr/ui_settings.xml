@@ -29,7 +29,6 @@
     <string name="stalker_device_identity_hint">Bunları yalnızca sağlayıcınız belirli bir cihaz kaydettiyse doldurun. MAC\'ten cihaz profili oluşturmak için boş bırakın.</string>
     <string name="sett_type_summary">Tür: %1$s</string>
     <string name="sett_editing_provider">%1$s düzenleniyor</string>
-    <string name="sett_editing_jellyfin">Jellyfin düzenleniyor</string>
     <string name="sett_editing_plex">Plex düzenleniyor</string>
     <string name="sett_plex_starting">Oturum açma başlatılıyor…</string>
     <string name="sett_plex_scan_code">plex.tv/link adresine gidip %1$s kodunu girin</string>
@@ -49,9 +48,7 @@
     <string name="sett_provider_backup_hint">Gözatma sırasında gizlenir. Ana kaynak başarısız olursa yine oynatılır.</string>
     <string name="sett_provider_backup_badge">Yedek</string>
     <string name="sett_provider_backup_needed">En az bir görünür kaynak bırakın</string>
-    <string name="sett_remove_plex_confirm">Plex kaldırılsın mı?</string>
     <string name="sett_remove_plex_message">Filmleri ve dizileri artık görünmeyecek.</string>
-    <string name="sett_remove_jellyfin_confirm">Jellyfin kaldırılsın mı?</string>
     <string name="sett_remove_jellyfin_message">Kanalları artık görünmeyecek.</string>
     <string name="sett_choose_provider_type_first">Önce bir sağlayıcı türü seçin</string>
     <string name="sett_enter_m3u_url">Bir M3U URL\'si girin</string>
@@ -67,7 +64,6 @@
     <string name="sett_expired">Süresi doldu</string>
     <string name="sett_could_not_start_server">Sunucu başlatılamadı</string>
     <string name="sett_provider_received">Sağlayıcı alındı! Yükleniyor...</string>
-    <string name="sett_backup_saved_to">Yedek %1$s konumuna kaydedildi</string>
     <string name="sett_backup_secrets_note">Yedek dosyası, sağlayıcı oturum açma bilgilerini ve medya sunucusu oturum belirteçlerini okunabilir metin olarak taşır — özel bir yerde saklayın.</string>
     <string name="sett_export_failed">Dışa aktarma başarısız</string>
     <string name="sett_no_backup_file">%1$s konumunda yedek dosyası bulunamadı</string>
@@ -121,7 +117,6 @@
     <string name="sett_suggest_external_player">Harici oynatıcı öner: %1$s</string>
     <string name="sett_fast_zap">Daha hızlı kanal değiştirme: %1$s</string>
     <string name="sett_frame_rate_match">Ekran yenileme hızını eşleştir: %1$s</string>
-    <string name="sett_live_preview">Canlı kanal önizlemesi: %1$s</string>
     <string name="sett_on">AÇIK</string>
     <string name="sett_off">KAPALI</string>
     <string name="sett_playback_settings_title">Oynatma Ayarları</string>

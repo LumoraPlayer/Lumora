@@ -407,17 +407,6 @@ class LiveGuideAdapter(
          *  out can tell a miss from a hit. */
         fun requestChannelFocus(): Boolean = channelInfo.requestFocus()
 
-        /** Reserves [px] of end margin so this row's content clears the floating preview
-         *  pane - 0 once the row is no longer behind it. Driven by MainActivity's
-         *  updateGuideRowWrap(), which knows the preview's on-screen position. */
-        fun setReservedEnd(px: Int) {
-            val lp = itemView.layoutParams as? ViewGroup.MarginLayoutParams ?: return
-            if (lp.marginEnd != px) {
-                lp.marginEnd = px
-                itemView.layoutParams = lp
-            }
-        }
-
         fun bind(channel: Channel) {
             current = channel
             // Recycled-row hygiene: a row sliding from an EPG channel to a no-EPG one must

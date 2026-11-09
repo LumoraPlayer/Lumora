@@ -941,9 +941,8 @@ class PlayerManager(
     }
 
     /**
-     * Render into a raw [android.view.Surface]. The Android Auto host hands its navigation
-     * template's drawing surface over directly - there is no View to attach - so this is the
-     * only way the car session can show a picture (see auto/CarPlayback.kt).
+     * Render into a raw [android.view.Surface] handed over by a SurfaceHolder callback - there
+     * is no View to attach in that path.
      */
     fun setVideoSurface(surface: android.view.Surface?) {
         // Called from the Activity's SurfaceHolder callbacks, which can fire after the

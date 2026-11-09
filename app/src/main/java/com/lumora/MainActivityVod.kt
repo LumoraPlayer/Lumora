@@ -62,12 +62,6 @@ private const val VOD_SCAN_PAGE = 1000
  *  double the work for the same answer. */
 private val VOD_BUILD_MUTEX = kotlinx.coroutines.sync.Mutex()
 
-internal fun MainActivity.vodMediaType(tab: Int): MediaType? = when (tab) {
-    1 -> MediaType.SERIES
-    2 -> MediaType.MOVIE
-    else -> null
-}
-
 internal fun MainActivity.vodEnglishOnly(): Boolean =
     com.lumora.data.ProfileStore.effectiveHideNonEnglish(prefs)
 

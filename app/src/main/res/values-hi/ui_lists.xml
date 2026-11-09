@@ -65,7 +65,6 @@
     <string name="list_off">बंद</string>
     <string name="list_no_alt_audio">कोई वैकल्पिक ऑडियो ट्रैक नहीं</string>
     <string name="list_no_alt_video">कोई वैकल्पिक वीडियो गुणवत्ता नहीं</string>
-    <string name="list_no_subtitles">कोई सबटाइटल उपलब्ध नहीं</string>
     <string name="list_refresh_title">प्रोवाइडर रीफ़्रेश करें</string>
     <string name="list_refresh_message">चुनें कि क्या दोबारा डाउनलोड करना है। जिन स्रोतों को आप अचयनित छोड़ते हैं, उनका मौजूदा कैटलॉग बना रहता है।</string>
     <string name="list_refresh_all">सभी प्रोवाइडर</string>

@@ -65,7 +65,6 @@
     <string name="list_off">Uit</string>
     <string name="list_no_alt_audio">Geen alternatieve audiotracks</string>
     <string name="list_no_alt_video">Geen alternatieve videokwaliteit</string>
-    <string name="list_no_subtitles">Geen ondertitels beschikbaar</string>
     <string name="list_refresh_title">Providers vernieuwen</string>
     <string name="list_refresh_message">Kies wat opnieuw moet worden gedownload. Bronnen die je niet selecteert, behouden hun huidige catalogus.</string>
     <string name="list_refresh_all">Alle providers</string>
