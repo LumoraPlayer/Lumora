@@ -70,6 +70,9 @@
 
     <!-- activity_main.xml -->
     <string name="search">Search</string>
+    <!-- Toolbar refresh button. Its siblings announce "Search"/"Settings", so this one needs
+         a name too - without it the icon is silent to TalkBack and screen readers. -->
+    <string name="refresh">Refresh</string>
     <string name="tab_home">Home</string>
     <string name="tab_live_tv">Live TV</string>
     <!-- Sports tab: today's fixtures from the configured sports feeds, matched against the

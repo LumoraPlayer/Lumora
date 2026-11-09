@@ -46,7 +46,10 @@
         <item name="android:letterSpacing">0.09</item>
         <item name="android:textAllCaps">true</item>
         <item name="android:accessibilityHeading">true</item>
-        <item name="android:maxLines">1</item>
+        <!-- Two lines rather than an ellipsis, same call as the nav labels above: wide
+             letter-spacing plus the group indent pushes "Your library" past one line, and a
+             group heading cut to "YOUR LIB…" stops naming the section it introduces. -->
+        <item name="android:maxLines">2</item>
         <item name="android:ellipsize">end</item>
     </style>
 

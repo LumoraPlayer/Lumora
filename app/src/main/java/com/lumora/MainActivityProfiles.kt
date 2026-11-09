@@ -19,6 +19,7 @@ import com.lumora.data.UserProfile
 import com.lumora.model.CategoryFilter
 import com.lumora.model.Channel
 import com.lumora.ui.dialog.LumoraDialog
+import com.lumora.ui.takeDpadFocus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -99,7 +100,15 @@ internal fun MainActivity.applyActiveProfileAndReload() {
         when {
             showingHome -> homeShelfAdapter.submitList(buildHomeShelves())
             showingSports -> refreshSportsBoard()
-            !showingDiscover && !showingDownloads && !showingCatchup && activeTab == 0 -> {
+            !showingDiscover && !showingDownloads && !showingCatchup && activeTab == 0 &&
+                // Settings open: skip the re-entry. settingsContainer and contentRow are
+                // weight-1 siblings sharing one content slot, so selectTab claiming the slot
+                // while Settings holds it splits the pane two ways and squeezes Settings to
+                // half height - and re-entering the tab was also what dismissed Settings
+                // outright when a single checkbox was toggled. Settings' own dismiss handler
+                // re-runs selectTab(activeTab) the moment the panel closes, so the category
+                // revalidation simply waits for it; the panel covers this content anyway.
+                activeSettingsOverlay == null -> {
                 // Re-enter the Live tab so its default category is revalidated against the
                 // profile-filtered rows (the old Sports selection may no longer exist).
                 selectTab(0)
@@ -299,7 +308,17 @@ internal fun MainActivity.showProfilesDialog() {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = gap }
+            ).apply {
+                topMargin = gap
+                // Focus room for the 1.06x pop - the same call item_lumora_dialog_choice makes
+                // with dialog_choice_side_padding (see the clip note above dialog_lumora.xml's
+                // choice frame). The dialog content chain clips at its own bounds, and a
+                // uniform scale on a ~590dp row throws ~18dp of overhang past each side: the
+                // ring's left and right strokes are the first thing the clip takes, leaving
+                // the flat band with only top and bottom rules. The overhang lands here.
+                marginStart = resources.getDimensionPixelSize(R.dimen.dialog_choice_side_padding)
+                marginEnd = resources.getDimensionPixelSize(R.dimen.dialog_choice_side_padding)
+            }
         }
         val avatar = ImageView(this).apply {
             layoutParams = LinearLayout.LayoutParams(profileDp(44), profileDp(44))
@@ -324,10 +343,26 @@ internal fun MainActivity.showProfilesDialog() {
         text = twoLineSettingsText(title, detail)
     }
 
+    /**
+     * Switcher captions carry only what helps *choosing* a viewer: the type, and only when
+     * the name doesn't already say it - the default profiles are literally named Adult/Kids,
+     * so those rows read clean, while a custom name keeps "Kids" because that is the one thing
+     * a name may not tell you. Picture and Trakt state belong to the editor and the settings
+     * entry: repeating "No picture - No Trakt ID" under every row is empty-state noise in a
+     * picker, and the avatar above already answers the picture question.
+     */
+    fun switcherCaption(profile: UserProfile): String {
+        val type = getString(
+            if (profile.type == ProfileType.KIDS) R.string.sett_profile_type_kids
+            else R.string.sett_profile_type_adult
+        )
+        return if (profile.name.equals(type, ignoreCase = true)) "" else type
+    }
+
     val rows = profiles.map { profile ->
         val marker = if (profile.id == active?.id) " \u00b7 " + getString(R.string.sett_profile_current) else ""
         val row = buildRow(profile)
-        row.addView(rowLabel(profile.name + marker, profileSummary(profile)))
+        row.addView(rowLabel(profile.name + marker, switcherCaption(profile)))
         root.addView(row)
         profile to row
     }
@@ -364,7 +399,7 @@ internal fun MainActivity.showProfilesDialog() {
         val focusRow = rows.firstOrNull { it.first.id == active?.id }?.second
             ?: rows.firstOrNull()?.second
             ?: addRow
-        focusRow.requestFocus()
+        focusRow.takeDpadFocus()
     }
     dialog.show()
 }

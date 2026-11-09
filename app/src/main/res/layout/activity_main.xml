@@ -214,8 +214,14 @@
                      The focus scale (1.06x, focus_scale_flat) still has room because
                      clipToPadding stays false and the 2dp top / 4dp bottom padding gives
                      the scaled pill a band to bleed into. -->
+                <!-- Fading edges: with the profile chip in the row the tab strip is narrower
+                     than its labels, so "Home" sits clipped at the scroller's edge at rest.
+                     A hard cut there reads as broken rendering; the fade says the strip
+                     continues, on both ends (focus can land mid-strip after a scroll). -->
                 <HorizontalScrollView
                     android:id="@+id/tabBar"
+                    android:requiresFadingEdge="horizontal"
+                    android:fadingEdgeLength="28dp"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -718,6 +724,7 @@
                     android:layout_marginStart="@dimen/toolbar_button_gap"
                     android:background="@drawable/bg_tab_item"
                     android:clickable="true"
+                    android:contentDescription="@string/refresh"
                     android:focusable="true"
                     android:gravity="center"
                     android:layerType="none"
@@ -736,6 +743,7 @@
                     <ImageView
                         android:layout_width="20dp"
                         android:layout_height="20dp"
+                        android:contentDescription="@null"
                         android:src="@drawable/ic_refresh"
                         android:tint="@color/text_secondary" />
                 </LinearLayout>

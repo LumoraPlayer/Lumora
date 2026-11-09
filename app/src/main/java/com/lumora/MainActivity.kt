@@ -3,6 +3,8 @@ package com.lumora
 
 import android.Manifest
 import com.lumora.ui.dialog.LumoraDialog
+import com.lumora.ui.takeDpadFocus
+import com.lumora.ui.watchDpadFocus
 import android.app.Dialog
 import android.app.DownloadManager
 import android.app.PictureInPictureParams
@@ -3437,6 +3439,12 @@ class MainActivity : AppCompatActivity() {
         // overlay - without this latch the already-consumed listener fired a second time,
         // yanking navigation somewhere the user hadn't asked to go.
         private var dismissed = false
+        // The control that had focus when show() ran, handed back on dismiss(). Without it
+        // the focus that lands inside the overlay dies with the overlay: the view tree is
+        // left with nothing focused, the root frame takes it, and from a full-screen frame
+        // RIGHT and UP resolve to nothing - closing Settings with the remote used to leave
+        // the D-pad looking dead until the user happened to press DOWN.
+        private var hostFocusedView: View? = null
 
         init {
             closeButton.setOnClickListener { dismiss() }
@@ -3445,6 +3453,14 @@ class MainActivity : AppCompatActivity() {
         fun setOnDismissListener(listener: () -> Unit) { dismissListener = listener }
 
         fun show() {
+            // Record the host's focused control before this overlay claims focus (the
+            // initialFocus post below moves it inside). Full-screen containers are skipped:
+            // they draw no ring behind the overlay and are the dead end dismiss() must not
+            // hand focus back to.
+            (container.context as? MainActivity)?.window?.currentFocus?.let { host ->
+                val fullScreen = host.width >= host.rootView.width && host.height >= host.rootView.height
+                if (host.isFocusable && host.isFocused && !fullScreen) hostFocusedView = host
+            }
             if (view.layoutParams !is FrameLayout.LayoutParams) {
                 view.layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             }
@@ -3456,7 +3472,7 @@ class MainActivity : AppCompatActivity() {
             // while nothing had been focused at all.
             fun applyFocus(): Boolean {
                 val target = initialFocus?.invoke() ?: return false
-                return target.isShown && target.requestFocus()
+                return target.isShown && target.takeDpadFocus()
             }
             // Retried on the next frame, same as showEmptyState()'s focusFirstAction: setup
             // code can hide or reveal the intended target after this post is queued
@@ -3472,9 +3488,22 @@ class MainActivity : AppCompatActivity() {
         fun dismiss() {
             if (dismissed) return
             dismissed = true
+            val host = hostFocusedView
+            hostFocusedView = null
             if (view.parent === container) container.removeView(view)
             if (hideContainerOnDismiss) container.visibility = View.GONE
             dismissListener?.invoke()
+            // Hand focus back to the control that opened this overlay, then watch the
+            // hand-over: the dismiss listener above rebuilds the screen behind on
+            // coroutines, and that rebuild can hide or replace the view focus came back to,
+            // dropping focus onto the root frame. watchDpadFocus() catches the slip and
+            // moves focus onto a real control instead of leaving the D-pad with nowhere
+            // to go.
+            val decor = (container.context as? MainActivity)?.window?.decorView ?: return
+            decor.post {
+                if (host != null && host.isShown && host.isFocusable) host.takeDpadFocus()
+                watchDpadFocus(decor)
+            }
         }
     }
 

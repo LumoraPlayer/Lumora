@@ -1402,8 +1402,19 @@ internal fun MainActivity.showProviderSettings() {
         closeButton = binding.btnSettings,
         // Resolved lazily at show()-time (see MainActivity.FullScreenOverlay) - if nothing's
         // configured yet, openIptvForm(null) has already run by then and hidden
-        // addIptvProviderButton, so fall back to the first type card instead.
-        initialFocus = { if (addIptvProviderButton.visibility == View.VISIBLE) addIptvProviderButton else typeM3u }
+        // addIptvProviderButton, so fall back to the first type card instead. isShown, not
+        // visibility: those views sit in the Providers pane, which is GONE on every other
+        // pane, so a visibility check "passed" for a view that could not take focus - and
+        // with all three branches failing, Settings opened with nothing focused at all. The
+        // final fallback is the rail, which is what the D-pad should reach on the General
+        // pane (and what a remote-open already landed on).
+        initialFocus = {
+            when {
+                addIptvProviderButton.isShown -> addIptvProviderButton
+                typeM3u.isShown -> typeM3u
+                else -> dialogView.findViewById(R.id.navCollapseRail)
+            }
+        }
     )
 
     /** MediaServerConfig.id the form is editing, or null when it is adding a new account.
@@ -3150,7 +3161,10 @@ internal fun MainActivity.showProviderSettings() {
     // the whole app (which tabs exist, what gets fetched), not the catalogue filters.
     val generalPane = dialogView.findViewById<LinearLayout>(R.id.paneGeneral)
     lateinit var vodCheckBox: CheckBox
-    generalPane.addView(settingsSectionLabel(getString(R.string.sett_profiles_group)))
+    // The profiles rows are appended further down, after the app-behaviour rows: the pane
+    // opens with the XML's APP BEHAVIOUR label, so a block inserted straight after it would
+    // head the profiles section while Simple mode/Disable VOD/Open-the-app-on sat underneath
+    // the USER PROFILES label instead. Declared here only - addView order is what groups them.
     lateinit var profilesManageRow: TextView
     val profilesEnabledBox = dubCheckBoxRow(
         getString(R.string.sett_profiles_enable),
@@ -3162,8 +3176,6 @@ internal fun MainActivity.showProviderSettings() {
         renderProfilesSettingsRow(profilesManageRow)
     }
     profilesManageRow = profilesSettingsRow()
-    generalPane.addView(profilesEnabledBox)
-    generalPane.addView(profilesManageRow)
     val simpleModeBox = dubCheckBoxRow(
         getString(R.string.sett_simple_mode),
         getString(R.string.sett_simple_mode_caption),
@@ -3186,6 +3198,12 @@ internal fun MainActivity.showProviderSettings() {
     // Which screen the app opens on. Next to the other whole-app choices, and above the
     // language rows: it is the one a new TV owner changes first.
     generalPane.addView(startScreenChoiceRow())
+    // USER PROFILES sits between the rows APP BEHAVIOUR labels and the LANGUAGE label, so
+    // every section label heads its own rows: label, rows, label, rows - never two labels
+    // stacked with the rows that belong to the first one filed under the second.
+    generalPane.addView(settingsSectionLabel(getString(R.string.sett_profiles_group)))
+    generalPane.addView(profilesEnabledBox)
+    generalPane.addView(profilesManageRow)
     generalPane.addView(settingsSectionLabel(getString(R.string.settings_group_language)))
     generalPane.addSettingsRowGroup(
         listOf(
