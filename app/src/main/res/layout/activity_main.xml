@@ -122,7 +122,7 @@
             android:paddingStart="@dimen/toolbar_padding_horizontal"
             android:paddingEnd="@dimen/toolbar_padding_horizontal"
             android:paddingTop="@dimen/toolbar_padding_top"
-            android:paddingBottom="4dp">
+            android:paddingBottom="5dp">
 
             <!-- Left group: brand + tab scroller. weight=1 absorbs the free middle of the
                  row, so the button cluster stays pinned right even when the scroller is
@@ -142,8 +142,9 @@
                  its own edge - so with the group left unclipped the strip's overflow (the
                  Settings/Refresh pair, which is wider than the space the clock leaves)
                  painted straight over the clock and off the right edge of the screen. The
-                 scroller's own 4dp vertical padding and the row's 6dp bottom padding leave
-                 the 1.06x focus scale room to bleed without being sliced. -->
+                 scroller's own 2dp top / 4dp bottom padding and the row's 5dp bottom padding
+                 leave the 1.06x focus scale room to bleed without being sliced (the tabs
+                 scale down from their top edge at runtime, see setupToolbar). -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -211,8 +212,8 @@
                      them rendered straight over the Settings/Refresh cluster instead of
                      scrolling under it. Clipping is what makes the scroller behave as one.
                      The focus scale (1.06x, focus_scale_flat) still has room because
-                     clipToPadding stays false and the 4dp vertical padding below gives the
-                     scaled pill a band to bleed into. -->
+                     clipToPadding stays false and the 2dp top / 4dp bottom padding gives
+                     the scaled pill a band to bleed into. -->
                 <HorizontalScrollView
                     android:id="@+id/tabBar"
                     android:layout_width="0dp"
@@ -220,7 +221,8 @@
                     android:layout_weight="1"
                     android:clipChildren="true"
                     android:clipToPadding="false"
-                    android:paddingVertical="4dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="4dp"
                     android:fillViewport="true"
                     android:scrollbars="none">
 
@@ -1156,9 +1158,9 @@
             android:layout_weight="1"
             android:visibility="gone" />
 
-        <!-- Content row: category sidebar + active tab's list/grid. clipChildren false
-             throughout - item_category rows scale to 1.06x on focus (focus_scale) and
-             would otherwise get clipped top/bottom by categorySidebar's own bounds. -->
+        <!-- Content row: category sidebar + active tab's list/grid. Category rows no longer
+             scale on focus (see item_category), so the sidebar's own padding is the only
+             inset between the focus outline and the panel edge. -->
         <LinearLayout
             android:id="@+id/contentRow"
             android:layout_width="match_parent"
@@ -1177,7 +1179,7 @@
                 android:layout_marginBottom="12dp"
                 android:background="@drawable/bg_category_panel"
                 android:defaultFocusHighlightEnabled="true"
-                android:padding="10dp"
+                android:padding="8dp"
                 android:visibility="gone" />
 
             <FrameLayout
@@ -1221,16 +1223,21 @@
                              own shelf above the guide, so no programme block or time label is
                              ever covered by the preview. -->
                         <LinearLayout
+                            android:id="@+id/livePreviewHeader"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:layout_marginBottom="10dp"
                             android:background="@drawable/bg_live_preview_header"
+                            android:clickable="true"
                             android:clipChildren="false"
                             android:clipToPadding="false"
+                            android:focusable="true"
                             android:gravity="center_vertical"
+                            android:nextFocusUp="@id/tabLive"
                             android:orientation="horizontal"
                             android:padding="12dp"
+                            android:stateListAnimator="@animator/focus_scale"
                             android:visibility="gone">
 
                             <LinearLayout
@@ -2513,7 +2520,8 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_gravity="top|start"
-            android:layout_margin="16dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="4dp"
             android:background="@drawable/bg_toolbar_button"
             android:clickable="true"
             android:contentDescription="@string/plug_back"
@@ -3277,7 +3285,8 @@
                         android:clipChildren="false"
                         android:clipToPadding="false"
                         android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:orientation="horizontal"
+                        android:paddingVertical="1dp">
 
                         <LinearLayout
                             android:id="@+id/playerTransport"
@@ -3383,35 +3392,35 @@
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
+                            <!-- Audio and subtitles are one language decision, so they share
+                                 one deck tile; opening it lists both with their current
+                                 values. -->
                             <com.lumora.ui.PlayerQuickActionView
-                                android:id="@+id/btnSubtitleTrack"
+                                android:id="@+id/btnLanguage"
                                 android:layout_width="0dp"
                                 android:layout_height="@dimen/player_quick_action_height"
                                 android:layout_marginHorizontal="@dimen/player_quick_action_gap"
                                 android:stateListAnimator="@animator/focus_scale_flat"
                                 android:layout_weight="1" />
 
+                            <!-- Alternate streams of the channel/title. Restored to the
+                                 main deck because it is the first thing reached for when a
+                                 live copy misbehaves; applyPlayerControlLayout hides it
+                                 when the title has no other version. -->
                             <com.lumora.ui.PlayerQuickActionView
-                                android:id="@+id/btnAudioTrack"
+                                android:id="@+id/btnLiveVersions"
                                 android:layout_width="0dp"
                                 android:layout_height="@dimen/player_quick_action_height"
                                 android:layout_marginHorizontal="@dimen/player_quick_action_gap"
                                 android:stateListAnimator="@animator/focus_scale_flat"
-                                android:layout_weight="1" />
+                                android:layout_weight="1"
+                                android:visibility="gone" />
 
+                            <!-- Live only, and only while Multiview is enabled; it is the
+                                 direct way into the grid with the current channel already
+                                 playing. -->
                             <com.lumora.ui.PlayerQuickActionView
-                                android:id="@+id/btnVideoQuality"
-                                android:layout_width="0dp"
-                                android:layout_height="@dimen/player_quick_action_height"
-                                android:layout_marginHorizontal="@dimen/player_quick_action_gap"
-                                android:stateListAnimator="@animator/focus_scale_flat"
-                                android:layout_weight="1" />
-
-                            <!-- Speed belongs in the deck only where there is room for a fifth
-                                 tile; portrait phones and narrow landscape windows get it from
-                                 the More panel instead. applyPlayerControlLayout() decides. -->
-                            <com.lumora.ui.PlayerQuickActionView
-                                android:id="@+id/btnSpeed"
+                                android:id="@+id/btnMultiview"
                                 android:layout_width="0dp"
                                 android:layout_height="@dimen/player_quick_action_height"
                                 android:layout_marginHorizontal="@dimen/player_quick_action_gap"

@@ -9,6 +9,7 @@
     <string name="player_back">Back</string>
     <string name="player_all_options">Options</string>
     <string name="player_speed">Speed</string>
+    <string name="player_language">Language</string>
     <string name="player_aspect">Aspect</string>
     <string name="player_default">Default</string>
     <string name="play_playback_speed">Playback Speed</string>

@@ -1344,6 +1344,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                     currentEpisodeQueue = queue
                     currentEpisodeQueueIndex = queue.indexOfFirst { it.id.ifBlank { it.url } == chosenKey }
                     currentSeriesVersionContext = item to (seriesGroup ?: listOf(item))
+                    applyPlayerControlLayout()
                 }
             }
         },
@@ -1432,6 +1433,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         if (providerCast != null || castMembers.isNotEmpty()) {
             castLabel.visibility = View.VISIBLE
         }
+        alignDetailActionsWithCast()
         // The landscape still is the hero, never the cover card. The cover keeps the
         // poster the detail opened with; a provider/TMDB backdrop only replaces the
         // full-bleed artwork behind the header.
@@ -1702,6 +1704,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 currentEpisodeQueue = ordered
                 currentEpisodeQueueIndex = ordered.indexOfChannel(target)
                 currentSeriesVersionContext = item to (seriesGroup ?: listOf(item))
+                applyPlayerControlLayout()
             }
         }
     }
@@ -2377,6 +2380,13 @@ internal fun MainActivity.stopToolbarClock() {
 
 internal fun MainActivity.setupToolbar() {
     startToolbarClock()
+    // Top chrome scales from the top edge, not its centre: the tab pills sit close to the
+    // window's top, and a centred 1.06x focus scale pushed the ring's upper edge above the
+    // window where it was clipped. Scaling downward keeps the top outline whole while the
+    // bar itself stays slim.
+    for (i in 0 until binding.tabBarRow.childCount) {
+        binding.tabBarRow.getChildAt(i).pivotY = 0f
+    }
     binding.btnSettings.setOnClickListener {
         if (activeSettingsOverlay != null) activeSettingsOverlay?.dismiss() else showProviderSettings()
     }

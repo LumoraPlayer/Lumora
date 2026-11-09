@@ -407,8 +407,16 @@ internal const val BLACK_FRAME_MOTION_DELTA = 24
 // A frame with fewer than this fraction of moved pixels is treated as static. A dead feed
 // is dark AND static; real content that's dark still has grain/motion in far more pixels.
 internal const val BLACK_FRAME_MOTION_FRACTION = 0.01f
-internal const val BLACK_FRAME_STREAK_THRESHOLD = 2
+// Three consecutive dark, static samples: two was short enough that a normal dark scene
+// holding still for a few seconds could condemn a healthy feed and send it to another
+// version. A genuinely dead feed only waits two seconds longer.
+internal const val BLACK_FRAME_STREAK_THRESHOLD = 3
 internal const val DEAD_STREAM_COOLDOWN_MS = 60 * 60 * 1000L
+// A single startup hiccup is not a dead version. A stream has to fail twice inside this
+// window before it is blacklisted for the hour-long cooldown: the first failure only drops
+// it out of the current tune, leaving it selectable by hand and eligible again next time.
+internal const val STREAM_FAILURE_WINDOW_MS = 15 * 60 * 1000L
+internal const val STREAM_FAILURES_BEFORE_COOLDOWN = 2
 // Dead marks, persisted so a cooldown survives the app being closed and reopened.
 internal const val PREF_DEAD_STREAMS = "dead_streams_until"
 // How long a freshly-tuned stream is exempt from stall/black-frame failover. Startup and a
@@ -558,6 +566,13 @@ class MainActivity : AppCompatActivity() {
     internal var previewVersionGroup: List<Channel> = emptyList()
     internal var previewVersionIndex = 0
     internal var previewBlackFrameStreak = 0
+    /** When the preview's current version was handed to its player, and whether it has
+     *  reached READY - the preview watchdog gets the same settling window as fullscreen. */
+    internal var previewStreamStartMs = 0L
+    internal var previewVersionPlayed = false
+    /** Versions this preview tune has already left, so a failover cannot bounce back to the
+     *  copy it just decided was black. */
+    internal val previewTriedVersionIndices = mutableSetOf<Int>()
     internal val previewBlackFrameCheckRunnable = Runnable { checkForPreviewBlackFrame() }
 
     // ── Multiview (multi-screen live grid; see MainActivityMultiview) ──
@@ -660,6 +675,14 @@ class MainActivity : AppCompatActivity() {
     // out of is skipped by both fullscreen and preview auto-pick/failover for a cooldown
     // window instead of being retried again a few seconds later.
     internal val deadStreamUntil = mutableMapOf<String, Long>()
+    // (failures, last failure at) per stream key. A version is only blacklisted after
+    // STREAM_FAILURES_BEFORE_COOLDOWN failures close together; reaching READY clears the
+    // count, so a stream that recovers is immediately trusted again.
+    internal val streamFailureCounts = mutableMapOf<String, Pair<Int, Long>>()
+    // Versions this tune has already left after a failure. Cleared when a stream reaches
+    // READY (a later failure may revisit an earlier copy) and on a fresh play. Kept apart
+    // from the persisted dead marks so one hiccup never hides a version for an hour.
+    internal val failedVersionKeys = mutableSetOf<String>()
 
     // Every configured Xtream provider, keyed by IptvProviderConfig.id - detail/EPG calls
     // resolve the right one per-Channel via Channel.sourceProviderId instead of assuming
@@ -1176,6 +1199,11 @@ class MainActivity : AppCompatActivity() {
     // One-shot fresh-URL retry guard for Jellyfin direct-play: a transient server timeout or
     // expired direct-play URL gets one re-resolve before the generic "Playback error".
     internal var jellyfinRetryAttempted = false
+    // Quiet same-URL retries spent before a live error starts the version walk. A
+    // transport hiccup is retried on the copy already playing before any quality switch.
+    internal var liveTransientRetryAttempt = 0
+    /** The pending transient retry, so a version switch or a new play can cancel it. */
+    internal var liveTransientRetryRunnable: Runnable? = null
     // Backoff retry count for a live channel with no other version to fail over to (see
     // tryNextQualityVersion) - a transient server-side throttle (HTTP 509 etc.) is worth
     // retrying the exact same URL for before giving up.
@@ -1402,16 +1430,16 @@ class MainActivity : AppCompatActivity() {
         // and playItem's SERIES branch would open the episode itself as a dead detail page.
         // onHomeItemClick resolves an episode to its series (with direct-play fallback).
         onItemClick = { item -> onHomeItemClick(item) },
-        // The Series poster's lead shelf is the merged Continue Watching/Up Next/Favourites
-        // row. A hold there means "take this off the row", not "star it" - and because the
-        // row blends three lists under one label, the menu has to name the list the tile is
-        // actually in (see onMergedLeadLongClick) rather than always saying Continue Watching.
+        // The Series poster's personal shelves (Continue Watching, Next Up, Favourites) are
+        // removal lists, not a place to star things. A show can be in more than one of them,
+        // so the hold menu names every list it is actually in (see onMergedLeadLongClick).
+        // The combined "For You" line carries those lists in `sections`, not in its title.
         onItemLongClick = { item, shelf ->
-            if (shelf?.title == getString(R.string.category_continue_watching)) {
-                onMergedLeadLongClick(item)
-            } else {
-                toggleFavoriteVodItem(item)
-            }
+            val personalShelf = !shelf?.sections.isNullOrEmpty() ||
+                shelf?.title == getString(R.string.category_continue_watching) ||
+                shelf?.title == getString(R.string.category_next_up) ||
+                shelf?.title == getString(R.string.category_favourites)
+            if (personalShelf) onMergedLeadLongClick(item) else toggleFavoriteVodItem(item)
         },
         onPinClick = { shelf -> togglePinShelfCategory(1, shelf) },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenShelfCategory(1, shelf) },

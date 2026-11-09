@@ -18,10 +18,10 @@ import kotlinx.coroutines.launch
 //
 // The old bottom bar tried to keep thirteen equal-weight pills on one line beside the
 // transport. On a portrait phone each one had less width than its own label, and on TV the
-// flat grid read like a debug toolbar. The deck now keeps the transport plus four stateful
-// shortcuts (Subtitles, Audio, Quality, More; Speed joins them only where there is room),
-// and the occasional tools live in a two-column options panel. Every action that used to
-// have a pill is still one press away.
+// flat grid read like a debug toolbar. The deck now keeps the transport plus Language and
+// More, with Versions/Multiview when they apply; Speed and Quality live in the two-column
+// options panel behind More, since they are adjustments rather than destinations reached
+// mid-playback. Every action that used to have a pill is still one press away.
 
 /** One tile in the player options panel. A null value means the action has no state to show. */
 private data class PlayerOptionTile(
@@ -37,25 +37,20 @@ private data class PlayerOptionTile(
  * rotation itself and does not re-inflate the layout.
  */
 internal fun MainActivity.setupPlayerOptionsControls() {
-    binding.btnSubtitleTrack.bind(
-        R.drawable.ic_subtitles,
-        getString(R.string.subtitles),
-        getString(R.string.list_off),
+    binding.btnLanguage.bind(
+        R.drawable.ic_language,
+        getString(R.string.player_language),
+        "",
     )
-    binding.btnAudioTrack.bind(
-        R.drawable.ic_audio,
-        getString(R.string.audio),
-        getString(R.string.player_default),
+    binding.btnLiveVersions.bind(
+        R.drawable.ic_versions,
+        getString(R.string.versions),
+        "",
     )
-    binding.btnVideoQuality.bind(
-        R.drawable.ic_quality,
-        getString(R.string.quality),
-        getString(R.string.list_auto),
-    )
-    binding.btnSpeed.bind(
-        R.drawable.ic_speed,
-        getString(R.string.player_speed),
-        getString(R.string.play_speed_label, 1.0f),
+    binding.btnMultiview.bind(
+        R.drawable.ic_multiview,
+        getString(R.string.mv_multiview),
+        "",
     )
     binding.btnMore.bind(
         R.drawable.ic_more,
@@ -63,16 +58,13 @@ internal fun MainActivity.setupPlayerOptionsControls() {
         getString(R.string.player_all_options),
     )
 
-    binding.btnSubtitleTrack.setOnClickListener {
-        showTrackPicker(isAudio = false, returnFocus = binding.btnSubtitleTrack)
+    binding.btnLanguage.setOnClickListener {
+        showLanguageOptionsDialog(returnFocus = binding.btnLanguage)
     }
-    binding.btnAudioTrack.setOnClickListener {
-        showTrackPicker(isAudio = true, returnFocus = binding.btnAudioTrack)
+    binding.btnLiveVersions.setOnClickListener {
+        showVersionPicker(returnFocus = binding.btnLiveVersions)
     }
-    binding.btnVideoQuality.setOnClickListener {
-        showVideoQualityPicker(returnFocus = binding.btnVideoQuality)
-    }
-    binding.btnSpeed.setOnClickListener { showSpeedDialog(returnFocus = binding.btnSpeed) }
+    binding.btnMultiview.setOnClickListener { openMultiviewFromPlayer() }
     binding.btnMore.setOnClickListener { showPlayerOptionsDialog() }
 
     applyPlayerControlLayout()
@@ -80,28 +72,29 @@ internal fun MainActivity.setupPlayerOptionsControls() {
 }
 
 /**
- * One row on TV and landscape, two on portrait. The threshold is about the room a
- * horizontal icon + title + value tile needs, not about device class: a 960dp TV fits five,
- * an 800dp landscape phone four, and a 640dp one three.
+ * One row on TV and landscape, two on portrait. The deck carries Language and More plus
+ * Versions/Multiview when they apply; Speed and Quality are always in the More panel.
  */
 internal fun MainActivity.applyPlayerControlLayout() {
     val config = resources.configuration
     val portrait = config.orientation == Configuration.ORIENTATION_PORTRAIT
     val width = config.screenWidthDp
     val oneRow = !portrait && width >= 620
-    val showSpeed = isTv || (oneRow && width >= 900)
-    val showQuality = !oneRow || isTv || width >= 780
+    val hasVersions = playerHasVersions()
+    val hasMultiview = nowPlayingChannel?.mediaType == MediaType.LIVE &&
+        isMultiviewEnabled() && !isMultiviewVisible
 
-    binding.btnSpeed.visibility = if (showSpeed) View.VISIBLE else View.GONE
-    binding.btnVideoQuality.visibility = if (showQuality) View.VISIBLE else View.GONE
+    binding.btnLiveVersions.visibility = if (hasVersions) View.VISIBLE else View.GONE
+    binding.btnMultiview.visibility = if (hasMultiview) View.VISIBLE else View.GONE
 
     listOf(
-        binding.btnSubtitleTrack,
-        binding.btnAudioTrack,
-        binding.btnVideoQuality,
-        binding.btnSpeed,
+        binding.btnLanguage,
         binding.btnMore,
     ).forEach { it.setCompact(!oneRow) }
+    // Both destination tiles centre their label over the icon. Versions keeps its current
+    // copy underneath; Multiview is label-only and uses the smaller centred treatment.
+    binding.btnLiveVersions.setCompact(true)
+    binding.btnMultiview.setCompactLabelOnly()
 
     if (oneRow) {
         binding.playerControlDeck.orientation = LinearLayout.HORIZONTAL
@@ -168,25 +161,24 @@ private fun MainActivity.setDeckChildLayout(
  * a picker selection, and whenever speed/aspect/A-V/sleep state changes.
  */
 internal fun MainActivity.updatePlayerOptionLabels() {
+    val audio = currentAudioLabel()
     val subtitles = currentSubtitleLabel()
-    binding.btnSubtitleTrack.setValue(subtitles)
-    binding.btnSubtitleTrack.setActive(
-        subtitles != getString(R.string.list_off)
+    binding.btnLanguage.setValue(languageSummary(audio, subtitles))
+    binding.btnLanguage.setActive(
+        subtitles != getString(R.string.list_off) ||
+            audio != getString(R.string.player_default)
     )
 
-    binding.btnAudioTrack.setValue(currentAudioLabel())
-
-    val quality = currentQualityLabel()
-    binding.btnVideoQuality.setValue(quality)
-    binding.btnVideoQuality.setActive(quality != getString(R.string.list_auto))
-
-    binding.btnSpeed.setValue(getString(R.string.play_speed_label, speedController.currentSpeed))
-    binding.btnSpeed.setActive(kotlin.math.abs(speedController.currentSpeed - 1.0f) > 0.01f)
+    binding.btnLiveVersions.setValue(currentVersionQuickActionLabel())
+    binding.btnLiveVersions.setActive(isPlayingAlternateVersion())
 
     binding.btnMore.setActive(
         sleepTimerDisplay != null || playerManager.getAvOffsetMs() != 0
     )
 }
+
+/** "English · Off": the audio language, then the subtitle state, in one deck value. */
+private fun languageSummary(audio: String, subtitles: String): String = "$audio · $subtitles"
 
 private fun MainActivity.currentSubtitleLabel(): String {
     val selected = trackController.subtitleTracks(playerManager.getExoPlayer())
@@ -225,6 +217,29 @@ private fun MainActivity.currentQualityLabel(): String {
     val selected = trackController.videoTracks(playerManager.getExoPlayer())
         .firstOrNull { it.isSelected }
     return selected?.name?.let(::shortTrackLabel) ?: getString(R.string.list_auto)
+}
+
+/** The Versions shortcut's value: the raw copy actually playing for live, the provider of
+ *  the film/series copy otherwise (a film's group has no single "version 2/3" numbering). */
+private fun MainActivity.currentVersionQuickActionLabel(): String {
+    val playing = nowPlayingChannel ?: return ""
+    if (playing.mediaType == MediaType.LIVE) {
+        return currentVersionGroup.getOrNull(currentVersionIndex)?.name
+            ?.let(::shortTrackLabel)
+            .orEmpty()
+    }
+    val copy = currentSeriesVersionContext?.first ?: playing
+    return providerNameFor(copy)?.takeIf { it.isNotBlank() }.orEmpty()
+}
+
+/** True while the viewer is on a copy other than the group's default, so the Versions
+ *  shortcut can carry the same selected wash the stateful shortcuts use. */
+private fun MainActivity.isPlayingAlternateVersion(): Boolean {
+    val playing = nowPlayingChannel ?: return false
+    if (playing.mediaType == MediaType.LIVE) return currentVersionIndex > 0
+    val group = currentSeriesVersionContext?.second
+        ?: versionGroupContaining(filmVersions, playing.id).orEmpty()
+    return group.size > 1 && group.firstOrNull()?.id != playing.id
 }
 
 /** A quick action has one line for its value; "English · EAC3 · 5.1" becomes "English". */
@@ -370,20 +385,12 @@ private fun MainActivity.playerOptionTiles(): List<PlayerOptionTile> {
     val live = channel?.mediaType == MediaType.LIVE
     val speed = speedController.currentSpeed
     val avOffset = playerManager.getAvOffsetMs()
-    val versions = if (currentSeriesVersionContext == null) {
-        currentVersionGroup.getOrNull(currentVersionIndex)?.name?.let(::shortTrackLabel)
-    } else {
-        null
-    }
+    val versions = currentVersionQuickActionLabel().takeIf { it.isNotBlank() }
     return listOf(
         PlayerOptionTile(
-            getString(R.string.subtitles),
-            currentSubtitleLabel(),
-        ) { showTrackPicker(isAudio = false, returnFocus = binding.btnMore) },
-        PlayerOptionTile(
-            getString(R.string.audio),
-            currentAudioLabel(),
-        ) { showTrackPicker(isAudio = true, returnFocus = binding.btnMore) },
+            getString(R.string.player_language),
+            languageSummary(currentAudioLabel(), currentSubtitleLabel()),
+        ) { showLanguageOptionsDialog(returnFocus = binding.btnMore) },
         PlayerOptionTile(
             getString(R.string.quality),
             currentQualityLabel(),
@@ -436,6 +443,33 @@ private fun MainActivity.playerOptionTiles(): List<PlayerOptionTile> {
 }
 
 // ── Dialogs moved out of setupPlayerControls ───
+
+/**
+ * The one Language shortcut's menu: audio first, subtitles second, each carrying its
+ * current value. Picking either opens the existing track picker; keeping them in one entry
+ * stops the deck spending two tiles on what is one language decision.
+ */
+internal fun MainActivity.showLanguageOptionsDialog(returnFocus: View? = null) {
+    val audio = currentAudioLabel()
+    val subtitles = currentSubtitleLabel()
+    val options = arrayOf(
+        "${getString(R.string.audio)} · $audio",
+        "${getString(R.string.subtitles)} · $subtitles",
+    )
+    val builder = LumoraDialog.Builder(this)
+        .setTitle(getString(R.string.player_language))
+        .setItems(options) { dialog, which ->
+            dialog.dismiss()
+            // Let the Language dialog's own dismiss/focus work finish before the track
+            // picker replaces it, so the D-pad never lands between two dialog windows.
+            binding.playerLayout.post {
+                if (!isPlayerVisible) return@post
+                showTrackPicker(isAudio = which == 0, returnFocus = returnFocus)
+            }
+        }
+        .setNegativeButton(getString(R.string.cancel), null)
+    showControlsDialog(builder, returnFocus)
+}
 
 internal fun MainActivity.showSpeedDialog(returnFocus: View? = null) {
     val speeds = arrayOf(

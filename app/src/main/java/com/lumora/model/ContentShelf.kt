@@ -10,5 +10,17 @@ data class ContentShelf(
      *  database instead of being limited to the preview items above. */
     val matchIds: Set<String> = emptySet(),
     /** Explicit item ids, for rows that are not identified by category (anime/own-library). */
-    val channelIds: Set<String> = emptySet()
+    val channelIds: Set<String> = emptySet(),
+    /** When present, [items] is the flat union of these labelled groups and the shelf
+     *  renders them inline in one horizontal row, each group preceded by its title.
+     *  [items] still carries every real channel so catalogue/detail lookups keep working. */
+    val sections: List<ContentShelfSection>? = null
+)
+
+/** One labelled group inside a combined shelf - e.g. Continue Watching, Next Up and
+ *  Favourites sharing one poster line. */
+data class ContentShelfSection(
+    val title: String,
+    val items: List<Channel>,
+    val categoryId: String? = null,
 )

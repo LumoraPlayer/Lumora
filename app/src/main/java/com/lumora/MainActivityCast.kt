@@ -4,6 +4,7 @@ package com.lumora
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import com.lumora.data.remote.tmdb.TmdbClient
 import com.lumora.model.Channel
@@ -168,6 +169,42 @@ internal fun MainActivity.populateCastRow(
     val focusPersonId = castFocusPersonId ?: return
     castFocusPersonId = null
     row.post { focusCastCell(focusPersonId) }
+}
+
+/**
+ * Lines the Play / Find & Play / Trailer row up with the top of the cast faces.
+ *
+ * The actions and the cast share one horizontal band on TV. The cast title sits above its
+ * faces, so the action row used to float at the band's top, well above the images. The
+ * actions get the same top margin as the cast strip's first face - its label height plus
+ * the strip's 6dp focus padding. Portrait stacks the band, where this alignment does not
+ * apply, and a title with no faces keeps the actions at the top.
+ */
+internal fun MainActivity.alignDetailActionsWithCast() {
+    val actions = binding.detailActionsRow
+    val actionsParams = actions.layoutParams as? LinearLayout.LayoutParams ?: return
+    if (binding.detailInfoBand.orientation != LinearLayout.HORIZONTAL) {
+        if (actionsParams.topMargin != 0) {
+            actionsParams.topMargin = 0
+            actions.layoutParams = actionsParams
+        }
+        return
+    }
+    binding.detailInfoBand.post {
+        if (!isContentDetailVisible) return@post
+        val scroll = binding.detailCastScroll
+        val target = if (scroll.isShown && binding.detailCastRow.childCount > 0) {
+            // scroll.top is the label's bottom; paddingTop is where the first face starts.
+            scroll.top + scroll.paddingTop
+        } else {
+            0
+        }
+        val params = actions.layoutParams as? LinearLayout.LayoutParams ?: return@post
+        if (params.topMargin != target) {
+            params.topMargin = target
+            actions.layoutParams = params
+        }
+    }
 }
 
 /** Puts D-pad focus on the cast cell tagged with [personId], falling back to the Play

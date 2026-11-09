@@ -243,23 +243,37 @@ internal fun MainActivity.traktRemovePlayback(
     if (!isTraktSignedIn()) return
     val subjects = items.filter { it.mediaType != MediaType.LIVE }
     if (subjects.isEmpty()) return
-    // (title key, year to compare or null). A show's episodes are matched by name alone: an
-    // episode tile's year is not the year Trakt stamps on the show, and requiring it would
-    // quietly miss every entry for a series.
-    val byTitle: List<Pair<String, String?>> = if (matchByTitle) {
-        subjects.mapNotNull { item ->
-            val key = continueWatchingTitleKey(item) ?: return@mapNotNull null
-            key to if (item.mediaType == MediaType.MOVIE) item.year else null
-        }
-    } else {
-        emptyList()
-    }
     scope.launch {
         val token = traktAccessToken() ?: return@launch
         // Read the list first: no resolution work is worth doing for an account with nothing
         // paused, which is the common case right after a clear-all.
         val entries = traktClient.playback(token)
         if (entries.isEmpty()) return@launch
+        // (title key, year to compare or null). A show's episodes are matched by name alone:
+        // an episode tile's year is not the year Trakt stamps on the show, and requiring it
+        // would quietly miss every entry for a series. Several keys are tried per item: the
+        // *resolved show name* is the reliable one (a snapshot can be labelled
+        // "S01E02 · Episode Title" with no show name in it), while
+        // [continueWatchingTitleKey] covers the decorated tile and older snapshots.
+        val byTitle: List<Pair<String, String?>> = if (!matchByTitle) {
+            emptyList()
+        } else {
+            buildList {
+                for (item in subjects) {
+                    val keys = LinkedHashSet<String>()
+                    if (item.mediaType == MediaType.SERIES) {
+                        resolveHomeTileSeries(item)?.name
+                            ?.let(::cleanVodTitle)
+                            ?.let(::normalizeTitleForGrouping)
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let(keys::add)
+                    }
+                    continueWatchingTitleKey(item)?.let(keys::add)
+                    val year = if (item.mediaType == MediaType.MOVIE) item.year else null
+                    keys.forEach { add(it to year) }
+                }
+            }
+        }
         val wanted = entries.map { it.target }.toSet()
         val targets = mutableSetOf<TraktClient.ScrobbleTarget>()
         for (item in subjects) {

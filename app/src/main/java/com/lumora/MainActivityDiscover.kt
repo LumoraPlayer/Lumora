@@ -15,6 +15,7 @@ import com.lumora.cache.WatchedStore
 import com.lumora.data.IptvProviderStore
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
+import com.lumora.model.ContentShelfSection
 import com.lumora.model.MediaType
 import com.lumora.plugin.js.PluginScript
 import com.lumora.ui.attachBlinkingCursor
@@ -1041,18 +1042,38 @@ internal fun MainActivity.removeFromContinueWatching(item: Channel) {
     val sharedSet = sharedKeys.toHashSet()
     fun isRemovedSibling(entry: Channel): Boolean =
         entry.id == item.id || (sharedSet.isNotEmpty() && watchedKeysFor(entry).any { it in sharedSet })
+    // Clear the matching resume entry on *every* account that holds a copy, not just the one
+    // the clicked tile happened to come from. A show carried by two servers/accounts has one
+    // entry per server, each with its own item id; pruning only this frame's in-memory list
+    // left the other server's resume point intact, so the next pull rebuilt the tile. Everything
+    // is matched by the same shared episode keys as the local position sweep.
     for ((serverId, items) in jellyfinResumeByServer.toMap()) {
-        jellyfinResumeByServer[serverId] = items.filterNot(::isRemovedSibling)
+        val removed = items.filter(::isRemovedSibling)
+        if (removed.isEmpty()) continue
+        jellyfinResumeByServer[serverId] = items - removed.toSet()
+        val client = jellyfinClients[serverId] ?: continue
+        scope.launch(Dispatchers.IO) {
+            removed.forEach { entry ->
+                runCatching { client.clearUserData(com.lumora.util.rawMediaItemId(entry.id)) }
+            }
+        }
     }
     for ((serverId, items) in plexResumeByServer.toMap()) {
-        plexResumeByServer[serverId] = items.filterNot(::isRemovedSibling)
+        val removed = items.filter(::isRemovedSibling)
+        if (removed.isEmpty()) continue
+        plexResumeByServer[serverId] = items - removed.toSet()
+        val client = plexClients[serverId] ?: continue
+        scope.launch(Dispatchers.IO) {
+            removed.forEach { entry ->
+                runCatching { client.clearUserData(com.lumora.util.rawMediaItemId(entry.id)) }
+            }
+        }
     }
+    // If the clicked tile itself was not in a server list this loop saw (already absent, or a
+    // local-only entry), still clear the server item it names when it is one.
     val rawId = com.lumora.util.rawMediaItemId(item.id)
     val serverId = item.sourceProviderId.orEmpty()
     if (item.isJellyfin) {
-        // Same resolution rule as everywhere else a media-server call is made: the entry's own
-        // account, never "the current one" - with two servers configured an id means nothing
-        // outside the one that issued it. Skip when that account is no longer connected.
         val client = jellyfinClients[serverId]
         if (client != null) scope.launch(Dispatchers.IO) { runCatching { client.clearUserData(rawId) } }
     }
@@ -1140,18 +1161,13 @@ internal fun MainActivity.onContinueWatchingLongClick(item: Channel) {
 }
 
 /**
- * Hold on the Series poster's merged lead row - the one tile-per-show blend of what is
- * part-watched, what is next up and what the user starred.
+ * Hold on one of the Series poster's personal shelves - Continue Watching, Next Up or
+ * Favourites.
  *
- * A hold there has to name the list the tile is actually in. The row's label is always
- * "Continue Watching", so every hold used to offer "Remove from Continue Watching" - under a
- * poster that was only there because it had been starred, which removes nothing and reads as
- * the control being broken. Every list the *show* is in is offered, in the row's own priority
- * order (part-watched, next, starred), and the removal behind each one is the same one those
- * grids run.
- *
- * Nothing to take it off falls back to the hold-to-favourite gesture the other shelves keep,
- * so a tile in none of the three still does something predictable.
+ * A show can be in more than one of those lists, so the menu names every list the tile is
+ * actually in and offers the same removal each of those grids runs. Nothing to take it off
+ * falls back to the hold-to-favourite gesture the other shelves keep, so a tile in none of
+ * the three still does something predictable.
  */
 internal fun MainActivity.onMergedLeadLongClick(item: Channel) {
     val favIds = FavoritesStore.getFavoriteSeriesIds(this)
@@ -1605,25 +1621,10 @@ internal fun MainActivity.restoreRemovedUpNext() {
     }
 }
 
-/**
- * The Series poster's single lead shelf: everything the user has a personal claim on, in the
- * order they are likely to want it - what is part-watched, then what is next, then what they
- * starred.
- *
- * One row rather than three because three near-identical rows of five tiles each pushed the
- * catalogue itself below the fold, and the same show could head all three of them. The
- * sidebar still lists Continue Watching and Up Next separately: the rail is for picking a
- * filter, where the distinction is the whole point, while the poster is for picking a title.
- *
- * Deduped by *show*, not by tile. A Continue Watching episode, an Up Next episode and a
- * favourite are three different Channels carrying three different ids that can all stand for
- * one series, so what gets claimed is the series each tile belongs to - an episode through
- * its parent id, a top-level entry through its own. First tile in wins, which makes the
- * order above the priority order too.
- */
-/** The show a Series lead-row tile stands for - the key [seriesPosterLeadShelfItems]
- *  dedupes on: the label's show half when the tile is decorated ("Show · S01E04"), the
- *  parent id for an episode, the tile's own id for anything else. */
+/** The show a Series personal-shelf tile stands for: the label's show half when the tile is
+ *  decorated ("Show · S01E04"), the parent id for an episode, the tile's own id for
+ *  anything else. Used by the personal-shelf long-press menu to name the lists a show is
+ *  actually in. */
 internal fun leadRowShowKey(item: Channel): String {
     val named = normalizeTitleForGrouping(cleanVodTitle(item.name).substringBefore('·'))
     return named.ifBlank {
@@ -1646,16 +1647,50 @@ internal fun sameShowAs(a: Channel, b: Channel): Boolean {
     return leadRowShowKey(a) == leadRowShowKey(b)
 }
 
-internal fun MainActivity.seriesPosterLeadShelfItems(favourites: List<Channel>): List<Channel> {
-    val claimed = HashSet<String>()
-    return (seriesContinueItems() + seriesUpNextItems() + favourites).filter { item ->
-        // Keyed on the *name* the tiles are labelled with ("Show · S01E04"), not on the parent
-        // id: the same show reached through two providers carries two different series ids, so
-        // an id-keyed dedupe let "Neagley S01E01" (part-watched) and "Neagley S01E02" (next up)
-        // sit side by side on one row.
-        val show = leadRowShowKey(item)
-        show.isNotBlank() && claimed.add(show)
+/**
+ * The Series poster's personal line: Continue Watching, Next Up and Favourites stay distinct
+ * labelled sections, but share one horizontally scrolling row so they no longer take three
+ * rows of the poster away from the catalogue.
+ *
+ * The old single row blended the three lists into one unlabelled "Continue Watching" shelf,
+ * which made it show next-up episodes and starred shows the viewer never opened on the
+ * source they were browsing. Here every group carries its own title inline, so the row
+ * cannot lie about what each collection is.
+ */
+internal fun MainActivity.seriesPersonalShelves(favourites: List<Channel>): List<ContentShelf> {
+    val sections = mutableListOf<ContentShelfSection>()
+    val hidden = getHiddenCategories(1)
+    val continueItems = seriesContinueItems()
+    if (continueItems.isNotEmpty() && CONTINUE_WATCHING_CATEGORY_ID !in hidden) {
+        sections += ContentShelfSection(
+            getString(R.string.category_continue_watching),
+            continueItems,
+            categoryId = CONTINUE_WATCHING_CATEGORY_ID,
+        )
     }
+    val nextUp = seriesUpNextItems()
+    if (nextUp.isNotEmpty() && UP_NEXT_CATEGORY_ID !in hidden) {
+        sections += ContentShelfSection(
+            getString(R.string.category_next_up),
+            nextUp,
+            categoryId = UP_NEXT_CATEGORY_ID,
+        )
+    }
+    if (favourites.isNotEmpty() && FAVOURITES_CATEGORY_ID !in hidden) {
+        sections += ContentShelfSection(
+            getString(R.string.category_favourites),
+            favourites,
+            categoryId = FAVOURITES_CATEGORY_ID,
+        )
+    }
+    if (sections.isEmpty()) return emptyList()
+    return listOf(
+        ContentShelf(
+            getString(R.string.shelf_for_you),
+            sections.flatMap { it.items },
+            sections = sections,
+        )
+    )
 }
 
 internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {

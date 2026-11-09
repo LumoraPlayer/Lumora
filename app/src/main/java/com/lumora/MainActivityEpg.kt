@@ -102,9 +102,13 @@ internal fun MainActivity.focusLiveChannelRowAfterPlayer(channel: Channel, attem
  *  the provider just didn't attach guide data to every feed. Each carries its own
  *  sourceProviderId, since siblings can come from a different Xtream provider entirely. */
 internal fun MainActivity.epgCandidateChannels(channelId: String): List<Channel> {
-    val versions = liveVersions[channelId]
-    if (versions != null) return versions
-    return listOfNotNull(liveChannels.find { it.id == channelId })
+    liveVersions[channelId]?.let { return it }
+    val channel = liveChannelsById()[channelId]
+        ?: liveVersions.entries.firstNotNullOfOrNull { (_, group) ->
+            group.firstOrNull { it.id == channelId }
+        }
+        ?: return emptyList()
+    return liveVersionGroupFor(channel)
 }
 
 /** Goes through [resolveEpgPrograms] rather than calling the provider itself, so the
@@ -513,6 +517,10 @@ internal fun MainActivity.ensurePreviewPlayer(): PlayerManager {
     manager.addListener(object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) {
             binding.previewBuffering.visibility = if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
+            if (state == Player.STATE_READY) {
+                previewVersionPlayed = true
+                previewVersionGroup.getOrNull(previewVersionIndex)?.let { noteVersionHealthy(it) }
+            }
         }
         override fun onPlayerError(error: PlaybackException) {
             binding.previewBuffering.visibility = View.GONE
@@ -542,6 +550,12 @@ internal fun MainActivity.showLivePreviewPane() {
             outline.setRoundRect(0, 0, view.width, view.height, radius)
         }
     }
+    // The preview is also the way into what it is showing: clicking the video or its
+    // now/next text opens the previewed channel, or adds it in Multiview add mode. UP from
+    // the first guide row lands here before the tab bar, so the band is reachable by remote.
+    binding.livePreviewHeader.setOnClickListener { playPreviewedChannel() }
+    binding.livePreviewPane.setOnClickListener { playPreviewedChannel() }
+    liveAdapter.topRowFocusUpTargetId = R.id.livePreviewHeader
     ensurePreviewPlayer().setTextureView(binding.previewSurface)
     binding.liveContent.post { updateGuideRowWrap() }
 }
@@ -562,6 +576,8 @@ internal fun MainActivity.releaseLivePreview() {
     (binding.livePreviewGutter.parent as? View)?.visibility = View.GONE
     binding.livePreviewGutter.visibility = View.GONE
     binding.livePreviewPane.visibility = View.GONE
+    // With no preview band, UP from the top guide row is the tab bar again.
+    liveAdapter.topRowFocusUpTargetId = R.id.tabLive
     updateGuideRowWrap()
     // A hardware-overlay SurfaceView can keep compositing its last frame even
     // after the Java view tree is hidden; explicitly stop playback and hide the
@@ -861,6 +877,22 @@ internal fun MainActivity.onChannelOkPress(channel: Channel) {
     }
 }
 
+/**
+ * Clicking the live-preview card (its video or its now/next text) opens the channel it is
+ * showing. In Multiview add mode the same click adds that channel to the grid, matching what
+ * OK on a guide row does in that mode.
+ */
+internal fun MainActivity.playPreviewedChannel() {
+    val channel = previewTargetChannel
+        ?: lastFocusedLiveChannel?.takeIf { it.id.isNotBlank() && it.id == previewChannelId }
+        ?: return
+    if (isMultiviewAddMode) {
+        addChannelToMultiviewFromBrowse(channel)
+    } else {
+        playItem(channel)
+    }
+}
+
 /** Debounced so fast D-pad scrolling through the list doesn't spawn a load per row. */
 internal fun MainActivity.requestPreviewLoad(channel: Channel) {
     if (!isLivePreviewEnabled()) return
@@ -883,8 +915,11 @@ internal fun MainActivity.loadPreview(channel: Channel) {
     binding.previewChannelName.text = channel.name
     updatePreviewProgramInfo(channel)
     binding.previewBuffering.visibility = View.VISIBLE
-    previewVersionGroup = liveVersions[channel.id] ?: listOf(channel)
+    previewVersionGroup = liveVersionGroupFor(channel)
     previewVersionIndex = previewVersionGroup.indexOfFirst { !isStreamDead(it) }.takeIf { it >= 0 } ?: 0
+    previewStreamStartMs = System.currentTimeMillis()
+    previewVersionPlayed = false
+    previewTriedVersionIndices.clear()
     val startVersion = previewVersionGroup.getOrNull(previewVersionIndex) ?: channel
     ensurePreviewPlayer().playUrl(
         startVersion.url,
@@ -1195,12 +1230,17 @@ internal fun MainActivity.renderPlayerEpg() {
         }
         card.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
-                // Reading the guide is not idling: hold the bar open while the D-pad is on
-                // it. Moving off (or closing the details) restarts the ordinary countdown.
+                // The cards themselves are not a deliberate reading state - only the opened
+                // programme details are. With the details closed, landing on a card gives
+                // the ordinary 4s countdown (the bar closes while the viewer browses the
+                // rail); opening the details below cancels it and holds the bar open.
                 mainHandler.removeCallbacks(hideControlsRunnable)
                 if (playerEpgDetailsStart > 0L && playerEpgDetailsStart != program.startTimestamp) {
                     playerEpgDetailsStart = program.startTimestamp
                     renderPlayerEpgDetails()
+                }
+                if (playerEpgDetailsStart <= 0L) {
+                    mainHandler.postDelayed(hideControlsRunnable, 4000)
                 }
             } else {
                 // Posted so a move from card to card is judged after the new card has focus -
@@ -1336,10 +1376,12 @@ internal fun MainActivity.relinkPlayerEpgFocus() {
         .forEach { it.nextFocusUpId = deckUpTarget }
 }
 
-/** Whether the viewer is deliberately reading the rail - so the auto-hide must stand down. */
+/** Whether the viewer has a programme's full details open - the one EPG state where the
+ *  auto-hide must stand down. Focus on a rail card alone is still ordinary browsing: the
+ *  bar closes after the usual delay unless the details were opened. */
 internal fun MainActivity.isPlayerEpgEngaged(): Boolean =
     binding.playerEpgSection.visibility == View.VISIBLE &&
-        (binding.playerEpgDetails.visibility == View.VISIBLE || binding.playerEpgRail.hasFocus())
+        binding.playerEpgDetails.visibility == View.VISIBLE
 
 /** Opens or closes the details panel for the listing starting at [startTimestamp]. */
 internal fun MainActivity.togglePlayerEpgDetails(startTimestamp: Long) {
@@ -1347,14 +1389,11 @@ internal fun MainActivity.togglePlayerEpgDetails(startTimestamp: Long) {
     val closing = playerEpgDetailsStart == startTimestamp
     playerEpgDetailsStart = if (closing) 0L else startTimestamp
     renderPlayerEpgDetails()
-    if (closing && !binding.playerEpgRail.hasFocus()) {
-        // A touch press does not necessarily move focus onto the card, so there may be no
-        // focus event to restart the countdown after the panel closes.
-        mainHandler.removeCallbacks(hideControlsRunnable)
-        mainHandler.postDelayed(hideControlsRunnable, 4000)
-    } else {
-        mainHandler.removeCallbacks(hideControlsRunnable)
-    }
+    // Opening the details holds the bar; closing them returns the rail to ordinary browsing
+    // and restarts the countdown even when focus never left the card (D-pad OK), which
+    // would otherwise leave the bar up until some later key.
+    mainHandler.removeCallbacks(hideControlsRunnable)
+    if (closing) mainHandler.postDelayed(hideControlsRunnable, 4000)
 }
 
 /** Closes the details panel without touching focus or the auto-hide timer. */
@@ -1533,8 +1572,9 @@ internal fun MainActivity.showControls(takeFocus: Boolean = true) {
 }
 
 /** [force] is for an explicit dismissal (Back, a tap on the video). The ordinary auto-hide
- *  timer is not allowed to take the bar down while the viewer is reading the EPG rail or a
- *  programme's details - those are deliberate states, not idling. */
+ *  timer is not allowed to take the bar down while a programme's full details are open -
+ *  that is a deliberate reading state. A focused rail card without the details panel is
+ *  normal browsing and still closes on the timer. */
 internal fun MainActivity.hideControls(force: Boolean = false) {
     if (!force && isPlayerEpgEngaged()) return
     closePlayerEpgDetails()

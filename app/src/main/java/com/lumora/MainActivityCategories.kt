@@ -284,10 +284,9 @@ internal fun MainActivity.toggleFavoriteVodItem(item: Channel, favoriteId: Strin
         }
     }
     refreshHomeShelvesIfShowing()
-    // Rebuilds the Series/Films shelves so the merged Continue Watching shelf leading the
-    // Series poster - favourites are folded into it now - picks the change up without a tab
-    // switch. Only worth doing on those tabs: Home is handled above, and Live TV has no VOD
-    // shelf to redraw.
+    // Rebuilds the Series/Films shelves so the personal shelves leading the Series poster
+    // pick the change up without a tab switch. Only worth doing on those tabs: Home is
+    // handled above, and Live TV has no VOD shelf to redraw.
     // preserveUi, not a full first-paint: the plain classifyAndShow() dispatches through
     // selectTab, which clears the selection and resets the pane to its shelves - so un-starring
     // one poster from an open Favourites grid threw the user back to the top level.
@@ -310,26 +309,34 @@ internal fun MainActivity.refreshHomeShelvesIfShowing() {
     }
 }
 
-/** Series-shelf counterpart of [refreshHomeShelvesIfShowing]: the merged lead shelf
- *  (continue watching + up next + favourites) and Newest all move when playback ends, so the
+/** Series-shelf counterpart of [refreshHomeShelvesIfShowing]: the personal shelves
+ *  (Continue Watching, Next Up, Favourites) and Newest all move when playback ends, so the
  *  Series poster needs the same lightweight refresh. Rebuilds the shelf list from
  *  cachedSeriesCategoryRows - never re-runs the expensive buildCategoryRows() pass. */
 internal fun MainActivity.refreshSeriesShelvesIfShowing() {
     if (showingHome || activeTab != 1) return
     if (binding.seriesContent.visibility != View.VISIBLE) return
-    val favoriteSeries = seriesList.filter { it.id in FavoritesStore.getFavoriteSeriesIds(this) }
+    val favouriteIds = FavoritesStore.getFavoriteSeriesIds(this)
+    val cachedFavourites = seriesShelves
+        .firstOrNull { it.title == getString(R.string.shelf_for_you) }
+        ?.sections
+        ?.firstOrNull { it.title == getString(R.string.category_favourites) }
+        ?.items
+        ?: seriesShelves.firstOrNull { it.title == getString(R.string.category_favourites) }?.items
+        ?: emptyList()
+    val favoriteSeries = if (favouriteIds.isEmpty()) {
+        emptyList()
+    } else {
+        seriesList.filter { it.id in favouriteIds }.ifEmpty { cachedFavourites }
+    }
     // The Newest shelf is built from the database by buildVodContent(); `seriesList` is only
     // the bounded preview set now, so recomputing newest from it would silently shrink the
     // shelf to whatever happened to be resident. Keep the DB-built shelf and only rebuild the
     // lead, which is the part playback actually changes.
     val newestShelf = seriesShelves.firstOrNull { it.categoryId == NEWEST_CATEGORY_ID }
-    val shelves = shelvesFromCategoryRows(cachedSeriesCategoryRows, seriesList)
-        .let { s -> (if (newestShelf == null) s else listOf(newestShelf) + s) }
-        .let { s ->
-            val lead = seriesPosterLeadShelfItems(favoriteSeries)
-            if (lead.isEmpty()) s
-            else listOf(ContentShelf(getString(R.string.category_continue_watching), lead)) + s
-        }
+    val shelves = seriesPersonalShelves(favoriteSeries) +
+        shelvesFromCategoryRows(cachedSeriesCategoryRows, seriesList)
+            .let { s -> (if (newestShelf == null) s else listOf(newestShelf) + s) }
     seriesShelves = shelves
     seriesShelfAdapter.submitList(shelves)
 }

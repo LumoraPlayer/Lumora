@@ -51,7 +51,7 @@ private const val MULTIVIEW_TICK_MS = 2_000L
 /** How many version switches one pane may make before it is declared failed. Matches the
  *  fullscreen live cap: beyond this the provider is likely throttling the whole account, and
  *  rapid switching just reads as a flickering tile. */
-private const val MULTIVIEW_MAX_VERSION_SWITCHES = 2
+private const val MULTIVIEW_MAX_VERSION_SWITCHES = 3
 
 /** Stall limits: a pane that never showed a frame gets less patience than one that played
  *  and then re-buffered - a cold start on a slow panel can legitimately take a while, while
@@ -100,6 +100,9 @@ internal class MultiviewPane(
 ) {
     var versionGroup: List<Channel> = emptyList()
     var versionIndex = 0
+    /** Versions this pane has already failed over from in the current tune. Cleared by any
+     *  confirmed READY, so a later failure may revisit a version that has recovered. */
+    val triedVersionIndices = mutableSetOf<Int>()
     /** Version switches spent on the pane's current stream. Reset by any confirmed READY. */
     var switchCount = 0
     /** Terminal for this pane (all versions tried): shows the retry badge until OK/Fullscreen. */
@@ -128,9 +131,9 @@ internal class MultiviewPane(
     var released = false
 }
 
-/** Wires the grid's action bar. The entry point now lives in the player's More panel
- *  (see [openMultiviewFromPlayer]); called once from onCreate, like the other player
- *  control wiring. */
+/** Wires the grid's action bar. The entry point is the player deck's Multiview shortcut,
+ *  with the same action still listed in the More panel (see [openMultiviewFromPlayer]);
+ *  called once from onCreate, like the other player control wiring. */
 internal fun MainActivity.setupMultiviewControls() {
     binding.btnMvAdd.setOnClickListener { enterMultiviewAddMode() }
     binding.btnMvChange.setOnClickListener { promptChangeSelectedMultiviewPane() }
@@ -145,7 +148,11 @@ internal fun MainActivity.openMultiviewFromPlayer() {
         Toast.makeText(this, getString(R.string.mv_toast_no_live), Toast.LENGTH_SHORT).show()
         return
     }
+    // The channel on screen becomes the first pane, then go straight to the Live TV
+    // channel menu in add mode. Opening a one-pane grid and making the viewer find "Add
+    // screen" was an extra step for the only reason they pressed Multiview.
     openMultiview(channel)
+    enterMultiviewAddMode()
 }
 
 internal fun MainActivity.isMultiviewEnabled(): Boolean =
@@ -544,6 +551,7 @@ internal fun MainActivity.playMultiviewPane(pane: MultiviewPane, channel: Channe
     pane.channel = channel
     pane.failed = false
     pane.switchCount = 0
+    pane.triedVersionIndices.clear()
     pane.played = false
     pane.blackStreak = 0
     pane.lastLuma = null
@@ -552,7 +560,7 @@ internal fun MainActivity.playMultiviewPane(pane: MultiviewPane, channel: Channe
     pane.nextRetryAtMs = 0L
     pane.retrying = false
     pane.streamStartMs = System.currentTimeMillis()
-    val group = liveVersions[channel.id] ?: listOf(channel)
+    val group = liveVersionGroupFor(channel)
     pane.versionGroup = group
     pane.versionIndex = group.indexOfFirst { !isStreamDead(it) }.takeIf { it >= 0 } ?: 0
     pane.spinner.visibility = View.VISIBLE
@@ -619,11 +627,13 @@ internal fun MainActivity.multiviewPaneListener(pane: MultiviewPane): Player.Lis
                     pane.bufferingSinceMs = 0L
                     pane.played = true
                     pane.switchCount = 0
-                    // Back playing: the offline ladder is spent and forgotten.
+                    // Back playing: the offline ladder is spent and forgotten, and the
+                    // versions this pane failed over from are eligible again.
                     pane.retryAttempt = 0
                     pane.nextRetryAtMs = 0L
                     pane.retrying = false
-                    pane.versionGroup.getOrNull(pane.versionIndex)?.let { clearStreamDead(it) }
+                    pane.triedVersionIndices.clear()
+                    pane.versionGroup.getOrNull(pane.versionIndex)?.let { noteVersionHealthy(it) }
                 }
                 else -> {
                     pane.spinner.visibility = View.GONE
@@ -713,10 +723,19 @@ internal fun MainActivity.noteMultiviewCapabilityFailure(pane: MultiviewPane) {
 internal fun MainActivity.advanceMultiviewVersion(pane: MultiviewPane, markDead: Boolean) {
     if (pane.released || pane.failed) return
     val current = pane.versionGroup.getOrNull(pane.versionIndex) ?: pane.channel
-    if (markDead) markStreamDead(current)
+    val currentIndex = pane.versionIndex
+    // A failure drops this version out of the pane's walk immediately; the hour-long
+    // blacklist waits for a second failure (see noteVersionFailure), so a short startup
+    // hiccup no longer takes a healthy feed out of every pane and the guide preview.
+    if (markDead) noteVersionFailure(current)
+    pane.triedVersionIndices.add(currentIndex)
     val switchable = pane.switchCount < MULTIVIEW_MAX_VERSION_SWITCHES
     val next = if (switchable) {
-        pane.versionGroup.indices.firstOrNull { it != pane.versionIndex && !isStreamDead(pane.versionGroup[it]) }
+        pane.versionGroup.indices.firstOrNull {
+            it != currentIndex &&
+                !isStreamDead(pane.versionGroup[it]) &&
+                it !in pane.triedVersionIndices
+        }
     } else null
     if (next == null) {
         failMultiviewPane(pane)
@@ -781,12 +800,13 @@ internal fun MainActivity.retryMultiviewPane(pane: MultiviewPane) {
     pane.failed = false
     pane.retrying = true
     pane.switchCount = 0
+    pane.triedVersionIndices.clear()
     pane.played = false
     pane.blackStreak = 0
     pane.lastLuma = null
     pane.bufferingSinceMs = 0L
     pane.streamStartMs = System.currentTimeMillis()
-    val group = liveVersions[pane.channel.id] ?: listOf(pane.channel)
+    val group = liveVersionGroupFor(pane.channel)
     pane.versionGroup = group
     pane.versionIndex = group.indexOfFirst { !isStreamDead(it) }.takeIf { it >= 0 } ?: 0
     pane.spinner.visibility = View.VISIBLE

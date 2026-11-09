@@ -524,6 +524,7 @@
     <string name="category_anime">Anime</string>
     <string name="category_collapse_categories">Collapse categories</string>
     <string name="category_favourites">Favourites</string>
+    <string name="shelf_for_you">For You</string>
     <string name="category_group_into_categories">Group into categories</string>
     <string name="category_show_all_categories">Show all categories (classic list)</string>
     <string name="category_next_up">Next Up</string>

@@ -9,6 +9,7 @@
     android:orientation="vertical">
 
     <LinearLayout
+        android:id="@+id/shelfHeader"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="8dp"
@@ -81,4 +82,26 @@
         android:clipChildren="false"
             android:clipToPadding="false"
         android:orientation="horizontal" />
+
+    <!-- Combined personal shelf (Continue Watching / Next Up / Favourites): one horizontal
+         line of labelled groups, each group's title above its posters. -->
+    <HorizontalScrollView
+        android:id="@+id/shelfSectionsScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:fillViewport="false"
+        android:overScrollMode="never"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/shelfSectionsRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
 </LinearLayout>

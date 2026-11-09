@@ -92,7 +92,7 @@
     <!-- Live TV: category sidebar and the EPG guide grid. Same story as the settings scale -
          these were sized for a phone in the hand; values-television/ steps them up. -->
     <dimen name="category_row_text">10sp</dimen>
-    <dimen name="category_row_padding_vertical">8dp</dimen>
+    <dimen name="category_row_padding_vertical">4dp</dimen>
     <!-- Vector star/pin targets in the category rail and the guide's channel column. -->
     <dimen name="category_star_size">22dp</dimen>
     <dimen name="guide_star_size">22dp</dimen>
@@ -114,7 +114,7 @@
     <dimen name="player_epg_title_text_min">9sp</dimen>
     <!-- Multiview shell and action bar. The bar is a real strip under the grid, not an
          overlay, so the row can use a full 48dp target without covering pane labels. -->
-    <dimen name="mv_grid_padding">8dp</dimen>
+    <dimen name="mv_grid_padding">2dp</dimen>
     <dimen name="mv_bar_padding_horizontal">16dp</dimen>
     <dimen name="mv_bar_padding_vertical">10dp</dimen>
     <dimen name="mv_action_min_height">48dp</dimen>
@@ -129,7 +129,7 @@
     <dimen name="guide_channel_logo_size">26dp</dimen>
     <!-- Floor only - the row is wrap_content and normally taller than this on its own. -->
     <dimen name="guide_row_min_height">34dp</dimen>
-    <dimen name="category_row_padding_horizontal">10dp</dimen>
+    <dimen name="category_row_padding_horizontal">4.5dp</dimen>
     <!-- How far a long category name may wrap before it ellipsises. Portrait phones get a
          third line (values-port) - the rail is narrowest exactly where names are longest. -->
     <integer name="category_row_max_lines">2</integer>

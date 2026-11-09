@@ -308,19 +308,45 @@ private fun emptyVodContent() = MainActivity.FilmsSeriesContent(
     filmCategoryRows = emptyList()
 )
 
-/** Recomputes just the Continue Watching lead shelf on a cache hit - playback state moves
- *  without the stored catalogue or the shaping prefs changing. */
+/** Recomputes the Series/Films personal shelves (Continue Watching, Next Up, Favourites) on
+ *  a cache hit - playback state moves without the stored catalogue or shaping prefs
+ *  changing. */
 private fun MainActivity.refreshVodLead(content: MainActivity.FilmsSeriesContent): MainActivity.FilmsSeriesContent {
     val continueTitle = getString(R.string.category_continue_watching)
-    fun withLead(shelves: List<ContentShelf>, lead: List<Channel>, categoryId: String?): List<ContentShelf> {
+    val favouritesTitle = getString(R.string.category_favourites)
+    val personalTitle = getString(R.string.shelf_for_you)
+    fun withFilmLead(shelves: List<ContentShelf>, lead: List<Channel>): List<ContentShelf> {
         val rest = shelves.filterNot { it.title == continueTitle }
         return if (lead.isEmpty()) rest
-        else listOf(ContentShelf(continueTitle, lead, categoryId = categoryId)) + rest
+        else listOf(ContentShelf(continueTitle, lead, categoryId = CONTINUE_WATCHING_CATEGORY_ID)) + rest
     }
-    val favoriteSeries = content.seriesList.filter { it.id in FavoritesStore.getFavoriteSeriesIds(this) }
+    val favouriteIds = FavoritesStore.getFavoriteSeriesIds(this)
+    // A bounded cached seriesList can miss a favourite outside its preview window. The
+    // previous personal row kept those tiles, so carry them through - either from the
+    // combined row's Favourites section or from the old separate shelf.
+    val cachedPersonal = content.seriesShelves.firstOrNull { it.title == personalTitle }
+    val cachedFavourites = cachedPersonal?.sections
+        ?.firstOrNull { it.title == favouritesTitle }?.items
+        ?: content.seriesShelves.firstOrNull { it.title == favouritesTitle }?.items
+        ?: emptyList()
+    val favoriteSeries = if (favouriteIds.isEmpty()) {
+        emptyList()
+    } else {
+        content.seriesList.filter { it.id in favouriteIds }.ifEmpty { cachedFavourites }
+    }
+    // Drop every shape the personal line has had on disk: the combined row, and the old
+    // separate Continue Watching / Next Up / Favourites shelves.
+    val personalTitles = setOf(
+        personalTitle,
+        continueTitle,
+        getString(R.string.category_next_up),
+        favouritesTitle,
+    )
+    val personal = seriesPersonalShelves(favoriteSeries)
+    val seriesRest = content.seriesShelves.filterNot { it.title in personalTitles }
     return content.copy(
-        filmShelves = withLead(content.filmShelves, movieContinueItems(), CONTINUE_WATCHING_CATEGORY_ID),
-        seriesShelves = withLead(content.seriesShelves, seriesPosterLeadShelfItems(favoriteSeries), null)
+        filmShelves = withFilmLead(content.filmShelves, movieContinueItems()),
+        seriesShelves = personal + seriesRest
     )
 }
 
@@ -376,17 +402,23 @@ private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType, rowsOnly
     } else {
         emptyList()
     }
-    val lead = if (tab == 1) seriesPosterLeadShelfItems(favoriteSeries) else movieContinueItems()
     val shelves = buildList {
-        if (lead.isNotEmpty()) {
-            add(
-                ContentShelf(
-                    getString(R.string.category_continue_watching), lead,
-                    // Films' lead shelf is Continue Watching alone, so "See all" can serve
-                    // the full in-progress list; the Series lead merges several sources.
-                    categoryId = if (tab == 2) CONTINUE_WATCHING_CATEGORY_ID else null
+        if (tab == 1) {
+            // Separate personal rows again: Continue Watching must not fold in next-up or
+            // starred shows, or it stops matching the sidebar filter of the same name.
+            addAll(seriesPersonalShelves(favoriteSeries))
+        } else {
+            val lead = movieContinueItems()
+            if (lead.isNotEmpty()) {
+                add(
+                    ContentShelf(
+                        getString(R.string.category_continue_watching), lead,
+                        // Films' lead shelf is Continue Watching alone, so "See all" can
+                        // serve the full in-progress list.
+                        categoryId = CONTINUE_WATCHING_CATEGORY_ID
+                    )
                 )
-            )
+            }
         }
         if (newest.isNotEmpty()) add(ContentShelf(getString(R.string.category_newest), newest, categoryId = NEWEST_CATEGORY_ID))
         addAll(catalogShelves)

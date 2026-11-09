@@ -119,8 +119,8 @@
     <dimen name="category_row_text">14sp</dimen>
     <!-- Tighter than the phone's 12dp/14dp: the category pill should hug its (now bold,
          larger) label rather than sit in a box sized for 10sp text. -->
-    <dimen name="category_row_padding_vertical">6dp</dimen>
-    <dimen name="category_row_padding_horizontal">9dp</dimen>
+    <dimen name="category_row_padding_vertical">3dp</dimen>
+    <dimen name="category_row_padding_horizontal">4.25dp</dimen>
     <dimen name="category_star_size">26dp</dimen>
     <dimen name="guide_star_size">26dp</dimen>
     <dimen name="guide_channel_name_text">13sp</dimen>
@@ -139,7 +139,7 @@
     <dimen name="player_epg_time_text_min">9sp</dimen>
     <dimen name="player_epg_title_text">13sp</dimen>
     <dimen name="player_epg_title_text_min">10sp</dimen>
-    <dimen name="mv_grid_padding">12dp</dimen>
+    <dimen name="mv_grid_padding">2dp</dimen>
     <dimen name="mv_bar_padding_horizontal">20dp</dimen>
     <dimen name="mv_bar_padding_vertical">12dp</dimen>
     <dimen name="mv_action_min_height">48dp</dimen>
@@ -288,7 +288,7 @@
          settings/refresh pair and the clock on one line at 960dp, and every dp here is a dp
          the buttons lose. -->
     <dimen name="toolbar_padding_horizontal">24dp</dimen>
-    <dimen name="toolbar_padding_top">4dp</dimen>
+    <dimen name="toolbar_padding_top">2dp</dimen>
     <!-- The brand mark: 36dp rather than 40dp, for the same reason as the row's horizontal
          padding - it is a mark, not a label, and it reads the same two dp smaller. -->
     <dimen name="toolbar_brand_size">36dp</dimen>

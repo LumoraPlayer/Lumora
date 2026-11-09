@@ -135,8 +135,10 @@ class PlayerTrackController {
             for (i in 0 until group.length) {
                 val format = group.getTrackFormat(i)
                 // Unsupported renditions (no decoder) can't play - listing them only
-                // offers a choice that immediately errors.
-                if (!group.isSupported) continue
+                // offers a choice that immediately errors. Check the track itself, not the
+                // group: a group with one playable rendition still lists its unsupported
+                // siblings, and picking one is the "alternate quality does nothing" case.
+                if (!group.isTrackSupported(i)) continue
                 result.add(
                     PlayerTrack(
                         id = trackKey(group.mediaTrackGroup.id, i),

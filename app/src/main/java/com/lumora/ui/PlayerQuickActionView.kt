@@ -3,6 +3,7 @@ package com.lumora.ui
 
 import android.content.Context
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -10,6 +11,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.core.widget.TextViewCompat
 import com.lumora.R
 
 /**
@@ -121,6 +123,24 @@ class PlayerQuickActionView @JvmOverloads constructor(
             valueView.gravity = Gravity.START
         }
         requestLayout()
+    }
+
+    /**
+     * A shortcut with no value line (Multiview): icon above a short, centred label. The
+     * stateful tiles keep the larger type because their value line needs the room; this one
+     * only has to name the destination.
+     */
+    fun setCompactLabelOnly() {
+        setCompact(true)
+        TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+            titleView,
+            11,
+            13,
+            1,
+            TypedValue.COMPLEX_UNIT_SP,
+        )
+        titleView.gravity = Gravity.CENTER
+        valueView.gravity = Gravity.CENTER
     }
 
     private fun updateContentDescription() {

@@ -49,17 +49,22 @@ import java.lang.ref.WeakReference
 //
 // Extracted from MainActivity.kt; see that file's header.
 
-/** Backoff schedule for retrying a single-source live channel's exact URL after a hard
- *  player error (see onPlayerError) - a provider-side throttle (HTTP 509 etc.) often clears
- *  within seconds, and there is no other version to fail over to for that case. */
+/** Quiet same-URL retries tried before a live version group is walked. A provider throttle
+ *  (HTTP 509 etc.) or one dropped connection is often gone a couple of seconds later;
+ *  switching quality on that first error made the app look like it had given up on a
+ *  stream that was only hiccuping. Non-transport errors (404/403, a parser refusal) skip
+ *  these and fail over immediately - they would fail the same way again. */
+private val LIVE_TRANSIENT_RETRY_DELAYS_MS = longArrayOf(2_500L, 6_000L)
+
+/** Backoff schedule for retrying a single-source live channel's exact URL after the
+ *  transient retries and version walk are spent - a provider-side throttle often clears
+ *  within seconds, and there is no other version left for that case. */
 private val LIVE_RETRY_DELAYS_MS = longArrayOf(5_000L, 15_000L, 30_000L)
 
-/** Backoff schedule for a film/episode's own same-URL retry. Shorter and fewer than live's:
- *  a VOD file is being watched from a position, so every second of retrying is a second of
- *  stopped playback the user is sitting through, whereas a live retry only costs airtime
- *  that was going to pass anyway. Two attempts covers the overwhelmingly common case (a
- *  single dropped connection or a provider hiccup mid-file) without a long dead screen. */
-private val VOD_RETRY_DELAYS_MS = longArrayOf(2_000L, 6_000L)
+/** Backoff schedule for a film/episode's own same-URL retry. Three attempts now: the first
+ *  two cover the common dropped connection/provider hiccup, and the third gives a slow CDN
+ *  time to come back instead of abandoning a film the viewer was halfway through. */
+private val VOD_RETRY_DELAYS_MS = longArrayOf(2_000L, 5_000L, 10_000L)
 
 /** Player error codes worth retrying the same URL for: the transport failed, not the media.
  *  A missing file, a permission refusal or an unplayable container fails identically on a
@@ -72,8 +77,10 @@ private val RETRYABLE_PLAYER_ERROR_CODES = setOf(
 )
 
 /** Auto-switches tryNextQualityVersion will make in a row before giving up on hopping and
- *  falling through to the quiet same-URL backoff retry - see its own comment. */
-private const val MAX_LIVE_VERSION_SWITCHES = 2
+ *  falling through to the quiet same-URL backoff retry - see its own comment. Three tries
+ *  past the copy that failed covers the usual 4K/FHD/HD/SD ladder; a provider-wide throttle
+ *  is still bounded, and each version now gets its own transient retries first. */
+private const val MAX_LIVE_VERSION_SWITCHES = 3
 
 // ── Player ─────────────────────────────────────
 
@@ -376,11 +383,19 @@ internal fun MainActivity.setupPlayerControls() {
                     currentStreamPlayed = true
                     liveRetryAttempt = 0
                     liveVersionSwitchAttempt = 0
+                    liveTransientRetryAttempt = 0
+                    liveTransientRetryRunnable?.let { mainHandler.removeCallbacks(it) }
+                    liveTransientRetryRunnable = null
                     // A stream that reached READY has spent nothing: a later failure in the
                     // same title gets the full retry ladder again rather than inheriting a
                     // count from a hiccup ten minutes ago.
                     vodRetryAttempt = 0
-                    currentVersionGroup.getOrNull(currentVersionIndex)?.let { clearStreamDead(it) }
+                    // The stream proved itself: clear its failure count/dead mark and forget
+                    // this tune's failed-over versions, so a later error may revisit them.
+                    currentVersionGroup.getOrNull(currentVersionIndex)?.let { noteVersionHealthy(it) }
+                    nowPlayingChannel?.let { noteVersionHealthy(it) }
+                    currentSeriesVersionContext?.first?.let { noteVersionHealthy(it) }
+                    failedVersionKeys.clear()
                     maybeShowResumePrompt()
                 }
             if (state == Player.STATE_ENDED) {
@@ -471,6 +486,9 @@ internal fun MainActivity.setupPlayerControls() {
             binding.bufferingSpinner.visibility = View.GONE
             resetStallTracking()
             blackFrameStreak = 0
+            // A transport-shaped live error gets the same copy back before any quality
+            // switch; only a conclusive error walks the version group straight away.
+            if (retryLiveStreamTransiently(error)) return
             if (!tryNextQualityVersion()) {
                 val liveChannel = nowPlayingChannel?.takeIf { it.mediaType == MediaType.LIVE && !it.isOwnLibrary }
                 val vodChannel = nowPlayingChannel?.takeIf { it.mediaType != MediaType.LIVE && !it.isOwnLibrary }
@@ -689,15 +707,23 @@ internal fun MainActivity.showPlayerFor(
     /** Set only by the scraper path - see PlayerManager.playUrl's parameter of the same name. */
     maintainTokenQuery: String? = null,
     /** Container MIME when the source knows it - see PlayerManager.playUrl. */
-    mimeType: String? = null
+    mimeType: String? = null,
+    /** True for the version-switch callers (manual picker, failover, quality watchdog).
+     *  They replace one copy of the title that is already playing, so the failed-version
+     *  walk must survive the hand-off or the next failure can bounce straight back to the
+     *  copy it just left behind. */
+    preserveFailoverState: Boolean = false
 ) {
     // Playing something from the browse screen supersedes a pending multiview add: the
     // panes that were waiting behind it are stopped and nothing is coming back for them.
     if (isMultiviewAddMode) abandonMultiviewAddMode()
     // The copy this call is replacing - captured before nowPlayingChannel is overwritten
-    // below. The only callers that pass resumeFromMs are the version switches (manual
-    // picker, failover, quality watchdog), which replace the playing copy of one title.
+    // below. Version-switch callers set preserveFailoverState and pass resumeFromMs.
     val replacedChannel = nowPlayingChannel
+    // A fresh play starts a fresh failover walk. Version switches keep the set so an
+    // auto-failover cannot bounce straight back to the copy it just left - even when the
+    // failure happened at position 0 and resumeFromMs is therefore null.
+    if (!preserveFailoverState) failedVersionKeys.clear()
     // From here until hidePlayer() the player owns the screen: no scraper-owned UI may come up
     // over it. This is what stops a site resolve or search still in flight - the queue keeps
     // trying sources until the stream that did start proves itself, and a torrent's trial
@@ -846,8 +872,7 @@ internal fun MainActivity.showPlayerFor(
     // Live channels may have multiple quality versions; start at the best
     // (versions are pre-sorted highest quality first) and keep the group
     // around so onPlayerError can fall back to the next one.
-    val versions = liveVersions[channel.id]
-    currentVersionGroup = versions ?: listOf(channel)
+    currentVersionGroup = liveVersionGroupFor(channel)
     // An explicitly requested version wins over the quality/dead-stream auto-pick: it's
     // the one the user was already watching (launch resume), so re-deriving a "best"
     // choice here would start them on a different stream and, when that one doesn't
@@ -863,6 +888,10 @@ internal fun MainActivity.showPlayerFor(
     if (channel.mediaType == MediaType.LIVE) {
         binding.playerChannelName.text = currentVersionGroup.getOrNull(currentVersionIndex)?.name ?: channel.name
     }
+    // The deck's Versions/Multiview shortcuts depend on this channel and group, so size and
+    // relink it now rather than leaving the buttons from the previous title behind.
+    applyPlayerControlLayout()
+    updatePlayerOptionLabels()
 
     resetStallTracking()
     beginStreamAttempt()
@@ -1168,6 +1197,82 @@ internal fun MainActivity.providerNameFor(channel: Channel): String? = when {
 
 internal fun MainActivity.streamKey(channel: Channel) = channel.id.ifBlank { channel.url }
 
+/** The merged quality/source group a live channel belongs to.
+ *
+ *  [MainActivity.liveVersions] is keyed by the group representative, and the channel being
+ *  opened usually is that representative - but a saved Continue Watching id, a stale
+ *  catalogue row or a re-grouped playlist can hand over one of its siblings instead. Looking
+ *  the group up by membership as well keeps "Versions" and its failover available in that
+ *  case, the same fix film groups already have (versionGroupContaining). */
+internal fun liveVersionGroupFor(
+    liveVersions: Map<String, List<Channel>>,
+    channel: Channel,
+): List<Channel> {
+    if (channel.mediaType != MediaType.LIVE) return listOf(channel)
+    if (channel.id.isBlank()) return listOf(channel)
+    liveVersions[channel.id]?.let { return it }
+    return liveVersions.entries
+        .firstOrNull { (_, group) -> group.any { it.id == channel.id } }
+        ?.value
+        ?: listOf(channel)
+}
+
+internal fun MainActivity.liveVersionGroupFor(channel: Channel): List<Channel> {
+    if (channel.mediaType != MediaType.LIVE) return listOf(channel)
+    liveVersions[channel.id]?.let { return it }
+    // A channel that is in the browse list but not a versions key is a group of one. Answer
+    // without walking every group - the guide preview loads one of these per focused row.
+    if (channel.id.isNotBlank() && liveChannelsById()[channel.id] != null) return listOf(channel)
+    return liveVersionGroupFor(liveVersions, channel)
+}
+
+/** The failure count for a stream, resetting when the previous failure is older than the
+ *  window. Pure so the two-strike rule is testable without a running Activity. */
+internal fun nextStreamFailureCount(
+    previousCount: Int,
+    previousAtMs: Long,
+    nowMs: Long,
+    windowMs: Long = STREAM_FAILURE_WINDOW_MS,
+): Int = if (previousCount > 0 && nowMs - previousAtMs in 0..windowMs) {
+    previousCount + 1
+} else {
+    1
+}
+
+/** True once a stream has failed often enough, close enough together, to be taken down for
+ *  [DEAD_STREAM_COOLDOWN_MS]. One failure is only a bad tune, not a dead version. */
+internal fun shouldBlacklistStream(failures: Int): Boolean =
+    failures >= STREAM_FAILURES_BEFORE_COOLDOWN
+
+/** Records one failure of [channel]. The version drops out of this tune's failover walk
+ *  immediately, but is only blacklisted for the full cooldown on the second failure inside
+ *  [STREAM_FAILURE_WINDOW_MS] - the old first-error dead mark made a brief provider hiccup
+ *  hide a good version for an hour. */
+internal fun MainActivity.noteVersionFailure(channel: Channel) {
+    val key = streamKey(channel)
+    val now = System.currentTimeMillis()
+    val previous = streamFailureCounts[key]
+    val failures = nextStreamFailureCount(previous?.first ?: 0, previous?.second ?: 0L, now)
+    streamFailureCounts[key] = failures to now
+    failedVersionKeys.add(key)
+    if (shouldBlacklistStream(failures)) {
+        com.lumora.diagnostics.SessionLog.event(
+            "failover",
+            "blacklisting ${channel.name} after $failures failures"
+        )
+        markStreamDead(channel)
+    }
+}
+
+/** A stream reached READY: forget its failures and lift any dead mark left by a previous
+ *  attempt. Called for fullscreen, Multiview and the preview alike. */
+internal fun MainActivity.noteVersionHealthy(channel: Channel) {
+    val key = streamKey(channel)
+    streamFailureCounts.remove(key)
+    failedVersionKeys.remove(key)
+    clearStreamDead(channel)
+}
+
 internal fun MainActivity.markStreamDead(channel: Channel) {
     deadStreamUntil[streamKey(channel)] = System.currentTimeMillis() + DEAD_STREAM_COOLDOWN_MS
     saveDeadStreams()
@@ -1252,13 +1357,16 @@ internal fun MainActivity.retryJellyfinPlayback() {
 
 internal fun MainActivity.tryNextQualityVersion(message: String? = null): Boolean {
     if (nowPlayingChannel?.mediaType != MediaType.LIVE) return false
+    // One bad tune is not a dead version: record the failure first (a second one close
+    // behind blacklists it) but leave it as a candidate for this walk, then skip whatever
+    // this tune has already failed over from.
+    currentVersionGroup.getOrNull(currentVersionIndex)?.let { noteVersionFailure(it) }
     // Capped separately from the dead-stream scan below: a provider-wide throttle (the same
     // account/IP getting 509'd) fails every version in the group in turn, each one briefly
     // opening before getting cut - scanning the whole group on every failure then reads as
     // the channel rapidly flipping instead of the quiet same-URL backoff retry it should
     // fall through to. Reset on a confirmed STATE_READY or a fresh showPlayerFor.
     if (liveVersionSwitchAttempt >= MAX_LIVE_VERSION_SWITCHES) return false
-    currentVersionGroup.getOrNull(currentVersionIndex)?.let { markStreamDead(it) }
     // Scans the whole group, not just forward from the current index: marching only
     // forward meant a channel that had already failed through to its last version could
     // never come back to an earlier one even once its hour-long dead-mark (see
@@ -1266,7 +1374,10 @@ internal fun MainActivity.tryNextQualityVersion(message: String? = null): Boolea
     // returning false forever after that point instead of ever re-trying it.
     val nextIndex = currentVersionGroup.indices
         .filterNot { it == currentVersionIndex }
-        .firstOrNull { !isStreamDead(currentVersionGroup[it]) }
+        .firstOrNull {
+            val candidate = currentVersionGroup[it]
+            !isStreamDead(candidate) && streamKey(candidate) !in failedVersionKeys
+        }
         ?: return false
     liveVersionSwitchAttempt++
     switchToVersionIndex(nextIndex, message ?: getString(R.string.play_switching_alt_quality))
@@ -1279,18 +1390,23 @@ internal fun MainActivity.tryNextQualityVersion(message: String? = null): Boolea
  *
  * The Versions picker has always offered these by hand (see showLiveVersionPicker); this is
  * the same switch made without the viewer having to notice the stream died. The failed
- * channel is marked dead first, which is also what bounds the walk: each broadcast is tried
- * once, and a game whose every source is broken ends on the error screen having flicked
- * through them rather than bouncing between the same two. The dead marks persist across
- * launches (see saveDeadStreams), so a broken PPV slot is not recommended again either.
+ * copy has already dropped out of this tune's walk (tryNextQualityVersion recorded it),
+ * which is also what bounds the walk: each broadcast is tried once, and a game whose every
+ * source is broken ends on the error screen having flicked through them rather than
+ * bouncing between the same two. Repeated failures blacklist a copy for the cooldown (see
+ * noteVersionFailure), so a dead PPV slot is not recommended again either.
  */
 internal fun MainActivity.tryNextGameBroadcast(): Boolean {
     val playing = nowPlayingChannel ?: return false
     if (playing.mediaType != MediaType.LIVE) return false
     val others = liveGameOtherChannels
     if (others.isEmpty()) return false
-    markStreamDead(playing)
-    val target = others.firstOrNull { it.id != playing.id && !isStreamDead(it) } ?: return false
+    // tryNextQualityVersion already recorded this error against the version that failed;
+    // noting the representative channel here as well would count one error twice and
+    // blacklist the current copy on its first failure.
+    val target = others.firstOrNull {
+        it.id != playing.id && !isStreamDead(it) && streamKey(it) !in failedVersionKeys
+    } ?: return false
     switchToGameBroadcast(target)
     return true
 }
@@ -1347,6 +1463,49 @@ internal fun MainActivity.retryCurrentVodStream(channel: Channel, error: Playbac
     return true
 }
 
+/**
+ * Retries the live stream already playing, quietly, before the version walk starts.
+ *
+ * A hard player error used to send a live channel straight to its next quality variant.
+ * For a 509 throttle, a connection reset or one read timeout that is the wrong move: the
+ * same copy is usually back a couple of seconds later, while the next variant is just as
+ * likely to be throttled. Only transport-shaped errors are retried here - a 404/403 or an
+ * unreadable container would fail identically and still falls through to failover at once.
+ *
+ * [LIVE_TRANSIENT_RETRY_DELAYS_MS] gives each freshly-tuned version two chances; after
+ * them the normal version walk (and then the longer single-source backoff) takes over.
+ */
+private fun MainActivity.retryLiveStreamTransiently(error: PlaybackException): Boolean {
+    val channel = nowPlayingChannel ?: return false
+    if (channel.mediaType != MediaType.LIVE || channel.isOwnLibrary) return false
+    if (liveTransientRetryAttempt >= LIVE_TRANSIENT_RETRY_DELAYS_MS.size) return false
+    if (!isRetryablePlaybackError(error)) return false
+    val delayMs = LIVE_TRANSIENT_RETRY_DELAYS_MS[liveTransientRetryAttempt]
+    liveTransientRetryAttempt++
+    liveTransientRetryRunnable?.let { mainHandler.removeCallbacks(it) }
+    val attemptStartedAt = currentStreamStartMs
+    val runnable = Runnable {
+        liveTransientRetryRunnable = null
+        if (!isPlayerVisible || nowPlayingChannel?.id != channel.id ||
+            currentStreamStartMs != attemptStartedAt
+        ) return@Runnable
+        resetStallTracking()
+        startBlackFrameWatch()
+        binding.bufferingSpinner.visibility = View.VISIBLE
+        com.lumora.diagnostics.SessionLog.event(
+            "retry",
+            "live transient retry $liveTransientRetryAttempt for ${channel.name}"
+        )
+        if (!playerManager.replayLast(0L)) {
+            showPlaybackFailed(getString(R.string.play_stream_error_reason, error.errorCodeName))
+        }
+    }
+    liveTransientRetryRunnable = runnable
+    binding.bufferingSpinner.visibility = View.VISIBLE
+    mainHandler.postDelayed(runnable, delayMs)
+    return true
+}
+
 /** True when the same URL is worth asking for again: the transport failed (connection reset,
  *  timeout, a 5xx/429/509 from the provider), rather than the media being wrong or absent. A
  *  404, a permission refusal or an unreadable container fails the same way every time. */
@@ -1392,8 +1551,9 @@ internal fun isProviderLevelPlaybackError(error: PlaybackException): Boolean =
  * switch is asynchronous and can still come back empty, in which case the caller's error path
  * has already been skipped; [showPlaybackFailed] is called from there instead.
  *
- * The copy being left behind is marked dead first, so the scan can't hand it straight back and
- * a group of broken sources is walked once rather than cycled.
+ * The copy being left behind drops out of this tune's walk first, so the scan can't hand it
+ * straight back and a group of broken sources is walked once rather than cycled. It is only
+ * blacklisted for the hour-long cooldown when the failure repeats (see noteVersionFailure).
  */
 internal fun MainActivity.tryNextVodVersion(): Boolean {
     val playing = nowPlayingChannel ?: return false
@@ -1402,8 +1562,10 @@ internal fun MainActivity.tryNextVodVersion(): Boolean {
     val seriesContext = currentSeriesVersionContext
     if (seriesContext != null) {
         val (series, group) = seriesContext
-        markStreamDead(series)
-        val target = group.firstOrNull { it.id != series.id && !isStreamDead(it) } ?: return false
+        noteVersionFailure(series)
+        val target = group.firstOrNull {
+            it.id != series.id && !isStreamDead(it) && streamKey(it) !in failedVersionKeys
+        } ?: return false
         Toast.makeText(this, getString(R.string.play_switching_source), Toast.LENGTH_SHORT).show()
         binding.bufferingSpinner.visibility = View.VISIBLE
         scope.launch {
@@ -1415,11 +1577,13 @@ internal fun MainActivity.tryNextVodVersion(): Boolean {
         return true
     }
     val group = versionGroupContaining(filmVersions, playing.id) ?: return false
-    markStreamDead(playing)
-    val next = group.firstOrNull { it.id != playing.id && !isStreamDead(it) } ?: return false
+    noteVersionFailure(playing)
+    val next = group.firstOrNull {
+        it.id != playing.id && !isStreamDead(it) && streamKey(it) !in failedVersionKeys
+    } ?: return false
     com.lumora.diagnostics.SessionLog.event("failover", "next source for ${playing.name}")
     Toast.makeText(this, getString(R.string.play_switching_source), Toast.LENGTH_SHORT).show()
-    showPlayerFor(next, resumeFromMs = resumeMs)
+    showPlayerFor(next, resumeFromMs = resumeMs, preserveFailoverState = true)
     return true
 }
 
@@ -1441,20 +1605,78 @@ internal fun MainActivity.showPlaybackFailed(reason: String) {
 }
 
 /** Swaps playback to an arbitrary version within the current channel's merged quality/source
- *  group - used both for manual picks (showLiveVersionPicker) and auto-failover (above). */
-internal fun MainActivity.switchToVersionIndex(index: Int, message: String? = null) {
+ *  group - used both for manual picks (showLiveVersionPicker) and auto-failover (above).
+ *
+ *  [manual] marks a version the viewer picked themselves. That is a fresh decision, not a
+ *  failover: the version's previous failure count and dead mark are cleared, and the
+ *  automatic switch budget is handed back so a later error can still walk the group.
+ *
+ *  The failed version's same-URL retry ladder restarts here too. It used to carry over from
+ *  the copy being left behind, so an alternate quality that hit one transient error went
+ *  straight to "no other versions" instead of getting the retry every fresh tune gets. */
+internal fun MainActivity.switchToVersionIndex(index: Int, message: String? = null, manual: Boolean = false) {
     if (index !in currentVersionGroup.indices) return
     currentVersionIndex = index
     val next = currentVersionGroup[index]
     com.lumora.diagnostics.SessionLog.event("failover", "switching to ${next.name}")
     resetStallTracking()
     beginStreamAttempt()
+    // The Stalker create_link below is asynchronous. beginStreamAttempt() stamps the attempt,
+    // so a resolve that lands after another switch (or after Back) can refuse to take over.
+    val attemptStartedAt = currentStreamStartMs
+    liveRetryAttempt = 0
+    if (manual) {
+        liveVersionSwitchAttempt = 0
+        streamFailureCounts.remove(streamKey(next))
+        failedVersionKeys.remove(streamKey(next))
+        clearStreamDead(next)
+    }
     startBlackFrameWatch()
     binding.playerAspectContainer.videoAspectRatio = 0f
     binding.playerChannelName.text = next.name
     Toast.makeText(this, message ?: getString(R.string.play_switching_to, extractLeadingTag(next.name) ?: next.name), Toast.LENGTH_SHORT).show()
     binding.bufferingSpinner.visibility = View.VISIBLE
     reportUnsupportedDrmScheme(next)
+    updatePlayerOptionLabels()
+    // A live version can arrive as a base64 create_link command rather than a URL (some
+    // Stalker portals do this for every quality variant). Resolve it the same way the
+    // initial play does instead of handing the player a blank URL.
+    if (next.url.isBlank() && !next.stalkerCmd.isNullOrBlank()) {
+        val channelId = nowPlayingChannel?.id
+        scope.launch {
+            val resolved = resolveStalkerPlayUrl(next)
+            if (!isPlayerVisible || nowPlayingChannel?.id != channelId ||
+                currentVersionIndex != index || currentStreamStartMs != attemptStartedAt
+            ) return@launch
+            if (resolved.isNullOrBlank()) {
+                binding.bufferingSpinner.visibility = View.GONE
+                Toast.makeText(
+                    this@switchToVersionIndex,
+                    getString(R.string.play_couldnt_open_title),
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@launch
+            }
+            // STREAM_USER_AGENT, not the channel's MAC: the resolved live.php URL is plain
+            // HTTP and wants a normal player UA (see showPlayerFor's Stalker branch).
+            playerManager.playUrl(
+                resolved,
+                STREAM_USER_AGENT,
+                preferAudioLanguage = next.mediaType != MediaType.LIVE,
+                mimeType = com.lumora.player.ClearKeyDrm.mimeTypeForManifestHint(next.manifestType),
+                drm = com.lumora.player.ClearKeyDrm.fromChannel(next),
+                manifestHeaders = next.manifestHeaders,
+                onDrmUnsupported = {
+                    Toast.makeText(
+                        this@switchToVersionIndex,
+                        getString(R.string.play_drm_unsupported),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+        }
+        return
+    }
     playerManager.playUrl(
         next.url,
         next.streamUserAgent,
@@ -1637,7 +1859,7 @@ private fun MainActivity.showLiveVersionPicker(playing: Channel, returnFocus: Vi
         )
         .setSingleChoiceItems(labels, currentVersionIndex) { dialog, which ->
             if (which < currentVersionGroup.size) {
-                switchToVersionIndex(which)
+                switchToVersionIndex(which, manual = true)
             } else {
                 switchToGameBroadcast(others[which - currentVersionGroup.size])
             }
@@ -1800,7 +2022,11 @@ internal fun MainActivity.showFilmVersionPicker(playing: Channel, returnFocus: V
             when {
                 which < sourceStart -> if (which != currentVersionIndex) {
                     suppressVodQualityWatchForCurrentTitle()
-                    showPlayerFor(versions[which], resumeFromMs = resumeMs)
+                    showPlayerFor(
+                        versions[which],
+                        resumeFromMs = resumeMs,
+                        preserveFailoverState = true,
+                    )
                 }
                 which < sourceEnd -> {
                     val pick = sources[which - sourceStart]
@@ -2044,10 +2270,12 @@ internal suspend fun MainActivity.switchToSeriesVersion(
         }
     } ?: return false
     val newQueue = seasons.firstOrNull { (_, eps) -> eps.any { it.id == match.id } }?.second ?: listOf(match)
-    showPlayerFor(match, resumeFromMs = resumeMs)
+    showPlayerFor(match, resumeFromMs = resumeMs, preserveFailoverState = true)
     currentEpisodeQueue = newQueue
     currentEpisodeQueueIndex = newQueue.indexOfFirst { it.id == match.id }
     currentSeriesVersionContext = target to group
+    applyPlayerControlLayout()
+    updatePlayerOptionLabels()
     return true
 }
 
@@ -2201,7 +2429,7 @@ internal fun MainActivity.attemptVodQualitySwitch(preferHigherQuality: Boolean, 
             }
         }
     } else {
-        showPlayerFor(target, resumeFromMs = resumeMs)
+        showPlayerFor(target, resumeFromMs = resumeMs, preserveFailoverState = true)
     }
     return true
 }
@@ -2264,8 +2492,8 @@ internal fun MainActivity.attemptBufferFailover() {
 /** Whether the current stream is still too young to judge. Every automatic failover is a
  *  verdict on a stream that's been given a fair chance to settle; without this the app
  *  cycles through the whole version group in the first few seconds of a tune, each switch
- *  restarting the clock on the next one. Hard playback errors bypass this - those are
- *  conclusive on their own. */
+ *  restarting the clock on the next one. Hard playback errors still switch immediately,
+ *  but they only count as one strike toward the blacklist (see noteVersionFailure). */
 internal fun MainActivity.withinFailoverGrace(): Boolean =
     System.currentTimeMillis() - currentStreamStartMs < FAILOVER_GRACE_MS
 
@@ -2273,6 +2501,9 @@ internal fun MainActivity.withinFailoverGrace(): Boolean =
 internal fun MainActivity.beginStreamAttempt() {
     currentStreamStartMs = System.currentTimeMillis()
     currentStreamPlayed = false
+    liveTransientRetryAttempt = 0
+    liveTransientRetryRunnable?.let { mainHandler.removeCallbacks(it) }
+    liveTransientRetryRunnable = null
     externalPlayerSuggestedForStream = false
     // Whatever this dialog was about belongs to the attempt that just ended, not the one
     // starting now - stale otherwise if that attempt failed over automatically and this new
@@ -2413,6 +2644,15 @@ internal fun MainActivity.checkForPreviewBlackFrame() {
         mainHandler.postDelayed(previewBlackFrameCheckRunnable, BLACK_FRAME_CHECK_INTERVAL_MS)
         return
     }
+    // Same settling window as fullscreen: a preview tune that has not shown a frame yet
+    // (or began seconds ago) must not be condemned from its startup black. The old
+    // preview path sampled after 3s with no grace at all, so simply browsing past a
+    // channel could silently dead-mark a perfectly healthy version for an hour.
+    val now = System.currentTimeMillis()
+    if (!previewVersionPlayed || now - previewStreamStartMs < FAILOVER_GRACE_MS) {
+        mainHandler.postDelayed(previewBlackFrameCheckRunnable, BLACK_FRAME_CHECK_INTERVAL_MS)
+        return
+    }
     val textureView = binding.previewSurface
     if (!textureView.isAvailable) {
         mainHandler.postDelayed(previewBlackFrameCheckRunnable, BLACK_FRAME_CHECK_INTERVAL_MS)
@@ -2436,19 +2676,29 @@ internal fun MainActivity.checkForPreviewBlackFrame() {
         return
     }
     previewBlackFrameStreak = 0
-    previewVersionGroup.getOrNull(previewVersionIndex)?.let { markStreamDead(it) }
-    var nextIndex = previewVersionIndex + 1
-    while (nextIndex < previewVersionGroup.size && isStreamDead(previewVersionGroup[nextIndex])) nextIndex++
-    if (nextIndex >= previewVersionGroup.size) {
-        // Every version is dead. Clear the "which channel is loaded" latch so a later focus
-        // (or a re-entry into the pane) retries from the top once dead marks expire - leaving
-        // it set made requestPreviewLoad early-return for the same channel, so the pane sat
-        // black forever. Keep sampling so a version that recovers is still noticed.
+    val failedVersion = previewVersionGroup.getOrNull(previewVersionIndex)
+    failedVersion?.let { noteVersionFailure(it) }
+    previewTriedVersionIndices.add(previewVersionIndex)
+    val nextIndex = previewVersionGroup.indices.firstOrNull {
+        it != previewVersionIndex &&
+            !isStreamDead(previewVersionGroup[it]) &&
+            it !in previewTriedVersionIndices
+    }
+    if (nextIndex == null) {
+        // Every version is dead or already tried this tune. Clear the "which channel is
+        // loaded" latch so a later focus (or a re-entry into the pane) retries from the top
+        // once dead marks expire - leaving it set made requestPreviewLoad early-return for
+        // the same channel, so the pane sat black forever. Keep sampling so a version that
+        // recovers is still noticed.
         previewChannelId = null
+        previewVersionPlayed = false
         mainHandler.postDelayed(previewBlackFrameCheckRunnable, BLACK_FRAME_CHECK_INTERVAL_MS)
         return
     }
     previewVersionIndex = nextIndex
+    previewStreamStartMs = now
+    previewVersionPlayed = false
+    lastPreviewBlackFrameLuma = null
     val next = previewVersionGroup[nextIndex]
     ensurePreviewPlayer().playUrl(
         next.url,
@@ -2652,6 +2902,8 @@ internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
     mainHandler.removeCallbacks(longStallCheckRunnable)
     mainHandler.removeCallbacks(blackFrameCheckRunnable)
     mainHandler.removeCallbacks(vodQualityCheckRunnable)
+    liveTransientRetryRunnable?.let { mainHandler.removeCallbacks(it) }
+    liveTransientRetryRunnable = null
     // Full cancel, not just the tick: leaving upNextActive set with the pill gone made the
     // next player session's D-pad guards think an offer was on screen when none was, and
     // suppressed STATE_ENDED's auto-advance for it.

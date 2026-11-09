@@ -8,7 +8,9 @@ import android.text.style.RelativeSizeSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
@@ -32,6 +34,10 @@ import com.lumora.ui.dialog.LumoraDialog
 import com.lumora.util.PosterLoader
 import com.lumora.util.cleanVodTitle
 import com.lumora.util.resetFocusTransform
+
+/** How many posters one section of the combined personal line shows. The sidebar rows carry
+ *  the full lists; the poster line is a preview that must stay scrollable in one line. */
+private const val MAX_PERSONAL_SECTION_ITEMS = 20
 
 /** Vertical stack of horizontally-scrolling category shelves. Explicit key handling bridges
  *  the nested shelf/poster RecyclerViews to their header controls and the tab/search row. */
@@ -73,16 +79,27 @@ class ShelfAdapter(
         holder.bind(getItem(position))
     }
 
+    override fun onViewRecycled(holder: ShelfViewHolder) {
+        holder.releaseSections()
+        super.onViewRecycled(holder)
+    }
+
     inner class ShelfViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val header: View = itemView.findViewById(R.id.shelfHeader)
         private val titleText: TextView = itemView.findViewById(R.id.shelfTitle)
         private val seeAllButton: TextView = itemView.findViewById(R.id.shelfSeeAllButton)
         private val overflowButton: ImageView = itemView.findViewById(R.id.shelfOverflowButton)
         val itemsList: RecyclerView = itemView.findViewById(R.id.shelfItems)
+        private val sectionsScroll: HorizontalScrollView = itemView.findViewById(R.id.shelfSectionsScroll)
+        private val sectionsRow: LinearLayout = itemView.findViewById(R.id.shelfSectionsRow)
         // The shelf is captured per bind (current) so the poster's long-press can tell
         // which row it was pressed on - the same adapter serves every Home shelf.
         private val posterAdapter = ShelfPosterAdapter(onItemClick, progressFor) { item ->
             onItemLongClick?.invoke(item, current)
         }
+        private val sectionsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        private val sectionJobs = mutableListOf<Job>()
+        private var firstSectionPoster: View? = null
         private var current: ContentShelf? = null
 
         init {
@@ -125,10 +142,120 @@ class ShelfAdapter(
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
             }
-            seeAllButton.visibility = if (onSeeAllClick != null) View.VISIBLE else View.GONE
+            // A combined personal row owns its labels and has no single See All or pin/hide
+            // target; the individual sections are browsable from the sidebar. Its outer
+            // "For You" heading is dropped too - each section title sits above its own
+            // poster row.
+            val sectioned = !shelf.sections.isNullOrEmpty()
+            header.visibility = if (sectioned) View.GONE else View.VISIBLE
+            seeAllButton.visibility =
+                if (!sectioned && onSeeAllClick != null) View.VISIBLE else View.GONE
+            overflowButton.visibility = if (sectioned) View.GONE else View.VISIBLE
             overflowButton.contentDescription = itemView.context.getString(R.string.shelf_more_actions, shelf.title)
             posterAdapter.topRowFocusUpTargetId = topRowFocusUpTargetId
-            posterAdapter.submitList(shelf.items)
+            itemsList.visibility = if (sectioned) View.GONE else View.VISIBLE
+            sectionsScroll.visibility = if (sectioned) View.VISIBLE else View.GONE
+            if (sectioned) {
+                posterAdapter.submitList(emptyList())
+                bindSections(shelf)
+            } else {
+                clearSections()
+                posterAdapter.submitList(shelf.items)
+            }
+        }
+
+        /** Builds the combined line: one vertical group per section, each with its title and
+         *  count above a row of posters. The whole line scrolls horizontally as one. */
+        private fun bindSections(shelf: ContentShelf) {
+            clearSections()
+            shelf.sections.orEmpty().forEach { section ->
+                if (section.items.isEmpty()) return@forEach
+                val group = LayoutInflater.from(itemView.context)
+                    .inflate(R.layout.item_shelf_section_group, sectionsRow, false) as LinearLayout
+                group.findViewById<TextView>(R.id.shelfSectionTitle).text = section.title
+                group.findViewById<TextView>(R.id.shelfSectionCount).text =
+                    section.items.size.toString()
+                val posterRow = group.findViewById<LinearLayout>(R.id.shelfSectionPosters)
+                section.items.take(MAX_PERSONAL_SECTION_ITEMS).forEach { channel ->
+                    val poster = LayoutInflater.from(itemView.context)
+                        .inflate(R.layout.item_shelf_poster, posterRow, false)
+                    bindSectionPoster(poster, channel)
+                    posterRow.addView(poster)
+                    if (firstSectionPoster == null) firstSectionPoster = poster
+                }
+                sectionsRow.addView(group)
+            }
+        }
+
+        private fun clearSections() {
+            sectionsScope.coroutineContext.cancelChildren()
+            sectionJobs.clear()
+            sectionsRow.removeAllViews()
+            firstSectionPoster = null
+        }
+
+        /** Fly-out release for a recycled combined row: the static posters are not adapter
+         *  children, so their image jobs have to be cancelled explicitly. */
+        fun releaseSections() = clearSections()
+
+        private fun bindSectionPoster(view: View, channel: Channel) {
+            view.resetFocusTransform()
+            view.tag = channel.id
+            val posterImage = view.findViewById<ImageView>(R.id.itemPoster)
+            val titleText = view.findViewById<TextView>(R.id.itemTitle)
+            val progressBar = view.findViewById<ProgressBar>(R.id.itemProgress)
+            titleText.text =
+                if (channel.mediaType == MediaType.MOVIE || channel.mediaType == MediaType.SERIES) {
+                    cleanVodTitle(channel.name)
+                } else {
+                    channel.name
+                }
+            val progress = progressFor?.invoke(channel)
+            if (progress != null && progress > 0.01f) {
+                progressBar.visibility = View.VISIBLE
+                progressBar.progress = (progress * 100f).toInt().coerceIn(0, 100)
+            } else {
+                progressBar.visibility = View.GONE
+            }
+            view.setOnClickListener { onItemClick(channel) }
+            view.setOnLongClickListener {
+                onItemLongClick?.invoke(channel, current)
+                true
+            }
+            view.setOnKeyListener { v, keyCode, event ->
+                if (event.action == android.view.KeyEvent.ACTION_DOWN &&
+                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
+                    bindingAdapterPosition == 0
+                ) {
+                    val headerAction = firstVisibleHeaderAction()
+                    if (headerAction != null && headerAction.isShown && headerAction.requestFocus()) {
+                        return@setOnKeyListener true
+                    }
+                    return@setOnKeyListener focusOutsideTopShelf()
+                }
+                false
+            }
+            posterImage.setImageResource(R.drawable.ic_launcher_foreground)
+            val url = channel.posterUrl ?: channel.logoUrl
+            if (url.isNullOrBlank()) return
+            PosterLoader.getCached(url)?.let {
+                posterImage.setImageBitmap(it)
+                return
+            }
+            sectionJobs += sectionsScope.launch {
+                delay(PosterLoader.LOAD_DEBOUNCE_MS)
+                val bitmap = PosterLoader.fetch(url)
+                if (bitmap != null && vTagIs(view, channel)) posterImage.setImageBitmap(bitmap)
+            }
+        }
+
+        private fun vTagIs(view: View, channel: Channel): Boolean =
+            view.tag == channel.id
+
+        private fun focusFirstSectionPoster(): Boolean {
+            val target = firstSectionPoster ?: return false
+            sectionsScroll.post { target.requestFocus() }
+            return true
         }
 
         /** Pin/unpin and hide share one labelled chooser; it is the only header control
@@ -169,9 +296,11 @@ class ShelfAdapter(
         }
 
         private fun focusFirstPoster(): Boolean {
+            if (sectionsScroll.visibility == View.VISIBLE) return focusFirstSectionPoster()
             if (posterAdapter.itemCount == 0) return false
             itemsList.scrollToPosition(0)
-            fun attempt(): Boolean = itemsList.layoutManager?.findViewByPosition(0)?.requestFocus() == true
+            fun attempt(): Boolean =
+                itemsList.layoutManager?.findViewByPosition(0)?.requestFocus() == true
             itemsList.post { if (!attempt()) itemsList.post { attempt() } }
             return true
         }
@@ -192,6 +321,7 @@ private class ShelfPosterAdapter(
     var topRowFocusUpTargetId: Int = View.NO_ID
     /** First visible action in a top shelf's header, resolved live by its owning holder. */
     var topShelfHeaderActionProvider: (() -> View?)? = null
+
     /** Whether this shelf currently sits at the top of the outer list, resolved live by the
      *  owning shelf holder - a DiffUtil move does not rebind the moved shelf, so a value
      *  captured at bind time goes stale and swallows UP. */
