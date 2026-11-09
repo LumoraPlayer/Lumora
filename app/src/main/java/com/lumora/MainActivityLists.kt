@@ -248,10 +248,11 @@ internal fun MainActivity.refreshDownloadsList(focusPosition: Int? = null) {
 
 // ── Tabs ───────────────────────────────────────
 
-/** The screen the app opens on, from Settings → General. Live TV unless the user says
- *  otherwise. */
+/** The screen the app opens on, from Settings → General. Last played unless the user says
+ *  otherwise: it picks up where the viewer left off, which means Live TV until something has
+ *  played (see [lastPlayedScreen]). */
 internal fun MainActivity.startScreenPref(): String =
-    prefs.getString(PREF_START_SCREEN, START_SCREEN_LIVE) ?: START_SCREEN_LIVE
+    prefs.getString(PREF_START_SCREEN, START_SCREEN_LAST) ?: START_SCREEN_LAST
 
 /**
  * The tab a start screen means. Home is not a tab (it is a pane of its own), so it has no
@@ -259,12 +260,34 @@ internal fun MainActivity.startScreenPref(): String =
  *
  * Series and Movies fall back to Live TV when VOD is off: simple mode hides those tabs
  * outright, and the VOD toggle leaves them there but empty - so opening on one of them
- * would mean opening on a tab with nothing in it.
+ * would mean opening on a tab with nothing in it. Last played resolves through the tab the
+ * most recent playback belonged to, with the same VOD guard.
  */
 internal fun MainActivity.startScreenTab(screen: String): Int = when (screen) {
+    START_SCREEN_LAST -> startScreenTab(lastPlayedScreen())
     START_SCREEN_SERIES -> if (isVodDisabled()) 0 else 1
     START_SCREEN_FILMS -> if (isVodDisabled()) 0 else 2
     else -> 0
+}
+
+/** The tab the last playback came from - Live TV until something has played, which is also
+ *  where the app started before Last played existed. */
+internal fun MainActivity.lastPlayedScreen(): String =
+    prefs.getString(PREF_LAST_PLAYED_SCREEN, START_SCREEN_LIVE) ?: START_SCREEN_LIVE
+
+/**
+ * Records the tab the playback belongs to, so the Last played start screen can open there
+ * next launch. Called from showPlayerFor for every play, before the stream proves itself: a
+ * viewer who opened an episode still means "Series" even if that stream then failed over.
+ */
+internal fun MainActivity.rememberLastPlayedScreen(channel: Channel) {
+    val screen = when (channel.mediaType) {
+        MediaType.LIVE -> START_SCREEN_LIVE
+        MediaType.SERIES -> START_SCREEN_SERIES
+        MediaType.MOVIE -> START_SCREEN_FILMS
+        else -> return
+    }
+    prefs.edit().putString(PREF_LAST_PLAYED_SCREEN, screen).apply()
 }
 
 /**

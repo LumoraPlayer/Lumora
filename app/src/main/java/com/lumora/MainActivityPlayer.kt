@@ -769,6 +769,9 @@ internal fun MainActivity.showPlayerFor(
     // A fresh playback session is never a continuation of a user pause.
     userPausedPlayback = false
     nowPlayingChannel = channel
+    // Where the viewer was watching from, for the "Last played" start screen. Recorded
+    // before the stream proves itself: an attempted episode still means the Series tab.
+    rememberLastPlayedScreen(channel)
     // Mid-playback version switch: the position is handed to the replacement by hand, and
     // the copy being left behind must not stay behind in Continue Watching as its own
     // in-progress entry next to it.

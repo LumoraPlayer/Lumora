@@ -252,7 +252,7 @@ internal fun MainActivity.setItemWatched(
     }
     val sharedKeys = watchedKeysFor(item)
     if (sharedKeys.isNotEmpty()) {
-        for (key in sharedKeys) WatchedStore.setWatched(this, key, watched)
+        WatchedStore.setWatchedBatch(this, sharedKeys, watched)
         clearSiblingCopyPositions(item, sharedKeys)
     }
     if (alsoPushToServers) {

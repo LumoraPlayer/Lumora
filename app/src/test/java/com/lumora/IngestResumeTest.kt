@@ -24,7 +24,7 @@ class IngestResumeTest {
         componentOn: Boolean = true,
         completedAt: Long = now - 1_000,
         hasRows: Boolean = true
-    ) = canResumeIngestSection(resume, componentOn, completedAt, now, hasRows)
+    ) = canResumeIngestSection(resume, componentOn, completedAt, now, hasRows, ttl)
 
     @Test
     fun `a section finished inside the ttl with its rows in place is resumed`() {

@@ -197,7 +197,7 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
                 showingSports -> refreshSportsBoard()
                 canApplyStartScreen(start) -> when (start) {
                     START_SCREEN_HOME -> selectHome()
-                    START_SCREEN_SERIES, START_SCREEN_FILMS -> selectTab(startScreenTab(start))
+                    START_SCREEN_SERIES, START_SCREEN_FILMS, START_SCREEN_LAST -> selectTab(startScreenTab(start))
                     else -> selectTab(0)
                 }
                 else -> selectTab(activeTab)
@@ -246,7 +246,7 @@ internal fun MainActivity.classifyAndShowLiveFirst() {
                 showingDiscover -> selectDiscover()
                 canApplyStartScreen(start) -> when (start) {
                     START_SCREEN_HOME -> selectHome()
-                    START_SCREEN_SERIES, START_SCREEN_FILMS -> selectTab(startScreenTab(start))
+                    START_SCREEN_SERIES, START_SCREEN_FILMS, START_SCREEN_LAST -> selectTab(startScreenTab(start))
                     else -> selectTab(0)
                 }
                 activeTab == 0 -> selectTab(activeTab)

@@ -64,6 +64,35 @@ object WatchedStore {
     }
 
     /**
+     * Adds or removes [keys] in one pass, rewriting the marshalled file once.
+     *
+     * The Trakt pulls write a whole history at a time - thousands of keys in a single run. A
+     * persist per key rewrote the entire file (temp write + atomic rename) per mark, while
+     * holding this store's monitor that every shelf build reads through: what used to be
+     * minutes of disk churn and UI stalls for a large account is now one write. Interactive
+     * paths keep using [setWatched], where a single mark is the whole operation.
+     *
+     * Returns the number of keys whose state actually changed.
+     */
+    @Synchronized
+    fun setWatchedBatch(context: Context, keys: Collection<String>, watched: Boolean = true): Int {
+        val set = ensureLoaded(context)
+        var changed = 0
+        for (key in keys) {
+            if (key.isBlank()) continue
+            if (watched) {
+                // Same ceiling rule as setWatched: the freshest mark is never dropped.
+                if (set.size >= MAX_ENTRIES) set.iterator().let { if (it.hasNext()) { it.next(); it.remove() } }
+                if (set.add(key)) changed++
+            } else if (set.remove(key)) {
+                changed++
+            }
+        }
+        if (changed > 0) persist(context, set)
+        return changed
+    }
+
+    /**
      * Snapshot of every mark, for the passes that have to walk the whole set rather than ask
      * about one title - the Trakt backfill, which turns marks back into titles to push.
      *

@@ -980,8 +980,11 @@ internal fun MainActivity.startScreenChoiceRow(): TextView {
         ViewGroup.LayoutParams.WRAP_CONTENT
     ).apply { topMargin = resources.getDimensionPixelSize(R.dimen.settings_gap_m) }
 
-    val screens = listOf(START_SCREEN_LIVE, START_SCREEN_HOME, START_SCREEN_SERIES, START_SCREEN_FILMS)
+    // Last played first: it is the default, so the row reads as the same thing the app will
+    // do next launch for most users.
+    val screens = listOf(START_SCREEN_LAST, START_SCREEN_LIVE, START_SCREEN_HOME, START_SCREEN_SERIES, START_SCREEN_FILMS)
     fun label(screen: String): String = when (screen) {
+        START_SCREEN_LAST -> getString(R.string.sett_start_last_played)
         START_SCREEN_HOME -> getString(R.string.tab_home)
         START_SCREEN_SERIES -> getString(R.string.series_tab)
         START_SCREEN_FILMS -> getString(R.string.films_tab)

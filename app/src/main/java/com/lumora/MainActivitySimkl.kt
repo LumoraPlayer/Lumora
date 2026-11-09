@@ -242,6 +242,9 @@ internal fun MainActivity.pullSimklWatched(force: Boolean = false, onDone: ((Int
         }
         if (entries.isEmpty()) { onDone?.invoke(0); return@launch }
         val added = withContext(Dispatchers.Default) {
+            // Collect first, write once - same reason as the Trakt pull: a persist per mark
+            // rewrites the whole watched file while holding its monitor.
+            val pending = HashSet<String>()
             var count = 0
             for (entry in entries) {
                 if (entry.isSeries) {
@@ -255,15 +258,20 @@ internal fun MainActivity.pullSimklWatched(force: Boolean = false, onDone: ((Int
                             if (keys.isEmpty()) continue
                             var changed = false
                             for (key in keys) {
-                                if (WatchedStore.setWatched(this@pullSimklWatched, key, true)) changed = true
+                                if (!WatchedStore.isWatched(this@pullSimklWatched, key)) changed = true
+                                pending.add(key)
                             }
                             if (changed) count++
                         }
                     }
                 } else {
                     val key = movieWatchedKey(entry.title) ?: continue
-                    if (WatchedStore.setWatched(this@pullSimklWatched, key, true)) count++
+                    if (!WatchedStore.isWatched(this@pullSimklWatched, key)) count++
+                    pending.add(key)
                 }
+            }
+            if (pending.isNotEmpty()) {
+                WatchedStore.setWatchedBatch(this@pullSimklWatched, pending, true)
             }
             count
         }

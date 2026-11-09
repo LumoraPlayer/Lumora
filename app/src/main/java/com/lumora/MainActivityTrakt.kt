@@ -441,6 +441,11 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
         }
         if (entries.isEmpty()) { onDone?.invoke(0); return@launch }
         val added = withContext(Dispatchers.Default) {
+            // Collect first, write once. Every WatchedStore write rewrites the whole marks
+            // file and holds its monitor - a Trakt history is thousands of keys, so a persist
+            // per key was the difference between a sync that lands in a second and one that
+            // churns the disk (and stalls every shelf build reading a mark) for minutes.
+            val pending = HashSet<String>()
             var count = 0
             for (entry in entries) {
                 if (entry.isSeries) {
@@ -457,15 +462,22 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
                             if (keys.isEmpty()) continue
                             var changed = false
                             for (key in keys) {
-                                if (WatchedStore.setWatched(this@pullTraktWatched, key, true)) changed = true
+                                // Pre-state decides the count: the batch write below has a
+                                // single return value, but the caller reports items.
+                                if (!WatchedStore.isWatched(this@pullTraktWatched, key)) changed = true
+                                pending.add(key)
                             }
                             if (changed) count++
                         }
                     }
                 } else {
                     val key = movieWatchedKey(entry.title) ?: continue
-                    if (WatchedStore.setWatched(this@pullTraktWatched, key, true)) count++
+                    if (!WatchedStore.isWatched(this@pullTraktWatched, key)) count++
+                    pending.add(key)
                 }
+            }
+            if (pending.isNotEmpty()) {
+                WatchedStore.setWatchedBatch(this@pullTraktWatched, pending, true)
             }
             count
         }

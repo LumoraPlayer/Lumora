@@ -64,6 +64,10 @@ internal fun MainActivity.aliasRemoteWatchedMarks() {
     if (remoteWatchedSeries.isEmpty()) return
     val index = localSeriesIndex()
     if (index.isEmpty) return
+    // One write for the whole pass: this loop matches every remote-spelled mark against the
+    // catalogue, and a persist per alias key used to rewrite the marks file thousands of
+    // times (see WatchedStore.setWatchedBatch).
+    val pending = HashSet<String>()
     for (key in WatchedStore.allKeys(this)) {
         val parts = key.split('|')
         if (parts.size != 4 || parts[0] != "e") continue
@@ -80,9 +84,10 @@ internal fun MainActivity.aliasRemoteWatchedMarks() {
         val season = parts[2].removePrefix("s").let { if (it == "x") null else it.toIntOrNull() }
         val episode = parts[3].removePrefix("e").toIntOrNull() ?: continue
         for (localKey in episodeWatchedKeys(local.name, season, episode)) {
-            WatchedStore.setWatched(this, localKey, true)
+            if (!WatchedStore.isWatched(this, localKey)) pending.add(localKey)
         }
     }
+    if (pending.isNotEmpty()) WatchedStore.setWatchedBatch(this, pending, true)
 }
 
 /**

@@ -683,9 +683,10 @@ internal fun MainActivity.markIngestSectionDone(providerId: String, type: MediaT
  * Whether one section of a provider's catalogue can be served from the database instead of
  * being fetched again.
  *
- * All four have to hold: the load allows resuming at all (a forced load does not), the type is
- * switched on, the section has actually finished once before and that was inside the TTL, and
- * its rows are still in the catalogue - a section whose rows were pruned must be fetched, no
+ * All of them have to hold: the load allows resuming at all (a forced load does not), the type
+ * is switched on, the section has actually finished once before and that was inside [ttlMs]
+ * (live uses the 24h catalogue TTL, VOD the 72h window - see [catalogSectionTtlMs]), and its
+ * rows are still in the catalogue - a section whose rows were pruned must be fetched, no
  * matter how recent its timestamp says it is.
  */
 internal fun canResumeIngestSection(
@@ -693,9 +694,43 @@ internal fun canResumeIngestSection(
     sectionEnabled: Boolean,
     completedAt: Long,
     now: Long,
-    hasRows: Boolean
+    hasRows: Boolean,
+    ttlMs: Long
 ): Boolean = resume && sectionEnabled && hasRows &&
-    completedAt > 0L && now - completedAt < CATALOG_TTL_MS
+    completedAt > 0L && now - completedAt < ttlMs
+
+/** The TTL a finished catalogue section is trusted for: Live TV follows the catalogue TTL,
+ *  VOD (films/series) the 72h window - see [VOD_CATALOG_TTL_MS]. */
+internal fun catalogSectionTtlMs(type: MediaType): Long =
+    if (type == MediaType.LIVE) CATALOG_TTL_MS else VOD_CATALOG_TTL_MS
+
+/**
+ * Whether one VOD half of [providerId] can be served from the cache on a normal load.
+ *
+ * Shared by the single-payload sources (M3U, Stalker, Jellyfin/Plex): their films/series
+ * arrive in the same response as everything else, so instead of skipping a download the
+ * loader keeps the stored rows and only replaces them once the 72h window has passed.
+ * Xtream does not need this - it resumes whole sections inside its own ingest.
+ */
+internal suspend fun MainActivity.canKeepCachedVodSection(
+    providerId: String,
+    type: MediaType,
+    resume: Boolean
+): Boolean {
+    if (!resume) return false
+    val completedAt = ingestSectionDoneAt(providerId, type)
+    val hasRows = runCatching {
+        CatalogRepository.get(this).hasRows(providerId, type)
+    }.getOrDefault(false)
+    return canResumeIngestSection(
+        resume = true,
+        sectionEnabled = true,
+        completedAt = completedAt,
+        now = System.currentTimeMillis(),
+        hasRows = hasRows,
+        ttlMs = catalogSectionTtlMs(type)
+    )
+}
 
 /** Brings the running app in line with data a backup restore just wrote. Both the settings
  *  provider list (when its overlay is open) and the in-memory catalog were loaded before the
@@ -1213,6 +1248,17 @@ internal fun MainActivity.loadAllConfiguredProviders(
                         publishCatalogIngest(config.id, config.name, phase, rows, bytes, total)
                     }
                 }
+                // VOD cache: on a normal load the stored films/series stand in for a re-read
+                // until their 72h stamp is up (see VOD_CATALOG_TTL_MS). Xtream decides this
+                // per section inside its own ingest; Stalker can skip its separate VOD fetch
+                // entirely, and every single-payload source keeps the stored rows below
+                // instead of replacing them.
+                val keepMovie = config.type != "xtream" && ramCollected == null &&
+                    providerAllowsMovies(config) &&
+                    canKeepCachedVodSection(config.id, MediaType.MOVIE, !forceRefresh)
+                val keepSeries = config.type != "xtream" && ramCollected == null &&
+                    providerAllowsSeries(config) &&
+                    canKeepCachedVodSection(config.id, MediaType.SERIES, !forceRefresh)
                 val result = withTimeoutOrNull(PROVIDER_FETCH_TIMEOUT_MS) {
                     when (config.type) {
                         // A forced load (provider edited, backup restored, provider re-added)
@@ -1222,7 +1268,11 @@ internal fun MainActivity.loadAllConfiguredProviders(
                             config, { expiryText = it }, onProgress, publishLive,
                             resume = !forceRefresh, ramCollector = ramCollected
                         )
-                        "stalker" -> fetchStalkerChannels(config, publishLive)
+                        // Films and series are a separate call on Stalker; while both totals
+                        // are still fresh it is pure download with nothing to store.
+                        "stalker" -> fetchStalkerChannels(
+                            config, publishLive, fetchVod = !(keepMovie && keepSeries)
+                        )
                         else -> fetchM3uChannels(config, onProgress) { live ->
                             loadScope.launch { showPartial(config.id, live) }
                         }
@@ -1256,13 +1306,31 @@ internal fun MainActivity.loadAllConfiguredProviders(
                             // ChannelCache file; no database write is needed.
                             ramCollected.addAll(toStore)
                         } else {
-                            runCatching {
+                            // A VOD half inside its 72h window is not replaced: skipping the
+                            // type keeps the stored rows instead of overwriting them with the
+                            // list the app just decided not to re-read.
+                            val skipTypes = globalVodOffTypes + buildSet {
+                                if (keepMovie) add(MediaType.MOVIE)
+                                if (keepSeries) add(MediaType.SERIES)
+                            }
+                            val stored = runCatching {
                                 val repository = CatalogRepository.get(this@loadAllConfiguredProviders)
                                 repository.replaceProvider(
                                     config.id, toStore,
                                     backup = IptvProviderStore.load(prefs).firstOrNull { it.id == config.id }?.backup == true,
-                                    skipTypes = globalVodOffTypes
+                                    skipTypes = skipTypes
                                 )
+                            }.isSuccess
+                            if (stored) {
+                                // A half that was actually written becomes the fresh cache for
+                                // the next 72h. Empty halves are not stamped: the hasRows check
+                                // blocks their resume anyway, and they are cheap to retry.
+                                if (!keepMovie && toStore.any { it.mediaType == MediaType.MOVIE }) {
+                                    markIngestSectionDone(config.id, MediaType.MOVIE)
+                                }
+                                if (!keepSeries && toStore.any { it.mediaType == MediaType.SERIES }) {
+                                    markIngestSectionDone(config.id, MediaType.SERIES)
+                                }
                             }
                         }
                     }
@@ -1332,15 +1400,33 @@ internal fun MainActivity.loadAllConfiguredProviders(
                 is FetchResult.Success -> {
                     catalogRefreshSucceeded = true
                     refreshedSourceIds += server.id
+                    // Same 72h VOD window as the IPTV fetch: the library's films/series are
+                    // kept as stored on a normal refresh, and only live rows are replaced.
+                    val keepMovie = ramCollected == null &&
+                        canKeepCachedVodSection(server.id, MediaType.MOVIE, !forceRefresh)
+                    val keepSeries = ramCollected == null &&
+                        canKeepCachedVodSection(server.id, MediaType.SERIES, !forceRefresh)
                     if (ramCollected != null) {
                         ramCollected.addAll(result.channels)
                     } else {
-                        runCatching {
+                        val skipTypes = globalVodOffTypes + buildSet {
+                            if (keepMovie) add(MediaType.MOVIE)
+                            if (keepSeries) add(MediaType.SERIES)
+                        }
+                        val stored = runCatching {
                             CatalogRepository.get(this@loadAllConfiguredProviders)
                                 .replaceProvider(
                                     server.id, result.channels,
-                                    skipTypes = globalVodOffTypes
+                                    skipTypes = skipTypes
                                 )
+                        }.isSuccess
+                        if (stored) {
+                            if (!keepMovie && result.channels.any { it.mediaType == MediaType.MOVIE }) {
+                                markIngestSectionDone(server.id, MediaType.MOVIE)
+                            }
+                            if (!keepSeries && result.channels.any { it.mediaType == MediaType.SERIES }) {
+                                markIngestSectionDone(server.id, MediaType.SERIES)
+                            }
                         }
                     }
                     combined += result.channels.filter { it.mediaType == MediaType.LIVE }
@@ -1582,7 +1668,16 @@ internal fun MainActivity.persistCatalogueSizes(): List<Long> {
  *  what ran a low-RAM box out of heap (lowmemorykiller killing the process) and read as the
  *  whole app freezing. Splitting the fetch also gets Live TV on screen while VOD/series -
  *  the slower, bulkier part - are still loading. */
-internal suspend fun MainActivity.fetchStalkerChannels(config: IptvProviderConfig, onLive: suspend (List<Channel>) -> Unit): FetchResult {
+/**
+ * Fetches a Stalker portal: live first (handed over immediately), then its VOD/series lists.
+ * [fetchVod] is false when both VOD halves are still inside their 72h cache window - the
+ * separate VOD call is then pure download with nothing the loader would store.
+ */
+internal suspend fun MainActivity.fetchStalkerChannels(
+    config: IptvProviderConfig,
+    onLive: suspend (List<Channel>) -> Unit,
+    fetchVod: Boolean = true
+): FetchResult {
     return try {
         val mac = config.userAgent ?: return FetchResult.Failure("no MAC address")
         val stalkerProvider = Provider(
@@ -1600,7 +1695,10 @@ internal suspend fun MainActivity.fetchStalkerChannels(config: IptvProviderConfi
         onLive(live)
 
         // Content-type gates: a live-only setup never touches the (slow) VOD/series fetch.
-        if (!providerAllowsMovies(config) && !providerAllowsSeries(config)) return FetchResult.Success(live)
+        // The VOD halves can also still be cached from an earlier import (72h window).
+        if (!fetchVod || (!providerAllowsMovies(config) && !providerAllowsSeries(config))) {
+            return FetchResult.Success(live)
+        }
 
         val vodSeriesResult = withContext(Dispatchers.IO) { stalker.loadVodAndSeries(stalkerProvider) }
         if (vodSeriesResult.isFailure) return FetchResult.Failure(vodSeriesResult.exceptionOrNull()?.message?.take(60) ?: "error")
@@ -1893,17 +1991,20 @@ internal suspend fun MainActivity.fetchXtreamChannels(
             val resumeLive = ramCollector == null && canResumeIngestSection(
                 resume, !liveOff,
                 ingestSectionDoneAt(config.id, MediaType.LIVE), now,
-                repository.hasRows(config.id, MediaType.LIVE)
+                repository.hasRows(config.id, MediaType.LIVE),
+                catalogSectionTtlMs(MediaType.LIVE)
             )
             val resumeMovies = ramCollector == null && canResumeIngestSection(
                 resume, !moviesOff,
                 ingestSectionDoneAt(config.id, MediaType.MOVIE), now,
-                repository.hasRows(config.id, MediaType.MOVIE)
+                repository.hasRows(config.id, MediaType.MOVIE),
+                catalogSectionTtlMs(MediaType.MOVIE)
             )
             val resumeSeries = ramCollector == null && canResumeIngestSection(
                 resume, !seriesOff,
                 ingestSectionDoneAt(config.id, MediaType.SERIES), now,
-                repository.hasRows(config.id, MediaType.SERIES)
+                repository.hasRows(config.id, MediaType.SERIES),
+                catalogSectionTtlMs(MediaType.SERIES)
             )
             // Category lists are small (tens of KB) and every stream needs one to label
             // it, so they are fetched up front for the sections that will actually be read.

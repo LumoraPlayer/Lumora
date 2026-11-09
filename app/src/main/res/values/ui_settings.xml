@@ -251,6 +251,8 @@
     <string name="sett_start_screen">Open the app on</string>
     <string name="sett_start_screen_row">%1$s  ·  %2$s</string>
     <string name="sett_start_screen_caption">Applies the next time the app opens</string>
+    <!-- Start-screen choice: open on the tab of the most recent playback. -->
+    <string name="sett_start_last_played">Last played</string>
     <string name="sett_audio_language">Audio language</string>
     <string name="sett_audio_language_caption">preferred track on films and series</string>
     <string name="sett_subtitle_language">Subtitle language</string>

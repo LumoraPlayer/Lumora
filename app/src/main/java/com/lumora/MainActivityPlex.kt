@@ -249,7 +249,7 @@ internal fun MainActivity.importPlexUserState(
                 // this runs over a whole season at a time. Every alias spelling is written
                 // too, so an un-tick clears whichever one a local copy computed. No push
                 // back to the servers: this state came from one, and Plex already knows.
-                sharedWatchedKeysFor(item).forEach { WatchedStore.setWatched(this, it, true) }
+                sharedWatchedKeysFor(item).let { WatchedStore.setWatchedBatch(this, it, true) }
             }
             item.resumePositionMs > 0 -> {
                 val key = qualifiedMediaItemId(cfg.id, item.id)

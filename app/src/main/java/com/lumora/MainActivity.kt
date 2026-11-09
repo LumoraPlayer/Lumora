@@ -249,12 +249,17 @@ internal const val PREF_GROUP_CHANNELS = "group_channels"
  */
 internal const val PREF_LOCALITY_FILTER = "locality_filter"
 internal const val PREF_LOCALITY_SHOW_UNTAGGED = "locality_show_untagged"
-/** The screen the app opens on: live | home | series | films. Live TV is the default. */
+/** The screen the app opens on: last | live | home | series | films. Last played is the
+ *  default (Live TV until something has played - see lastPlayedScreen). */
 internal const val PREF_START_SCREEN = "start_screen"
+/** Open on the tab the most recent playback came from. */
+internal const val START_SCREEN_LAST = "last"
 internal const val START_SCREEN_LIVE = "live"
 internal const val START_SCREEN_HOME = "home"
 internal const val START_SCREEN_SERIES = "series"
 internal const val START_SCREEN_FILMS = "films"
+/** Which of live/series/films the last playback came from - see rememberLastPlayedScreen. */
+internal const val PREF_LAST_PLAYED_SCREEN = "last_played_screen"
 // When the catalog was last fetched from the network; the cache serves every launch until
 // this is CATALOG_TTL_MS old (a provider change force-refreshes regardless).
 internal const val PREF_CATALOG_REFRESHED_AT = "catalog_refreshed_at"
@@ -263,6 +268,13 @@ internal const val PREF_CATALOG_REFRESHED_AT = "catalog_refreshed_at"
  *  full-table pass when the set itself changed (see loadAllConfiguredProviders). */
 internal const val PREF_CATALOG_BACKUP_RANK_KEY = "catalog_backup_rank_key"
 internal const val CATALOG_TTL_MS = 24 * 60 * 60 * 1000L
+/**
+ * How long imported VOD (films and series) is served from the cache before a normal catalog
+ * refresh re-reads it. VOD lists are the expensive half of an import and change slowly, so
+ * they are only reimported every 72 hours while live TV keeps the 24h catalog TTL. A forced
+ * refresh (provider edited, manual refresh, backup restored) still re-reads everything.
+ */
+internal const val VOD_CATALOG_TTL_MS = 72 * 60 * 60 * 1000L
 /** How long the projected-display driving warning stays up before accepting itself. The
  *  warning must never be a dead end on a head unit whose only input this dialog cannot see,
  *  and the app behind it is unreachable until the warning is gone. */
