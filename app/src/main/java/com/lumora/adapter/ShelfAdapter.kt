@@ -233,6 +233,19 @@ class ShelfAdapter(
                 onItemLongClick?.invoke(channel, current)
                 true
             }
+            // Focus search scrolls the outer shelf list just enough to show this poster,
+            // which can tuck the section label above it under the list's top edge - the
+            // title then reads as cut off (or vanishes) after scrolling away and back.
+            // Keep the shelf's own top in view whenever a section poster takes focus.
+            view.setOnFocusChangeListener { _, hasFocus ->
+                if (!hasFocus) return@setOnFocusChangeListener
+                val list = itemView.parent as? RecyclerView ?: return@setOnFocusChangeListener
+                val position = bindingAdapterPosition
+                if (position == RecyclerView.NO_POSITION) return@setOnFocusChangeListener
+                val lm = list.layoutManager as? LinearLayoutManager ?: return@setOnFocusChangeListener
+                val shelfTop = lm.findViewByPosition(position)?.top ?: return@setOnFocusChangeListener
+                if (shelfTop < list.paddingTop) list.scrollToPosition(position)
+            }
             view.setOnKeyListener { v, keyCode, event ->
                 if (event.action == android.view.KeyEvent.ACTION_DOWN &&
                     keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&

@@ -2393,8 +2393,8 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginBottom="-6dp"
-                                android:clipChildren="false"
-                                    android:clipToPadding="false"
+                                android:clipChildren="true"
+                                android:clipToPadding="true"
                                 android:scrollbars="none"
                                 android:visibility="gone">
 

@@ -1091,13 +1091,29 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // The actions sit in the title column at the top of the screen, so UP leaves
     // them for the Back button; DOWN enters the cast row beside them, then the
     // versions/seasons below the header.
-    fun focusActionAbove(): Boolean {
+    /** The title-row icon actions, in visual order. They sit above the action row and are
+     *  otherwise unreachable with the D-pad: the title between them is not focusable, and
+     *  every action button intercepts UP to leave the header entirely. */
+    fun titleRowActions(): List<View> =
+        listOf(favoriteButton, watchlistButton, hideButton).filter { it.isShown }
+
+    fun focusBackAbove(): Boolean {
         // The Back button floats outside the ScrollView, so focusing it never scrolls
         // the page - without this UP moved focus but left the episodes on screen, and
         // the top of the poster stayed unreachable. Scrolling first is safe: the
         // actions live at the top, so nothing below scrolls back down afterwards.
         binding.detailScroll.scrollTo(0, 0)
         return binding.detailBackButton.requestFocus()
+    }
+
+    fun focusActionAbove(): Boolean {
+        // Step onto the title-row actions (favourite / watchlist / hide) first; only once
+        // focus is already among them does UP leave for Back. Without this the star was
+        // touch-only on a remote, which made both the film bookmark and the series star
+        // impossible to reach.
+        val titleAction = titleRowActions().firstOrNull()
+        if (titleAction != null && titleAction.requestFocus()) return true
+        return focusBackAbove()
     }
 
     fun focusActionBelow(): Boolean {
@@ -1109,10 +1125,8 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         return focusBelowDetailHeader()
     }
 
-    // The star sits beside the title, above the Play row: DOWN lands on Play
-    // directly (or whatever the header offers below when Play is hidden), UP leaves
-    // for the Back button like every other action.
-    fun focusStarBelow(): Boolean {
+    // A title-row action drops into the Play row, then continues into the cast/episodes.
+    fun focusTitleActionBelow(): Boolean {
         if (playButton.isShown && playButton.requestFocus()) return true
         return focusActionBelow()
     }
@@ -1124,7 +1138,9 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         binding.detailFindStreamButton,
         binding.detailTrailerButton
     ).forEach { button -> wireVerticalFocus(button, ::focusActionAbove, ::focusActionBelow) }
-    wireVerticalFocus(favoriteButton, ::focusActionAbove, ::focusStarBelow)
+    wireVerticalFocus(favoriteButton, ::focusBackAbove, ::focusTitleActionBelow)
+    wireVerticalFocus(watchlistButton, ::focusBackAbove, ::focusTitleActionBelow)
+    wireVerticalFocus(hideButton, ::focusBackAbove, ::focusTitleActionBelow)
     binding.detailBackButton.setOnKeyListener { _, keyCode, event ->
         if (event.action == android.view.KeyEvent.ACTION_DOWN &&
             keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN
