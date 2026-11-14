@@ -54,6 +54,8 @@ class SearchResultsAdapter(
     private val showTypeBadge: Boolean = false,
     /** Long-press on a media poster - favourites the item (see MainActivity.toggleFavoriteVodItem). */
     private val onItemLongClick: ((Channel) -> Unit)? = null,
+    /** True when the result has already been watched - draws the green corner tick. */
+    private val isWatched: ((Channel) -> Boolean)? = null,
     private val onItemClick: (SearchResultItem) -> Unit
 ) : ListAdapter<SearchResultItem, RecyclerView.ViewHolder>(DiffCallback()) {
 
@@ -215,10 +217,12 @@ class SearchResultsAdapter(
         private val posterImage: ImageView = itemView.findViewById(R.id.itemPoster)
         private val titleText: TextView = itemView.findViewById(R.id.itemTitle)
         private val typeBadge: TextView = itemView.findViewById(R.id.itemTypeBadge)
+        private val watchedBadge: ImageView = itemView.findViewById(R.id.itemWatchedBadge)
         private var current: Channel? = null
         private var imageJob: Job? = null
 
         init {
+            watchedBadge.isSelected = true
             itemView.setOnClickListener { current?.let { onItemClick(SearchResultItem.Media(it)) } }
             onItemLongClick?.let { handler ->
                 itemView.setOnLongClickListener { current?.let(handler); true }
@@ -261,6 +265,8 @@ class SearchResultsAdapter(
             } else {
                 typeBadge.visibility = View.GONE
             }
+            watchedBadge.visibility =
+                if (isWatched?.invoke(channel) == true) View.VISIBLE else View.GONE
 
             val url = channel.posterUrl ?: channel.logoUrl
             // Placeholder before the async fetch: a loading tile isn't blank, and a failed

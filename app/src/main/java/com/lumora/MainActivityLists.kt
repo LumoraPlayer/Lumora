@@ -1356,6 +1356,10 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         // setItemWatched, not a bare store write: the mark has to land on every other copy
         // of each episode and on the configured media servers, not just this season's ids.
         for (ep in episodes) setItemWatched(ep, !allWatched)
+        // Recompute against the show card's own title: the episode rows can spell the show
+        // differently ("Natalee Holloway" vs "Taken: Natalee Holloway"), so the marker has
+        // to be maintained from the card, not inferred from the episode key.
+        updateSeriesWatchedMarker(item, seasons)
         itemAdapter.notifyDataSetChanged()
         refreshSeasonChipStates(seasons)
         playButtonRefresh?.invoke()
@@ -1364,7 +1368,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         // from the same store, so they need a refresh too.
         clearUpNextMemo()
         refreshSeriesShelvesIfShowing()
-        if (showingHome) homeShelfAdapter.submitList(buildHomeShelves())
+        refreshHomeShelvesIfShowing()
         // preserveUi: the plain form ends in selectTab(), which clears the selected
         // category, tears the sidebar down and rebuilds the pane from scratch - all
         // behind this detail screen, which then had its season chip yanked out from
@@ -1431,7 +1435,11 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             // watched episode lingers in Continue Watching.
             clearUpNextMemo()
             refreshSeriesShelvesIfShowing()
-            if (showingHome) homeShelfAdapter.submitList(buildHomeShelves())
+            refreshHomeShelvesIfShowing()
+            // Marking or un-marking changes whether the show is complete. The marker is
+            // recomputed from the show card's title, because episode names may spell it
+            // differently ("Natalee Holloway" vs "Taken: Natalee Holloway").
+            updateSeriesWatchedMarker(item, detailSeasons)
             // preserveUi for the same reason as toggleSeasonWatched above.
             if (!showingHome && activeTab != 0) scope.launch { classifyAndShow(preserveUi = true) }
             refreshSeasonChipStates(detailSeasons)
@@ -1816,6 +1824,10 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                     else mergeMissingEpisodesFromTmdb(item, fromVersions)
                 if (nowShowingDetailId != requestedItemId) return@launch
                 detailSeasons = seasons
+                // Backfills the whole-series watched marker for a show finished before this
+                // build, and keeps it current after edits. Off the main thread: a long
+                // season's episode keys are a normalisation pass each.
+                withContext(Dispatchers.Default) { updateSeriesWatchedMarker(item, seasons) }
                 if (seasons.all { it.second.isEmpty() }) {
                     showDetailStatus(getString(R.string.list_no_episodes))
                 } else {
@@ -2128,6 +2140,10 @@ internal fun MainActivity.hideContentDetail(restoreMain: Boolean = true) {
         return
     }
     binding.mainContent.visibility = View.VISIBLE
+    // The detail page is where watched state is changed; the poster behind it has been hidden
+    // (not rebuilt) while that happened, so rebind the visible grids/shelves before finding
+    // the returning poster - otherwise its watched tick and resume bar are one edit stale.
+    refreshVodProgress(rebind = true)
     // Back out of a series/film and you should be standing where you left: on that poster,
     // in that shelf, at that scroll position. The list underneath was only hidden, never
     // rebuilt, so the view is still there to focus - restoreTabFocus() (which lands on the

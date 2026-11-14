@@ -89,7 +89,8 @@ internal fun MainActivity.showDiscoverSearchOverlay() {
     // The keyboard's SEARCH key asks for the first match once the current query lands.
     var focusFirstOnPublish = false
     val resultsAdapter = com.lumora.adapter.PosterGridAdapter(
-        badgeFor = { item -> shownBadges[item.id]?.let { it to R.color.primary } }
+        badgeFor = { item -> shownBadges[item.id]?.let { it to R.color.primary } },
+        isWatched = { item -> isItemWatched(item) }
     ) { item ->
         // Picking a title also leaves the pane showing this search, so Back from the detail
         // screen lands on the results rather than on whatever was there before the overlay.

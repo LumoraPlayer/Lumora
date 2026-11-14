@@ -58,7 +58,9 @@ class ShelfAdapter(
     // a fixed, meaningful order, so the star has nothing to do there.
     private val showPinButton: Boolean = true,
     /** 0..1 resume position per card, or null when the title has no saved progress. */
-    private val progressFor: ((Channel) -> Float?)? = null
+    private val progressFor: ((Channel) -> Float?)? = null,
+    /** True when [Channel] has already been watched - draws the green corner tick. */
+    private val isWatched: ((Channel) -> Boolean)? = null
 ) : ListAdapter<ContentShelf, ShelfAdapter.ShelfViewHolder>(DiffCallback()) {
 
     /** Where D-pad UP from posters in the top shelf should land - the active tab button
@@ -95,7 +97,7 @@ class ShelfAdapter(
         private val sectionsRow: LinearLayout = itemView.findViewById(R.id.shelfSectionsRow)
         // The shelf is captured per bind (current) so the poster's long-press can tell
         // which row it was pressed on - the same adapter serves every Home shelf.
-        private val posterAdapter = ShelfPosterAdapter(onItemClick, progressFor) { item ->
+        private val posterAdapter = ShelfPosterAdapter(onItemClick, progressFor, isWatched) { item ->
             onItemLongClick?.invoke(item, current)
         }
         private val sectionsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -222,6 +224,10 @@ class ShelfAdapter(
             } else {
                 progressBar.visibility = View.GONE
             }
+            val watchedBadge = view.findViewById<ImageView>(R.id.itemWatchedBadge)
+            watchedBadge.isSelected = true
+            watchedBadge.visibility =
+                if (isWatched?.invoke(channel) == true) View.VISIBLE else View.GONE
             view.setOnClickListener { onItemClick(channel) }
             view.setOnLongClickListener {
                 onItemLongClick?.invoke(channel, current)
@@ -320,6 +326,7 @@ class ShelfAdapter(
 private class ShelfPosterAdapter(
     private val onItemClick: (Channel) -> Unit,
     private val progressFor: ((Channel) -> Float?)?,
+    private val isWatched: ((Channel) -> Boolean)?,
     private val onItemLongClick: ((Channel) -> Unit)?
 ) : ListAdapter<Channel, ShelfPosterAdapter.ViewHolder>(DiffCallback()) {
 
@@ -366,11 +373,13 @@ private class ShelfPosterAdapter(
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val posterImage: ImageView = itemView.findViewById(R.id.itemPoster)
         private val titleText: TextView = itemView.findViewById(R.id.itemTitle)
+        private val watchedBadge: ImageView = itemView.findViewById(R.id.itemWatchedBadge)
         private val progressBar: ProgressBar = itemView.findViewById(R.id.itemProgress)
         private var current: Channel? = null
         private var imageJob: Job? = null
 
         init {
+            watchedBadge.isSelected = true
             itemView.setOnClickListener { current?.let(onItemClick) }
             onItemLongClick?.let { handler ->
                 itemView.setOnLongClickListener { current?.let(handler); true }
@@ -419,6 +428,8 @@ private class ShelfPosterAdapter(
             } else {
                 progressBar.visibility = View.GONE
             }
+            watchedBadge.visibility =
+                if (isWatched?.invoke(channel) == true) View.VISIBLE else View.GONE
 
             val url = channel.posterUrl ?: channel.logoUrl
             // Placeholder before the async fetch: a loading tile isn't blank, and a failed

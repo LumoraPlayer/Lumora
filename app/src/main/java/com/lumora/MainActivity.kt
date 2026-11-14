@@ -1465,7 +1465,8 @@ class MainActivity : AppCompatActivity() {
         onPinClick = { shelf -> togglePinShelfCategory(1, shelf) },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenShelfCategory(1, shelf) },
         onSeeAllClick = { shelf -> showSeeAll(shelf) },
-        progressFor = { item -> vodProgressById[item.id] }
+        progressFor = { item -> vodProgressById[item.id] },
+        isWatched = { item -> isItemWatched(item) }
     ).apply { topRowFocusUpTargetId = R.id.tabSeries }
     internal val filmsShelfAdapter = ShelfAdapter(
         onItemClick = { item -> playItem(item) },
@@ -1482,7 +1483,8 @@ class MainActivity : AppCompatActivity() {
         onPinClick = { shelf -> togglePinShelfCategory(2, shelf) },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenShelfCategory(2, shelf) },
         onSeeAllClick = { shelf -> showSeeAll(shelf) },
-        progressFor = { item -> vodProgressById[item.id] }
+        progressFor = { item -> vodProgressById[item.id] },
+        isWatched = { item -> isItemWatched(item) }
     ).apply { topRowFocusUpTargetId = R.id.tabFilms }
     internal val homeShelfAdapter = ShelfAdapter(
         onItemClick = { item -> onHomeItemClick(item) },
@@ -1498,25 +1500,29 @@ class MainActivity : AppCompatActivity() {
         },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenHomeShelf(shelf.title) },
         showPinButton = false,
-        progressFor = { item -> vodProgressById[item.id] }
+        progressFor = { item -> vodProgressById[item.id] },
+        isWatched = { item -> isItemWatched(item) }
     ).apply { topRowFocusUpTargetId = R.id.tabHome }
     // Single-category selection swaps to these - a vertical, scrollable grid instead of
     // the shelves' horizontal strip, since one category's whole catalog doesn't fit a
     // single row.
     internal val seriesGridAdapter = com.lumora.adapter.PosterGridAdapter(
         onItemLongClick = { item -> onGridItemLongClick(item) },
-        progressFor = { item -> vodProgressById[item.id] }
+        progressFor = { item -> vodProgressById[item.id] },
+        isWatched = { item -> isItemWatched(item) }
     ) { item -> onHomeItemClick(item) }
     internal val filmsGridAdapter = com.lumora.adapter.PosterGridAdapter(
         onItemLongClick = { item -> onGridItemLongClick(item) },
-        progressFor = { item -> vodProgressById[item.id] }
+        progressFor = { item -> vodProgressById[item.id] },
+        isWatched = { item -> isItemWatched(item) }
     ) { item -> playItem(item) }
     internal val tmdbClient = com.lumora.data.remote.tmdb.TmdbClient()
     /** Discover tile id -> short badge naming the sources that already carry the title.
      *  Filled by loadDiscover() off the main thread; empty means "not in your library". */
     internal var discoverLibrarySources: Map<String, String> = emptyMap()
     internal val discoverGridAdapter = com.lumora.adapter.PosterGridAdapter(
-        badgeFor = { item -> discoverLibrarySources[item.id]?.let { it to R.color.primary } }
+        badgeFor = { item -> discoverLibrarySources[item.id]?.let { it to R.color.primary } },
+        isWatched = { item -> isItemWatched(item) }
     ) { item -> onDiscoverItemClick(item) }
     internal var discoverSearchJob: Job? = null
     /** Badge pass for the Discover grid - cancelled when a new search replaces the tiles. */

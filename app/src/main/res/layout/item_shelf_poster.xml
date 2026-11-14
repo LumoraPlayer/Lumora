@@ -45,6 +45,20 @@
             android:progressDrawable="@drawable/progress_poster_resume"
             android:visibility="gone" />
 
+        <!-- Watched marker: green tick on the artwork's top-right corner. -->
+        <ImageView
+            android:id="@+id/itemWatchedBadge"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="6dp"
+            android:background="@drawable/bg_episode_check"
+            android:importantForAccessibility="no"
+            android:padding="3dp"
+            android:src="@drawable/ic_check"
+            android:tint="@android:color/white"
+            android:visibility="gone" />
+
         <!-- Three lines, not four: the overlay is a caption, not a synopsis. Four lines
              swallowed the bottom half of the artwork and forced the auto-sizer down to
              the floor on almost every long title; two clipped titles like

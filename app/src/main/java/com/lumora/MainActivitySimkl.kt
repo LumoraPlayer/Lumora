@@ -292,6 +292,7 @@ internal fun MainActivity.pullSimklWatched(force: Boolean = false, onDone: ((Int
         if (added > 0) {
             refreshHomeShelvesIfShowing()
             refreshSeriesShelvesIfShowing()
+            refreshFilmShelvesIfShowing()
         }
         onDone?.invoke(added)
     }

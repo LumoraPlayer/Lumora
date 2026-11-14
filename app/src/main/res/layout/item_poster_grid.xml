@@ -63,6 +63,20 @@
             android:textSize="@dimen/poster_badge_text"
             android:visibility="gone" />
 
+        <!-- Watched marker: green tick on the artwork's top-right corner. -->
+        <ImageView
+            android:id="@+id/itemWatchedBadge"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="6dp"
+            android:background="@drawable/bg_episode_check"
+            android:importantForAccessibility="no"
+            android:padding="3dp"
+            android:src="@drawable/ic_check"
+            android:tint="@android:color/white"
+            android:visibility="gone" />
+
         <!-- Caption block: a quiet year/rating line above the title, so the grid can show
              the metadata that makes a remake distinguishable without moving titles off the
              artwork (which costs a row of visible posters). -->

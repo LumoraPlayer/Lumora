@@ -217,7 +217,44 @@ private fun MainActivity.seriesTitleForEpisode(item: Channel): String? {
 internal fun MainActivity.isItemWatched(item: Channel): Boolean {
     val key = item.id.ifBlank { item.url }
     if (key.isNotBlank() && PlaybackPositionStore.get(this, key)?.isNearComplete == true) return true
+    // A show card has no episode number, so there is no per-episode key to consult. Its tick
+    // comes from the whole-series marker updateSeriesWatchedMarker() maintains when every
+    // episode in the loaded list has been seen.
+    if (item.mediaType == MediaType.SERIES && item.episodeNum == null) {
+        return seriesWatchedKey(item.name)?.let { WatchedStore.isWatched(this, it) } ?: false
+    }
     return watchedKeysFor(item).any { WatchedStore.isWatched(this, it) }
+}
+
+/** Shared watched mark for a whole series, keyed by its normalised title. */
+internal fun seriesWatchedKey(seriesTitle: String?): String? {
+    val title = seriesTitle ?: return null
+    return normalizeForWatchedKey(title)?.let { "s|$it" }
+}
+
+/**
+ * Records (or clears) the whole-series watched marker from a fully loaded episode list.
+ *
+ * A series card is not a playable item, so it has no watched key of its own. The detail screen
+ * is the one place that holds every episode the provider and TMDB know about; when all of them
+ * are watched the show gets an `s|title` mark, which is what draws the poster's tick. Called on
+ * detail load (which also backfills the marker for a show already finished before this build)
+ * and after every per-episode or whole-season toggle.
+ */
+internal fun MainActivity.updateSeriesWatchedMarker(
+    series: Channel,
+    seasons: List<Pair<String, List<Channel>>>
+) {
+    if (series.mediaType != MediaType.SERIES) return
+    val marker = seriesWatchedKey(series.name) ?: return
+    val episodes = seasons.asSequence()
+        .flatMap { (_, episodeList) -> episodeList.asSequence() }
+        .filter { it.episodeNum != null }
+        .toList()
+    // Nothing to compare against - leave an existing marker alone rather than clearing it on
+    // a detail page the provider refused to load.
+    if (episodes.isEmpty()) return
+    WatchedStore.setWatched(this, marker, episodes.all { isItemWatched(it) })
 }
 
 /**

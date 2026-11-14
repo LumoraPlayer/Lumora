@@ -49,6 +49,7 @@ internal fun MainActivity.refreshVodProgress(rebind: Boolean = false) {
         }
     }
     if (showingHome) homeShelfAdapter.notifyItemRangeChanged(0, homeShelfAdapter.itemCount)
+    if (showingDiscover) discoverGridAdapter.notifyItemRangeChanged(0, discoverGridAdapter.itemCount)
 }
 
 /** Cards a horizontal shelf previews. "See all" pages the rest from the database. */

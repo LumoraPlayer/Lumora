@@ -86,7 +86,8 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     resultsList.layoutManager = GridLayoutManager(this, dialogSpanCount)
     val resultsAdapter = SearchResultsAdapter(
         showTypeBadge = true,
-        onItemLongClick = { item -> toggleFavoriteVodItem(item) }
+        onItemLongClick = { item -> toggleFavoriteVodItem(item) },
+        isWatched = { item -> isItemWatched(item) }
     ) { item ->
         // P1-1: remember the query so Back from the player/detail returns to the
         // results (the session survives picking a result). This is also the moment a

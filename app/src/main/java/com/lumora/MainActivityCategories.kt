@@ -305,6 +305,9 @@ internal fun MainActivity.refreshHomeShelvesIfShowing() {
     if (showingHome) {
         refreshVodProgress()
         homeShelfAdapter.submitList(buildHomeShelves()) {
+            // Watched ticks and resume bars are bind-time state; a content-equal diff would
+            // otherwise leave them stale until something else rebinds the row.
+            homeShelfAdapter.notifyItemRangeChanged(0, homeShelfAdapter.itemCount)
             // Removing a shelf/poster takes the focused view with it. Re-claim Home if the
             // refresh left nothing visible focused (no-op when the ring survived).
             if (showingHome) restoreBrowseFocusIfLost()
@@ -341,7 +344,11 @@ internal fun MainActivity.refreshSeriesShelvesIfShowing() {
         shelvesFromCategoryRows(cachedSeriesCategoryRows, seriesList)
             .let { s -> (if (newestShelf == null) s else listOf(newestShelf) + s) }
     seriesShelves = shelves
-    seriesShelfAdapter.submitList(shelves)
+    seriesShelfAdapter.submitList(shelves) {
+        // Watched ticks and resume bars are drawn from store state at bind time; without
+        // this a content-equal diff leaves them stale after a watched toggle.
+        seriesShelfAdapter.notifyItemRangeChanged(0, seriesShelfAdapter.itemCount)
+    }
 }
 
 /** Films-shelf counterpart of [refreshSeriesShelvesIfShowing]: the Continue Watching
@@ -361,7 +368,9 @@ internal fun MainActivity.refreshFilmShelvesIfShowing() {
             else listOf(ContentShelf(getString(R.string.category_continue_watching), lead)) + s
         }
     filmShelves = shelves
-    filmsShelfAdapter.submitList(shelves)
+    filmsShelfAdapter.submitList(shelves) {
+        filmsShelfAdapter.notifyItemRangeChanged(0, filmsShelfAdapter.itemCount)
+    }
 }
 
 /** Long-press a future guide block to arm/disarm a 5-min-before notification for it. */

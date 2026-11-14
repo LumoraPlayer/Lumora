@@ -592,6 +592,13 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
             }.toHashSet()
             var cleared = 0
             if (removed.isNotEmpty()) {
+                // Any removed episode means its show is no longer fully watched.
+                for (key in removed) {
+                    val parts = key.split('|')
+                    if (parts.size == 4 && parts[0] == "e") {
+                        WatchedStore.setWatched(this@pullTraktWatched, "s|${parts[1]}", false)
+                    }
+                }
                 val toClear = removed.filter { WatchedStore.isWatched(this@pullTraktWatched, it) }
                 if (toClear.isNotEmpty()) {
                     WatchedStore.setWatchedBatch(this@pullTraktWatched, toClear, false)
@@ -637,6 +644,7 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
         if (added > 0 || removed > 0) {
             refreshHomeShelvesIfShowing()
             refreshSeriesShelvesIfShowing()
+            refreshFilmShelvesIfShowing()
         }
         onDone?.invoke(added)
     }
@@ -688,6 +696,15 @@ internal fun MainActivity.reconcileTraktUpNextTrails() {
         if (!key.startsWith("trakt|")) continue
         val title = normalizeForWatchedKey(snapshot.name) ?: continue
         if (title !in watchedShowTitles) PlaybackPositionStore.clear(this, key)
+    }
+    // A whole-series marker is only meaningful while at least one episode mark remains; a
+    // store that lost its episode keys must not leave a green tick on a show with no watched
+    // episodes left.
+    val marks = WatchedStore.allKeys(this)
+    for (marker in marks) {
+        if (!marker.startsWith("s|")) continue
+        val title = marker.removePrefix("s|")
+        if (marks.none { it.startsWith("e|$title|") }) WatchedStore.setWatched(this, marker, false)
     }
 }
 

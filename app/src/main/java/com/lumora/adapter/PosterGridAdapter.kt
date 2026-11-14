@@ -42,6 +42,8 @@ class PosterGridAdapter(
     private val onItemLongClick: ((Channel) -> Unit)? = null,
     /** 0..1 resume position per card, or null when the title has no saved progress. */
     private val progressFor: ((Channel) -> Float?)? = null,
+    /** True when [Channel] has already been watched - draws the green corner tick. */
+    private val isWatched: ((Channel) -> Boolean)? = null,
     private val onItemClick: (Channel) -> Unit
 ) : ListAdapter<Channel, PosterGridAdapter.ViewHolder>(DiffCallback()) {
 
@@ -129,11 +131,14 @@ class PosterGridAdapter(
         private val titleText: TextView = itemView.findViewById(R.id.itemTitle)
         private val metaText: TextView = itemView.findViewById(R.id.itemMeta)
         private val typeBadge: TextView = itemView.findViewById(R.id.itemTypeBadge)
+        private val watchedBadge: ImageView = itemView.findViewById(R.id.itemWatchedBadge)
         private val progressBar: ProgressBar = itemView.findViewById(R.id.itemProgress)
         private var current: Channel? = null
         private var imageJob: Job? = null
 
         init {
+            // The tick uses the episode-toggle's green selected circle.
+            watchedBadge.isSelected = true
             itemView.setOnClickListener { current?.let(onItemClick) }
             onItemLongClick?.let { handler ->
                 itemView.setOnLongClickListener { current?.let(handler); true }
@@ -228,6 +233,8 @@ class PosterGridAdapter(
             } else {
                 progressBar.visibility = View.GONE
             }
+            watchedBadge.visibility =
+                if (isWatched?.invoke(channel) == true) View.VISIBLE else View.GONE
 
             val custom = badgeFor?.invoke(channel)
             if (custom != null) {
