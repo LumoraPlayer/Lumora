@@ -37,8 +37,8 @@ android {
         applicationId = "com.lumora"
         minSdk = 25
         targetSdk = 36
-        versionCode = 72
-        versionName = "7.2"
+        versionCode = 73
+        versionName = "7.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
