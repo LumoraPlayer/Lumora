@@ -65,6 +65,7 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
     localSeriesIndexCache = null
     withContext(Dispatchers.Default) {
         aliasRemoteWatchedMarks()
+        reconcileRemoteUpNextDrops()
         reconcileTraktUpNextTrails()
     }
 

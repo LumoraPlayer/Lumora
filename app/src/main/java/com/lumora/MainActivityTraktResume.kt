@@ -73,16 +73,53 @@ internal fun MainActivity.pullTraktPlayback(force: Boolean = false, onDone: ((In
     scope.launch {
         val token = traktAccessToken() ?: run { onDone?.invoke(0); return@launch }
         val entries = withContext(Dispatchers.IO) {
-            runCatching { traktClient.playback(token) }.getOrDefault(emptyList())
+            runCatching { traktClient.playbackOrNull(token) }.getOrNull()
+        } ?: run { onDone?.invoke(0); return@launch }
+        val result = withContext(Dispatchers.Default) {
+            // Canonical keys for every entry Trakt currently holds. Comparing them with the
+            // set observed at the previous successful pull is what turns "absent" into
+            // "removed on another device": a local resume point Trakt never held is never in
+            // the observed set, so it is not swept just because this device watched ahead.
+            val remoteKeys = HashSet<String>()
+            for (entry in entries) {
+                if (entry.target.isSeries) {
+                    remoteKeys += episodeWatchedKeys(
+                        entry.title, entry.target.season, entry.target.episode
+                    )
+                } else {
+                    movieWatchedKey(entry.title)?.let(remoteKeys::add)
+                }
+            }
+            val localCopies = ArrayList<Channel>()
+            val imported = importTraktResumeEntries(entries) { localCopies += it }
+            // The catalogue's spelling of the same episode is a second key the local position
+            // entry may be under (see watchedKeysFor). Including it in the observed set means
+            // a removal on another device clears that copy too, not just Trakt's spelling.
+            for (local in localCopies) remoteKeys += watchedKeysFor(local)
+            val removedKeys = TraktStore.playbackSeenKeys(prefs) - remoteKeys
+            val before = PlaybackPositionStore.getAllWithSnapshots(this@pullTraktPlayback).size
+            if (removedKeys.isNotEmpty()) clearPositionEntriesForWatchedKeys(removedKeys)
+            val removed = (before - PlaybackPositionStore.getAllWithSnapshots(this@pullTraktPlayback).size)
+                .coerceAtLeast(0)
+            // Remember only the entries that actually produced a local resume point. That
+            // bounds the set to what this device can show, and a resume point created later
+            // is compared against a later pull rather than this one.
+            val localKeys = HashSet<String>()
+            for ((_, snapshot) in PlaybackPositionStore.getAllWithSnapshots(this@pullTraktPlayback)) {
+                localKeys += watchedKeysFor(snapshot)
+            }
+            TraktStore.savePlaybackSeenKeys(
+                prefs,
+                remoteKeys.filterTo(HashSet()) { it in localKeys }
+            )
+            imported to removed
         }
-        if (entries.isEmpty()) { onDone?.invoke(0); return@launch }
-        val imported = withContext(Dispatchers.Default) {
-            importTraktResumeEntries(entries)
-        }
+        val imported = result.first
+        val removed = result.second
         TraktStore.markPlaybackPulled(prefs)
-        if (imported > 0) {
+        if (imported > 0 || removed > 0) {
             // The row is rebuilt from the store on every shelf build, so the tiles are already
-            // there - but a shelf that is on screen was built before the import landed.
+            // there - but a shelf that is on screen was built before the import/removal landed.
             refreshHomeShelvesIfShowing()
             refreshSeriesShelvesIfShowing()
             refreshFilmShelvesIfShowing()
@@ -101,13 +138,18 @@ private const val PULL_INTERVAL_MS = 6L * 60 * 60 * 1000
  * episode list is a network call. Bounded by the size of Trakt's own list, which is the
  * list of things somebody actually left half-watched - a handful, not a library.
  */
-private suspend fun MainActivity.importTraktResumeEntries(entries: List<TraktClient.PlaybackEntry>): Int {
+private suspend fun MainActivity.importTraktResumeEntries(
+    entries: List<TraktClient.PlaybackEntry>,
+    /** Called with every resolved local copy, whether or not its position was overwritten. */
+    onResolved: (Channel) -> Unit = {}
+): Int {
     var imported = 0
     for (entry in entries) {
         // Nothing to resume: a finished item is in the watched list, and an untouched one is
         // not a resume point at all.
         if (entry.progress <= 0.0 || entry.progress >= 100.0) continue
         val local = resolveTraktResumeCopy(entry) ?: continue
+        onResolved(local)
         if (seedTraktResumePosition(entry, local)) imported++
     }
     return imported

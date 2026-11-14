@@ -10,6 +10,7 @@ import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.RecentlyPlayedStore
 import com.lumora.cache.WatchedStore
 import com.lumora.data.IptvProviderStore
+import com.lumora.data.TraktStore
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
 import com.lumora.model.ContentShelfSection
@@ -1495,7 +1496,9 @@ internal fun MainActivity.fetchUpNextSeries(seriesIds: List<Pair<String, String?
 internal fun MainActivity.seriesUpNextItems(): List<Channel> {
     val server = (jellyfinNextUpItems + plexNextUpItems).filter { it.mediaType == MediaType.SERIES }
     val local = buildUpNextSeriesTiles()
-    val hidden = getHiddenUpNextSeries()
+    // A show removed here is in PREF_UP_NEXT_HIDDEN; one dropped on another device is in the
+    // Trakt-mirrored set. Both mean "not on this row", so the row reads the same everywhere.
+    val hidden = getHiddenUpNextSeries() + TraktStore.remoteHiddenUpNextIds(prefs)
     return continueWatchingTiles(
         (server + local)
             .distinctBy { it.id.ifBlank { it.url } }
@@ -1586,11 +1589,19 @@ internal fun MainActivity.removeFromUpNext(item: Channel) {
  *  only way back from [removeFromUpNext], which is otherwise permanent. Offered on the sidebar
  *  row's own menu, where the row is. */
 internal fun MainActivity.restoreRemovedUpNext() {
-    if (getHiddenUpNextSeries().isEmpty()) return
+    val remoteTmdb = TraktStore.remoteDroppedTmdbIds(prefs)
+    if (getHiddenUpNextSeries().isEmpty() && remoteTmdb.isEmpty() &&
+        TraktStore.remoteHiddenUpNextIds(prefs).isEmpty()
+    ) {
+        return
+    }
     prefs.edit().remove(PREF_UP_NEXT_HIDDEN).apply()
+    TraktStore.clearRemoteUpNextDrops(prefs)
     // Read before undropOnTrakt clears the set: these ids are the only handle Trakt's drop list
     // has, and undropping is what keeps the row from staying empty on every other Trakt client.
-    undropOnTrakt(getUpNextDroppedOnTrakt())
+    // Drops mirrored from another device are included - restoring the row here means restoring
+    // it on the account, or this device would just hide it again on the next drops pull.
+    undropOnTrakt(getUpNextDroppedOnTrakt() + remoteTmdb)
     // Trails for the restored shows were never resolved while they were hidden.
     clearUpNextMemo()
     refreshHomeShelvesIfShowing()
@@ -1708,9 +1719,11 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     // servers hide (see disabledSourceIds); their lists are only re-pulled on catalog
     // loads, so the filter has to run here at render time, not where they are stored.
     val off = disabledSourceIds()
+    val hiddenUpNext = getHiddenUpNextSeries() + TraktStore.remoteHiddenUpNextIds(prefs)
     val nextUpItems = (jellyfinNextUpItems + plexNextUpItems + upNext)
         .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
         .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
+        .filterNot { upNextSeriesId(it) in hiddenUpNext }
         .distinctBy { it.id.ifBlank { it.url } }
         .filterNot(::isAdultHomeItem)
     if (nextUpItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_next_up), nextUpItems))

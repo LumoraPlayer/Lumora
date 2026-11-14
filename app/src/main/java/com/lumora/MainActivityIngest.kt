@@ -24,6 +24,26 @@ internal fun formatCatalogueSize(bytes: Long): String = when {
     else -> "$bytes B"
 }
 
+/**
+ * True when a load has a catalogue to show already, so its import runs without the card.
+ *
+ * In-memory lists cover the normal case (a refresh, a provider edit, a second load in the same
+ * session). On a forced load the persisted catalogue is checked separately - see
+ * loadAllConfiguredProviders - because a VOD-only setup can be on screen with an empty live list.
+ */
+internal fun MainActivity.hasCachedCatalogueOnScreen(): Boolean =
+    allChannels.isNotEmpty() ||
+        filmList.isNotEmpty() ||
+        seriesList.isNotEmpty() ||
+        cachedSeriesCategoryRows.isNotEmpty() ||
+        cachedFilmCategoryRows.isNotEmpty()
+
+/** Whether this load's ingest card is deliberately kept off screen. */
+internal fun shouldSuppressIngestBanner(
+    paintedFromStore: Boolean,
+    hadCachedCatalogue: Boolean
+): Boolean = paintedFromStore || hadCachedCatalogue
+
 /** One provider's live numbers while its catalogue is being ingested. */
 internal data class CatalogIngestState(
     val providerId: String,
@@ -96,7 +116,7 @@ internal fun MainActivity.publishCatalogConnecting(providerId: String, name: Str
 internal fun MainActivity.renderCatalogIngest(takeFocus: Boolean = true) {
     // Hiding the banner is about the narration, not the work: keep collecting state (the
     // end-of-load summary and the stored sizes still need it) and skip the repaint.
-    if (catalogIngestHidden) return
+    if (catalogIngestHidden || suppressIngestBanner) return
     // Fullscreen playback owns the screen. Keep collecting the numbers, but keep the card
     // out of the picture; hidePlayer repaints it if the load is still running.
     if (isPlayerVisible) {
@@ -208,8 +228,9 @@ internal fun MainActivity.finishCatalogIngest() {
     hideIngestBanner()
     // The work is not over, only the download: narrate the rest on the status row, which
     // yields to any pane the user has moved to (see applyStatus). Replaced by the load's own
-    // summary a moment later.
-    setStatus(getString(R.string.loading), visible = true)
+    // summary a moment later. A load with a cached catalogue is deliberately silent - the
+    // card was never up, and a "Loading..." row would be the same narration by another name.
+    if (!suppressIngestBanner) setStatus(getString(R.string.loading), visible = true)
 }
 
 /** Drops the narration - the load's own summary message takes over. */
@@ -237,6 +258,9 @@ internal fun MainActivity.prioritizeIngestSection(tab: Int) {
     if (tab != 1 && tab != 2) return
     ingestPriorityTab = tab
     if (catalogIngest.isEmpty()) return
+    // A load with an existing catalogue is deliberately silent; opening a thin-looking tab
+    // must not bring the card back over content the user already has.
+    if (suppressIngestBanner) return
     // If this half is already painted from the cache, the tab is not thin and the card has
     // nothing to explain; leave it hidden. A tab with no cached rows still brings it back.
     val hasCachedSection = if (tab == 1) {

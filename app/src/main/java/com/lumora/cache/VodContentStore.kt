@@ -53,6 +53,10 @@ internal object VodContentStore {
         val content: MainActivity.FilmsSeriesContent? = null,
     )
 
+    /** Cheap existence test for the snapshot, used before deciding whether a load narrates. */
+    fun hasCache(context: Context): Boolean =
+        File(context.filesDir, FILE).let { it.isFile && it.length() > 0L }
+
     /** Returns the stored key and content, or null when there is nothing usable. */
     fun load(context: Context): Pair<String, MainActivity.FilmsSeriesContent>? {
         // An upgrade from a broken older snapshot should not leave its orphan behind

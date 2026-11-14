@@ -142,6 +142,15 @@ class CatalogRepository private constructor(
         dao.count()
     }
 
+    /**
+     * True when any catalogue row is stored, without materialising the resident model.
+     *
+     * Used to decide whether a catalogue load starts in the background: [count] would build
+     * a flat-cache-backed resident list just to answer, which is the work the decision exists
+     * to avoid narrating.
+     */
+    suspend fun hasStoredRows(): Boolean = withContext(Dispatchers.IO) { dao.count() > 0 }
+
     suspend fun countForProvider(providerId: String): Int =
         withContext(Dispatchers.IO) {
             resident()?.let { return@withContext it.countForProvider(providerId) }

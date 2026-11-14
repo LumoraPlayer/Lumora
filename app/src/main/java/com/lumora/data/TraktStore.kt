@@ -32,6 +32,26 @@ object TraktStore {
     private const val KEY_LAST_PULL = "trakt_last_watched_pull"
     /** Timestamp of the last successful `/sync/playback` pull - see [lastPlaybackPullMs]. */
     private const val KEY_LAST_PLAYBACK_PULL = "trakt_last_playback_pull"
+    /** Timestamp of the last successful `/users/hidden/dropped` pull. */
+    private const val KEY_LAST_DROPS_PULL = "trakt_last_drops_pull"
+
+    /**
+     * Canonical watched keys last seen on Trakt *and* present locally at that pull.
+     *
+     * The pull is otherwise additive: a mark that another device removed from Trakt is absent
+     * from the response, which says nothing on its own (it may never have been pushed). These
+     * keys make the absence meaningful only for state this device had already confirmed was on
+     * Trakt - so a removal on one device clears the mark here instead of this device pushing it
+     * straight back on the next Sync.
+     */
+    private const val KEY_WATCHED_SEEN = "trakt_watched_seen_keys"
+    /** The same idea for `/sync/playback`: watched keys whose resume entry was on Trakt. */
+    private const val KEY_PLAYBACK_SEEN = "trakt_playback_seen_keys"
+
+    /** Shows Trakt currently reports as dropped, by TMDB id. */
+    private const val KEY_REMOTE_DROPPED_TMDB = "trakt_remote_dropped_tmdb"
+    /** Local Up Next ids resolved from [KEY_REMOTE_DROPPED_TMDB] for the row filter. */
+    private const val KEY_REMOTE_UP_NEXT_HIDDEN = "trakt_remote_up_next_hidden"
 
     fun tokens(prefs: SharedPreferences): TraktClient.Tokens? {
         val access = prefs.getString(KEY_ACCESS_TOKEN, null)?.takeIf { it.isNotBlank() } ?: return null
@@ -72,6 +92,11 @@ object TraktStore {
             .remove(KEY_USERNAME)
             .remove(KEY_LAST_PULL)
             .remove(KEY_LAST_PLAYBACK_PULL)
+            .remove(KEY_LAST_DROPS_PULL)
+            .remove(KEY_WATCHED_SEEN)
+            .remove(KEY_PLAYBACK_SEEN)
+            .remove(KEY_REMOTE_DROPPED_TMDB)
+            .remove(KEY_REMOTE_UP_NEXT_HIDDEN)
             .apply()
     }
 
@@ -140,5 +165,54 @@ object TraktStore {
 
     fun markPlaybackPulled(prefs: SharedPreferences) {
         prefs.edit().putLong(KEY_LAST_PLAYBACK_PULL, System.currentTimeMillis()).apply()
+    }
+
+    fun lastDropsPullMs(prefs: SharedPreferences): Long = prefs.getLong(KEY_LAST_DROPS_PULL, 0L)
+
+    fun markDropsPulled(prefs: SharedPreferences) {
+        prefs.edit().putLong(KEY_LAST_DROPS_PULL, System.currentTimeMillis()).apply()
+    }
+
+    // ── Cross-device removals ───────────────────
+
+    fun watchedSeenKeys(prefs: SharedPreferences): Set<String> =
+        prefs.getStringSet(KEY_WATCHED_SEEN, emptySet())?.toSet().orEmpty()
+
+    fun saveWatchedSeenKeys(prefs: SharedPreferences, keys: Set<String>) {
+        prefs.edit().putStringSet(KEY_WATCHED_SEEN, keys).apply()
+    }
+
+    fun playbackSeenKeys(prefs: SharedPreferences): Set<String> =
+        prefs.getStringSet(KEY_PLAYBACK_SEEN, emptySet())?.toSet().orEmpty()
+
+    fun savePlaybackSeenKeys(prefs: SharedPreferences, keys: Set<String>) {
+        prefs.edit().putStringSet(KEY_PLAYBACK_SEEN, keys).apply()
+    }
+
+    /** TMDB ids of the shows Trakt currently reports as dropped, or empty. */
+    fun remoteDroppedTmdbIds(prefs: SharedPreferences): Set<Int> =
+        prefs.getStringSet(KEY_REMOTE_DROPPED_TMDB, emptySet())
+            ?.mapNotNull { it.toIntOrNull() }?.toSet().orEmpty()
+
+    fun saveRemoteDroppedTmdbIds(prefs: SharedPreferences, ids: Set<Int>) {
+        prefs.edit()
+            .putStringSet(KEY_REMOTE_DROPPED_TMDB, ids.map(Int::toString).toSet())
+            .apply()
+    }
+
+    /** Local series ids the remote dropped list currently hides from Up Next. */
+    fun remoteHiddenUpNextIds(prefs: SharedPreferences): Set<String> =
+        prefs.getStringSet(KEY_REMOTE_UP_NEXT_HIDDEN, emptySet())?.toSet().orEmpty()
+
+    fun saveRemoteHiddenUpNextIds(prefs: SharedPreferences, ids: Set<String>) {
+        prefs.edit().putStringSet(KEY_REMOTE_UP_NEXT_HIDDEN, ids).apply()
+    }
+
+    /** Forgets the remote dropped list - used when the user restores removed shows. */
+    fun clearRemoteUpNextDrops(prefs: SharedPreferences) {
+        prefs.edit()
+            .remove(KEY_REMOTE_DROPPED_TMDB)
+            .remove(KEY_REMOTE_UP_NEXT_HIDDEN)
+            .apply()
     }
 }

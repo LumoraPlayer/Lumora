@@ -1391,6 +1391,10 @@ class MainActivity : AppCompatActivity() {
     /** Set by the banner's Hide button: the import keeps running, the narration stops until
      *  the next load starts. Main-thread only, like the map above. */
     internal var catalogIngestHidden = false
+    /** True for a load that found a catalogue already on disk or on screen: the import runs in
+     *  the background and must not raise its card, not even when the user opens a tab whose
+     *  cached rows are empty (see prioritizeIngestSection). Main-thread only. */
+    internal var suppressIngestBanner = false
     /** True while the card holds focus (or has just been given it), so a repaint does not
      *  fight the user for it - see MainActivityIngest.takeIngestFocus. */
     internal var catalogIngestFocusTaken = false
@@ -1883,6 +1887,9 @@ class MainActivity : AppCompatActivity() {
         // Continue Watching on a second TV; the watched pull above only knows what was
         // *finished*, which is Up Next's business rather than this row's.
         pullTraktPlayback()
+        // Trakt's dropped-show list - an Up Next removal made on another device. Without it
+        // that device kept offering the show and a new play there undid the drop.
+        pullTraktDroppedShows()
 
         // Downloads are a mobile-only affordance - a TV box has nowhere meaningful to
         // browse a downloaded file, and it's not what "download for offline" means there.

@@ -87,7 +87,16 @@ internal fun MainActivity.aliasRemoteWatchedMarks() {
             if (!WatchedStore.isWatched(this, localKey)) pending.add(localKey)
         }
     }
-    if (pending.isNotEmpty()) WatchedStore.setWatchedBatch(this, pending, true)
+    if (pending.isNotEmpty()) {
+        WatchedStore.setWatchedBatch(this, pending, true)
+        // These alias keys mirror marks that are on Trakt under the trackers' spelling. Keep
+        // them in the observed set so an un-watch on another device clears this spelling too,
+        // instead of the next backfill pushing it under the catalogue's title.
+        com.lumora.data.TraktStore.saveWatchedSeenKeys(
+            prefs,
+            com.lumora.data.TraktStore.watchedSeenKeys(prefs) + pending
+        )
+    }
 }
 
 /**

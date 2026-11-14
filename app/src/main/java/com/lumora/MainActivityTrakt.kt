@@ -246,9 +246,9 @@ internal fun MainActivity.traktRemovePlayback(
     scope.launch {
         val token = traktAccessToken() ?: return@launch
         // Read the list first: no resolution work is worth doing for an account with nothing
-        // paused, which is the common case right after a clear-all.
-        val entries = traktClient.playback(token)
-        if (entries.isEmpty()) return@launch
+        // paused, which is the common case right after a clear-all. Null is a failed read, not
+        // an empty list - deleting nothing would leave the entries on Trakt.
+        val entries = traktClient.playbackOrNull(token) ?: return@launch
         // (title key, year to compare or null). A show's episodes are matched by name alone:
         // an episode tile's year is not the year Trakt stamps on the show, and requiring it
         // would quietly miss every entry for a series. Several keys are tried per item: the
@@ -378,6 +378,83 @@ internal fun MainActivity.undropOnTrakt(ids: Set<Int>) {
     }
 }
 
+/**
+ * Pulls Trakt's dropped-show list, so an Up Next removal made on another device hides the same
+ * show here.
+ *
+ * A drop is account state; without reading it back the other installs kept offering the show,
+ * and watching the next episode there made Trakt undrop it, which is how a series taken off
+ * For You on one device kept coming back. The dropped list is small (one row per refused show),
+ * so it is pulled beside the watched/playback lists and rate-limited on the same six hours.
+ *
+ * A failed request is null and changes nothing. An empty list is real and clears the remote
+ * hidden set, which is how an un-drop on trakt.tv (or another device's restore) comes back.
+ */
+internal fun MainActivity.pullTraktDroppedShows(force: Boolean = false, onDone: ((Int) -> Unit)? = null) {
+    if (!isTraktSignedIn()) {
+        onDone?.invoke(0)
+        return
+    }
+    if (!force && System.currentTimeMillis() - TraktStore.lastDropsPullMs(prefs) < PULL_INTERVAL_MS) {
+        onDone?.invoke(0)
+        return
+    }
+    scope.launch {
+        val token = traktAccessToken() ?: run { onDone?.invoke(0); return@launch }
+        val dropped = withContext(Dispatchers.IO) {
+            runCatching { traktClient.droppedShows(token) }.getOrNull()
+        } ?: run { onDone?.invoke(0); return@launch }
+        TraktStore.markDropsPulled(prefs)
+        val changed = withContext(Dispatchers.Default) {
+            TraktStore.saveRemoteDroppedTmdbIds(prefs, dropped.mapNotNullTo(HashSet()) { it.tmdbId })
+            reconcileRemoteUpNextDrops()
+        }
+        if (changed > 0) {
+            clearUpNextMemo()
+            refreshHomeShelvesIfShowing()
+            refreshSeriesShelvesIfShowing()
+            if (!showingHome && activeTab == 1) {
+                rebuildCategoriesForActiveTab()
+                applyCategoryFilter()
+            }
+        }
+        onDone?.invoke(changed)
+    }
+}
+
+/**
+ * Turns the remote dropped list into local Up Next hiding, or back when the list shrinks.
+ *
+ * Matching is by TMDB id first (`LocalSeriesIndex.findByTmdbId`), which both sides state; the
+ * stored ids are resolved again after every catalogue load, because a pull at launch can run
+ * before the catalogue exists and a show added later still has to honour the drop.
+ *
+ * Returns how many local hidden ids changed, so callers only rebuild the row when it moved.
+ */
+internal fun MainActivity.reconcileRemoteUpNextDrops(): Int {
+    val remoteTmdb = TraktStore.remoteDroppedTmdbIds(prefs)
+    val previous = TraktStore.remoteHiddenUpNextIds(prefs)
+    if (remoteTmdb.isEmpty()) {
+        if (previous.isEmpty()) return 0
+        TraktStore.saveRemoteHiddenUpNextIds(prefs, emptySet())
+        return previous.size
+    }
+    // The catalogue is not loaded yet (launch pull): leave the previous answer in place and
+    // let classifyAndShow's reconcile pass resolve it once the series rows exist.
+    val index = localSeriesIndex()
+    if (index.isEmpty) return 0
+    val resolved = buildSet {
+        for (tmdbId in remoteTmdb) {
+            val show = index.findByTmdbId(tmdbId) ?: continue
+            val id = upNextSeriesId(show)
+            if (id.isNotBlank()) add(id)
+        }
+    }
+    if (resolved == previous) return 0
+    TraktStore.saveRemoteHiddenUpNextIds(prefs, resolved)
+    return (previous - resolved).size + (resolved - previous).size
+}
+
 // ── Watched sync ────────────────────────────────
 
 /**
@@ -418,9 +495,12 @@ internal fun MainActivity.pushWatchedToTrakt(item: Channel, watched: Boolean) {
  * built from exactly that. A show watched on Trakt therefore reads as watched on every copy in
  * the catalogue, including providers added later.
  *
- * Additive only. A title *absent* from Trakt is not evidence it wasn't watched - it may simply
- * predate the connection, or have been watched on a provider Trakt never heard about - so
- * nothing is ever un-marked from here. Removal stays a deliberate act in the detail screen.
+ * Additive for marks this device has never confirmed on Trakt - a title *absent* from Trakt is
+ * not evidence it wasn't watched, because it may simply predate the connection, or have been
+ * watched on a provider Trakt never heard about. Removal is only inferred for keys this app
+ * previously saw in Trakt's own watched list and still holds locally: those disappearing means
+ * another device (or trakt.tv) un-watched them, and clearing them here is what stops the next
+ * push from resurrecting them there. Marks Trakt never held are never touched.
  *
  * Rate-limited to [PULL_INTERVAL_MS] because it is two whole-library responses; [force] is the
  * Settings pane's "Sync now", which means now.
@@ -437,50 +517,105 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
     scope.launch {
         val token = traktAccessToken() ?: run { onDone?.invoke(0); return@launch }
         val entries = withContext(Dispatchers.IO) {
-            runCatching { traktClient.watched(token) }.getOrDefault(emptyList())
-        }
-        if (entries.isEmpty()) { onDone?.invoke(0); return@launch }
-        val added = withContext(Dispatchers.Default) {
+            runCatching { traktClient.watchedOrNull(token) }.getOrNull()
+        } ?: run { onDone?.invoke(0); return@launch }
+        val result = withContext(Dispatchers.Default) {
             // Collect first, write once. Every WatchedStore write rewrites the whole marks
             // file and holds its monitor - a Trakt history is thousands of keys, so a persist
             // per key was the difference between a sync that lands in a second and one that
             // churns the disk (and stalls every shelf build reading a mark) for minutes.
             val pending = HashSet<String>()
+            val remoteKeys = HashSet<String>()
+            // Shows present in the response whose episode list Trakt could not state. Their
+            // existing marks must not be read as removed just because this response carried no
+            // seasons - the fallback budget or an API quirk can leave the list empty.
+            val protectedTitles = HashSet<String>()
+            val seriesIndex = localSeriesIndex()
             var count = 0
             for (entry in entries) {
+                val local = if (seriesIndex.isEmpty) null else seriesIndex.find(
+                    entry.title, entry.year, entry.tmdbId
+                )
                 if (entry.isSeries) {
                     // How Trakt spells the show is remembered, so the mark can be re-spelled
                     // in the catalogue's own words once the catalogue has loaded - see
                     // aliasRemoteWatchedMarks.
                     recordRemoteSeries(entry.title, entry.year, entry.tmdbId)
+                    if (entry.episodes.isEmpty()) {
+                        normalizeTitleForGrouping(cleanVodTitle(entry.title))
+                            .takeIf { it.isNotBlank() }?.let(protectedTitles::add)
+                        local?.let {
+                            normalizeTitleForGrouping(cleanVodTitle(it.name))
+                                .takeIf { title -> title.isNotBlank() }?.let(protectedTitles::add)
+                        }
+                    }
                     for ((season, numbers) in entry.episodes) {
                         for (number in numbers) {
                             // Every alias spelling (see episodeWatchedKeys): a local copy with
                             // no season marker computes s0 while Trakt states the real season,
                             // and marking only one of them leaves the other's un-tick stuck.
-                            val keys = episodeWatchedKeys(entry.title, season, number)
+                            // The catalogue's spelling is included when it differs, so an
+                            // un-watch on another device clears that mark too instead of this
+                            // device pushing it back under its own title.
+                            val keys = episodeWatchedKeys(entry.title, season, number).toHashSet()
+                            local?.let { keys += episodeWatchedKeys(it.name, season, number) }
                             if (keys.isEmpty()) continue
-                            var changed = false
-                            for (key in keys) {
-                                // Pre-state decides the count: the batch write below has a
-                                // single return value, but the caller reports items.
-                                if (!WatchedStore.isWatched(this@pullTraktWatched, key)) changed = true
-                                pending.add(key)
-                            }
+                            remoteKeys += keys
+                            val changed = keys.any { !WatchedStore.isWatched(this@pullTraktWatched, it) }
+                            pending += keys
                             if (changed) count++
                         }
                     }
                 } else {
-                    val key = movieWatchedKey(entry.title) ?: continue
-                    if (!WatchedStore.isWatched(this@pullTraktWatched, key)) count++
-                    pending.add(key)
+                    val keys = HashSet<String>()
+                    movieWatchedKey(entry.title)?.let(keys::add)
+                    local?.let { movieWatchedKey(it.name)?.let(keys::add) }
+                    if (keys.isEmpty()) continue
+                    remoteKeys += keys
+                    if (keys.any { !WatchedStore.isWatched(this@pullTraktWatched, it) }) count++
+                    pending += keys
                 }
             }
             if (pending.isNotEmpty()) {
                 WatchedStore.setWatchedBatch(this@pullTraktWatched, pending, true)
             }
-            count
+            // A mark that was on Trakt at the last successful pull and is gone now was
+            // removed by another device (or on trakt.tv). Clear it here too, so this device's
+            // next pushExistingWatchedToTrakt cannot put it straight back. Only keys inside
+            // the previously observed set are eligible: a local mark Trakt never held is not
+            // evidence of a removal.
+            val removed = (TraktStore.watchedSeenKeys(prefs) - remoteKeys).filterNot { key ->
+                // A show whose episode list this response omitted keeps whatever this device
+                // already holds; only a show that stated its episodes can have one removed.
+                val parts = key.split('|')
+                parts.size == 4 && parts[0] == "e" && parts[1] in protectedTitles
+            }.toHashSet()
+            var cleared = 0
+            if (removed.isNotEmpty()) {
+                val toClear = removed.filter { WatchedStore.isWatched(this@pullTraktWatched, it) }
+                if (toClear.isNotEmpty()) {
+                    WatchedStore.setWatchedBatch(this@pullTraktWatched, toClear, false)
+                    cleared = toClear.size
+                }
+                // A near-complete per-copy position entry makes the title read as watched even
+                // with the shared mark gone, so the removal has to reach the position store
+                // too - for every spelling in [removed], not only the ones still marked.
+                val before = PlaybackPositionStore.getAllWithSnapshots(this@pullTraktWatched).size
+                clearPositionEntriesForWatchedKeys(removed)
+                cleared += (before - PlaybackPositionStore.getAllWithSnapshots(this@pullTraktWatched).size)
+                    .coerceAtLeast(0)
+            }
+            // Only keys this device actually holds are worth remembering: the set is a
+            // tombstone for local state, not a copy of the account's whole history.
+            val localNow = WatchedStore.allKeys(this@pullTraktWatched)
+            TraktStore.saveWatchedSeenKeys(
+                prefs,
+                remoteKeys.filterTo(HashSet()) { it in localNow }
+            )
+            count to cleared
         }
+        val added = result.first
+        val removed = result.second
         TraktStore.markWatchedPulled(prefs)
         // The catalogue may be loaded by now, in which case the marks can be spelled
         // against it straight away; if it is not, this is a no-op and the catalogue load
@@ -488,9 +623,9 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
         // catalogue database, so keep them off the main dispatcher.
         withContext(Dispatchers.Default) {
             aliasRemoteWatchedMarks()
-            if (added > 0) {
+            if (added > 0 || removed > 0) {
                 // Watched state decides what "next episode" means, so the memo behind Up Next is
-                // stale the moment any mark lands.
+                // stale the moment any mark lands (or is cleared).
                 clearUpNextMemo()
                 // The catalog this install is matching Trakt titles against may not be loaded yet
                 // (this whole pull runs off app launch, racing loadSavedProvider's own async
@@ -499,7 +634,7 @@ internal fun MainActivity.pullTraktWatched(force: Boolean = false, onDone: ((Int
                 reconcileTraktUpNextTrails()
             }
         }
-        if (added > 0) {
+        if (added > 0 || removed > 0) {
             refreshHomeShelvesIfShowing()
             refreshSeriesShelvesIfShowing()
         }
@@ -539,6 +674,20 @@ internal fun MainActivity.reconcileTraktUpNextTrails() {
         val copyKey = "trakt|${series.id}"
         if (PlaybackPositionStore.get(this, copyKey) != null) continue
         PlaybackPositionStore.save(this, copyKey, 1L, 1L, series.copy(id = copyKey, categoryId = series.id))
+    }
+    // A mark removed on another device arrives here as a cleared WatchedStore key (see
+    // pullTraktWatched's removal pass). Its completed-trail stub has to go too, or Up Next
+    // keeps offering a show with no watched episodes left - and the next play there undoes
+    // the removal on Trakt again.
+    val watchedShowTitles = HashSet<String>()
+    for (key in WatchedStore.allKeys(this)) {
+        val parts = key.split('|')
+        if (parts.size == 4 && parts[0] == "e") watchedShowTitles.add(parts[1])
+    }
+    for ((key, snapshot) in PlaybackPositionStore.getAllWithSnapshots(this)) {
+        if (!key.startsWith("trakt|")) continue
+        val title = normalizeForWatchedKey(snapshot.name) ?: continue
+        if (title !in watchedShowTitles) PlaybackPositionStore.clear(this, key)
     }
 }
 
@@ -592,10 +741,12 @@ internal fun MainActivity.pushExistingWatchedToTrakt(onDone: ((pushed: Int, unre
     scope.launch {
         val token = traktAccessToken() ?: run { onDone?.invoke(0, 0); return@launch }
 
-        // What Trakt already has, so nothing is sent twice.
+        // What Trakt already has, so nothing is sent twice. Null is a failed read: pushing the
+        // whole local history at that point would be a flood of requests Trakt has to dedupe,
+        // so wait for a successful pull instead.
         val remote = withContext(Dispatchers.IO) {
-            runCatching { traktClient.watched(token) }.getOrDefault(emptyList())
-        }
+            runCatching { traktClient.watchedOrNull(token) }.getOrNull()
+        } ?: run { onDone?.invoke(0, 0); return@launch }
         val remoteMovies = remote.filterNot { it.isSeries }.mapNotNull { it.tmdbId }.toHashSet()
         val remoteEpisodes = HashMap<Int, MutableMap<Int, MutableSet<Int>>>()
         for (entry in remote) {
@@ -675,6 +826,10 @@ internal fun MainActivity.pushExistingWatchedToTrakt(onDone: ((pushed: Int, unre
  */
 internal fun MainActivity.traktSyncBothWays(onStatus: ((String) -> Unit)? = null) {
     if (!isTraktSignedIn() || !TraktStore.isWatchedSyncEnabled(prefs)) return
+    // The dropped list can change independently of the two history pulls, and it is what keeps
+    // another device's Up Next removal from being undone here. Fire it before the chain; it
+    // refreshes the row itself when it lands.
+    pullTraktDroppedShows(force = true)
     pullTraktPlayback(force = true) { resumed ->
         pullTraktWatched(force = true) { pulled ->
             onStatus?.invoke(getString(R.string.trakt_pushing))

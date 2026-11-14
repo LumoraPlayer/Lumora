@@ -143,7 +143,7 @@ internal fun sharedWatchedKeysFor(item: com.lumora.data.remote.plex.PlexProvider
         else -> listOfNotNull(sharedWatchedKeyFor(item))
     }
 
-private fun normalizeForWatchedKey(title: String): String? {
+internal fun normalizeForWatchedKey(title: String): String? {
     val normalized = normalizeTitleForGrouping(cleanVodTitle(title))
     if (normalized.isBlank()) return null
     // A newline would corrupt the store's line-per-key file; '|' is this key's own separator.
@@ -291,6 +291,22 @@ internal fun MainActivity.clearSiblingCopyPositions(item: Channel, sharedKeys: L
         if (key == ownKey) continue
         if (sibling.mediaType != item.mediaType) continue
         if (watchedKeysFor(sibling).any { it in sharedSet }) PlaybackPositionStore.clear(this, key)
+    }
+}
+
+/**
+ * Clears every stored position whose shared watched keys intersect [keys].
+ *
+ * Used when Trakt reports that a mark it previously held is gone - the other half of a removal
+ * made on another device. The shared-key sweep is what catches every provider's copy of the
+ * episode, not just the one whose position entry happens to be in front of us; without it a
+ * near-complete copy's position entry keeps `isItemWatched` true and the show stays in Up Next
+ * even though the watched mark itself was cleared.
+ */
+internal fun MainActivity.clearPositionEntriesForWatchedKeys(keys: Set<String>) {
+    if (keys.isEmpty()) return
+    for ((key, snapshot) in PlaybackPositionStore.getAllWithSnapshots(this)) {
+        if (watchedKeysFor(snapshot).any { it in keys }) PlaybackPositionStore.clear(this, key)
     }
 }
 

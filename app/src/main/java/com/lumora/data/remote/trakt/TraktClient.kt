@@ -340,11 +340,24 @@ class TraktClient(private val http: OkHttpClient) {
      * are dropped: tmdb is the only id the app can produce for a catalogue title, so an entry
      * it can't match is an entry it must not delete.
      */
-    suspend fun playback(accessToken: String): List<PlaybackEntry> = withContext(Dispatchers.IO) {
-        if (!isConfigured) return@withContext emptyList()
-        val arr = getArray("$API_BASE/sync/playback?limit=$PLAYBACK_PAGE_LIMIT", accessToken)
-            ?: return@withContext emptyList()
-        parseTraktPlayback(arr)
+    suspend fun playback(accessToken: String): List<PlaybackEntry> =
+        playbackOrNull(accessToken) ?: emptyList()
+
+    /**
+     * [playback] with failure distinguished from an empty list.
+     *
+     * Cross-device removal reconciliation must not treat a failed request as "the account has
+     * nothing paused": that would clear every local resume point the other devices still hold.
+     * Null means the request failed and no absence may be inferred; an empty list is a real
+     * empty account.
+     */
+    suspend fun playbackOrNull(accessToken: String): List<PlaybackEntry>? = withContext(Dispatchers.IO) {
+        if (!isConfigured) return@withContext null
+        val out = mutableListOf<PlaybackEntry>()
+        val complete = forEachArrayPage(
+            "$API_BASE/sync/playback", accessToken, PLAYBACK_PAGE_LIMIT
+        ) { rows -> out += parseTraktPlayback(rows) }
+        if (complete) out else null
     }
 
     /** Deletes one playback entry - what removes a title from Trakt's own Continue Watching.
@@ -387,6 +400,30 @@ class TraktClient(private val http: OkHttpClient) {
         code == 200 || code == 201
     }
 
+    /** One show in the account's dropped list. */
+    data class DroppedShow(
+        val tmdbId: Int?,
+        val title: String,
+        val year: Int?
+    )
+
+    /**
+     * The account's currently dropped shows, or null when the request failed.
+     *
+     * This is the read half of [setDropped]: without it a drop made on one device was invisible
+     * to every other install, so the other device kept offering the show in Up Next and a new
+     * play there undid the drop on Trakt. An empty list is a real answer (nothing dropped);
+     * null is a failed request and must never be read as "the user restored everything".
+     */
+    suspend fun droppedShows(accessToken: String): List<DroppedShow>? = withContext(Dispatchers.IO) {
+        if (!isConfigured) return@withContext null
+        val out = mutableListOf<DroppedShow>()
+        val complete = forEachArrayPage(
+            "$API_BASE/users/hidden/dropped", accessToken, DROPPED_PAGE_LIMIT
+        ) { rows -> out += parseTraktDropped(rows) }
+        if (complete) out else null
+    }
+
     /** One watched title pulled from Trakt: a film, or a show with the episodes seen in it. */
     data class WatchedEntry(
         val title: String,
@@ -412,12 +449,24 @@ class TraktClient(private val http: OkHttpClient) {
      * seasons?extended=episodes to expand every episode up to it - so those shows still resolve
      * to a real episode set instead of silently contributing nothing.
      */
-    suspend fun watched(accessToken: String): List<WatchedEntry> = withContext(Dispatchers.IO) {
-        if (!isConfigured) return@withContext emptyList()
+    suspend fun watched(accessToken: String): List<WatchedEntry> =
+        watchedOrNull(accessToken) ?: emptyList()
+
+    /**
+     * [watched] with a failed request distinguished from an empty history.
+     *
+     * Removal reconciliation relies on absence from this response. A partial or failed read must
+     * therefore be null, never an empty list, or the pull would treat every mark as removed on
+     * Trakt and clear the local library.
+     */
+    suspend fun watchedOrNull(accessToken: String): List<WatchedEntry>? = withContext(Dispatchers.IO) {
+        if (!isConfigured) return@withContext null
         val out = mutableListOf<WatchedEntry>()
-        getArray("$API_BASE/sync/watched/movies", accessToken)?.let { arr ->
-            for (i in 0 until arr.length()) {
-                val movie = arr.optJSONObject(i)?.optJSONObject("movie") ?: continue
+        val moviesComplete = forEachArrayPage(
+            "$API_BASE/sync/watched/movies", accessToken, WATCHED_PAGE_LIMIT
+        ) { moviesArr ->
+            for (i in 0 until moviesArr.length()) {
+                val movie = moviesArr.optJSONObject(i)?.optJSONObject("movie") ?: continue
                 out += WatchedEntry(
                     title = movie.optString("title"),
                     year = movie.optInt("year", 0).takeIf { it > 0 },
@@ -427,10 +476,16 @@ class TraktClient(private val http: OkHttpClient) {
                 )
             }
         }
+        if (!moviesComplete) return@withContext null
         var fallbackBudget = PROGRESS_FALLBACK_BUDGET
-        getArray("$API_BASE/sync/watched/shows", accessToken)?.let { arr ->
-            for (i in 0 until arr.length()) {
-                val row = arr.optJSONObject(i) ?: continue
+        // `extended=progress` is what carries the per-season episode breakdown. Without it the
+        // 2026 Trakt response has show rows but no seasons, and every pull would look like a
+        // removal of that show's episodes.
+        val showsComplete = forEachArrayPage(
+            "$API_BASE/sync/watched/shows?extended=progress", accessToken, WATCHED_PAGE_LIMIT
+        ) { showsArr ->
+            for (i in 0 until showsArr.length()) {
+                val row = showsArr.optJSONObject(i) ?: continue
                 val show = row.optJSONObject("show") ?: continue
                 val seasons = HashMap<Int, MutableSet<Int>>()
                 val seasonsArr = row.optJSONArray("seasons")
@@ -463,7 +518,7 @@ class TraktClient(private val http: OkHttpClient) {
                 )
             }
         }
-        out
+        if (showsComplete) out else null
     }
 
     /**
@@ -582,6 +637,54 @@ class TraktClient(private val http: OkHttpClient) {
         }
     }.onFailure { android.util.Log.w("TraktClient", "GET $url failed", it) }.getOrNull()
 
+    private class ArrayPage(val rows: JSONArray, val pageCount: Int)
+
+    /**
+     * One page of a Trakt list, with the page count it states.
+     *
+     * Trakt force-paginates the sync endpoints (100 rows a page by default), and a caller that
+     * never reads the count silently sees only the first page. Null is a failed request; an
+     * empty page is a real empty list.
+     */
+    private fun getArrayPage(url: String, accessToken: String): ArrayPage? = runCatching {
+        http.newCall(Request.Builder().url(url).applyTraktHeaders(accessToken).build()).execute().use { response ->
+            if (!response.isSuccessful) {
+                android.util.Log.w("TraktClient", "GET $url -> ${response.code}")
+                return@use null
+            }
+            val pageCount = response.header("X-Pagination-Page-Count")
+                ?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+            val body = response.body?.string().orEmpty()
+            val rows = if (body.isBlank()) JSONArray() else JSONArray(body)
+            ArrayPage(rows, pageCount)
+        }
+    }.onFailure { android.util.Log.w("TraktClient", "GET $url failed", it) }.getOrNull()
+
+    /**
+     * Walks every page of [baseUrl], handing each page's rows to [onPage]. False when any page
+     * failed - the caller must then treat the whole read as incomplete and infer nothing from
+     * absence, because removal reconciliation is destructive.
+     */
+    private suspend fun forEachArrayPage(
+        baseUrl: String,
+        accessToken: String,
+        pageLimit: Int,
+        onPage: suspend (JSONArray) -> Unit
+    ): Boolean {
+        var page = 1
+        var pageCount = 1
+        while (page <= pageCount) {
+            val separator = if ('?' in baseUrl) '&' else '?'
+            val pageData = getArrayPage(
+                "$baseUrl${separator}page=$page&limit=$pageLimit", accessToken
+            ) ?: return false
+            onPage(pageData.rows)
+            pageCount = pageData.pageCount
+            page++
+        }
+        return true
+    }
+
     /** Every Trakt call needs the version and the client id; authenticated ones add the
      *  bearer token. Missing `trakt-api-key` is a 403 regardless of the bearer. */
     private fun Request.Builder.applyTraktHeaders(accessToken: String?): Request.Builder {
@@ -613,9 +716,13 @@ class TraktClient(private val http: OkHttpClient) {
          *  burst against Trakt's rate limit. */
         const val PROGRESS_FALLBACK_BUDGET = 25
 
+        /** Rows per watched page. Trakt's `extended=progress` shows cap at 100. */
+        const val WATCHED_PAGE_LIMIT = 100
         /** Ceiling on one /sync/playback read. The list is what is *paused*, so it is small by
          *  nature - this only stops a pathological account from pulling an unbounded page. */
-        const val PLAYBACK_PAGE_LIMIT = 500
+        const val PLAYBACK_PAGE_LIMIT = 250
+        /** Ceiling on one dropped-shows read; same bound-the-response reasoning. */
+        const val DROPPED_PAGE_LIMIT = 250
         /** Where the user types the code. Shown verbatim in the Settings pane. */
         const val ACTIVATE_URL = "https://trakt.tv/activate"
 
@@ -686,6 +793,22 @@ internal fun parseTraktPlayback(rows: JSONArray): List<TraktClient.PlaybackEntry
                 )
             }
         }
+    }
+    return out
+}
+
+/** Trakt's `/users/hidden/dropped` rows, as the app reads them. */
+internal fun parseTraktDropped(rows: JSONArray): List<TraktClient.DroppedShow> {
+    val out = mutableListOf<TraktClient.DroppedShow>()
+    for (i in 0 until rows.length()) {
+        val show = rows.optJSONObject(i)?.optJSONObject("show") ?: continue
+        val title = show.optString("title").trim()
+        if (title.isEmpty()) continue
+        out += TraktClient.DroppedShow(
+            tmdbId = show.optJSONObject("ids")?.optInt("tmdb", 0)?.takeIf { it > 0 },
+            title = title,
+            year = show.optInt("year", 0).takeIf { it > 0 }
+        )
     }
     return out
 }

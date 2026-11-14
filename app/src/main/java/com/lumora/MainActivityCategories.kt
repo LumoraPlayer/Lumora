@@ -190,8 +190,11 @@ internal fun MainActivity.showCategoryContextMenu(category: CategoryFilter) {
     }
     // Up Next carries the way back from a removal (see removeFromUpNext) - a refused show is
     // otherwise gone for good, and the row it was refused on is the only place anyone would
-    // think to look for it. Only offered while something is actually hidden.
-    if (id == UP_NEXT_CATEGORY_ID && getHiddenUpNextSeries().isNotEmpty()) {
+    // think to look for it. Only offered while something is actually hidden, including a show
+    // dropped on another device (mirrored through Trakt - see pullTraktDroppedShows).
+    val hasHiddenUpNext = getHiddenUpNextSeries().isNotEmpty() ||
+        com.lumora.data.TraktStore.remoteHiddenUpNextIds(prefs).isNotEmpty()
+    if (id == UP_NEXT_CATEGORY_ID && hasHiddenUpNext) {
         LumoraDialog.Builder(this)
             .setTitle(category.name)
             .setItems(

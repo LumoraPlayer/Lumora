@@ -185,6 +185,11 @@ object ChannelCache {
 
     fun load(context: Context): List<Channel>? = loadWithMeta(context)?.channels
 
+    /** Cheap existence test for the flat cache, used before any decision that would parse it.
+     *  An empty file is a cache that was rewritten after everything was removed, not content. */
+    fun hasCache(context: Context): Boolean =
+        File(context.filesDir, CACHE_FILE).let { it.isFile && it.length() > 0L }
+
     fun loadWithMeta(context: Context): LoadResult? {
         val file = File(context.filesDir, CACHE_FILE)
         if (!file.exists()) return null

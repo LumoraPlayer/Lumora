@@ -15,6 +15,9 @@ import org.junit.Test
  * no stream and no local id - the title is what the row is matched to this device's catalogue
  * by) and the *percentage* (Trakt states no duration, so the percentage is the whole of the
  * resume point until the local stream's own runtime is known).
+ *
+ * The dropped-show rows are pinned here too: they are the other half of a cross-device Up Next
+ * removal, and a row with no title cannot hide anything locally.
  */
 class TraktPlaybackParsingTest {
 
@@ -163,5 +166,33 @@ class TraktPlaybackParsingTest {
         assertNull(parseTraktTimestamp("not a stamp"))
         // A truncated stamp must not be read as the beginning of the year.
         assertNull(parseTraktTimestamp("2026-05-01T12:34:56.000Zjunk"))
+    }
+
+    @Test
+    fun `a dropped-show row carries the tmdb id and title used to hide it locally`() {
+        val dropped = parseTraktDropped(
+            rows(
+                """
+                [{
+                  "hidden_at": "2026-05-01T12:34:56.000Z",
+                  "show": { "title": "SAS Rogue Heroes", "year": 2025, "ids": { "tmdb": 24956 } }
+                }]
+                """
+            )
+        )
+
+        assertEquals(1, dropped.size)
+        assertEquals(24956, dropped.single().tmdbId)
+        assertEquals("SAS Rogue Heroes", dropped.single().title)
+        assertEquals(2025, dropped.single().year)
+    }
+
+    @Test
+    fun `a dropped-show row without a title cannot hide anything and is skipped`() {
+        val dropped = parseTraktDropped(
+            rows("""[{ "hidden_at": "2026-05-01T12:34:56.000Z", "show": { "ids": { "tmdb": 7 } } }]""")
+        )
+
+        assertTrue(dropped.isEmpty())
     }
 }

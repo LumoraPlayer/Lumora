@@ -933,6 +933,24 @@ internal fun MainActivity.loadAllConfiguredProviders(
     val previousLoad = providerLoadJob
     providerLoadJob = scope.launch {
         previousLoad?.cancelAndJoin()
+        // A load with a usable catalogue already - on screen, in Room or in the flat RAM
+        // cache - is a background refresh. Suppress the import card for the whole load, not
+        // just the cached paint below: a forced refresh (provider added/edited) skips that
+        // paint but still has content to keep on screen.
+        suppressIngestBanner = false
+        // Drop any card/stale progress left by the load this one replaced before deciding
+        // whether this load narrates at all.
+        resetCatalogIngest()
+        val hadCachedCatalogue = hasCachedCatalogueOnScreen() || withContext(Dispatchers.IO) {
+            runCatching {
+                CatalogRepository.get(this@loadAllConfiguredProviders).hasStoredRows() ||
+                    com.lumora.cache.ChannelCache.hasCache(this@loadAllConfiguredProviders) ||
+                    com.lumora.cache.VodContentStore.hasCache(this@loadAllConfiguredProviders)
+            }.getOrDefault(false)
+        }
+        // A cache means the screen is the user's, not the loader's: drop the "Loading..."
+        // row raised on entry and let the refresh happen without any narration.
+        if (hadCachedCatalogue) setStatus("", visible = false)
         // Enforce the storage invariant: a *removed* source owns no catalogue rows, and a
         // type switched off for an enabled provider owns none either. Disabled providers are
         // deliberately still in the keep-list - their rows are parked (hidden by rank), not
@@ -1146,7 +1164,10 @@ internal fun MainActivity.loadAllConfiguredProviders(
         // that empty half delete the stored VOD (see replaceProvider's skipTypes).
         val globalVodOffTypes =
             if (isVodDisabled()) setOf(MediaType.MOVIE, MediaType.SERIES) else emptySet()
-        if (!uiPainted && fetchConfigs.isNotEmpty()) {
+        // With a catalogue already present the whole refresh is background work: no
+        // connecting status, no import card, no focus taken off what the user is watching.
+        val backgroundImport = shouldSuppressIngestBanner(paintedFromStore, hadCachedCatalogue)
+        if (!uiPainted && !backgroundImport && fetchConfigs.isNotEmpty()) {
             setStatus(
                 if (fetchConfigs.size == 1) getString(R.string.plug_connecting_to, fetchConfigs.first().name)
                 else getString(R.string.plug_connecting_to_n, fetchConfigs.size),
@@ -1216,11 +1237,14 @@ internal fun MainActivity.loadAllConfiguredProviders(
         // A fresh load narrates again even if the previous banner was hidden - including a
         // load that was cancelled before its own reset could run.
         resetCatalogIngest()
-        // But a catalogue painted from the store is already usable: a background TTL
-        // refresh must not put an "Importing..." card over content the user can watch.
-        // The card still appears for a first import and for a manual refresh (which
-        // skips the cached read and leaves paintedFromStore false).
-        if (paintedFromStore) hideCatalogIngest()
+        // But a catalogue already on screen or on disk is usable: a background refresh - the
+        // TTL pass, a provider edit, a re-add - must not put an "Importing..." card over
+        // content the user can watch. The card still appears for a first import on a device
+        // with nothing cached.
+        if (backgroundImport) {
+            suppressIngestBanner = true
+            hideCatalogIngest()
+        }
         // The live derive skips its disk cache while a catalogue is streaming in (see
         // deriveLiveHalf); cleared by finishCatalogIngest once the transfer is over.
         catalogIngestRunning = true
