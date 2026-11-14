@@ -2227,6 +2227,30 @@
                                         android:textSize="@dimen/text_body_s" />
                                 </LinearLayout>
 
+                                <!-- Films have no episode rows to carry the watched check,
+                                     so the detail page is where one is marked seen. The
+                                     same green-filled/hollow circle the episode and season
+                                     checks use (state_selected drives both the background
+                                     and the glyph). Shown for films only - a series is
+                                     ticked through its episodes and seasons. -->
+                                <TextView
+                                    android:id="@+id/detailWatchedButton"
+                                    android:layout_width="40dp"
+                                    android:layout_height="40dp"
+                                    android:layout_marginStart="10dp"
+                                    android:background="@drawable/bg_episode_check"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:fontFamily="@font/inter_semibold"
+                                    android:gravity="center"
+                                    android:stateListAnimator="@animator/focus_scale_flat"
+                                    android:text="✓"
+                                    android:textColor="@color/episode_check_text"
+                                    android:textSize="@dimen/text_subhead"
+                                    android:visibility="gone"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false" />
+
                                 <LinearLayout
                                     android:id="@+id/detailDownloadButton"
                                     android:layout_width="40dp"

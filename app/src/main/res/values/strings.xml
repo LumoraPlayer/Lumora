@@ -437,11 +437,13 @@
     <string name="episode_download">Download episode</string>
     <string name="download_delete">Delete download</string>
 
-    <!-- item_episode.xml / item_season_chip.xml - watched-state check toggles -->
+    <!-- item_episode.xml / item_season_chip.xml / activity_main.xml - watched-state check toggles -->
     <string name="episode_mark_watched">Mark episode as watched</string>
     <string name="episode_mark_unwatched">Mark episode as unwatched</string>
     <string name="season_mark_watched">Mark season as watched</string>
     <string name="season_mark_unwatched">Mark season as unwatched</string>
+    <string name="movie_mark_watched">Mark film as watched</string>
+    <string name="movie_mark_unwatched">Mark film as unwatched</string>
 
     <!-- Glyph-only toggle buttons (★/☆ stars, ✕) - contentDescriptions the adapters swap
          per bind so TalkBack announces what a press would now do. Default values only;

@@ -37,6 +37,7 @@ internal fun MainActivity.focusFirstDetailActionFromBelow(): Boolean {
  *  out of the cast faces (UP) and the Back button's way back down (DOWN). */
 internal fun MainActivity.firstDetailAction(): View? = listOf(
     binding.detailPlayButton,
+    binding.detailWatchedButton,
     binding.detailFavoriteButton,
     binding.detailDownloadButton,
     binding.detailFindStreamButton,

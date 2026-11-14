@@ -1002,6 +1002,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     val seasonRow = binding.detailSeasonRow
     val playButton = binding.detailPlayButton
     val playButtonLabel = binding.detailPlayButtonLabel
+    val watchedButton = binding.detailWatchedButton
     val favoriteButton = binding.detailFavoriteButton
     val favoriteIcon = binding.detailFavoriteIcon
     val hideButton = binding.detailHideButton
@@ -1102,6 +1103,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
 
     listOf(
         playButton,
+        watchedButton,
         downloadButton,
         binding.detailFindStreamButton,
         binding.detailTrailerButton
@@ -1138,6 +1140,9 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // episode it would resume - "Resume S1E1". These views are reused across opens, so
     // without a reset that tag stayed on the button when a *film* was opened next.
     playButtonLabel.text = getString(R.string.play)
+    watchedButton.visibility = View.GONE
+    watchedButton.isSelected = false
+    watchedButton.setOnClickListener(null)
     favoriteButton.visibility = View.GONE
     hideButton.visibility = View.GONE
     downloadButton.visibility = View.GONE
@@ -1160,6 +1165,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // no casts. A NO_ID here eats the press outright whenever the listener path misses,
     // which is the "stuck on Play, can't reach the top" dead end.
     playButton.nextFocusUpId = binding.detailBackButton.id
+    watchedButton.nextFocusUpId = binding.detailBackButton.id
     favoriteButton.nextFocusUpId = binding.detailBackButton.id
     hideButton.nextFocusUpId = binding.detailBackButton.id
     downloadButton.nextFocusUpId = binding.detailBackButton.id
@@ -1963,6 +1969,43 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 val playable = item.url.isNotBlank() || !item.stalkerCmd.isNullOrBlank() ||
                     versions.any { it.url.isNotBlank() || !it.stalkerCmd.isNullOrBlank() }
                 val mustFind = !playable && canFindStream(item)
+                // Films have no episode rows to carry the watched check, so this is the
+                // only place to mark one seen without playing it. The shared m|title mark
+                // it writes is the one every provider's copy reads (and the poster tick
+                // binds from), and setItemWatched also reports it to Trakt, Simkl and any
+                // media server holding the film.
+                watchedButton.visibility = View.VISIBLE
+                fun refreshWatchedButton() {
+                    val watched = isItemWatched(item)
+                    watchedButton.isSelected = watched
+                    watchedButton.contentDescription = getString(
+                        if (watched) R.string.movie_mark_unwatched else R.string.movie_mark_watched
+                    )
+                }
+                fun refreshFilmPlayLabel() {
+                    val inProgress = filmKey.takeIf { it.isNotBlank() }
+                        ?.let { PlaybackPositionStore.get(this@showContentDetail, it) }
+                        ?.isInProgress == true
+                    playButtonLabel.text = when {
+                        mustFind -> getString(R.string.list_find_and_play)
+                        inProgress -> getString(R.string.list_resume)
+                        else -> getString(R.string.play)
+                    }
+                }
+                refreshWatchedButton()
+                watchedButton.setOnClickListener {
+                    setItemWatched(item, !isItemWatched(item))
+                    refreshWatchedButton()
+                    // The mark replaces (or clears) this copy's position, so Play's
+                    // Resume/Play label moved with it.
+                    refreshFilmPlayLabel()
+                    // Ticks and Continue Watching read store state at bind time, so the
+                    // surfaces behind this screen need a repaint before it closes.
+                    refreshFilmShelvesIfShowing()
+                    refreshHomeShelvesIfShowing()
+                    refreshVodProgress(rebind = true)
+                    if (!showingHome && activeTab != 0) scope.launch { classifyAndShow(preserveUi = true) }
+                }
                 playButtonLabel.text = when {
                     mustFind -> getString(R.string.list_find_and_play)
                     filmProgress != null -> getString(R.string.list_resume)
