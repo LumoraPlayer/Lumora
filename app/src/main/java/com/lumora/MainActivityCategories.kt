@@ -95,7 +95,7 @@ internal fun MainActivity.togglePinShelfCategory(tab: Int, shelf: ContentShelf) 
         togglePinnedShelf(tab, shelf.title)
         return
     }
-    togglePinCategory(CategoryFilter(id = id, name = shelf.title, count = shelf.items.size), tab)
+    togglePinCategory(CategoryFilter(id = id, name = shelf.title, count = shelf.safeItems.size), tab)
 }
 
 internal fun MainActivity.toggleHiddenShelfCategory(tab: Int, shelf: ContentShelf) {
@@ -104,7 +104,7 @@ internal fun MainActivity.toggleHiddenShelfCategory(tab: Int, shelf: ContentShel
         toggleHiddenShelf(tab, shelf.title)
         return
     }
-    toggleHiddenSidebarCategory(CategoryFilter(id = id, name = shelf.title, count = shelf.items.size), tab)
+    toggleHiddenSidebarCategory(CategoryFilter(id = id, name = shelf.title, count = shelf.safeItems.size), tab)
 }
 
 internal fun MainActivity.togglePinCategory(category: CategoryFilter, tab: Int = activeTab) {
@@ -1660,13 +1660,13 @@ internal fun MainActivity.setGridSpan(recyclerView: RecyclerView, adapter: Poste
 /** "See All" on a shelf header - same vertical grid a sidebar category pick opens,
  *  just seeded directly from that shelf's own items instead of matching category ids. */
 internal fun MainActivity.showSeeAll(shelf: ContentShelf) {
-    selectedShelfItems = shelf.items
+    selectedShelfItems = shelf.safeItems
     selectedCategoryLabel = shelf.title
     selectedRowId = shelf.categoryId
     // The shelf only previews a page of its row; these keys let the grid page the rest
     // out of the catalogue database. Newest has no keys - it is the "all, by date" query.
-    selectedCategoryIds = shelf.matchIds.takeIf { it.isNotEmpty() }
-    selectedBrandChannelIds = shelf.channelIds.takeIf { it.isNotEmpty() }
+    selectedCategoryIds = shelf.safeMatchIds.takeIf { it.isNotEmpty() }
+    selectedBrandChannelIds = shelf.safeChannelIds.takeIf { it.isNotEmpty() }
     persistVodSelectionPref()
     scope.launch { applyCategoryFilter(wholesale = true) }
 }

@@ -136,7 +136,7 @@ class ShelfAdapter(
             titleText.text = SpannableStringBuilder(shelf.title).apply {
                 append("  ")
                 val start = length
-                append(shelf.items.size.toString())
+                append(shelf.safeItems.size.toString())
                 setSpan(RelativeSizeSpan(0.72f), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 setSpan(
                     ForegroundColorSpan(ContextCompat.getColor(itemView.context, R.color.text_tertiary)),
@@ -166,7 +166,7 @@ class ShelfAdapter(
                 bindSections(usableSections)
             } else {
                 clearSections()
-                posterAdapter.submitList(shelf.items)
+                posterAdapter.submitList(shelf.safeItems)
             }
         }
 

@@ -42,8 +42,9 @@ object VodDownloader {
     }
 
     fun enqueue(context: Context, channel: Channel): DownloadRecord {
+        val downloadId = channel.downloadId()
         val extension = channel.url.substringAfterLast('.', "mp4").takeIf { it.length in 2..4 } ?: "mp4"
-        val filename = FILENAME_UNSAFE_REGEX.replace(channel.name, "_").take(80) + "_${channel.id}.$extension"
+        val filename = FILENAME_UNSAFE_REGEX.replace(channel.name, "_").take(80) + "_${downloadId}.$extension"
 
         val request = DownloadManager.Request(Uri.parse(channel.url))
             .setTitle(channel.name)
@@ -61,7 +62,7 @@ object VodDownloader {
         val downloadManagerId = downloadManager.enqueue(request)
 
         val record = DownloadRecord(
-            id = channel.id,
+            id = downloadId,
             title = channel.name,
             subtitle = if (channel.mediaType == MediaType.SERIES) channel.categoryName ?: context.getString(R.string.ui_episode) else context.getString(R.string.ui_movie),
             posterUrl = channel.posterUrl ?: channel.logoUrl,
@@ -84,6 +85,10 @@ object VodDownloader {
             val downloadedIdx = it.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
             val totalIdx = it.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
             val localUriIdx = it.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+            // A projection can be missing a column (an OEM DownloadManager, a future
+            // platform): getColumnIndex returns -1 and getInt(-1) throws. Leave the record
+            // alone rather than taking the Downloads tab down.
+            if (statusIdx < 0 || downloadedIdx < 0 || totalIdx < 0) return record
 
             val dmStatus = it.getInt(statusIdx)
             val downloaded = it.getLong(downloadedIdx)
@@ -96,7 +101,7 @@ object VodDownloader {
                 DownloadManager.STATUS_RUNNING -> DownloadStatus.DOWNLOADING
                 else -> DownloadStatus.QUEUED
             }
-            val localPath = if (newStatus == DownloadStatus.COMPLETE) {
+            val localPath = if (newStatus == DownloadStatus.COMPLETE && localUriIdx >= 0) {
                 // Cursor.getString() returns null for a NULL column, and Uri.parse(null) throws
                 // NPE before the ?. can help. Read into a val and only parse when non-null;
                 // a missing local URI means "not downloaded" - no file to point at.

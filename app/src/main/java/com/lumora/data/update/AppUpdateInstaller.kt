@@ -106,7 +106,11 @@ class AppUpdateInstaller(private val context: Context) {
         )
         cursor.use {
             if (!it.moveToFirst()) return false
-            val status = it.getInt(it.getColumnIndex(DownloadManager.COLUMN_STATUS))
+            val statusIdx = it.getColumnIndex(DownloadManager.COLUMN_STATUS)
+            // A projection can be missing a column on an OEM DownloadManager; getInt(-1)
+            // would throw. "Unknown" is not "complete".
+            if (statusIdx < 0) return false
+            val status = it.getInt(statusIdx)
             return status == DownloadManager.STATUS_SUCCESSFUL
         }
     }
@@ -120,7 +124,10 @@ class AppUpdateInstaller(private val context: Context) {
         )
         cursor.use {
             if (!it.moveToFirst()) return true
-            val status = it.getInt(it.getColumnIndex(DownloadManager.COLUMN_STATUS))
+            val statusIdx = it.getColumnIndex(DownloadManager.COLUMN_STATUS)
+            // No status column means the download cannot be confirmed as successful.
+            if (statusIdx < 0) return true
+            val status = it.getInt(statusIdx)
             return status == DownloadManager.STATUS_FAILED
         }
     }
@@ -135,7 +142,9 @@ class AppUpdateInstaller(private val context: Context) {
         )
         cursor.use {
             if (!it.moveToFirst()) return null
-            val localUri = it.getString(it.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI))
+            val localUriIdx = it.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+            if (localUriIdx < 0) return null
+            val localUri = it.getString(localUriIdx)
             return localUri?.let { Uri.parse(it).path }
         }
     }

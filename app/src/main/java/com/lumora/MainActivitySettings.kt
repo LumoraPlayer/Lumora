@@ -112,7 +112,7 @@ internal fun MainActivity.wireSportsPane(dialogView: View) {
             val enabled = sport in com.lumora.sports.SportsConfig.enabledSports(prefs)
             rows.addView(sportsToggleRow(
                 title = getString(sport.labelRes),
-                subtitle = getString(R.string.sports_settings_sport_feed, sport.id),
+                subtitle = getString(R.string.sports_settings_sport_feed),
                 checked = enabled
             ) { checked ->
                 val current = com.lumora.sports.SportsConfig.enabledSports(prefs).toMutableSet()

@@ -20,6 +20,7 @@ import com.lumora.download.DownloadStatus
 import com.lumora.download.DownloadStore
 import com.lumora.download.HlsDownloads
 import com.lumora.download.VodDownloader
+import com.lumora.download.downloadId
 import com.lumora.cache.FavoritesStore
 import com.lumora.cache.PlaybackPositionStore
 import com.lumora.model.Channel
@@ -93,10 +94,18 @@ internal fun MainActivity.downloadItem(channel: Channel) {
         }
         return
     }
+    // A download is keyed by the item's stable id. A blank id (some plugin/anime items carry
+    // only a URL) collided in DownloadStore and handed Media3 an empty DownloadRequest id, so
+    // resolve the same fallback the rest of the app uses and refuse an item with neither.
+    val downloadId = channel.downloadId()
+    if (downloadId.isBlank()) {
+        Toast.makeText(this, getString(R.string.plug_could_not_resolve_stream), Toast.LENGTH_LONG).show()
+        return
+    }
     // HLS cannot be fetched as one file - it needs its segments pulled into a cache the player
     // can read back offline, which is a different downloader entirely (see HlsDownloads).
     if (HlsDownloads.isHls(channel.url)) {
-        if (DownloadStore.get(this, channel.id) != null) {
+        if (DownloadStore.get(this, downloadId) != null) {
             Toast.makeText(this, getString(R.string.list_already_in_downloads), Toast.LENGTH_SHORT).show()
             return
         }
@@ -104,7 +113,7 @@ internal fun MainActivity.downloadItem(channel: Channel) {
         DownloadStore.add(
             this,
             DownloadRecord(
-                id = channel.id,
+                id = downloadId,
                 title = channel.name,
                 subtitle = if (channel.mediaType == MediaType.SERIES)
                     channel.categoryName ?: getString(R.string.list_download_type_episode) else getString(R.string.list_download_type_movie),
@@ -124,7 +133,7 @@ internal fun MainActivity.downloadItem(channel: Channel) {
         Toast.makeText(this, reason, Toast.LENGTH_LONG).show()
         return
     }
-    if (DownloadStore.get(this, channel.id) != null) {
+    if (DownloadStore.get(this, downloadId) != null) {
         Toast.makeText(this, getString(R.string.list_already_in_downloads), Toast.LENGTH_SHORT).show()
         return
     }

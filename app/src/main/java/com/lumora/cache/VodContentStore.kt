@@ -6,6 +6,7 @@ import android.util.Log
 import com.google.gson.Gson
 import com.lumora.BuildConfig
 import com.lumora.MainActivity
+import com.lumora.model.ContentShelf
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -140,7 +141,7 @@ internal object VodContentStore {
     /** A partially-obfuscated or truncated snapshot can deserialize with blank ids - or with
      *  a null in a property Gson bypassed the constructor for - rather than throw. Treat that
      *  as unusable instead of crashing the first reader. */
-    private fun looksUsable(content: MainActivity.FilmsSeriesContent): Boolean {
+    internal fun looksUsable(content: MainActivity.FilmsSeriesContent): Boolean {
         // Every top-level collection [refreshVodLead] and the shelf adapters touch. Gson
         // leaves a missing field null even though it is declared non-null, and one null is
         // enough to take the Series tab down the moment the cache is used.
@@ -155,15 +156,33 @@ internal object VodContentStore {
             content.seriesCategoryChildren.isPresentMap() &&
             content.filmCategoryChildren.isPresentMap()
         if (!completeShape) return false
+        // A shelf's own fields are just as nullable: the v2 snapshot crashed on a section with
+        // a null item list, and `items`, `matchIds` and `channelIds` have the same shape. A
+        // blank title is rejected too - the binder feeds it to SpannableStringBuilder, which
+        // cannot take null. One bad shelf discards the snapshot; the next build rewrites it.
+        if (!(content.filmShelves + content.seriesShelves).all { it.isCompleteShape() }) return false
         val sample = (content.filmList + content.seriesList).firstOrNull()
-            ?: (content.filmShelves + content.seriesShelves).firstOrNull()?.items?.firstOrNull()
+            ?: (content.filmShelves + content.seriesShelves).firstOrNull()?.safeItems?.firstOrNull()
             ?: return true
         return sample.id.isNotBlank() && sample.name.isNotBlank()
     }
 }
+
+/** See [VodContentStore.looksUsable] - every field a snapshot reader can dereference. */
+private fun ContentShelf.isCompleteShape(): Boolean =
+    !title.isNullOrBlank() &&
+        items.isPresentList() &&
+        matchIds.isPresentSet() &&
+        channelIds.isPresentSet() &&
+        sections.orEmpty().all { section ->
+            !section.title.isNullOrBlank() && section.items.isPresentList()
+        }
 
 /** Present-on-disk check for a non-null Kotlin list. Gson can still leave it null. */
 private fun <T> List<T>?.isPresentList(): Boolean = this != null
 
 /** Present-on-disk check for a non-null Kotlin map. Gson can still leave it null. */
 private fun <K, V> Map<K, V>?.isPresentMap(): Boolean = this != null
+
+/** Present-on-disk check for a non-null Kotlin set. Gson can still leave it null. */
+private fun <T> Set<T>?.isPresentSet(): Boolean = this != null

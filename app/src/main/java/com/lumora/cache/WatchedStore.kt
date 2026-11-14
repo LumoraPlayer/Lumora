@@ -36,31 +36,48 @@ private const val MAX_ENTRIES = 20_000
  */
 object WatchedStore {
 
-    // The reference is swapped wholesale on load/clear and read from background dispatchers
-    // (shelf builds run on Dispatchers.Default), so it has to be volatile.
+    // The reference is swapped wholesale on load/write/clear and read from background
+    // dispatchers (shelf builds run on Dispatchers.Default), so it has to be volatile. A
+    // published set is never mutated: writes copy it, persist the copy, then publish that
+    // copy. Poster binding therefore reads a mark without taking the writer's lock, and a
+    // Trakt/Simkl pull rewriting a large history no longer blocks the main thread.
     @Volatile
-    private var cache: MutableSet<String>? = null
+    private var cache: Set<String>? = null
 
-    @Synchronized
-    fun isWatched(context: Context, key: String): Boolean =
-        key.isNotBlank() && ensureLoaded(context).contains(key)
+    /** Serialises load/write/clear and publication of [cache]. Reads never take it. */
+    private val lock = Any()
+
+    /** A lock-free read once the store has loaded; only the first read waits for the load. */
+    fun isWatched(context: Context, key: String): Boolean {
+        if (key.isBlank()) return false
+        val snapshot = cache ?: synchronized(lock) { ensureLoadedLocked(context) }
+        return key in snapshot
+    }
 
     /** Adds or removes [key]. Returns true when the set actually changed. */
-    @Synchronized
     fun setWatched(context: Context, key: String, watched: Boolean): Boolean {
         if (key.isBlank()) return false
-        val set = ensureLoaded(context)
-        val changed = if (watched) {
-            // A full set is not a reason to drop the mark being added - it is the freshest
-            // one there is. Nothing here records age, so eviction can only be arbitrary;
-            // the ceiling exists to bound the file, not to curate it.
-            if (set.size >= MAX_ENTRIES) set.iterator().let { if (it.hasNext()) { it.next(); it.remove() } }
-            set.add(key)
-        } else {
-            set.remove(key)
+        return synchronized(lock) {
+            val current = ensureLoadedLocked(context)
+            val next = if (watched) {
+                if (key in current) return@synchronized false
+                // A full set is not a reason to drop the mark being added - it is the freshest
+                // one there is. Nothing here records age, so eviction can only be arbitrary;
+                // the ceiling exists to bound the file, not to curate it.
+                LinkedHashSet(current).apply {
+                    if (size >= MAX_ENTRIES) {
+                        iterator().let { if (it.hasNext()) { it.next(); it.remove() } }
+                    }
+                    add(key)
+                }
+            } else {
+                if (key !in current) return@synchronized false
+                LinkedHashSet(current).apply { remove(key) }
+            }
+            persist(context, next)
+            cache = next
+            true
         }
-        if (changed) persist(context, set)
-        return changed
     }
 
     /**
@@ -68,28 +85,38 @@ object WatchedStore {
      *
      * The Trakt pulls write a whole history at a time - thousands of keys in a single run. A
      * persist per key rewrote the entire file (temp write + atomic rename) per mark, while
-     * holding this store's monitor that every shelf build reads through: what used to be
-     * minutes of disk churn and UI stalls for a large account is now one write. Interactive
-     * paths keep using [setWatched], where a single mark is the whole operation.
+     * holding the write lock that the same pass uses: what used to be minutes of disk churn
+     * and UI stalls for a large account is now one write. Interactive paths keep using
+     * [setWatched], where a single mark is the whole operation. Shelf reads never take that
+     * lock, so this write cannot stall poster binding.
      *
      * Returns the number of keys whose state actually changed.
      */
-    @Synchronized
     fun setWatchedBatch(context: Context, keys: Collection<String>, watched: Boolean = true): Int {
-        val set = ensureLoaded(context)
-        var changed = 0
-        for (key in keys) {
-            if (key.isBlank()) continue
-            if (watched) {
-                // Same ceiling rule as setWatched: the freshest mark is never dropped.
-                if (set.size >= MAX_ENTRIES) set.iterator().let { if (it.hasNext()) { it.next(); it.remove() } }
-                if (set.add(key)) changed++
-            } else if (set.remove(key)) {
-                changed++
+        return synchronized(lock) {
+            val current = ensureLoadedLocked(context)
+            val next = LinkedHashSet(current)
+            var changed = 0
+            for (key in keys) {
+                if (key.isBlank()) continue
+                if (watched) {
+                    if (key in next) continue
+                    // Same ceiling rule as setWatched: the freshest mark is never dropped.
+                    if (next.size >= MAX_ENTRIES) {
+                        next.iterator().let { if (it.hasNext()) { it.next(); it.remove() } }
+                    }
+                    next.add(key)
+                    changed++
+                } else if (next.remove(key)) {
+                    changed++
+                }
             }
+            if (changed > 0) {
+                persist(context, next)
+                cache = next
+            }
+            changed
         }
-        if (changed > 0) persist(context, set)
-        return changed
     }
 
     /**
@@ -99,16 +126,20 @@ object WatchedStore {
      * A copy, not the live set: callers iterate it off the main thread while a mark written in
      * the meantime would otherwise be a ConcurrentModificationException.
      */
-    @Synchronized
-    fun allKeys(context: Context): Set<String> = LinkedHashSet(ensureLoaded(context))
-
-    @Synchronized
-    fun clearAll(context: Context) {
-        cache = mutableSetOf()
-        runCatching { File(context.filesDir, FILE_NAME).delete() }
+    fun allKeys(context: Context): Set<String> {
+        val snapshot = cache ?: synchronized(lock) { ensureLoadedLocked(context) }
+        return LinkedHashSet(snapshot)
     }
 
-    private fun ensureLoaded(context: Context): MutableSet<String> {
+    fun clearAll(context: Context) {
+        synchronized(lock) {
+            cache = emptySet()
+            runCatching { File(context.filesDir, FILE_NAME).delete() }
+        }
+    }
+
+    /** Caller must hold [lock]. Publishes an immutable snapshot no caller can mutate. */
+    private fun ensureLoadedLocked(context: Context): Set<String> {
         cache?.let { return it }
         val loaded = LinkedHashSet<String>()
         runCatching {
@@ -119,8 +150,9 @@ object WatchedStore {
                 }
             }
         }.onFailure { Log.w(TAG, "Failed to load watched marks: ${it.message}") }
-        cache = loaded
-        return loaded
+        val snapshot: Set<String> = java.util.Collections.unmodifiableSet(loaded)
+        cache = snapshot
+        return snapshot
     }
 
     /**

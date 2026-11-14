@@ -92,21 +92,55 @@ internal class DbChannelList(
 ) : AbstractList<Channel>() {
 
     private val storedCount: Int by lazy {
-        runBlocking { dao.vodCardCount(mediaType.name, englishOnly, hideAdult) }
+        liveStoredCount()
     }
 
     override val size: Int get() = storedCount + extras.size
 
+    /** A fresh count for the rare path where the cached [storedCount] no longer matches Room. */
+    private fun liveStoredCount(): Int = runBlocking {
+        dao.vodCardCount(mediaType.name, englishOnly, hideAdult)
+    }
+
     override fun get(index: Int): Channel {
         if (index < 0 || index >= size) throw IndexOutOfBoundsException("index=$index size=$size")
-        if (index < storedCount) {
+        val stored = storedCount
+        if (index < stored) {
+            val page = runBlocking {
+                dao.vodPage(mediaType.name, englishOnly, hideAdult, 1, index)
+            }
+            page.firstOrNull()?.let { return CatalogMapping.toChannel(it) }
+
+            // The catalogue changed under the cached count. Re-resolve against the live count:
+            // a shrunken catalogue moves this index into the extras block, while a grown one
+            // still answers the same DB offset. Both halves keep the list readable instead of
+            // letting a provider import turn a stale index into an IndexOutOfBoundsException.
+            val live = liveStoredCount()
+            if (index < live) {
+                val retry = runBlocking {
+                    dao.vodPage(mediaType.name, englishOnly, hideAdult, 1, index)
+                }
+                retry.firstOrNull()?.let { return CatalogMapping.toChannel(it) }
+            }
+            if (index >= live) extras.getOrNull(index - live)?.let { return it }
+            return extras.firstOrNull() ?: missingRow()
+        }
+        // The index was cached as an extras slot. The DB half may have grown since then, in
+        // which case the same index now belongs to a catalogue row, so resolve the boundary
+        // against the live count rather than assuming `stored` still holds.
+        val live = liveStoredCount()
+        if (index < live) {
             val page = runBlocking {
                 dao.vodPage(mediaType.name, englishOnly, hideAdult, 1, index)
             }
             page.firstOrNull()?.let { return CatalogMapping.toChannel(it) }
         }
-        return extras[index - storedCount]
+        if (index >= live) extras.getOrNull(index - live)?.let { return it }
+        return extras.firstOrNull() ?: missingRow()
     }
+
+    /** The advertised size is stale and no row or extra answers this slot. */
+    private fun missingRow(): Channel = Channel(id = "", name = "", url = "", mediaType = mediaType)
 
     override fun iterator(): Iterator<Channel> = sequence {
         var after = ""
@@ -446,7 +480,7 @@ private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType, rowsOnly
     // The bounded in-memory set: shelf previews + anime. Detail navigation, version chips
     // and favourites operate on these; anything outside them is looked up in SQL.
     val byId = LinkedHashMap<String, Channel>()
-    for (shelf in shelves) for (item in shelf.items) byId.putIfAbsent(CatalogMapping.uidOf(item), item)
+    for (shelf in shelves) for (item in shelf.safeItems) byId.putIfAbsent(CatalogMapping.uidOf(item), item)
     for (item in anime) byId.putIfAbsent(CatalogMapping.uidOf(item), item)
     // Favourites and in-progress entries outside the shelf previews are still looked up
     // by the (non-suspending) Home/Continue helpers, so keep them resident too.

@@ -15,7 +15,22 @@ data class ContentShelf(
      *  renders them inline in one horizontal row, each group preceded by its title.
      *  [items] still carries every real channel so catalogue/detail lookups keep working. */
     val sections: List<ContentShelfSection>? = null
-)
+) {
+    /**
+     * [items] as a non-null list.
+     *
+     * Gson constructs snapshot models without calling the constructor, so a shelf read from a
+     * cache written before a field was kept can carry null in a property declared non-null.
+     * Every reader that can see a restored shelf uses this instead of [items].
+     */
+    val safeItems: List<Channel> get() = items.orEmptyWhenNull()
+
+    /** [matchIds] as a non-null set - see [safeItems]. */
+    val safeMatchIds: Set<String> get() = matchIds.orEmptyWhenNull()
+
+    /** [channelIds] as a non-null set - see [safeItems]. */
+    val safeChannelIds: Set<String> get() = channelIds.orEmptyWhenNull()
+}
 
 /** One labelled group inside a combined shelf - e.g. Continue Watching, Next Up and
  *  Favourites sharing one poster line. */
@@ -37,3 +52,4 @@ data class ContentShelfSection(
 }
 
 private fun <T> List<T>?.orEmptyWhenNull(): List<T> = this ?: emptyList()
+private fun <T> Set<T>?.orEmptyWhenNull(): Set<T> = this ?: emptySet()

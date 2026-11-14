@@ -191,6 +191,8 @@ object HlsDownloads {
      * data source rather than a shared factory.
      */
     fun enqueue(context: Context, channel: Channel) {
+        val downloadId = channel.downloadId()
+        if (downloadId.isBlank()) return
         val headers = buildMap {
             channel.streamHeaders?.let { putAll(it) }
             channel.streamUserAgent?.takeIf { it.isNotBlank() }?.let { put("User-Agent", it) }
@@ -198,9 +200,9 @@ object HlsDownloads {
         enqueuedHeaders = headers
         val item = MediaItem.Builder()
             .setUri(channel.url)
-            .setMediaId(channel.id)
+            .setMediaId(downloadId)
             .build()
-        val request = DownloadRequest.Builder(channel.id, item.localConfiguration!!.uri)
+        val request = DownloadRequest.Builder(downloadId, item.localConfiguration!!.uri)
             .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
             .setData(channel.name.toByteArray())
             .build()

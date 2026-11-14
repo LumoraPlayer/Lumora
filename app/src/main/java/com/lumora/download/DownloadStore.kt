@@ -3,12 +3,23 @@ package com.lumora.download
 
 import android.content.Context
 import android.util.Log
+import com.lumora.model.Channel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
 private const val TAG = "DownloadStore"
 private const val FILE_NAME = "downloads.json"
+
+/**
+ * The identity a download row is keyed by.
+ *
+ * A [Channel]'s id is the provider's stable id, but plugin/anime items can leave it blank and
+ * carry only a URL. The rest of the app falls back the same way (`streamKey`); a download that
+ * used the raw blank id collided with every other blank-id item in [DownloadStore] and handed
+ * Media3 an empty download id. A blank result means the item has no stable identity at all.
+ */
+internal fun Channel.downloadId(): String = id.ifBlank { url }
 
 enum class DownloadStatus { QUEUED, DOWNLOADING, COMPLETE, FAILED }
 

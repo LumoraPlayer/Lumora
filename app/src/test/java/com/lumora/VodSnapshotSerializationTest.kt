@@ -2,11 +2,13 @@
 package com.lumora
 
 import com.google.gson.Gson
+import com.lumora.cache.VodContentStore
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
 import com.lumora.model.ContentShelfSection
 import com.lumora.model.MediaType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -78,5 +80,68 @@ class VodSnapshotSerializationTest {
         // be able to bind this as an empty group rather than NPE on items.isEmpty().
         val section = Gson().fromJson("""{"categoryId":"x"}""", ContentShelfSection::class.java)
         assertTrue(section.safeItems.isEmpty())
+    }
+
+    @Test
+    fun aShelfWhoseOwnFieldsDidNotSurviveReadsAsEmptyInsteadOfCrashing() {
+        // Same failure mode one level up: ContentShelf.items, matchIds and channelIds are
+        // non-null Kotlin properties, but Gson can leave them null when the fields are absent.
+        val shelf = Gson().fromJson("""{"title":"Newest"}""", ContentShelf::class.java)
+        assertTrue(shelf.safeItems.isEmpty())
+        assertTrue(shelf.safeMatchIds.isEmpty())
+        assertTrue(shelf.safeChannelIds.isEmpty())
+    }
+
+    @Test
+    fun aSnapshotWithAShelfMissingItsItemsIsRejected() {
+        val film = Channel(
+            id = "film-1",
+            name = "A Film",
+            url = "https://example.invalid/film",
+            mediaType = MediaType.MOVIE,
+        )
+        val badShelf = Gson().fromJson(
+            """{"title":"Newest","items":null,"matchIds":[],"channelIds":[]}""",
+            ContentShelf::class.java,
+        )
+        val content = MainActivity.FilmsSeriesContent(
+            filmList = listOf(film),
+            filmVersions = emptyMap(),
+            filmShelves = listOf(badShelf),
+            seriesList = emptyList(),
+            seriesVersions = emptyMap(),
+            seriesShelves = emptyList(),
+            seriesCategoryRows = emptyList(),
+            filmCategoryRows = emptyList(),
+        )
+        assertFalse(VodContentStore.looksUsable(content))
+    }
+
+    @Test
+    fun aCompleteSnapshotIsAccepted() {
+        val film = Channel(
+            id = "film-1",
+            name = "A Film",
+            url = "https://example.invalid/film",
+            mediaType = MediaType.MOVIE,
+        )
+        val shelf = ContentShelf(
+            title = "Newest",
+            items = listOf(film),
+            matchIds = setOf("newest"),
+            channelIds = emptySet(),
+            categoryId = "newest",
+        )
+        val content = MainActivity.FilmsSeriesContent(
+            filmList = listOf(film),
+            filmVersions = emptyMap(),
+            filmShelves = listOf(shelf),
+            seriesList = emptyList(),
+            seriesVersions = emptyMap(),
+            seriesShelves = emptyList(),
+            seriesCategoryRows = emptyList(),
+            filmCategoryRows = emptyList(),
+        )
+        assertTrue(VodContentStore.looksUsable(content))
     }
 }
