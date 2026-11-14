@@ -123,6 +123,7 @@ internal fun MainActivity.downloadItem(channel: Channel) {
                 // there is no system id to record against it.
                 downloadManagerId = HlsDownloads.NO_SYSTEM_ID,
                 status = DownloadStatus.QUEUED,
+                categoryId = channel.categoryId,
             )
         )
         Toast.makeText(this, getString(R.string.list_downloading, channel.name), Toast.LENGTH_SHORT).show()
@@ -169,7 +170,10 @@ internal fun MainActivity.playDownload(record: DownloadRecord) {
         name = record.title,
         url = "file://${record.localFilePath}",
         posterUrl = record.posterUrl,
-        mediaType = runCatching { MediaType.valueOf(record.mediaType) }.getOrDefault(MediaType.MOVIE)
+        mediaType = runCatching { MediaType.valueOf(record.mediaType) }.getOrDefault(MediaType.MOVIE),
+        // An episode's parent lives on the record now, so finishing the last one can return
+        // to the show's poster (see returnToPosterAfterPlayback).
+        categoryId = record.categoryId
     )
     currentIndex = -1
     showPlayerFor(local)
@@ -190,7 +194,8 @@ private fun MainActivity.playOfflineHls(record: DownloadRecord, sourceUrl: Strin
         name = record.title,
         url = sourceUrl,
         posterUrl = record.posterUrl,
-        mediaType = runCatching { MediaType.valueOf(record.mediaType) }.getOrDefault(MediaType.MOVIE)
+        mediaType = runCatching { MediaType.valueOf(record.mediaType) }.getOrDefault(MediaType.MOVIE),
+        categoryId = record.categoryId
     )
     offlineHlsPlaybackId = record.id
     try {
@@ -467,6 +472,14 @@ internal fun MainActivity.selectTab(index: Int) {
             }
             if (!rowsReady) filmsSeriesDeriveJob?.join()
         }
+        // A tab opened later must see the personal rows as they are now: they move with
+        // playback, and a parent series card can land after the catalogue build finished (see
+        // requestHomeTileSeries). The end-of-playback refreshes only run while the tab is on
+        // screen, so a shelf built before that state settled would otherwise stay stale until
+        // the next full catalogue rebuild. Cheap here - it reuses the cached category rows
+        // rather than re-running the expensive derive.
+        if (index == 1) refreshSeriesShelvesIfShowing()
+        if (index == 2) refreshFilmShelvesIfShowing()
         // Pre-expand the Sports bucket so its children are visible when the user
         // scrolls down to it, regardless of what's selected at the top.
         if (index == 0) expandedGroupKeys.add("${DYNAMIC_BUCKET_ID_PREFIX}Sports")

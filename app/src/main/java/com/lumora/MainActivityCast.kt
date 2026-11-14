@@ -344,6 +344,14 @@ internal fun MainActivity.showPersonPage() {
             bioLabel.visibility = View.VISIBLE
         }
         personCredits = details.credits
+        // From search there is no origin title to choose a half of the filmography; if the
+        // chosen half is empty, show the one that has something rather than an empty list
+        // with the other chip sitting beside it.
+        if (details.credits.isNotEmpty() &&
+            details.credits.none { (it.mediaType == "tv") == personShowTvCredits }
+        ) {
+            personShowTvCredits = !personShowTvCredits
+        }
         buildPersonCreditFilter()
         renderPersonCredits(requestedPersonId, focusSelected = true)
     }

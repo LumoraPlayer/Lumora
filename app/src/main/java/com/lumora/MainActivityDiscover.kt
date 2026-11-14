@@ -734,26 +734,94 @@ internal fun MainActivity.onHomeItemClick(channel: Channel) {
                     showContentDetail(series)
                     return
                 }
-                showPlayerFor(channel)
-                // A lone episode has no queue behind it - nothing would auto-advance when
-                // it ends. An up-next tile already had its cross-season chain built during
-                // the fetch that resolved it; anything else back-fills the same chain the
-                // detail page plays from.
-                val upNextQueue = upNextQueues[channel.id.ifBlank { channel.url }]
-                if (upNextQueue != null) {
-                    val index = upNextQueue.indexOfFirst {
-                        it.id.ifBlank { it.url } == channel.id.ifBlank { channel.url }
+                // Not in the resident index. That is not the same as "no such show": the
+                // tile's parent can be outside buildVodTab's bounded preview set (a server
+                // Next Up row for a show no shelf happens to list), and direct-playing the
+                // episode there is the one outcome the row exists to avoid. The catalogue
+                // database knows the show, so ask it before giving up - the same lookup the
+                // decoration makes asynchronously (see requestHomeTileSeries).
+                scope.launch {
+                    val catalogSeries = resolveHomeTileSeriesFromCatalog(channel)
+                    // The user moved to another screen while the lookup ran - don't hijack it.
+                    if (isPlayerVisible || isContentDetailVisible ||
+                        activeSettingsOverlay != null || activeSearchOverlay != null
+                    ) {
+                        return@launch
                     }
-                    currentEpisodeQueue = upNextQueue
-                    currentEpisodeQueueIndex = if (index >= 0) index else 0
-                } else {
-                    populateHomeTileEpisodeQueue(channel)
+                    if (catalogSeries != null) {
+                        showContentDetail(catalogSeries)
+                    } else {
+                        playHomeTileEpisode(channel)
+                    }
                 }
+                return
             } else {
                 showContentDetail(channel)
             }
         }
     }
+}
+
+/** Direct play of a lone episode tile - the last resort when the catalogue cannot name the
+ *  show the episode belongs to (see onHomeItemClick). Also back-fills the auto-advance queue:
+ *  an up-next tile already had its cross-season chain built during the fetch that resolved
+ *  it; anything else gets the same chain the detail page plays from. */
+private fun MainActivity.playHomeTileEpisode(channel: Channel) {
+    showPlayerFor(channel)
+    val upNextQueue = upNextQueues[channel.id.ifBlank { channel.url }]
+    if (upNextQueue != null) {
+        val index = upNextQueue.indexOfFirst {
+            it.id.ifBlank { it.url } == channel.id.ifBlank { channel.url }
+        }
+        currentEpisodeQueue = upNextQueue
+        currentEpisodeQueueIndex = if (index >= 0) index else 0
+    } else {
+        populateHomeTileEpisodeQueue(channel)
+    }
+}
+
+/** Parent series cards for Continue Watching / Next Up tiles whose show is outside the
+ *  bounded resident set.
+ *
+ *  `seriesList` holds shelf previews plus favourites and in-progress parents (see buildVodTab),
+ *  so a server Next Up entry - the *next* episode of a show, which by definition has no
+ *  position entry to drag its parent in - can name a show the resident index has never seen.
+ *  The tile then stayed an undecorated episode: episode still, a label with no show name the
+ *  resolver could match, and a click that direct-played it. The catalogue database has the
+ *  card; [requestHomeTileSeries] fetches it once per show and both the decoration and the
+ *  click path read it synchronously from here.
+ *
+ *  Keyed by provider-scoped series id: a series id is only unique inside one provider, and a
+ *  panel and a media server can both number a show "1234". Cleared with the catalogue that
+ *  filled it - see [clearHomeTileSeriesParents]. */
+private val homeTileSeriesParents = java.util.concurrent.ConcurrentHashMap<String, Channel>()
+/** Shows already looked up, found or not, so a row rebuild doesn't re-query the database. */
+private val homeTileSeriesParentLookups = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+/** Coalesces the row rebuilds a burst of late parent-card answers would otherwise each
+ *  trigger: one refresh after the last one lands. */
+@Volatile private var homeTileSeriesRefreshJob: Job? = null
+
+private fun MainActivity.schedulePersonalRowRefresh() {
+    homeTileSeriesRefreshJob?.cancel()
+    homeTileSeriesRefreshJob = scope.launch {
+        delay(120)
+        refreshHomeShelvesIfShowing()
+        refreshSeriesShelvesIfShowing()
+    }
+}
+
+/** The key [homeTileSeriesParents] holds a tile's show under, or null when the snapshot
+ *  carries no parent id. Pure so the cache's identity rule stays testable. */
+internal fun homeTileSeriesKey(categoryId: String?, sourceProviderId: String?): String? {
+    val id = categoryId?.takeIf { it.isNotBlank() } ?: return null
+    return "${sourceProviderId.orEmpty()}\u0000$id"
+}
+
+/** Drops the parent-series cache with the catalogue it was read from. */
+internal fun clearHomeTileSeriesParents() {
+    homeTileSeriesParents.clear()
+    homeTileSeriesParentLookups.clear()
 }
 
 /**
@@ -788,6 +856,12 @@ private object SeriesTileIndexCache {
  *  catalog first, then the "{series} · {episode}" name-prefix fallback for snapshots that
  *  predate categoryId. Null if unresolvable - callers fall back to direct play. */
 internal fun MainActivity.resolveHomeTileSeries(channel: Channel): Channel? {
+    // A row that already resolved this show from the database (see requestHomeTileSeries) has
+    // the card here, provider-scoped. That is what lets a click on a tile built before the
+    // cache landed - or before its show entered the bounded resident set - still open the show.
+    homeTileSeriesKey(channel.categoryId, channel.sourceProviderId)
+        ?.let { homeTileSeriesParents[it] }
+        ?.let { return it }
     val lookup = SeriesTileIndexCache.of(allChannels, seriesList)
     // Exact series-id match. Ids are provider-scoped (Xtream series id, Jellyfin item id,
     // Plex rating key), so cross-matching is impossible - matching the source flags is the
@@ -865,6 +939,66 @@ internal fun MainActivity.resolveHomeTileSeries(channel: Channel): Channel? {
             title.equals(prefix, ignoreCase = true) || normalizeTitleForGrouping(title) == prefixKey
         }
         .maxByOrNull { it.name.length }
+}
+
+/**
+ * The catalogue's own card for the show an episode tile belongs to, or null when the
+ * catalogue genuinely has none.
+ *
+ * The synchronous [resolveHomeTileSeries] can only answer from the resident lists, and those
+ * are a bounded preview set now - a Continue Watching or Next Up tile for a show outside it
+ * used to fall through to direct play even though `catalog_channels` holds the card. This is
+ * that missing half, for the click path; tile decoration warms the same cache through
+ * [requestHomeTileSeries].
+ */
+internal suspend fun MainActivity.resolveHomeTileSeriesFromCatalog(channel: Channel): Channel? {
+    val key = homeTileSeriesKey(channel.categoryId, channel.sourceProviderId) ?: return null
+    homeTileSeriesParents[key]?.let { return it }
+    val seriesId = channel.categoryId ?: return null
+    val series = withContext(Dispatchers.IO) {
+        runCatching {
+            com.lumora.data.catalog.CatalogRepository.get(this@resolveHomeTileSeriesFromCatalog)
+                .bySourceId(MediaType.SERIES, seriesId, channel.sourceProviderId)
+        }.getOrNull()
+    }
+        // Episode rows share the table; a card is what a parent id has to resolve to.
+        ?.takeIf { it.mediaType == MediaType.SERIES && it.episodeNum == null }
+        ?: return null
+    homeTileSeriesParents[key] = series
+    homeTileSeriesParentLookups.add(key)
+    return series
+}
+
+/**
+ * Fills [homeTileSeriesParents] for tiles whose show the resident index cannot answer.
+ *
+ * One database lookup per provider-scoped series id, ever (until the catalogue changes - see
+ * [clearHomeTileSeriesParents]); the found card is what [continueWatchingTiles] decorates
+ * with and what [resolveHomeTileSeries] hands the click through. A missing card is remembered
+ * as a miss so rows rebuilt around a show the catalogue does not have don't re-query it on
+ * every bind. Whatever lands rebuilds the personal rows that were built before the answer.
+ */
+private fun MainActivity.requestHomeTileSeries(items: List<Channel>) {
+    for (item in items) {
+        val key = homeTileSeriesKey(item.categoryId, item.sourceProviderId) ?: continue
+        if (!homeTileSeriesParentLookups.add(key)) continue
+        val seriesId = item.categoryId ?: continue
+        val providerId = item.sourceProviderId
+        scope.launch {
+            val series = withContext(Dispatchers.IO) {
+                runCatching {
+                    com.lumora.data.catalog.CatalogRepository.get(this@requestHomeTileSeries)
+                        .bySourceId(MediaType.SERIES, seriesId, providerId)
+                }.getOrNull()
+            }?.takeIf { it.mediaType == MediaType.SERIES && it.episodeNum == null }
+                ?: return@launch
+            homeTileSeriesParents[key] = series
+            // The rows on screen were built before this answer - give them the poster and the
+            // show name the tile should have had from the start. Batched: a row of missing
+            // parents resolves one query at a time, and each one rebuilding the list is churn.
+            schedulePersonalRowRefresh()
+        }
+    }
 }
 
 /** A Home tile can be one episode standing alone (Continue Watching, Jellyfin Next Up),
@@ -1459,11 +1593,22 @@ internal fun MainActivity.fetchUpNextSeries(seriesIds: List<Pair<String, String?
             }
             val chain = seasons.flatMap { (_, eps) -> eps.sortedBy { it.episodeNum ?: Int.MAX_VALUE } }
             queues[next.id.ifBlank { next.url }] = chain
+            // The show has to be resident for the row's decoration and the click to find it,
+            // and a completed trail's parent is not in-progress - nothing else brings it in
+            // (see buildVodTab's keepIds). Cache the card and put its poster on the tile
+            // directly too, so a later catalogue pass replacing seriesList cannot turn this
+            // card back into an episode still.
+            ensureVodResident(series)
+            homeTileSeriesKey(seriesId, providerId)?.let { homeTileSeriesParents[it] = series }
             // Prefix the series name so a bare "S02E03 · Title" tile reads as the show
             // it belongs to - but peel any series-name occurrence already baked into the
             // episode title first (Xtream titles often read "Clarkson's Farm (2021) -
             // Tractoring"), or the series shows twice.
-            resolved[seriesId] = next.copy(name = upNextTileName(series.name, next.name))
+            resolved[seriesId] = next.copy(
+                name = upNextTileName(series.name, next.name),
+                posterUrl = series.posterUrl ?: series.logoUrl ?: next.posterUrl,
+                logoUrl = series.logoUrl ?: series.posterUrl ?: next.logoUrl
+            )
         }
         // Commit only if no watched-state change invalidated the memo mid-fetch. No
         // upNextFetching cleanup here: the clear already wiped the set, and removing
@@ -1743,16 +1888,22 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     // loads, so the filter has to run here at render time, not where they are stored.
     val off = disabledSourceIds()
     val hiddenUpNext = getHiddenUpNextSeries() + TraktStore.remoteHiddenUpNextIds(prefs)
-    val nextUpItems = withoutShowsInContinueWatching(
-        (jellyfinNextUpItems + plexNextUpItems + upNext)
-            .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
-            .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
-            .filterNot { upNextSeriesId(it) in hiddenUpNext }
-            .distinctBy { it.id.ifBlank { it.url } }
-            .filterNot(::isAdultHomeItem),
-        // Same rule as the Series tab: what is still in progress was already offered under
-        // Continue Watching and must not be offered a second time here.
-        continueItems.filter { it.mediaType == MediaType.SERIES }
+    // Labelled and postered from the parent series, same as the Series tab - see
+    // continueWatchingTiles. Applied after the dedupe so the catalogue pass runs over the
+    // final row, not the raw merge; without it a local up-next card read "Show · Show S01E02"
+    // over an episode still, while the Series tab showed the identical show correctly.
+    val nextUpItems = continueWatchingTiles(
+        withoutShowsInContinueWatching(
+            (jellyfinNextUpItems + plexNextUpItems + upNext)
+                .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
+                .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
+                .filterNot { upNextSeriesId(it) in hiddenUpNext }
+                .distinctBy { it.id.ifBlank { it.url } }
+                .filterNot(::isAdultHomeItem),
+            // Same rule as the Series tab: what is still in progress was already offered under
+            // Continue Watching and must not be offered a second time here.
+            continueItems.filter { it.mediaType == MediaType.SERIES }
+        )
     )
     if (nextUpItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_next_up), nextUpItems))
 
@@ -1910,6 +2061,22 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
         if (ch.id !in wanted) continue
         candidates.getOrPut(ch.id) { mutableListOf() }.add(ch)
     }
+    // Shows whose card is neither resident nor in the derived set - a server Next Up row for a
+    // show outside the shelf previews, a completed local trail - are looked up in the catalogue
+    // database once. The tile is decorated from that cache on this or the next build; the rows
+    // already on screen are rebuilt when the answer lands (see requestHomeTileSeries).
+    // Matched on the same source guard the decoration below uses, not just on the id: a numeric
+    // series id can exist on a panel and a server at once, and the other copy cannot stand in
+    // for this row's show.
+    fun sameSeriesCopy(candidate: Channel, item: Channel): Boolean =
+        candidate.isJellyfin == item.isJellyfin && candidate.isPlex == item.isPlex &&
+            (item.sourceProviderId == null || candidate.sourceProviderId == item.sourceProviderId)
+    val missingParents = live.filter { item ->
+        if (item.mediaType != MediaType.SERIES || item.episodeNum == null) return@filter false
+        val parentId = item.categoryId?.takeIf { it.isNotBlank() } ?: return@filter false
+        candidates[parentId].orEmpty().none { sameSeriesCopy(it, item) }
+    }
+    if (missingParents.isNotEmpty()) requestHomeTileSeries(missingParents)
 
     // One tile per episode, whichever copy was watched last. The position store keys per copy
     // (provider-scoped id, or the url when an id is blank), so the same episode carried by
@@ -1943,11 +2110,12 @@ internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Chan
         val episode = item.episodeNum ?: return@mapNotNull item
         val seriesId = item.categoryId?.takeIf { it.isNotBlank() }
         val series = seriesId?.let { id ->
-            candidates[id]?.firstOrNull {
-                it.isJellyfin == item.isJellyfin && it.isPlex == item.isPlex &&
-                    (item.sourceProviderId == null || it.sourceProviderId == item.sourceProviderId)
-            }
+            candidates[id]?.firstOrNull { sameSeriesCopy(it, item) }
         }
+            // A card the catalogue database already answered for this show. Checked before the
+            // resident name scan below so a known miss doesn't walk the whole live list.
+            ?: homeTileSeriesKey(item.categoryId, item.sourceProviderId)
+                ?.let { homeTileSeriesParents[it] }
             // The id index only holds snapshots whose stamped parent id still names a
             // catalogue series; an older save or a since-relisted show falls back to the
             // same name-based resolution clicking uses.

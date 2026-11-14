@@ -115,7 +115,7 @@ internal fun MainActivity.setupPlayerControls() {
     }
     binding.btnPrevChannel.setOnClickListener { navigateChannel(-1) }
     binding.btnNextChannel.setOnClickListener { navigateChannel(1) }
-    binding.btnBack.setOnClickListener { hidePlayer(); restoreSearchIfPending() }
+    binding.btnBack.setOnClickListener { returnToPosterAfterPlayback(); restoreSearchIfPending() }
     binding.btnPlayerMenu.setOnClickListener { openSideMenu() }
     // The browse screen's gear sits behind the player, so the player carries its own
     // top-right settings shortcut - same destination as the side menu's Settings row.

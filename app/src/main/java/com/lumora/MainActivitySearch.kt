@@ -107,6 +107,28 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
                 else -> showContentDetail(item.channel)
             }
             is SearchResultItem.Epg -> playItem(item.program.channel)
+            is SearchResultItem.Person -> {
+                // Open the person's page (biography + filmography) rather than a title: that is
+                // where their series and films are listed and playable. The active chip picks
+                // which half of the filmography it opens on; with "All" the known-for titles
+                // TMDB returned decide, so an actor known for a show lands on their shows.
+                val showSeries = when (searchFilter) {
+                    MainActivity.SearchFilter.MOVIE -> false
+                    MainActivity.SearchFilter.SERIES -> true
+                    else -> item.person.knownForSeries
+                }
+                openPersonPage(
+                    MainActivity.OpenPerson(
+                        personId = item.person.personId,
+                        name = item.person.name,
+                        character = null,
+                        fromTitle = null,
+                        fromIsSeries = showSeries
+                    ),
+                    returnItem = null,
+                    returnGroup = null
+                )
+            }
         }
     }
     resultsAdapter.spanCount = dialogSpanCount
@@ -397,7 +419,7 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
  *  a catalog with thousands of vaguely-matching substrings instead of it being buried.
  *
  *  Both arguments are already [normalizeForSearch] keys - see the call site. */
-internal fun MainActivity.searchRankLower(lowerName: String, query: String, boundaryRegex: Regex): Int = when {
+internal fun searchRankLower(lowerName: String, query: String, boundaryRegex: Regex): Int = when {
     lowerName == query -> 0
     lowerName.startsWith(query) -> 1
     boundaryRegex.containsMatchIn(lowerName) -> 2
@@ -406,6 +428,54 @@ internal fun MainActivity.searchRankLower(lowerName: String, query: String, boun
 
 internal fun MainActivity.searchRank(name: String, query: String, boundaryRegex: Regex): Int =
     searchRankLower(normalizeForSearch(name), query, boundaryRegex)
+
+/** One ranked hit before it becomes a [SearchResultItem]; [kind] breaks ties in favour of
+ *  the catalogue over TMDB's people index. */
+private data class RankedSearchHit(
+    val rank: Int,
+    val kind: Int,
+    val name: String,
+    val item: SearchResultItem
+)
+
+private const val KIND_MEDIA = 0
+private const val KIND_PERSON = 1
+
+/**
+ * Merges catalogue hits and TMDB people into one display order.
+ *
+ * Both use the same relevance ladder, with a catalogue title winning a tie - the app's own
+ * catalogue is the primary search. Pinning people to either end broke one case each: people
+ * first buried "Test Show" under performers whose surnames merely contain "Test", people last
+ * buried "Bryan Cranston" under a tail of loose title matches. Pure so the ordering is
+ * testable without the network.
+ */
+internal fun rankSearchHits(
+    media: List<Pair<Channel, String>>,
+    people: List<SearchResultItem.Person>,
+    needle: String,
+    boundaryRegex: Regex
+): List<SearchResultItem> {
+    val combined = ArrayList<RankedSearchHit>(media.size + people.size)
+    for ((channel, name) in media) {
+        combined.add(
+            RankedSearchHit(
+                searchRankLower(name, needle, boundaryRegex), KIND_MEDIA, name,
+                SearchResultItem.Media(channel)
+            )
+        )
+    }
+    for (person in people) {
+        val name = normalizeForSearch(person.person.name)
+        combined.add(
+            RankedSearchHit(
+                searchRankLower(name, needle, boundaryRegex), KIND_PERSON, name, person
+            )
+        )
+    }
+    combined.sortWith(compareBy({ it.rank }, { it.kind }, { it.name }))
+    return combined.map { it.item }
+}
 
 internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchResultsAdapter, statusText: TextView, resultsList: RecyclerView) {
     statusText.text = getString(R.string.search_status_searching)
@@ -426,6 +496,17 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
             return@launch
         }
         val filter = searchFilter
+        // People come from TMDB's index, not the catalogue: a query that names an actor has no
+        // local title to match, so without this the results row was empty for the one search
+        // that should open their page. Not under the Live filter - a person is not a channel -
+        // and a no-key setup simply skips them (Discover is empty there too).
+        val personResults = if (filter != MainActivity.SearchFilter.LIVE && tmdbClient.hasKey()) {
+            runCatching { tmdbClient.searchPeople(query) }.getOrNull()
+                .orEmpty()
+                .map { SearchResultItem.Person(it) }
+        } else {
+            emptyList()
+        }
         // Films and series are database-only now: query them for this term instead of
         // scanning a resident list. Both queries are capped; the UI says "N of M" from
         // whatever comes back.
@@ -458,7 +539,7 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
                 else seriesVersions = seriesVersions + versions
             }
         }
-        val mediaResults = withContext(Dispatchers.Default) {
+        val displayResults = withContext(Dispatchers.Default) {
             // P1-2: compiled once per query, not per comparison - the boundary regex was
             // built inside searchRank (called by the comparator), so sorting ~50k titles
             // compiled ~1.5M Patterns and cost seconds on a TV stick.
@@ -492,8 +573,7 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
                 val name = normalizeForSearch(channel.name)
                 if (name.contains(needle)) ranked.add(channel to name)
             }
-            ranked.sortWith(compareBy({ searchRankLower(it.second, needle, boundaryRegex) }, { it.second }))
-            ranked.map { SearchResultItem.Media(it.first) }
+            rankSearchHits(ranked, personResults, needle, boundaryRegex)
         }
         // Stale run (query changed or overlay dismissed while this was in flight) - the
         // EPG fetches make runs long enough that publishing late would clobber newer
@@ -535,10 +615,14 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
         // for up to 10 channels over the network and can take seconds on a slow panel -
         // don't make the user stare at "Searching…" the whole time. When there are no
         // media matches, wait for EPG before declaring "no results" - it may still match.
-        if (mediaResults.isNotEmpty()) publish(mediaResults)
+        // Both lists are already merged and ranked; the EPG phase below fetches short guides
+        // for up to 10 channels over the network and can take seconds on a slow panel - don't
+        // make the user stare at "Searching…" the whole time. When there is nothing yet, wait
+        // for EPG before declaring "no results" - it may still match.
+        if (displayResults.isNotEmpty()) publish(displayResults)
         val epgResults = buildEpgSearchResults(query, filter)
         if (runId != searchRunId) return@launch
-        publish(mediaResults + epgResults)
+        publish(displayResults + epgResults)
     }
 }
 

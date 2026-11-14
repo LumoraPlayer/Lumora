@@ -159,7 +159,11 @@ class PlexProvider(baseClient: OkHttpClient, private val clientIdentifier: Strin
         val played: Boolean = false,
         // Episodes only - a Next Up row is meaningless without saying which show it's from.
         val seriesId: String? = null,
-        val seriesName: String? = null
+        val seriesName: String? = null,
+        // Episodes only - the show's poster (grandparentThumb). imageUrl is the episode's own
+        // still, which reads as a random scene on a row that is offering the series; the rows
+        // stamp this in toChannel.
+        val seriesImageUrl: String? = null
     )
 
     /** One season of a series as the server names it - "Specials" (index 0) included, which
@@ -830,7 +834,10 @@ class PlexProvider(baseClient: OkHttpClient, private val clientIdentifier: Strin
             resumePositionMs = json.optLong("viewOffset", 0L).coerceAtLeast(0L),
             played = json.optInt("viewCount", 0) > 0,
             seriesId = json.optString("grandparentRatingKey", "").takeIf { it.isNotBlank() },
-            seriesName = json.optString("grandparentTitle", "").takeIf { it.isNotBlank() }
+            seriesName = json.optString("grandparentTitle", "").takeIf { it.isNotBlank() },
+            seriesImageUrl = if (mediaType == "Episode") {
+                json.optString("grandparentThumb", "").takeIf { it.isNotBlank() }?.let { "$base$it" }
+            } else null
         )
     }
 
@@ -1297,6 +1304,13 @@ class PlexProvider(baseClient: OkHttpClient, private val clientIdentifier: Strin
             } else {
                 item.name
             }
+            // A row tile stands for the show, not the episode - see the same rule in
+            // JellyfinProvider.toChannel. Episode lists keep their own stills.
+            val displayImage = if (prefixSeriesName && item.mediaType == "Episode") {
+                item.seriesImageUrl ?: item.imageUrl
+            } else {
+                item.imageUrl
+            }
 
             return Channel(
                 // Qualified with the server this came from - a Plex rating key is a small
@@ -1305,8 +1319,8 @@ class PlexProvider(baseClient: OkHttpClient, private val clientIdentifier: Strin
                 id = qualifiedMediaItemId(sourceId, item.id),
                 name = displayName,
                 url = streamUrl,
-                logoUrl = item.imageUrl,
-                posterUrl = item.imageUrl,
+                logoUrl = displayImage,
+                posterUrl = displayImage,
                 backdropUrl = item.backdropUrl,
                 description = item.overview,
                 year = item.year?.toString(),

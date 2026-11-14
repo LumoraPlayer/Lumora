@@ -44,6 +44,8 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
     val snapshot = allChannels
     // A new catalogue invalidates the memoised show index the tracker passes build.
     localSeriesIndexCache = null
+    // Same for the parent cards Home/Series tiles were decorated from.
+    clearHomeTileSeriesParents()
     // Live stays resident (the guide, sports matcher and multiview scan it); films and
     // series are read back from the catalogue database as capped shelves.
     withContext(Dispatchers.Default) { deriveLiveHalf(snapshot) }
@@ -270,6 +272,9 @@ internal fun MainActivity.classifyAndShowLiveFirst() {
  *  selectTab and never raises status; the caller decides when the result shows. */
 internal fun MainActivity.deriveFilmsSeries() {
     val snapshot = allChannels
+    // The parent cards the Home/Series tiles were decorated from belong to the previous
+    // catalogue shape (see clearHomeTileSeriesParents).
+    clearHomeTileSeriesParents()
     filmsSeriesDeriveJob = scope.launch(Dispatchers.Default) {
         if (allChannels !== snapshot) return@launch
         // Build the tab the user is on first; every result is published as it lands, so a

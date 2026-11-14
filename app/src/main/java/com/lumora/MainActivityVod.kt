@@ -492,6 +492,16 @@ private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType, rowsOnly
         // An in-progress episode is decorated from its parent series card, which has to be
         // resident for continueWatchingTiles() to resolve it.
         if (type == MediaType.SERIES) addAll(inProgress.mapNotNull { it.categoryId?.takeIf { id -> id.isNotBlank() } })
+        // Next Up's tiles are decorated and resolved from their parent too, and a *next*
+        // episode has no position entry of its own to bring its show in. Keep the parents the
+        // media servers' own Next Up lists name as well - without this a show outside the
+        // shelf previews rendered as a bare episode still that direct-played on click.
+        if (type == MediaType.SERIES) {
+            addAll(
+                (jellyfinNextUpItems + plexNextUpItems)
+                    .mapNotNull { it.categoryId?.takeIf { id -> id.isNotBlank() } }
+            )
+        }
     }
     if (keepIds.isNotEmpty()) {
         for (item in repo.vodPageBySourceIds(type, keepIds, englishOnly, hideAdult, 0, 500)) {

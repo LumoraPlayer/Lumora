@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.lumora.R
+import com.lumora.data.remote.tmdb.TmdbClient
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.ui.RoundedImageView
@@ -36,11 +37,12 @@ data class SearchEpgResult(
     val channel: Channel
 )
 
-/** One cell in the search results grid: either a catalog [Media] item (poster tile) or
- *  an EPG [Epg] program match (program tile). */
+/** One cell in the search results grid: a catalog [Media] item (poster tile), an EPG [Epg]
+ *  program match (program tile), or a [Person] from TMDB's people index (portrait tile). */
 sealed class SearchResultItem {
     data class Media(val channel: Channel) : SearchResultItem()
     data class Epg(val program: SearchEpgResult) : SearchResultItem()
+    data class Person(val person: TmdbClient.PersonSearchResult) : SearchResultItem()
 }
 
 /** Search results grid: catalog posters + EPG program tiles in one mixed grid. Replaces
@@ -85,6 +87,7 @@ class SearchResultsAdapter(
     override fun getItemViewType(position: Int): Int = when (getItem(position)) {
         is SearchResultItem.Media -> TYPE_MEDIA
         is SearchResultItem.Epg -> TYPE_EPG
+        is SearchResultItem.Person -> TYPE_PERSON
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -94,6 +97,18 @@ class SearchResultsAdapter(
                 LayoutInflater.from(context).inflate(R.layout.item_epg_result, parent, false).also { view ->
                     tightenMargins(view)
                     compactCorners(view, R.id.epgPosterFrame, R.id.epgPoster, R.id.epgPosterScrim)
+                }
+            )
+            TYPE_PERSON -> PersonHolder(
+                LayoutInflater.from(context).inflate(R.layout.item_search_person, parent, false).also { view ->
+                    tightenMargins(view)
+                    compactCorners(view, R.id.personPosterFrame, R.id.personPoster, R.id.personPosterScrim)
+                    posterHeightDimen?.let { dimen ->
+                        val frame = view.findViewById<View>(R.id.personPosterFrame)
+                        frame.layoutParams = frame.layoutParams.also {
+                            it.height = view.resources.getDimensionPixelSize(dimen)
+                        }
+                    }
                 }
             )
             else -> MediaHolder(
@@ -142,6 +157,7 @@ class SearchResultsAdapter(
         when (val item = getItem(position)) {
             is SearchResultItem.Media -> (holder as MediaHolder).bind(item.channel)
             is SearchResultItem.Epg -> (holder as EpgHolder).bind(item.program)
+            is SearchResultItem.Person -> (holder as PersonHolder).bind(item.person)
         }
     }
 
@@ -149,6 +165,7 @@ class SearchResultsAdapter(
         when (holder) {
             is MediaHolder -> holder.cancelPendingLoad()
             is EpgHolder -> holder.cancelPendingLoad()
+            is PersonHolder -> holder.cancelPendingLoad()
         }
         super.onViewRecycled(holder)
     }
@@ -334,6 +351,64 @@ class SearchResultsAdapter(
         }
     }
 
+    inner class PersonHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val posterImage: ImageView = itemView.findViewById(R.id.personPoster)
+        private val titleText: TextView = itemView.findViewById(R.id.personName)
+        private val metaText: TextView = itemView.findViewById(R.id.personMeta)
+        private val badge: TextView = itemView.findViewById(R.id.personBadge)
+        private var current: TmdbClient.PersonSearchResult? = null
+        private var imageJob: Job? = null
+
+        init {
+            itemView.setOnClickListener { current?.let { onItemClick(SearchResultItem.Person(it)) } }
+            setupFocus(itemView) { bindingAdapterPosition }
+        }
+
+        fun bind(person: TmdbClient.PersonSearchResult) {
+            itemView.resetFocusTransform()
+            cancelPendingLoad()
+            current = person
+            // Not a title id, so it can't collide with the poster tags the detail screen's
+            // focus restore searches for.
+            itemView.tag = "person:${person.personId}"
+            titleText.text = person.name
+            // "Known for ..." is what tells an actor apart from a title of the same name;
+            // TMDB's role tag is the fallback when it listed no known-for titles.
+            val knownFor = person.knownFor.take(3)
+            metaText.text = if (knownFor.isNotEmpty()) {
+                itemView.context.getString(R.string.list_person_known_for) +
+                    " " + knownFor.joinToString(", ")
+            } else {
+                person.department.orEmpty()
+            }
+            metaText.visibility = if (metaText.text.isBlank()) View.GONE else View.VISIBLE
+            badge.text = itemView.context.getString(R.string.search_badge_person)
+            badge.backgroundTintList = ContextCompat.getColorStateList(itemView.context, R.color.primary)
+            if (spanCount >= 3) {
+                titleText.maxLines = 1
+                TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                    titleText, 8, 10, 1, TypedValue.COMPLEX_UNIT_SP
+                )
+                metaText.maxLines = 1
+                metaText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 8f)
+            }
+            val url = person.profileUrl
+            posterImage.setImageResource(R.drawable.ic_launcher_foreground)
+            if (url.isNullOrBlank()) return
+            PosterLoader.getCached(url)?.let { posterImage.setImageBitmap(it); return }
+            imageJob = scope.launch {
+                delay(PosterLoader.LOAD_DEBOUNCE_MS)
+                val bitmap = PosterLoader.fetch(url)
+                if (bitmap != null && current === person) posterImage.setImageBitmap(bitmap)
+            }
+        }
+
+        fun cancelPendingLoad() {
+            imageJob?.cancel()
+            imageJob = null
+        }
+    }
+
     class DiffCallback : DiffUtil.ItemCallback<SearchResultItem>() {
         override fun areItemsTheSame(old: SearchResultItem, new: SearchResultItem): Boolean = when {
             old is SearchResultItem.Media && new is SearchResultItem.Media ->
@@ -342,6 +417,8 @@ class SearchResultsAdapter(
             old is SearchResultItem.Epg && new is SearchResultItem.Epg ->
                 old.program.channel.id == new.program.channel.id &&
                     old.program.programTitle == new.program.programTitle
+            old is SearchResultItem.Person && new is SearchResultItem.Person ->
+                old.person.personId == new.person.personId
             else -> false
         }
         override fun areContentsTheSame(old: SearchResultItem, new: SearchResultItem): Boolean = old == new
@@ -350,5 +427,6 @@ class SearchResultsAdapter(
     private companion object {
         const val TYPE_MEDIA = 0
         const val TYPE_EPG = 1
+        const val TYPE_PERSON = 2
     }
 }

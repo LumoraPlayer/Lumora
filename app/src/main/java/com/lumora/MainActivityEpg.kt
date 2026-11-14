@@ -793,9 +793,36 @@ internal fun MainActivity.returnToPosterAfterPlayback() {
     val playing = nowPlayingChannel
     if (detailReturnItem == null && playing != null) {
         when (playing.mediaType) {
-            MediaType.SERIES -> currentSeriesVersionContext?.let { (series, group) ->
-                detailReturnItem = series
-                detailReturnGroup = group
+            MediaType.SERIES -> {
+                val seriesContext = currentSeriesVersionContext
+                if (seriesContext != null) {
+                    detailReturnItem = seriesContext.first
+                    detailReturnGroup = seriesContext.second
+                } else {
+                    // Playback that did not begin on the show's page: an episode tile whose
+                    // parent came from the catalogue rather than the resident lists, a
+                    // download, a queue restored after the context was cleared. The end of
+                    // the last episode still belongs on the show's poster - quitting to the
+                    // Series tab instead is the one outcome that loses the viewer's place.
+                    val resident = resolveHomeTileSeries(playing)
+                    if (resident != null) {
+                        detailReturnItem = resident
+                        detailReturnGroup = com.lumora.util.versionGroupContaining(seriesVersions, resident.id)
+                    } else {
+                        scope.launch {
+                            val series = resolveHomeTileSeriesFromCatalog(playing)
+                            // Back or another title may have taken the screen while the
+                            // lookup ran; opening the show then would hijack it.
+                            if (!isPlayerVisible || nowPlayingChannel?.id != playing.id) return@launch
+                            if (series != null) {
+                                detailReturnItem = series
+                                detailReturnGroup = com.lumora.util.versionGroupContaining(seriesVersions, series.id)
+                            }
+                            hidePlayer()
+                        }
+                        return
+                    }
+                }
             }
             MediaType.MOVIE -> {
                 detailReturnItem = playing

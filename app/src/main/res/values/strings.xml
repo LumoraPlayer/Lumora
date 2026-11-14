@@ -470,6 +470,8 @@
 
     <!-- item_epg_result.xml - EPG program search results -->
     <string name="epg_badge">EPG</string>
+    <!-- item_search_person.xml - a person hit in search results (actor/director) -->
+    <string name="search_badge_person">Person</string>
 
     <!-- ui/OnScreenKeyboard.kt - punctuation layer toggle. \? escapes the leading ? -
          aapt would otherwise read "?123" as a resource reference. -->

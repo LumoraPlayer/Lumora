@@ -1106,16 +1106,22 @@ class MainActivity : AppCompatActivity() {
     // Per configured Jellyfin account (MediaServerConfig.id), because the servers are fetched
     // concurrently: one flat list would be written by whichever fetch finished last rather
     // than merged. The flattened views below are what the Home rows read.
-    internal val jellyfinResumeByServer = mutableMapOf<String, List<Channel>>()
-    internal val jellyfinNextUpByServer = mutableMapOf<String, List<Channel>>()
+    // Concurrent: the flattened views are read from the VOD derive on Dispatchers.Default
+    // (buildVodTab keeps their parent series resident) while a refresh writes them.
+    internal val jellyfinResumeByServer =
+        java.util.concurrent.ConcurrentHashMap<String, List<Channel>>()
+    internal val jellyfinNextUpByServer =
+        java.util.concurrent.ConcurrentHashMap<String, List<Channel>>()
     internal val jellyfinResumeItems: List<Channel> get() = jellyfinResumeByServer.values.flatten()
     internal val jellyfinNextUpItems: List<Channel> get() = jellyfinNextUpByServer.values.flatten()
 
     // ── Plex server-side state ──────────────────
     /** Plex's On Deck, split the same way Jellyfin's Resume/Next Up are (see
      *  PlexProvider.getResumeItems) so the Home rows can treat both servers alike. */
-    internal val plexResumeByServer = mutableMapOf<String, List<Channel>>()
-    internal val plexNextUpByServer = mutableMapOf<String, List<Channel>>()
+    internal val plexResumeByServer =
+        java.util.concurrent.ConcurrentHashMap<String, List<Channel>>()
+    internal val plexNextUpByServer =
+        java.util.concurrent.ConcurrentHashMap<String, List<Channel>>()
     internal val plexResumeItems: List<Channel> get() = plexResumeByServer.values.flatten()
     internal val plexNextUpItems: List<Channel> get() = plexNextUpByServer.values.flatten()
 
@@ -2633,7 +2639,7 @@ class MainActivity : AppCompatActivity() {
         // Add mode unwinds to the grid it came from: Back is the "never mind" gesture,
         // while the dropdown's tab choices are what abandon the session outright.
         else if (isMultiviewAddMode) { cancelMultiviewAddMode() }
-        else if (isPlayerVisible) { hidePlayer(); restoreSearchIfPending() }
+        else if (isPlayerVisible) { returnToPosterAfterPlayback(); restoreSearchIfPending() }
         // The person page is the topmost content screen when it is up, whether it covers the
         // title it was opened from or a credit's detail page took that slot over.
         else if (isPersonDetailVisible) { hidePersonDetail(); restoreSearchIfPending() }

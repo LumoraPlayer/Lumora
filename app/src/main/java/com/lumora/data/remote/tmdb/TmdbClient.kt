@@ -65,6 +65,65 @@ class TmdbClient {
     }
 
     /**
+     * People matching [query] - actors, directors and the rest of TMDB's person index.
+     *
+     * Search was the missing door into the person page: the app already has that page
+     * (biography + combined filmography) behind a cast face, but a viewer who knows an
+     * actor's name rather than one of their titles had no way to reach it. The titles TMDB
+     * lists as their best-known work ride along for the result's meta line, and their media
+     * types decide which half of the filmography the page opens on.
+     */
+    suspend fun searchPeople(query: String): List<PersonSearchResult> {
+        if (query.isBlank() || !hasKey()) return emptyList()
+        // Cached per query for the process: switching the filter chips re-runs the search,
+        // and a repeat of the same name should not spend another round trip on TMDB.
+        val cacheKey = "$languageTag:$query"
+        peopleSearchCache[cacheKey]?.let { return it }
+        val q = java.net.URLEncoder.encode(query, "UTF-8")
+        val body = fetchBody("/search/person", "include_adult=false&language=$languageTag&query=$q&page=1")
+            ?: return emptyList()
+        return parsePeople(body).also { peopleSearchCache[cacheKey] = it }
+    }
+
+    /** [parse] for `/search/person`. Separate and internal so the result shape stays
+     *  testable without the network. */
+    internal fun parsePeople(body: String): List<PersonSearchResult> {
+        val results = JSONObject(body).optJSONArray("results") ?: return emptyList()
+        val out = ArrayList<PersonSearchResult>(results.length())
+        for (i in 0 until results.length()) {
+            val o = results.optJSONObject(i) ?: continue
+            val id = o.optInt("id", 0)
+            if (id <= 0) continue
+            val name = o.optStringOrNull("name")?.takeIf { it.isNotBlank() } ?: continue
+            var tvCount = 0
+            var filmCount = 0
+            val knownFor = o.optJSONArray("known_for")?.let { arr ->
+                (0 until arr.length()).mapNotNull { index ->
+                    val entry = arr.optJSONObject(index) ?: return@mapNotNull null
+                    when (entry.optString("media_type")) {
+                        "tv" -> tvCount++
+                        "movie" -> filmCount++
+                    }
+                    entry.optStringOrNull("title") ?: entry.optStringOrNull("name")
+                }
+            }.orEmpty()
+            out.add(
+                PersonSearchResult(
+                    personId = id,
+                    name = name,
+                    profileUrl = o.optStringOrNull("profile_path")?.let { "$PROFILE$it" },
+                    department = o.optStringOrNull("known_for_department"),
+                    knownFor = knownFor,
+                    // No known-for entries at all leaves the series half selected, which is
+                    // this app's default screen anyway.
+                    knownForSeries = tvCount >= filmCount
+                )
+            )
+        }
+        return out
+    }
+
+    /**
      * Titles TMDB lists alongside [mediaType]/[id] - the film detail screen's "More Like
      * This" strip. `recommendations` is the curated list; `similar` is the fallback for the
      * titles TMDB has no recommendations for at all.
@@ -549,6 +608,20 @@ class TmdbClient {
         val profileUrl: String?
     )
 
+    /** One person hit from search: enough to draw the tile and open their page. */
+    data class PersonSearchResult(
+        val personId: Int,
+        val name: String,
+        val profileUrl: String?,
+        /** TMDB's role tag ("Acting", "Directing", ...) - shown when there is no known-for line. */
+        val department: String?,
+        /** Up to a few titles TMDB lists as their best-known work, for the meta line. */
+        val knownFor: List<String>,
+        /** True when most of [knownFor] is television; picks the filmography half the page
+         *  opens on when the search was not already filtered to films or series. */
+        val knownForSeries: Boolean
+    )
+
     /** A person's page data: the biography block plus their filmography. */
     data class PersonDetails(
         val name: String,
@@ -592,6 +665,7 @@ class TmdbClient {
     private val personCache = java.util.concurrent.ConcurrentHashMap<String, BoxedPerson>()
     private val imdbCache = java.util.concurrent.ConcurrentHashMap<String, BoxedImdb>()
     private val recommendationCache = java.util.concurrent.ConcurrentHashMap<String, List<Channel>>()
+    private val peopleSearchCache = java.util.concurrent.ConcurrentHashMap<String, List<PersonSearchResult>>()
 
     companion object {
         /**

@@ -32,6 +32,10 @@ data class DownloadRecord(
     val downloadManagerId: Long,
     val status: DownloadStatus,
     val localFilePath: String? = null,
+    /** Parent series id for a downloaded episode - what lets the end of the series return to
+     *  its poster instead of the tab (see returnToPosterAfterPlayback). Null for films and
+     *  for records written before this was stored. */
+    val categoryId: String? = null,
     // Live-only, never persisted - recomputed from DownloadManager each time the list is shown.
     val progressPercent: Int = 0
 )
@@ -83,7 +87,8 @@ object DownloadStore {
                     downloadManagerId = obj.optLong("downloadManagerId"),
                     status = runCatching { DownloadStatus.valueOf(obj.optString("status", "QUEUED")) }
                         .getOrDefault(DownloadStatus.QUEUED),
-                    localFilePath = obj.optString("localFilePath", "").ifEmpty { null }
+                    localFilePath = obj.optString("localFilePath", "").ifEmpty { null },
+                    categoryId = obj.optString("categoryId", "").ifEmpty { null }
                 )
             }
         }
@@ -106,6 +111,7 @@ object DownloadStore {
                     put("downloadManagerId", r.downloadManagerId)
                     put("status", r.status.name)
                     put("localFilePath", r.localFilePath ?: "")
+                    put("categoryId", r.categoryId ?: "")
                 })
             }
             File(context.filesDir, FILE_NAME).writeText(arr.toString())

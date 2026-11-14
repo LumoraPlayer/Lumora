@@ -123,7 +123,11 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
         val favorite: Boolean = false,
         // Episodes only - a Next Up row is meaningless without saying which show it's from.
         val seriesId: String? = null,
-        val seriesName: String? = null
+        val seriesName: String? = null,
+        // Episodes only - the *show's* Primary image. imageUrl is the episode's own still
+        // (Primary on the episode), which says nothing about which series a Continue Watching
+        // or Next Up tile is offering; the rows stamp this in toChannel instead.
+        val seriesImageUrl: String? = null
     )
 
     /** One season of a series as the server names it - "Specials" (index 0) included, which
@@ -887,7 +891,17 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
             played = userData?.optBoolean("Played", false) ?: false,
             favorite = userData?.optBoolean("IsFavorite", false) ?: false,
             seriesId = json.optString("SeriesId", "").takeIf { it.isNotBlank() },
-            seriesName = json.optString("SeriesName", "").takeIf { it.isNotBlank() }
+            seriesName = json.optString("SeriesName", "").takeIf { it.isNotBlank() },
+            // Jellyfin puts the show's Primary image tag on the episode DTO, so the show's
+            // artwork is addressable from the episode row without a second request.
+            seriesImageUrl = serverBase?.let { base ->
+                if (type != "Episode") return@let null
+                json.optString("SeriesId", "").takeIf { it.isNotBlank() }?.let { seriesId ->
+                    val tag = json.optString("SeriesPrimaryImageTag", "").takeIf { it.isNotBlank() }
+                    val query = tag?.let { "?tag=${URLEncoder.encode(it, "UTF-8")}" } ?: ""
+                    "$base/Items/$seriesId/Images/Primary$query"
+                }
+            }
         )
     }
 
@@ -1216,6 +1230,14 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
             } else {
                 item.name
             }
+            // A row tile stands for the show, not the episode: an episode Primary is a
+            // screenshot of that one scene, which reads as a random still next to the show's
+            // name. Episode lists keep their own stills - only the prefixed row shape swaps it.
+            val displayImage = if (prefixSeriesName && item.mediaType == "Episode") {
+                item.seriesImageUrl ?: item.imageUrl
+            } else {
+                item.imageUrl
+            }
 
             return Channel(
                 // Qualified with the server this came from: several Jellyfin/Plex accounts can
@@ -1224,8 +1246,8 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
                 id = qualifiedMediaItemId(sourceId, item.id),
                 name = displayName,
                 url = streamUrl,
-                logoUrl = item.imageUrl,
-                posterUrl = item.imageUrl,
+                logoUrl = displayImage,
+                posterUrl = displayImage,
                 backdropUrl = item.backdropUrl,
                 description = item.overview,
                 year = item.year?.toString(),

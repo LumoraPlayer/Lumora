@@ -68,7 +68,8 @@ object VodDownloader {
             posterUrl = channel.posterUrl ?: channel.logoUrl,
             mediaType = channel.mediaType.name,
             downloadManagerId = downloadManagerId,
-            status = DownloadStatus.QUEUED
+            status = DownloadStatus.QUEUED,
+            categoryId = channel.categoryId
         )
         DownloadStore.add(context, record)
         return record
