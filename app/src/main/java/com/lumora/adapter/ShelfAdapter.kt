@@ -22,6 +22,7 @@ import androidx.recyclerview.widget.RecyclerView.RecycledViewPool
 import com.lumora.R
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
+import com.lumora.model.ContentShelfSection
 import com.lumora.model.MediaType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -145,8 +146,11 @@ class ShelfAdapter(
             // A combined personal row owns its labels and has no single See All or pin/hide
             // target; the individual sections are browsable from the sidebar. Its outer
             // "For You" heading is dropped too - each section title sits above its own
-            // poster row.
-            val sectioned = !shelf.sections.isNullOrEmpty()
+            // poster row. Only sections that actually carry items count: a snapshot read
+            // back without its section fields deserialises as empty groups, and that must
+            // fall back to the plain shelf rather than claim the combined layout.
+            val usableSections = shelf.sections.orEmpty().filter { it.safeItems.isNotEmpty() }
+            val sectioned = usableSections.isNotEmpty()
             header.visibility = if (sectioned) View.GONE else View.VISIBLE
             seeAllButton.visibility =
                 if (!sectioned && onSeeAllClick != null) View.VISIBLE else View.GONE
@@ -157,7 +161,7 @@ class ShelfAdapter(
             sectionsScroll.visibility = if (sectioned) View.VISIBLE else View.GONE
             if (sectioned) {
                 posterAdapter.submitList(emptyList())
-                bindSections(shelf)
+                bindSections(usableSections)
             } else {
                 clearSections()
                 posterAdapter.submitList(shelf.items)
@@ -166,17 +170,18 @@ class ShelfAdapter(
 
         /** Builds the combined line: one vertical group per section, each with its title and
          *  count above a row of posters. The whole line scrolls horizontally as one. */
-        private fun bindSections(shelf: ContentShelf) {
+        private fun bindSections(sections: List<ContentShelfSection>) {
             clearSections()
-            shelf.sections.orEmpty().forEach { section ->
-                if (section.items.isEmpty()) return@forEach
+            sections.forEach { section ->
+                val sectionItems = section.safeItems
+                if (sectionItems.isEmpty()) return@forEach
                 val group = LayoutInflater.from(itemView.context)
                     .inflate(R.layout.item_shelf_section_group, sectionsRow, false) as LinearLayout
                 group.findViewById<TextView>(R.id.shelfSectionTitle).text = section.title
                 group.findViewById<TextView>(R.id.shelfSectionCount).text =
-                    section.items.size.toString()
+                    sectionItems.size.toString()
                 val posterRow = group.findViewById<LinearLayout>(R.id.shelfSectionPosters)
-                section.items.take(MAX_PERSONAL_SECTION_ITEMS).forEach { channel ->
+                sectionItems.take(MAX_PERSONAL_SECTION_ITEMS).forEach { channel ->
                     val poster = LayoutInflater.from(itemView.context)
                         .inflate(R.layout.item_shelf_poster, posterRow, false)
                     bindSectionPoster(poster, channel)

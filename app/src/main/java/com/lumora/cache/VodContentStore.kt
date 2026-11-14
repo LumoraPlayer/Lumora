@@ -38,8 +38,11 @@ internal object VodContentStore {
 
     private const val TAG = "VodContentStore"
     // v2: the v1 snapshots were written with R8-renamed fields and cannot be read back.
-    private const val FILE = "vod_content_v2.json.gz"
-    private const val FORMAT = 2
+    // v3: 7.2 added ContentShelfSection to the snapshot model. Its fields were not kept by
+    // R8, so a v2 snapshot's sectioned shelves deserialize with null items after any build
+    // change - bump the format and rebuild them once instead of serving a half-shape model.
+    private const val FILE = "vod_content_v3.json.gz"
+    private const val FORMAT = 3
 
     private val gson = Gson()
 
@@ -52,8 +55,9 @@ internal object VodContentStore {
 
     /** Returns the stored key and content, or null when there is nothing usable. */
     fun load(context: Context): Pair<String, MainActivity.FilmsSeriesContent>? {
-        // An upgrade from the broken v1 file should not leave a multi-hundred-KB orphan
-        // behind forever.
+        // An upgrade from a broken older snapshot should not leave its orphan behind
+        // forever.
+        runCatching { File(context.filesDir, "vod_content_v2.json.gz").delete() }
         runCatching { File(context.filesDir, "vod_content_v1.json.gz").delete() }
         val file = File(context.filesDir, FILE)
         if (!file.isFile) return null
@@ -129,12 +133,33 @@ internal object VodContentStore {
         }
     }
 
-    /** A partially-obfuscated or truncated snapshot can deserialize with blank ids rather
-     *  than throw. Treat that as unusable instead of painting blank cards. */
+    /** A partially-obfuscated or truncated snapshot can deserialize with blank ids - or with
+     *  a null in a property Gson bypassed the constructor for - rather than throw. Treat that
+     *  as unusable instead of crashing the first reader. */
     private fun looksUsable(content: MainActivity.FilmsSeriesContent): Boolean {
+        // Every top-level collection [refreshVodLead] and the shelf adapters touch. Gson
+        // leaves a missing field null even though it is declared non-null, and one null is
+        // enough to take the Series tab down the moment the cache is used.
+        val completeShape = content.filmList.isPresentList() &&
+            content.filmVersions.isPresentMap() &&
+            content.filmShelves.isPresentList() &&
+            content.seriesList.isPresentList() &&
+            content.seriesVersions.isPresentMap() &&
+            content.seriesShelves.isPresentList() &&
+            content.seriesCategoryRows.isPresentList() &&
+            content.filmCategoryRows.isPresentList() &&
+            content.seriesCategoryChildren.isPresentMap() &&
+            content.filmCategoryChildren.isPresentMap()
+        if (!completeShape) return false
         val sample = (content.filmList + content.seriesList).firstOrNull()
             ?: (content.filmShelves + content.seriesShelves).firstOrNull()?.items?.firstOrNull()
             ?: return true
         return sample.id.isNotBlank() && sample.name.isNotBlank()
     }
 }
+
+/** Present-on-disk check for a non-null Kotlin list. Gson can still leave it null. */
+private fun <T> List<T>?.isPresentList(): Boolean = this != null
+
+/** Present-on-disk check for a non-null Kotlin map. Gson can still leave it null. */
+private fun <K, V> Map<K, V>?.isPresentMap(): Boolean = this != null

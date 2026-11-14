@@ -4,8 +4,10 @@ package com.lumora
 import com.google.gson.Gson
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
+import com.lumora.model.ContentShelfSection
 import com.lumora.model.MediaType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Guards the shape of the persisted Films/Series snapshot: these are the classes Gson
@@ -45,5 +47,36 @@ class VodSnapshotSerializationTest {
         assertEquals("A Film", restored.filmList.single().name)
         assertEquals("Newest", restored.filmShelves.single().title)
         assertEquals("film-1", restored.filmShelves.single().items.single().id)
+    }
+
+    @Test
+    fun sectionedShelfRoundTrips() {
+        val show = Channel(
+            id = "show-1",
+            name = "A Show",
+            url = "",
+            mediaType = MediaType.SERIES,
+        )
+        val shelf = ContentShelf(
+            title = "For You",
+            items = listOf(show),
+            sections = listOf(
+                ContentShelfSection("Continue Watching", listOf(show), CONTINUE_WATCHING_CATEGORY_ID)
+            ),
+        )
+        val gson = Gson()
+        val restored = gson.fromJson(gson.toJson(shelf), ContentShelf::class.java)
+        assertEquals("For You", restored.title)
+        assertEquals("Continue Watching", restored.sections?.single()?.title)
+        assertEquals("show-1", restored.sections?.single()?.safeItems?.single()?.id)
+    }
+
+    @Test
+    fun aSectionWhoseFieldsDidNotSurviveReadsAsEmptyInsteadOfCrashing() {
+        // What Gson produces when the snapshot was written by a build that obfuscated
+        // ContentShelfSection's fields: title and items are simply absent. The shelf must
+        // be able to bind this as an empty group rather than NPE on items.isEmpty().
+        val section = Gson().fromJson("""{"categoryId":"x"}""", ContentShelfSection::class.java)
+        assertTrue(section.safeItems.isEmpty())
     }
 }

@@ -312,7 +312,9 @@ private fun MainActivity.refreshVodLead(content: MainActivity.FilmsSeriesContent
     val favouritesTitle = getString(R.string.category_favourites)
     val personalTitle = getString(R.string.shelf_for_you)
     fun withFilmLead(shelves: List<ContentShelf>, lead: List<Channel>): List<ContentShelf> {
-        val rest = shelves.filterNot { it.title == continueTitle }
+        val rest = shelves.filterNot {
+            it.title == continueTitle || it.categoryId == CONTINUE_WATCHING_CATEGORY_ID
+        }
         return if (lead.isEmpty()) rest
         else listOf(ContentShelf(continueTitle, lead, categoryId = CONTINUE_WATCHING_CATEGORY_ID)) + rest
     }
@@ -320,9 +322,11 @@ private fun MainActivity.refreshVodLead(content: MainActivity.FilmsSeriesContent
     // A bounded cached seriesList can miss a favourite outside its preview window. The
     // previous personal row kept those tiles, so carry them through - either from the
     // combined row's Favourites section or from the old separate shelf.
-    val cachedPersonal = content.seriesShelves.firstOrNull { it.title == personalTitle }
+    val cachedPersonal = content.seriesShelves.firstOrNull {
+        it.sections != null || it.title == personalTitle
+    }
     val cachedFavourites = cachedPersonal?.sections
-        ?.firstOrNull { it.title == favouritesTitle }?.items
+        ?.firstOrNull { it.title == favouritesTitle }?.safeItems
         ?: content.seriesShelves.firstOrNull { it.title == favouritesTitle }?.items
         ?: emptyList()
     val favoriteSeries = if (favouriteIds.isEmpty()) {
@@ -330,16 +334,29 @@ private fun MainActivity.refreshVodLead(content: MainActivity.FilmsSeriesContent
     } else {
         content.seriesList.filter { it.id in favouriteIds }.ifEmpty { cachedFavourites }
     }
-    // Drop every shape the personal line has had on disk: the combined row, and the old
-    // separate Continue Watching / Next Up / Favourites shelves.
+    // Drop every shape the personal line has had on disk: the combined row, the old
+    // separate Continue Watching / Next Up / Favourites shelves, and anything still
+    // carrying `sections` - only this function builds a sectioned shelf, so a cached one
+    // is stale by definition (and its section fields may not map to this build at all).
+    // The old shelves are also matched by id, because a snapshot written under a different
+    // UI language carries translated titles that `personalTitles` cannot recognise.
     val personalTitles = setOf(
         personalTitle,
         continueTitle,
         getString(R.string.category_next_up),
         favouritesTitle,
     )
+    val personalCategoryIds = setOf(
+        CONTINUE_WATCHING_CATEGORY_ID,
+        UP_NEXT_CATEGORY_ID,
+        FAVOURITES_CATEGORY_ID,
+    )
     val personal = seriesPersonalShelves(favoriteSeries)
-    val seriesRest = content.seriesShelves.filterNot { it.title in personalTitles }
+    val seriesRest = content.seriesShelves.filterNot { shelf ->
+        shelf.sections != null ||
+            shelf.title in personalTitles ||
+            shelf.categoryId in personalCategoryIds
+    }
     return content.copy(
         filmShelves = withFilmLead(content.filmShelves, movieContinueItems()),
         seriesShelves = personal + seriesRest

@@ -23,4 +23,17 @@ data class ContentShelfSection(
     val title: String,
     val items: List<Channel>,
     val categoryId: String? = null,
-)
+) {
+    /**
+     * [items] as a non-null list.
+     *
+     * Gson constructs snapshot models without calling the constructor, so a section read
+     * from a cache written before its fields were kept can carry a null [items] even
+     * though the property is declared non-null. Binding reads this instead of [items], so
+     * a stale or half-obfuscated Films/Series snapshot paints an empty group rather than
+     * taking the app down with an NPE.
+     */
+    val safeItems: List<Channel> get() = items.orEmptyWhenNull()
+}
+
+private fun <T> List<T>?.orEmptyWhenNull(): List<T> = this ?: emptyList()

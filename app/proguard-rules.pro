@@ -85,6 +85,7 @@
 -keep class com.lumora.model.Channel { *; }
 -keep class com.lumora.model.DrmKey { *; }
 -keep class com.lumora.model.ContentShelf { *; }
+-keep class com.lumora.model.ContentShelfSection { *; }
 -keep class com.lumora.model.CategoryFilter { *; }
 -keep class com.lumora.model.MediaType { *; }
 
