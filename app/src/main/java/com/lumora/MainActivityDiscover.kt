@@ -1500,7 +1500,7 @@ internal fun MainActivity.seriesUpNextItems(): List<Channel> {
     // A show removed here is in PREF_UP_NEXT_HIDDEN; one dropped on another device is in the
     // Trakt-mirrored set. Both mean "not on this row", so the row reads the same everywhere.
     val hidden = getHiddenUpNextSeries() + TraktStore.remoteHiddenUpNextIds(prefs)
-    return continueWatchingTiles(
+    val tiles = continueWatchingTiles(
         (server + local)
             .distinctBy { it.id.ifBlank { it.url } }
             // Applied to both halves: a show refused here has to stay gone whether the tile
@@ -1509,6 +1509,28 @@ internal fun MainActivity.seriesUpNextItems(): List<Channel> {
             .filterNot { upNextSeriesId(it) in hidden }
             .filterNot(::isAdultHomeItem)
     )
+    // A show with an episode part-watched belongs to Continue Watching only. Leaving its
+    // next episode on Up Next offered the same show twice, in two rows that mean opposite
+    // things ("finish this" vs "start this"). The sidebar row, the poster shelf and the
+    // Up Next grid all read this one list, so the filter has to live here.
+    return withoutShowsInContinueWatching(tiles, seriesContinueItems())
+}
+
+/**
+ * Drops an Up Next tile when the same show already has an episode in Continue Watching.
+ *
+ * Matched with [sameShowAs], not by id alone: one show arrives from a panel, a media server
+ * and a synced trail under different ids and spellings. A film sharing a title with a show
+ * is not a concern here - both callers pass series tiles only.
+ */
+internal fun withoutShowsInContinueWatching(
+    nextUp: List<Channel>,
+    continueWatching: List<Channel>
+): List<Channel> {
+    if (nextUp.isEmpty() || continueWatching.isEmpty()) return nextUp
+    return nextUp.filterNot { next ->
+        continueWatching.any { resumed -> sameShowAs(next, resumed) }
+    }
 }
 
 /** The series an Up Next tile stands for: an episode through its parent id, anything else
@@ -1721,12 +1743,17 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     // loads, so the filter has to run here at render time, not where they are stored.
     val off = disabledSourceIds()
     val hiddenUpNext = getHiddenUpNextSeries() + TraktStore.remoteHiddenUpNextIds(prefs)
-    val nextUpItems = (jellyfinNextUpItems + plexNextUpItems + upNext)
-        .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
-        .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
-        .filterNot { upNextSeriesId(it) in hiddenUpNext }
-        .distinctBy { it.id.ifBlank { it.url } }
-        .filterNot(::isAdultHomeItem)
+    val nextUpItems = withoutShowsInContinueWatching(
+        (jellyfinNextUpItems + plexNextUpItems + upNext)
+            .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
+            .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
+            .filterNot { upNextSeriesId(it) in hiddenUpNext }
+            .distinctBy { it.id.ifBlank { it.url } }
+            .filterNot(::isAdultHomeItem),
+        // Same rule as the Series tab: what is still in progress was already offered under
+        // Continue Watching and must not be offered a second time here.
+        continueItems.filter { it.mediaType == MediaType.SERIES }
+    )
     if (nextUpItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_next_up), nextUpItems))
 
     // Recently Played: the ids are looked up in a map, not by scanning the live list once
