@@ -103,7 +103,10 @@ internal fun MainActivity.publishCatalogConnecting(providerId: String, name: Str
     renderCatalogIngest()
     // The banner says the same thing and can be seen with content on screen, so the status
     // row does not also hold the whole content slot for "Connecting to <provider>...".
-    if (!uiPainted) setStatus("", visible = false)
+    // A suppressed banner narrates nothing at all (a refresh over a usable catalogue), so
+    // it must not take the startup "Loading..." row down either - until the cached
+    // catalogue paints, that row is the only thing telling the user the app is working.
+    if (!uiPainted && !suppressIngestBanner) setStatus("", visible = false)
 }
 
 /**

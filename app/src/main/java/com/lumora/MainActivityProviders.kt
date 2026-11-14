@@ -948,9 +948,11 @@ internal fun MainActivity.loadAllConfiguredProviders(
                     com.lumora.cache.VodContentStore.hasCache(this@loadAllConfiguredProviders)
             }.getOrDefault(false)
         }
-        // A cache means the screen is the user's, not the loader's: drop the "Loading..."
-        // row raised on entry and let the refresh happen without any narration.
-        if (hadCachedCatalogue) setStatus("", visible = false)
+        // A cache means the screen is the user's, not the loader's - but only once something
+        // is actually painted. On a fresh open the catalogue read itself can take seconds, and
+        // clearing the "Loading..." row here left a black screen that looked like a crash.
+        // Keep it up until the first paint; a refresh over visible content stays silent.
+        if (hadCachedCatalogue && uiPainted) setStatus("", visible = false)
         // Enforce the storage invariant: a *removed* source owns no catalogue rows, and a
         // type switched off for an enabled provider owns none either. Disabled providers are
         // deliberately still in the keep-list - their rows are parked (hidden by rank), not
