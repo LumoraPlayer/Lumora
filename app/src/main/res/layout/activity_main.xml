@@ -2050,6 +2050,33 @@
                                         android:tint="@color/text_primary" />
                                 </LinearLayout>
 
+                                <!-- Films only: the Next Up watchlist. A film has no
+                                     "next episode" to derive, so this is how one gets onto
+                                     the row; the filled bookmark means it is already there. -->
+                                <LinearLayout
+                                    android:id="@+id/detailWatchlistButton"
+                                    android:layout_width="40dp"
+                                    android:layout_height="40dp"
+                                    android:layout_marginStart="8dp"
+                                    android:background="@drawable/bg_toolbar_button"
+                                    android:clickable="true"
+                                    android:focusable="true"
+                                    android:gravity="center"
+                                    android:stateListAnimator="@animator/focus_scale"
+                                    android:visibility="gone"
+                                    android:clipChildren="false"
+                                    android:clipToPadding="false">
+
+                                    <ImageView
+                                        android:id="@+id/detailWatchlistIcon"
+                                        android:layout_width="24dp"
+                                        android:layout_height="24dp"
+                                        android:contentDescription="@string/list_upnext_add_item"
+                                        android:scaleType="centerInside"
+                                        android:src="@drawable/ic_bookmark"
+                                        android:tint="@color/text_primary" />
+                                </LinearLayout>
+
                                 <!-- Profile-only hide action: removes this film/series from the
                                      active viewer's catalogue without touching the global one. -->
                                 <LinearLayout

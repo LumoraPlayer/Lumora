@@ -8,6 +8,7 @@ import android.widget.*
 import com.lumora.cache.FavoritesStore
 import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.RecentlyPlayedStore
+import com.lumora.cache.WatchlistStore
 import com.lumora.cache.WatchedStore
 import com.lumora.data.IptvProviderStore
 import com.lumora.data.TraktStore
@@ -1320,6 +1321,61 @@ internal fun MainActivity.onMergedLeadLongClick(item: Channel) {
         .show()
 }
 
+/**
+ * Hold on a film in the Films tab's personal line. The sectioned "For You" card can hold the
+ * same film in more than one of Continue Watching, Next Up and Favourites, so the menu names
+ * every list it is actually in - the same contract [onMergedLeadLongClick] follows for shows.
+ */
+internal fun MainActivity.onFilmLeadLongClick(item: Channel) {
+    val actions = mutableListOf<Pair<String, () -> Unit>>()
+    if (FavoritesStore.isFavoriteSeries(this, item.id)) {
+        actions += (getString(R.string.list_fav_remove_item)) to {
+            toggleFavoriteVodItem(item)
+        }
+    }
+    if (WatchlistStore.isWatchlisted(this, item.id)) {
+        actions += (getString(R.string.list_upnext_remove_item)) to {
+            removeFromFilmWatchlist(item)
+            Toast.makeText(this, R.string.list_upnext_removed, Toast.LENGTH_SHORT).show()
+        }
+    }
+    if (movieContinueItems().any { sameShowAs(it, item) }) {
+        actions += (getString(R.string.list_cw_remove_item)) to {
+            removeFromContinueWatching(item)
+            Toast.makeText(this, R.string.list_cw_removed, Toast.LENGTH_SHORT).show()
+        }
+    }
+    if (actions.isEmpty()) {
+        toggleFavoriteVodItem(item)
+        return
+    }
+    LumoraDialog.Builder(this)
+        .setTitle(item.name)
+        .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
+        .show()
+}
+
+/** Hold on a tile in Home's Next Up row: films come off the watchlist, shows off the derived
+ *  row. Anything not actually on the row keeps the hold-to-favourite gesture. */
+internal fun MainActivity.onUpNextLongClick(item: Channel) {
+    val listed = if (item.mediaType == MediaType.MOVIE) {
+        WatchlistStore.isWatchlisted(this, item.id)
+    } else {
+        seriesUpNextItems().any { sameShowAs(it, item) }
+    }
+    if (!listed) {
+        toggleFavoriteVodItem(item)
+        return
+    }
+    LumoraDialog.Builder(this)
+        .setTitle(item.name)
+        .setItems(arrayOf(getString(R.string.list_upnext_remove_item))) { _, _ ->
+            removeFromUpNext(item)
+            Toast.makeText(this, R.string.list_upnext_removed, Toast.LENGTH_SHORT).show()
+        }
+        .show()
+}
+
 /** Clear-all asks first: it empties the row for every provider at once and reaches the media
  *  servers and Trakt, none of which can be undone from here. */
 internal fun MainActivity.confirmClearContinueWatching() {
@@ -1721,6 +1777,12 @@ internal fun MainActivity.clearUpNextDroppedOnTrakt() {
  * ignored. Locally the refusal lands first, so the row responds even if the report fails.
  */
 internal fun MainActivity.removeFromUpNext(item: Channel) {
+    // A film on Next Up is the watchlist entry itself, not a derived tile: take it off the
+    // list rather than writing a series refusal for an id that is not a show.
+    if (item.mediaType == MediaType.MOVIE) {
+        removeFromFilmWatchlist(item)
+        return
+    }
     val seriesId = upNextSeriesId(item)
     if (seriesId.isBlank()) return
     val hidden = getHiddenUpNextSeries()
@@ -1740,6 +1802,38 @@ internal fun MainActivity.removeFromUpNext(item: Channel) {
         // Same as Continue Watching: the row only exists while it has items, so emptying it
         // has to move the pane off it rather than leave a selection nothing lists.
         if (selectedRowId == UP_NEXT_CATEGORY_ID && seriesUpNextItems().isEmpty()) {
+            selectedRowId = null
+            selectedCategoryLabel = null
+            selectedBrandChannelIds = null
+            selectedCategoryIds = null
+        }
+        rebuildCategoriesForActiveTab()
+        applyCategoryFilter()
+        if (!wasOnUpNext) return@launch
+        if (selectedRowId == UP_NEXT_CATEGORY_ID) focusItemWhenReady(grid, removedAt)
+        else focusSelectedSidebarRow()
+    }
+}
+
+/**
+ * Takes one film off the Next Up watchlist.
+ *
+ * The bookmark on the film's own page is the add/remove toggle; this is the removal the row
+ * itself offers (a hold on a tile or on the sidebar row), so both paths agree and the tile
+ * disappears without waiting for a catalogue rebuild.
+ */
+internal fun MainActivity.removeFromFilmWatchlist(item: Channel) {
+    if (!WatchlistStore.remove(this, item.id)) return
+    refreshHomeShelvesIfShowing()
+    refreshFilmShelvesIfShowing()
+    if (showingHome || activeTab != 2) return
+    val grid = binding.filmsContent
+    val removedAt = filmsGridAdapter.currentList.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
+    val wasOnUpNext = selectedRowId == UP_NEXT_CATEGORY_ID
+    scope.launch {
+        // Same as Continue Watching: the row only exists while it has items, so emptying it
+        // has to move the pane off it rather than leave a selection nothing lists.
+        if (selectedRowId == UP_NEXT_CATEGORY_ID && movieWatchlistItems().isEmpty()) {
             selectedRowId = null
             selectedCategoryLabel = null
             selectedBrandChannelIds = null
@@ -1853,6 +1947,61 @@ internal fun MainActivity.seriesPersonalShelves(favourites: List<Channel>): List
     )
 }
 
+/** Films the viewer added to Next Up as a watchlist, resolved from the resident film set. */
+internal fun MainActivity.movieWatchlistItems(): List<Channel> {
+    val ids = WatchlistStore.getIds(this)
+    if (ids.isEmpty()) return emptyList()
+    val profile = com.lumora.data.ProfileStore.activeProfileIfEnabled(prefs)
+    return filmList
+        .filter { it.id in ids }
+        .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
+        .filterNot(::isAdultHomeItem)
+}
+
+/**
+ * The Films poster's personal line, the counterpart of [seriesPersonalShelves]: Continue
+ * Watching, Next Up (the film watchlist) and Favourites stay distinct labelled sections in
+ * one row. Films used to lead with Continue Watching alone and had no card for the two the
+ * Series tab gets, so a film watchlist had nowhere to live.
+ */
+internal fun MainActivity.filmPersonalShelves(
+    favourites: List<Channel>,
+    nextUp: List<Channel>
+): List<ContentShelf> {
+    val sections = mutableListOf<ContentShelfSection>()
+    val hidden = getHiddenCategories(2)
+    val continueItems = movieContinueItems()
+    if (continueItems.isNotEmpty() && CONTINUE_WATCHING_CATEGORY_ID !in hidden) {
+        sections += ContentShelfSection(
+            getString(R.string.category_continue_watching),
+            continueItems,
+            categoryId = CONTINUE_WATCHING_CATEGORY_ID,
+        )
+    }
+    if (nextUp.isNotEmpty() && UP_NEXT_CATEGORY_ID !in hidden) {
+        sections += ContentShelfSection(
+            getString(R.string.category_next_up),
+            nextUp,
+            categoryId = UP_NEXT_CATEGORY_ID,
+        )
+    }
+    if (favourites.isNotEmpty() && FAVOURITES_CATEGORY_ID !in hidden) {
+        sections += ContentShelfSection(
+            getString(R.string.category_favourites),
+            favourites,
+            categoryId = FAVOURITES_CATEGORY_ID,
+        )
+    }
+    if (sections.isEmpty()) return emptyList()
+    return listOf(
+        ContentShelf(
+            getString(R.string.shelf_for_you),
+            sections.flatMap { it.items },
+            sections = sections,
+        )
+    )
+}
+
 internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     val shelves = mutableListOf<ContentShelf>()
     val hidden = getHiddenHomeShelves()
@@ -1888,22 +2037,37 @@ internal fun MainActivity.buildHomeShelves(): List<ContentShelf> {
     // loads, so the filter has to run here at render time, not where they are stored.
     val off = disabledSourceIds()
     val hiddenUpNext = getHiddenUpNextSeries() + TraktStore.remoteHiddenUpNextIds(prefs)
+    // Series Next Up first, then the film watchlist prepended below: a search that names a
+    // person, a half-watched film and a watchlisted one are different answers, and the user
+    // curated the watchlist explicitly, so it leads the row.
+    val seriesNextUp = withoutShowsInContinueWatching(
+        (jellyfinNextUpItems + plexNextUpItems + upNext)
+            .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
+            .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
+            // The refusal set is keyed by series id; a film id can collide numerically.
+            .filterNot { it.mediaType == MediaType.SERIES && upNextSeriesId(it) in hiddenUpNext }
+            .distinctBy { it.id.ifBlank { it.url } }
+            .filterNot(::isAdultHomeItem),
+        // Same rule as the Series tab: what is still in progress was already offered under
+        // Continue Watching and must not be offered a second time here.
+        continueItems.filter { it.mediaType == MediaType.SERIES }
+    )
+    // A film already part-watched is Continue Watching's answer; the watchlist copy would be
+    // the same title twice in two rows.
+    val inProgressMovies = continueItems
+        .filter { it.mediaType == MediaType.MOVIE }
+        .flatMap { listOf(it.id, it.url) }
+        .filter { it.isNotBlank() }
+        .toSet()
+    val watchlistFilms = movieWatchlistItems()
+        .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
+        .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
+        .filterNot { it.id in inProgressMovies || (it.url.isNotBlank() && it.url in inProgressMovies) }
     // Labelled and postered from the parent series, same as the Series tab - see
     // continueWatchingTiles. Applied after the dedupe so the catalogue pass runs over the
-    // final row, not the raw merge; without it a local up-next card read "Show · Show S01E02"
-    // over an episode still, while the Series tab showed the identical show correctly.
+    // final row, not the raw merge.
     val nextUpItems = continueWatchingTiles(
-        withoutShowsInContinueWatching(
-            (jellyfinNextUpItems + plexNextUpItems + upNext)
-                .filterNot { it.sourceProviderId != null && it.sourceProviderId in off }
-                .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
-                .filterNot { upNextSeriesId(it) in hiddenUpNext }
-                .distinctBy { it.id.ifBlank { it.url } }
-                .filterNot(::isAdultHomeItem),
-            // Same rule as the Series tab: what is still in progress was already offered under
-            // Continue Watching and must not be offered a second time here.
-            continueItems.filter { it.mediaType == MediaType.SERIES }
-        )
+        (watchlistFilms + seriesNextUp).distinctBy { it.id.ifBlank { it.url } }
     )
     if (nextUpItems.isNotEmpty()) shelves.add(ContentShelf(getString(R.string.category_next_up), nextUpItems))
 

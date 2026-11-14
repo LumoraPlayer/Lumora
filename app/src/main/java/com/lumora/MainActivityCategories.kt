@@ -194,7 +194,7 @@ internal fun MainActivity.showCategoryContextMenu(category: CategoryFilter) {
     // dropped on another device (mirrored through Trakt - see pullTraktDroppedShows).
     val hasHiddenUpNext = getHiddenUpNextSeries().isNotEmpty() ||
         com.lumora.data.TraktStore.remoteHiddenUpNextIds(prefs).isNotEmpty()
-    if (id == UP_NEXT_CATEGORY_ID && hasHiddenUpNext) {
+    if (id == UP_NEXT_CATEGORY_ID && activeTab == 1 && hasHiddenUpNext) {
         LumoraDialog.Builder(this)
             .setTitle(category.name)
             .setItems(
@@ -351,22 +351,32 @@ internal fun MainActivity.refreshSeriesShelvesIfShowing() {
     }
 }
 
-/** Films-shelf counterpart of [refreshSeriesShelvesIfShowing]: the Continue Watching
- *  lead shelf moves when playback ends, so the Films poster needs the same lightweight
- *  refresh. Rebuilds the shelf list from cachedFilmCategoryRows - never re-runs the
- *  expensive buildCategoryRows() pass. */
+/** Films-shelf counterpart of [refreshSeriesShelvesIfShowing]: the personal row (Continue
+ *  Watching, the watchlist as Next Up, Favourites) moves with playback and with the
+ *  watchlist, so the Films poster needs the same lightweight refresh. Rebuilds the shelf
+ *  list from cachedFilmCategoryRows - never re-runs the expensive buildCategoryRows() pass. */
 internal fun MainActivity.refreshFilmShelvesIfShowing() {
     if (showingHome || activeTab != 2) return
     if (binding.filmsContent.visibility != View.VISIBLE) return
+    val favouriteIds = FavoritesStore.getFavoriteSeriesIds(this)
+    val favouriteFilms = if (favouriteIds.isEmpty()) {
+        emptyList()
+    } else {
+        filmList.filter { it.id in favouriteIds }
+            .ifEmpty { filmShelves.personalSectionItems(getString(R.string.category_favourites), FAVOURITES_CATEGORY_ID) }
+    }
+    val watchlistIds = com.lumora.cache.WatchlistStore.getIds(this)
+    val watchlistFilms = if (watchlistIds.isEmpty()) {
+        emptyList()
+    } else {
+        filmList.filter { it.id in watchlistIds }
+            .ifEmpty { filmShelves.personalSectionItems(getString(R.string.category_next_up), UP_NEXT_CATEGORY_ID) }
+    }
     // See refreshSeriesShelvesIfShowing: Newest comes from the database, not this bounded list.
     val newestShelf = filmShelves.firstOrNull { it.categoryId == NEWEST_CATEGORY_ID }
-    val shelves = shelvesFromCategoryRows(cachedFilmCategoryRows, filmList)
-        .let { s -> if (newestShelf == null) s else listOf(newestShelf) + s }
-        .let { s ->
-            val lead = movieContinueItems()
-            if (lead.isEmpty()) s
-            else listOf(ContentShelf(getString(R.string.category_continue_watching), lead)) + s
-        }
+    val shelves = filmPersonalShelves(favouriteFilms, watchlistFilms) +
+        shelvesFromCategoryRows(cachedFilmCategoryRows, filmList)
+            .let { s -> if (newestShelf == null) s else listOf(newestShelf) + s }
     filmShelves = shelves
     filmsShelfAdapter.submitList(shelves) {
         filmsShelfAdapter.notifyItemRangeChanged(0, filmsShelfAdapter.itemCount)
@@ -757,7 +767,11 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
                 2 -> movieContinueItems()
                 else -> emptyList()
             },
-            upNext = if (tab == 1) seriesUpNextItems() else emptyList(),
+            upNext = when (tab) {
+                1 -> seriesUpNextItems()
+                2 -> movieWatchlistItems()
+                else -> emptyList()
+            },
             favouriteVod = if (tab != 0) list.filter { it.id in favoriteVodIds } else emptyList()
         )
     }
@@ -800,12 +814,12 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
             )
         }
     }
-    // Up Next leads the rail - it is the row that answers "what do I put on now", and it
-    // holds what Continue Watching structurally cannot: the *next* episode of a show whose
-    // last episode was finished. Series only (see UP_NEXT_CATEGORY_ID). Same special-case
-    // treatment in applyCategoryFilter, for the same reason as Continue Watching: its items
-    // aren't seriesList members.
-    if (tab == 1 && UP_NEXT_CATEGORY_ID !in hiddenIds && UP_NEXT_CATEGORY_ID !in pinned) {
+    // Up Next leads the rail - it is the row that answers "what do I put on now". On Series
+    // it holds what Continue Watching structurally cannot: the *next* episode of a show whose
+    // last episode was finished. On Films it is the watchlist, because a film has no next
+    // episode to derive. Same special-case treatment in applyCategoryFilter, for the same
+    // reason as Continue Watching: its items aren't members of the tab's own list.
+    if ((tab == 1 || tab == 2) && UP_NEXT_CATEGORY_ID !in hiddenIds && UP_NEXT_CATEGORY_ID !in pinned) {
         if (synthetic.upNext.isNotEmpty()) {
             rows.add(
                 0,

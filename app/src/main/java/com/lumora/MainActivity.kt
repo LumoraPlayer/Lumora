@@ -1477,14 +1477,16 @@ class MainActivity : AppCompatActivity() {
     internal val filmsShelfAdapter = ShelfAdapter(
         onItemClick = { item -> playItem(item) },
         onItemLongClick = { item, shelf ->
-            // The Films lead shelf is Continue Watching alone, so a hold there is a removal
-            // (the same contract Home's Continue Watching shelf follows); every other Films
+            // The Films personal line carries Continue Watching, the watchlist (Next Up) and
+            // Favourites in labelled sections, so a hold asks to take the film off one of
+            // those lists - the same contract the Series lead follows. Every other Films
             // shelf keeps the hold-to-favourite gesture.
-            if (shelf?.title == getString(R.string.category_continue_watching)) {
-                onContinueWatchingLongClick(item)
-            } else {
-                toggleFavoriteVodItem(item)
-            }
+            val personalShelf = !shelf?.sections.isNullOrEmpty() ||
+                shelf?.title == getString(R.string.shelf_for_you) ||
+                shelf?.title == getString(R.string.category_continue_watching) ||
+                shelf?.title == getString(R.string.category_next_up) ||
+                shelf?.title == getString(R.string.category_favourites)
+            if (personalShelf) onFilmLeadLongClick(item) else toggleFavoriteVodItem(item)
         },
         onPinClick = { shelf -> togglePinShelfCategory(2, shelf) },
         onHideClick = { shelf -> if (shelf.title == getString(R.string.category_continue_watching)) clearContinueWatching() else toggleHiddenShelfCategory(2, shelf) },
@@ -1501,6 +1503,7 @@ class MainActivity : AppCompatActivity() {
             when (shelf?.title) {
                 getString(R.string.category_recently_played) -> onRecentlyPlayedLongClick(item)
                 getString(R.string.category_continue_watching) -> onContinueWatchingLongClick(item)
+                getString(R.string.category_next_up) -> onUpNextLongClick(item)
                 else -> toggleFavoriteVodItem(item)
             }
         },

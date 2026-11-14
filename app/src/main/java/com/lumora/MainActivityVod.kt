@@ -5,6 +5,7 @@ import android.view.View
 import com.lumora.anime.AnimeCatalogClient
 import com.lumora.cache.FavoritesStore
 import com.lumora.cache.VodContentStore
+import com.lumora.cache.WatchlistStore
 import com.lumora.data.IptvProviderStore
 import com.lumora.data.catalog.CatalogMapping
 import com.lumora.data.catalog.CatalogRepository
@@ -344,59 +345,63 @@ private fun emptyVodContent() = MainActivity.FilmsSeriesContent(
  *  changing. */
 private fun MainActivity.refreshVodLead(content: MainActivity.FilmsSeriesContent): MainActivity.FilmsSeriesContent {
     val continueTitle = getString(R.string.category_continue_watching)
+    val nextUpTitle = getString(R.string.category_next_up)
     val favouritesTitle = getString(R.string.category_favourites)
     val personalTitle = getString(R.string.shelf_for_you)
-    fun withFilmLead(shelves: List<ContentShelf>, lead: List<Channel>): List<ContentShelf> {
-        val rest = shelves.filterNot {
-            it.title == continueTitle || it.categoryId == CONTINUE_WATCHING_CATEGORY_ID
-        }
-        return if (lead.isEmpty()) rest
-        else listOf(ContentShelf(continueTitle, lead, categoryId = CONTINUE_WATCHING_CATEGORY_ID)) + rest
-    }
     val favouriteIds = FavoritesStore.getFavoriteSeriesIds(this)
-    // A bounded cached seriesList can miss a favourite outside its preview window. The
-    // previous personal row kept those tiles, so carry them through - either from the
-    // combined row's Favourites section or from the old separate shelf.
-    val cachedPersonal = content.seriesShelves.firstOrNull {
-        it.sections != null || it.title == personalTitle
-    }
-    val cachedFavourites = cachedPersonal?.sections
-        ?.firstOrNull { it.title == favouritesTitle }?.safeItems
-        ?: content.seriesShelves.firstOrNull { it.title == favouritesTitle }?.items
-        ?: emptyList()
+    // A bounded cached list can miss a favourite or watchlisted film outside its preview
+    // window. The previous personal row kept those tiles, so carry them through - either from
+    // the combined row's section or from an older separate shelf.
     val favoriteSeries = if (favouriteIds.isEmpty()) {
         emptyList()
     } else {
-        content.seriesList.filter { it.id in favouriteIds }.ifEmpty { cachedFavourites }
+        content.seriesList.filter { it.id in favouriteIds }
+            .ifEmpty { content.seriesShelves.personalSectionItems(favouritesTitle, FAVOURITES_CATEGORY_ID) }
     }
-    // Drop every shape the personal line has had on disk: the combined row, the old
-    // separate Continue Watching / Next Up / Favourites shelves, and anything still
-    // carrying `sections` - only this function builds a sectioned shelf, so a cached one
-    // is stale by definition (and its section fields may not map to this build at all).
-    // The old shelves are also matched by id, because a snapshot written under a different
-    // UI language carries translated titles that `personalTitles` cannot recognise.
-    val personalTitles = setOf(
-        personalTitle,
-        continueTitle,
-        getString(R.string.category_next_up),
-        favouritesTitle,
-    )
+    val favouriteFilms = if (favouriteIds.isEmpty()) {
+        emptyList()
+    } else {
+        content.filmList.filter { it.id in favouriteIds }
+            .ifEmpty { content.filmShelves.personalSectionItems(favouritesTitle, FAVOURITES_CATEGORY_ID) }
+    }
+    val watchlistIds = WatchlistStore.getIds(this)
+    val watchlistFilms = if (watchlistIds.isEmpty()) {
+        emptyList()
+    } else {
+        content.filmList.filter { it.id in watchlistIds }
+            .ifEmpty { content.filmShelves.personalSectionItems(nextUpTitle, UP_NEXT_CATEGORY_ID) }
+    }
+    // Drop every shape the personal lines have had on disk: the combined row, the old
+    // separate Continue Watching / Next Up / Favourites shelves, and anything still carrying
+    // `sections` - only this function builds a sectioned shelf, so a cached one is stale by
+    // definition. The old shelves are also matched by id, because a snapshot written under a
+    // different UI language carries translated titles `personalTitles` cannot recognise.
+    val personalTitles = setOf(personalTitle, continueTitle, nextUpTitle, favouritesTitle)
     val personalCategoryIds = setOf(
         CONTINUE_WATCHING_CATEGORY_ID,
         UP_NEXT_CATEGORY_ID,
         FAVOURITES_CATEGORY_ID,
     )
-    val personal = seriesPersonalShelves(favoriteSeries)
-    val seriesRest = content.seriesShelves.filterNot { shelf ->
+    fun withoutPersonal(shelves: List<ContentShelf>): List<ContentShelf> = shelves.filterNot { shelf ->
         shelf.sections != null ||
             shelf.title in personalTitles ||
             shelf.categoryId in personalCategoryIds
     }
     return content.copy(
-        filmShelves = withFilmLead(content.filmShelves, movieContinueItems()),
-        seriesShelves = personal + seriesRest
+        filmShelves = filmPersonalShelves(favouriteFilms, watchlistFilms) + withoutPersonal(content.filmShelves),
+        seriesShelves = seriesPersonalShelves(favoriteSeries) + withoutPersonal(content.seriesShelves)
     )
 }
+
+/** Items a cached personal section holds - from the sectioned "For You" card or from an older
+ *  separate shelf of the same title/id. */
+internal fun List<ContentShelf>.personalSectionItems(title: String, categoryId: String): List<Channel> =
+    firstOrNull { it.sections != null }
+        ?.sections
+        ?.firstOrNull { it.title == title || it.categoryId == categoryId }
+        ?.safeItems
+        ?: firstOrNull { it.title == title || it.categoryId == categoryId }?.safeItems
+        ?: emptyList()
 
 private suspend fun MainActivity.buildVodCacheKey(repo: CatalogRepository): String = buildString {
     append(repo.vodVersionKey(MediaType.MOVIE))
@@ -429,6 +434,10 @@ private suspend fun MainActivity.buildVodCacheKey(repo: CatalogRepository): Stri
     // count also counted live channels, so a live refresh invalidated every VOD shelf.
     append(prefs.getString(PREF_ANIME_FINGERPRINT, ""))
     append(FavoritesStore.getFavoriteSeriesIds(this@buildVodCacheKey).hashCode())
+    // The watchlist keeps its films in the resident set, so a change has to invalidate the
+    // stored snapshot or a watchlisted film outside the shelf previews vanishes next launch.
+    append('|')
+    append(WatchlistStore.getIds(this@buildVodCacheKey).hashCode())
 }
 
 private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType, rowsOnly: Boolean = false): VodTab {
@@ -455,23 +464,31 @@ private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType, rowsOnly
     } else {
         emptyList()
     }
+    val favoriteFilms = if (tab == 2) {
+        val ids = FavoritesStore.getFavoriteSeriesIds(this)
+        if (ids.isEmpty()) emptyList()
+        else repo.vodPageBySourceIds(MediaType.MOVIE, ids, englishOnly, hideAdult, 0, 120)
+            .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
+    } else {
+        emptyList()
+    }
+    val watchlistFilms = if (tab == 2) {
+        val ids = WatchlistStore.getIds(this)
+        if (ids.isEmpty()) emptyList()
+        else repo.vodPageBySourceIds(MediaType.MOVIE, ids, englishOnly, hideAdult, 0, 120)
+            .filter { com.lumora.data.ProfileStore.allowsChannel(profile, it) }
+    } else {
+        emptyList()
+    }
     val shelves = buildList {
         if (tab == 1) {
             // Separate personal rows again: Continue Watching must not fold in next-up or
             // starred shows, or it stops matching the sidebar filter of the same name.
             addAll(seriesPersonalShelves(favoriteSeries))
-        } else {
-            val lead = movieContinueItems()
-            if (lead.isNotEmpty()) {
-                add(
-                    ContentShelf(
-                        getString(R.string.category_continue_watching), lead,
-                        // Films' lead shelf is Continue Watching alone, so "See all" can
-                        // serve the full in-progress list.
-                        categoryId = CONTINUE_WATCHING_CATEGORY_ID
-                    )
-                )
-            }
+        } else if (tab == 2) {
+            // The Films poster gets the same sectioned personal line as the Series one:
+            // Continue Watching, the film watchlist (Next Up) and Favourites.
+            addAll(filmPersonalShelves(favoriteFilms, watchlistFilms))
         }
         if (newest.isNotEmpty()) add(ContentShelf(getString(R.string.category_newest), newest, categoryId = NEWEST_CATEGORY_ID))
         addAll(catalogShelves)
@@ -486,6 +503,11 @@ private suspend fun MainActivity.buildVodTab(tab: Int, type: MediaType, rowsOnly
     // by the (non-suspending) Home/Continue helpers, so keep them resident too.
     val keepIds = buildSet {
         addAll(com.lumora.cache.FavoritesStore.getFavoriteSeriesIds(this@buildVodTab))
+        // A film on Next Up has no position or favourite entry of its own, so the watchlist
+        // is what has to keep its card resident for the (non-suspending) row builders.
+        if (type == MediaType.MOVIE) {
+            addAll(com.lumora.cache.WatchlistStore.getIds(this@buildVodTab))
+        }
         val inProgress = com.lumora.cache.PlaybackPositionStore.getAllInProgress(this@buildVodTab)
             .filter { it.mediaType == type }
         addAll(inProgress.map { it.id })
@@ -778,7 +800,7 @@ internal suspend fun MainActivity.applyVodTabFilter(
             return
         }
         UP_NEXT_CATEGORY_ID -> {
-            if (tab == 1) commitInMemory(seriesUpNextItems())
+            commitInMemory(if (tab == 1) seriesUpNextItems() else movieWatchlistItems())
             return
         }
         FAVOURITES_CATEGORY_ID -> {

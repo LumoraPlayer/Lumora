@@ -35,6 +35,7 @@ import com.lumora.PREF_SUGGEST_EXTERNAL_PLAYER
 import com.lumora.PREF_UI_LANGUAGE
 import com.lumora.PREF_UPDATE_CHECKS
 import com.lumora.cache.FavoritesStore
+import com.lumora.cache.WatchlistStore
 import com.lumora.data.IptvProviderStore
 import com.lumora.data.MediaServerStore
 import com.lumora.data.local.LumoraDatabase
@@ -451,6 +452,8 @@ class BackupManager(private val context: Context) {
         val favorites: List<String>? = emptyList(),
         val favoriteSeries: List<String>? = emptyList(),
         val favoriteChannels: List<String>? = emptyList(),
+        // Films the user put on Next Up. Absent on backups written before this field existed.
+        val watchlist: List<String>? = emptyList(),
         val watchHistory: List<WatchHistoryBackup>? = emptyList(),
         val recordingStorage: RecordingStorageBackup? = null,
         val recordingSchedules: List<RecordingScheduleBackup>? = emptyList(),
@@ -695,6 +698,7 @@ class BackupManager(private val context: Context) {
         count += MediaServerStore.load(prefs).size
         count += FavoritesStore.getFavoriteSeriesIds(context).size
         count += FavoritesStore.getFavoriteChannelIds(context).size
+        count += WatchlistStore.getIds(context).size
         count += db.epgSourceDao().getAll().size
         count += db.customGroupDao().getAll().size
         count += db.watchHistoryDao().getRecent().size
@@ -748,6 +752,7 @@ class BackupManager(private val context: Context) {
             favorites = emptyList(),
             favoriteSeries = FavoritesStore.getFavoriteSeriesIds(context).toList(),
             favoriteChannels = FavoritesStore.getFavoriteChannelIds(context).toList(),
+            watchlist = WatchlistStore.getIds(context).toList(),
             watchHistory = watchHistory.map { WatchHistoryBackup(
                 id = it.id, channelId = it.channelId, channelName = it.channelName,
                 mediaType = it.mediaType, positionMs = it.positionMs,
@@ -789,6 +794,7 @@ class BackupManager(private val context: Context) {
         val scraperSettings = data.scraperSettings.orEmpty()
         val favoriteSeries = data.favoriteSeries.orEmpty()
         val favoriteChannels = data.favoriteChannels.orEmpty()
+        val watchlist = data.watchlist.orEmpty()
         val epgSources = data.epgSources.orEmpty()
         val customGroups = data.customGroups.orEmpty()
         val watchHistory = data.watchHistory.orEmpty()
@@ -811,6 +817,11 @@ class BackupManager(private val context: Context) {
         // Restore favourites, replacing both sets outright.
         if (favoriteSeries.isNotEmpty() || favoriteChannels.isNotEmpty()) {
             FavoritesStore.replaceAll(context, favoriteSeries.toSet(), favoriteChannels.toSet())
+        }
+        // The film watchlist is a user-curated list like favourites: replace it when the
+        // backup carries one and leave the device's own list alone for older backups.
+        if (watchlist.isNotEmpty()) {
+            WatchlistStore.replaceAll(context, watchlist.toSet())
         }
 
         // Restore the app's saved settings. Unlike the list sections, an old backup without

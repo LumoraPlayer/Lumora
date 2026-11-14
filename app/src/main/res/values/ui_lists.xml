@@ -100,6 +100,8 @@
     <string name="list_cw_cleared">Continue Watching cleared</string>
     <string name="list_upnext_remove_item">Remove from Up Next</string>
     <string name="list_upnext_removed">Removed from Up Next</string>
+    <string name="list_upnext_add_item">Add to Next Up</string>
+    <string name="list_upnext_added">Added to Next Up</string>
     <string name="list_upnext_restore">Restore removed shows</string>
     <string name="list_upnext_restored">Removed shows restored</string>
 

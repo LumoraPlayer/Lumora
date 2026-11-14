@@ -23,6 +23,7 @@ import com.lumora.download.VodDownloader
 import com.lumora.download.downloadId
 import com.lumora.cache.FavoritesStore
 import com.lumora.cache.PlaybackPositionStore
+import com.lumora.cache.WatchlistStore
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.anime.AnimeCatalogClient
@@ -1018,6 +1019,8 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     val watchedButton = binding.detailWatchedButton
     val favoriteButton = binding.detailFavoriteButton
     val favoriteIcon = binding.detailFavoriteIcon
+    val watchlistButton = binding.detailWatchlistButton
+    val watchlistIcon = binding.detailWatchlistIcon
     val hideButton = binding.detailHideButton
     val hideIcon = binding.detailHideIcon
     val versionsScroll = binding.detailVersionsScroll
@@ -1278,7 +1281,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         }
     }
 
-    if (isSeries && item.id.isNotBlank()) {
+    if (item.id.isNotBlank()) {
         favoriteButton.visibility = View.VISIBLE
         fun refreshFavoriteIcon() {
             val favorite = FavoritesStore.isFavoriteSeries(this, item.id)
@@ -1301,6 +1304,37 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 }
             }
             scope.launch { classifyAndShow() }
+        }
+    }
+
+    // Films only: the Next Up watchlist. Series Next Up is derived from the watched trail;
+    // a film has no next episode to derive, so this bookmark is how one gets onto the row.
+    if (!isSeries && item.id.isNotBlank()) {
+        watchlistButton.visibility = View.VISIBLE
+        fun refreshWatchlistIcon() {
+            val listed = WatchlistStore.isWatchlisted(this, item.id)
+            watchlistIcon.setImageResource(
+                if (listed) R.drawable.ic_bookmark_filled else R.drawable.ic_bookmark
+            )
+            watchlistIcon.contentDescription = getString(
+                if (listed) R.string.list_upnext_remove_item else R.string.list_upnext_add_item
+            )
+        }
+        refreshWatchlistIcon()
+        watchlistButton.setOnClickListener {
+            val added = WatchlistStore.toggle(this, item.id)
+            refreshWatchlistIcon()
+            Toast.makeText(
+                this,
+                getString(if (added) R.string.list_upnext_added else R.string.list_upnext_removed),
+                Toast.LENGTH_SHORT
+            ).show()
+            refreshHomeShelvesIfShowing()
+            refreshFilmShelvesIfShowing()
+            if (!showingHome && activeTab == 2) scope.launch {
+                rebuildCategoriesForActiveTab()
+                applyCategoryFilter()
+            }
         }
     }
 
