@@ -2035,6 +2035,7 @@ internal fun MainActivity.selectHome() {
     homeShelfAdapter.submitList(buildHomeShelves())
     updateCatchupTabVisibility()
     applyStatus()
+    binding.homeContent.post { reportFirstContent(-1) }
 }
 
 /** Applies [widthDimen] as an explicit width, treating 0 as "leave it as laid out".

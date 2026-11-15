@@ -256,10 +256,9 @@ internal fun MainActivity.classifyAndShowLiveFirst() {
                 // Guard: user already moved to another tab - live side only, no selectTab.
                 else -> Unit
             }
-            // The number to judge a cold start by: process start to content on screen.
-            // The per-pass lines above only account for their own work, and miss process
-            // creation, Application.onCreate, layout inflation and the first frame.
-            perf("FIRST CONTENT", BaseApplication.instance.processStartedAt)
+            // The number to judge a cold start by is reported by the screen that actually
+            // lands the content (see reportFirstContent), not here - launch order is not
+            // paint order.
         } else {
             showEmptyState()
         }
@@ -501,6 +500,17 @@ internal fun MainActivity.setSelectedLocalities(codes: Set<String>) {
  *  which pass owns a slow start on the actual TV hardware. */
 internal fun MainActivity.perf(stage: String, startedAt: Long, detail: String = "") {
     android.util.Log.i("LumoraPerf", "$stage: ${System.currentTimeMillis() - startedAt}ms $detail")
+}
+
+/** Logs the cold-start budget once, from the screen that actually made content visible.
+ *  [screen] is the tab index, or -1 for Home. */
+internal fun MainActivity.reportFirstContent(screen: Int) {
+    if (firstContentReported) return
+    firstContentReported = true
+    perf(
+        if (screen < 0) "FIRST CONTENT(home)" else "FIRST CONTENT(tab=$screen)",
+        BaseApplication.instance.processStartedAt
+    )
 }
 
 /** Maps sidebar category rows (the output of [buildCategoryRows], already in sidebar

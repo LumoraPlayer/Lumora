@@ -54,6 +54,15 @@ class CatalogRepository private constructor(
      */
     suspend fun backfillSearchNames() = withContext(Dispatchers.IO) {
         if (searchBackfillDone) return@withContext
+        val prefs = backfillPrefs()
+        // A completed pass is remembered on disk: the query below is a whole-table scan for
+        // rows whose key is still empty, and on a six-figure catalogue that scan costs
+        // noticeable I/O on every cold start even though it finds nothing after the first
+        // run. New rows always carry a computed key (see CatalogMapping.toEntity).
+        if (prefs?.getBoolean(PREF_SEARCH_BACKFILL_DONE, false) == true) {
+            searchBackfillDone = true
+            return@withContext
+        }
         var after = ""
         while (true) {
             val page = dao.searchBackfillPage(after, SEARCH_BACKFILL_PAGE)
@@ -69,6 +78,7 @@ class CatalogRepository private constructor(
             if (page.size < SEARCH_BACKFILL_PAGE) break
         }
         searchBackfillDone = true
+        prefs?.edit()?.putBoolean(PREF_SEARCH_BACKFILL_DONE, true)?.apply()
     }
 
     /**
@@ -82,6 +92,13 @@ class CatalogRepository private constructor(
      */
     suspend fun backfillDateSorts(): Boolean = withContext(Dispatchers.IO) {
         if (dateSortBackfillDone) return@withContext false
+        val prefs = backfillPrefs()
+        // Same persisted completion marker as the search-key pass: this query also scans
+        // the table on every process start to find rows an older parser left at 0.
+        if (prefs?.getBoolean(PREF_DATE_BACKFILL_DONE, false) == true) {
+            dateSortBackfillDone = true
+            return@withContext false
+        }
         var updated = false
         var after = ""
         while (true) {
@@ -99,8 +116,13 @@ class CatalogRepository private constructor(
             if (page.size < DATE_BACKFILL_PAGE) break
         }
         dateSortBackfillDone = true
+        prefs?.edit()?.putBoolean(PREF_DATE_BACKFILL_DONE, true)?.apply()
         updated
     }
+
+    /** Completion markers live beside the catalogue settings they describe. */
+    private fun backfillPrefs() =
+        context?.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
 
     /** Rebuilds (or clears) the resident read model after a catalogue write. */
     suspend fun refreshResidentCatalog() {
@@ -745,6 +767,12 @@ private const val SEARCH_BACKFILL_PAGE = 2_000
 
 /** Rows per date-sort backfill transaction (see [CatalogRepository.backfillDateSorts]). */
 private const val DATE_BACKFILL_PAGE = 2_000
+
+/** Set once the whole-table search-key repair has completed on this database. */
+private const val PREF_SEARCH_BACKFILL_DONE = "catalog_search_backfill_done_v2"
+
+/** Set once the whole-table `dateSort = 0` repair has completed on this database. */
+private const val PREF_DATE_BACKFILL_DONE = "catalog_date_backfill_done_v2"
 
 /**
  * The live rows the app is willing to hold resident. A `Channel` costs roughly 800-900

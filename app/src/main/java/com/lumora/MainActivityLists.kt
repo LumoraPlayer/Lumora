@@ -458,20 +458,35 @@ internal fun MainActivity.selectTab(index: Int) {
     setStatus(getString(R.string.loading), visible = true)
     scope.launch {
         // A tab switch away from Live must not race the films/series derive: categories
-        // for the Films/Series tabs read filmList/seriesList, so wait for any in-flight
-        // derive to land before building them against possibly-stale lists.
+        // for the Films/Series tabs read filmList/seriesList, so wait until this tab's rows
+        // have been published before building them against possibly-stale lists.
         //
         // Unless this tab's rows are already there: the derive publishes each tab as it
-        // finishes it, and joining the job then would block this tab behind the *other*
-        // one's build (a six-figure Films pass is minutes). A stale-but-present set keeps
-        // the tab usable, and the derive's own publish replaces it when it lands.
+        // finishes it, and a stale-but-present set keeps the tab usable while the derive's
+        // own publish replaces it when it lands.
         if (index != 0) {
-            val rowsReady = if (index == 1) {
+            fun tabRowsReady(): Boolean = if (index == 1) {
                 cachedSeriesCategoryRows.isNotEmpty()
             } else {
                 cachedFilmCategoryRows.isNotEmpty()
             }
-            if (!rowsReady) filmsSeriesDeriveJob?.join()
+            if (!tabRowsReady()) {
+                // Wait for this tab's first usable rows, not for the whole two-tab build.
+                // buildVodContent publishes the cached snapshot and each tab's category rows
+                // before it starts on that tab's shelves, so a straightforward join kept the
+                // "Loading..." row up for the entire rebuild (minutes on a six-figure panel)
+                // although the sidebar and grid were already usable. Re-read the job each
+                // pass: a provider reload can replace it while this tab is waiting.
+                while (activeTab == index && !tabRowsReady()) {
+                    val build = filmsSeriesDeriveJob
+                    if (build == null || !build.isActive) break
+                    delay(50)
+                }
+                // Nothing was published (no VOD, a failed build, or the user moved on):
+                // keep the old join so a still-running build can finish before the category
+                // build reads the lists it is filling.
+                if (activeTab == index && !tabRowsReady()) filmsSeriesDeriveJob?.join()
+            }
         }
         // A tab opened later must see the personal rows as they are now: they move with
         // playback, and a parent series card can land after the catalogue build finished (see
@@ -561,6 +576,7 @@ internal fun MainActivity.selectTab(index: Int) {
         binding.contentRow.visibility = View.VISIBLE
         setStatus("", visible = false)
         applyStatus()
+        binding.contentRow.post { reportFirstContent(index) }
     }
 }
 

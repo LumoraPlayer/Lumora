@@ -17,6 +17,7 @@ import androidx.work.WorkerParameters
 import com.lumora.BuildConfig
 import com.lumora.data.local.CatalogDatabase
 import com.lumora.data.local.LumoraDatabase
+import com.lumora.storage.StorageAudit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -49,6 +50,13 @@ class MaintenanceWorker(
             } else {
                 DatabaseMaintenance.vacuumIfNeeded(applicationContext, catalog)
                 DatabaseMaintenance.vacuumIfNeeded(applicationContext, user)
+
+                // Diagnostic storage accounting, deliberately here rather than in the launch
+                // path: the walk and the once-per-version dbstat pass are expensive on a
+                // large package and compete with the catalogue read that paints the first
+                // screen. Same foreground rule as the VACUUM - it must not run while the
+                // user is browsing either.
+                StorageAudit.log(applicationContext)
             }
 
             DatabaseMaintenance.optimize(catalog)
