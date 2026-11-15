@@ -45,9 +45,9 @@
                     android:textColor="@color/text_primary"
                     android:textSize="@dimen/text_subhead_l" />
 
-                <!-- Type filters sit on the title row, so switching All/Live/Films/Series
-                     does not take a row away from the results. The strip scrolls on narrow
-                     phones; a TV has room for every chip. -->
+                <!-- Type filters sit on the title row, so switching All/Live/Films/Series/
+                     Cast/EPG does not take a row away from the results. The strip scrolls on
+                     narrow phones; a TV has room for every chip. -->
                 <HorizontalScrollView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -126,6 +126,7 @@
                 android:id="@+id/searchFilterSeries"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="@dimen/search_chip_gap"
                 android:background="@drawable/bg_season_chip"
                 android:clickable="true"
                 android:focusable="true"
@@ -134,6 +135,41 @@
                 android:paddingVertical="6dp"
                 android:stateListAnimator="@animator/focus_scale"
                 android:text="@string/search_filter_series"
+                android:textColor="@color/season_chip_text"
+                android:textSize="@dimen/text_body_s"
+                android:clipChildren="false"
+                android:clipToPadding="false"/>
+
+            <TextView
+                android:id="@+id/searchFilterCast"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="@dimen/search_chip_gap"
+                android:background="@drawable/bg_season_chip"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="@font/inter_medium"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="6dp"
+                android:stateListAnimator="@animator/focus_scale"
+                android:text="@string/cast"
+                android:textColor="@color/season_chip_text"
+                android:textSize="@dimen/text_body_s"
+                android:clipChildren="false"
+                android:clipToPadding="false"/>
+
+            <TextView
+                android:id="@+id/searchFilterEpg"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_season_chip"
+                android:clickable="true"
+                android:focusable="true"
+                android:fontFamily="@font/inter_medium"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="6dp"
+                android:stateListAnimator="@animator/focus_scale"
+                android:text="@string/epg_badge"
                 android:textColor="@color/season_chip_text"
                 android:textSize="@dimen/text_body_s"
                 android:clipChildren="false"

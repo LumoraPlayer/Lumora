@@ -199,23 +199,29 @@ internal fun MainActivity.pushWatchedToSimkl(item: Channel, watched: Boolean) {
     if (watched && !SimklStore.isWatchedSyncEnabled(prefs)) return
     if (item.mediaType == MediaType.LIVE) return
     scope.launch {
-        val target = simklTargetFor(item) ?: return@launch
-        val token = simklAccessToken() ?: return@launch
-        withContext(Dispatchers.IO) {
-            runCatching {
-                if (target.isSeries) {
-                    val season = target.season ?: 1
-                    val episode = target.episode ?: 1
-                    simklClient.addToHistory(
-                        token,
-                        movies = emptySet(),
-                        shows = mapOf(target.tmdbId to mapOf(season to setOf(episode))),
-                        remove = !watched
-                    )
-                } else {
-                    simklClient.addToHistory(token, movies = setOf(target.tmdbId), shows = emptyMap(), remove = !watched)
+        try {
+            val target = simklTargetFor(item) ?: return@launch
+            val token = simklAccessToken() ?: return@launch
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    if (target.isSeries) {
+                        val season = target.season ?: 1
+                        val episode = target.episode ?: 1
+                        simklClient.addToHistory(
+                            token,
+                            movies = emptySet(),
+                            shows = mapOf(target.tmdbId to mapOf(season to setOf(episode))),
+                            remove = !watched
+                        )
+                    } else {
+                        simklClient.addToHistory(token, movies = setOf(target.tmdbId), shows = emptyMap(), remove = !watched)
+                    }
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("LumoraWatched", "Simkl watched push failed: ${e.message}")
         }
     }
 }

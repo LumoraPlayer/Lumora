@@ -1398,9 +1398,7 @@ internal fun MainActivity.relinkPlayerEpgFocus() {
     } else {
         View.NO_ID
     }
-    (0 until binding.playerQuickActions.childCount)
-        .map { binding.playerQuickActions.getChildAt(it) }
-        .forEach { it.nextFocusUpId = deckUpTarget }
+    playerDeckActionViews().forEach { it.nextFocusUpId = deckUpTarget }
 }
 
 /** Whether the viewer has a programme's full details open - the one EPG state where the

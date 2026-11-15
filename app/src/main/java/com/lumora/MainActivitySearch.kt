@@ -110,8 +110,8 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
             is SearchResultItem.Person -> {
                 // Open the person's page (biography + filmography) rather than a title: that is
                 // where their series and films are listed and playable. The active chip picks
-                // which half of the filmography it opens on; with "All" the known-for titles
-                // TMDB returned decide, so an actor known for a show lands on their shows.
+                // which half of the filmography it opens on; with "All"/"Cast" the known-for
+                // titles TMDB returned decide, so an actor known for a show lands on their shows.
                 val showSeries = when (searchFilter) {
                     MainActivity.SearchFilter.MOVIE -> false
                     MainActivity.SearchFilter.SERIES -> true
@@ -135,11 +135,22 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     resultsAdapter.posterHeightDimen = R.dimen.search_poster_image_height
     resultsList.adapter = resultsAdapter
 
+    val filterChipIds = listOf(
+        R.id.searchFilterAll,
+        R.id.searchFilterLive,
+        R.id.searchFilterFilms,
+        R.id.searchFilterSeries,
+        R.id.searchFilterCast,
+        R.id.searchFilterEpg
+    )
+
     fun selectedFilterChipId(): Int = when (searchFilter) {
         MainActivity.SearchFilter.ALL -> R.id.searchFilterAll
         MainActivity.SearchFilter.LIVE -> R.id.searchFilterLive
         MainActivity.SearchFilter.MOVIE -> R.id.searchFilterFilms
         MainActivity.SearchFilter.SERIES -> R.id.searchFilterSeries
+        MainActivity.SearchFilter.CAST -> R.id.searchFilterCast
+        MainActivity.SearchFilter.EPG -> R.id.searchFilterEpg
     }
 
     fun updateSearchFocusTargets(filtersVisible: Boolean) {
@@ -197,9 +208,9 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
         }
     }
 
-    // P2-4: media-type filter chips. EPG results are only shown under All/Live.
+    // P2-4: result-type filter chips. EPG results are shown under All/Live/EPG.
     fun applyFilterChip(selected: View) {
-        for (id in listOf(R.id.searchFilterAll, R.id.searchFilterLive, R.id.searchFilterFilms, R.id.searchFilterSeries)) {
+        for (id in filterChipIds) {
             searchView.findViewById<View>(id).isSelected = searchView.findViewById<View>(id) === selected
         }
         updateSearchFocusTargets(filtersVisible = filtersRow.visibility == View.VISIBLE)
@@ -207,7 +218,7 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
 
     if (!touchDevice) {
         val closeButton = searchView.findViewById<View>(R.id.searchCloseButton)
-        for (id in listOf(R.id.searchFilterAll, R.id.searchFilterLive, R.id.searchFilterFilms, R.id.searchFilterSeries)) {
+        for (id in filterChipIds) {
             searchView.findViewById<View>(id).setOnKeyListener { chip, keyCode, event ->
                 if (event.action != android.view.KeyEvent.ACTION_DOWN) return@setOnKeyListener false
                 when (keyCode) {
@@ -235,7 +246,9 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
         MainActivity.SearchFilter.ALL to R.id.searchFilterAll,
         MainActivity.SearchFilter.LIVE to R.id.searchFilterLive,
         MainActivity.SearchFilter.MOVIE to R.id.searchFilterFilms,
-        MainActivity.SearchFilter.SERIES to R.id.searchFilterSeries
+        MainActivity.SearchFilter.SERIES to R.id.searchFilterSeries,
+        MainActivity.SearchFilter.CAST to R.id.searchFilterCast,
+        MainActivity.SearchFilter.EPG to R.id.searchFilterEpg
     )) {
         searchView.findViewById<TextView>(id).setOnClickListener {
             searchFilter = filter
@@ -247,16 +260,7 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     // Selection must follow the persisted filter, not default to All: restoreSearchIfPending
     // re-opens with the previous session's filter, and a chip row showing "All" while the
     // results are FILMS-filtered is a lie (P1-2).
-    applyFilterChip(
-        searchView.findViewById(
-            when (searchFilter) {
-                MainActivity.SearchFilter.ALL -> R.id.searchFilterAll
-                MainActivity.SearchFilter.LIVE -> R.id.searchFilterLive
-                MainActivity.SearchFilter.MOVIE -> R.id.searchFilterFilms
-                MainActivity.SearchFilter.SERIES -> R.id.searchFilterSeries
-            }
-        )
-    )
+    applyFilterChip(searchView.findViewById(selectedFilterChipId()))
 
     // P2-1: recent searches - chips populated from prefs, shown while the query is short.
     fun buildRecents() {
@@ -429,26 +433,35 @@ internal fun searchRankLower(lowerName: String, query: String, boundaryRegex: Re
 internal fun MainActivity.searchRank(name: String, query: String, boundaryRegex: Regex): Int =
     searchRankLower(normalizeForSearch(name), query, boundaryRegex)
 
-/** One ranked hit before it becomes a [SearchResultItem]; [kind] breaks ties in favour of
- *  the catalogue over TMDB's people index. */
+/** One ranked hit before it becomes a [SearchResultItem]; [group] is the result-type order
+ *  (Films, Series, Live, Cast) and wins before relevance. */
 private data class RankedSearchHit(
+    val group: Int,
     val rank: Int,
-    val kind: Int,
     val name: String,
     val item: SearchResultItem
 )
 
-private const val KIND_MEDIA = 0
-private const val KIND_PERSON = 1
+private const val GROUP_MOVIE = 0
+private const val GROUP_SERIES = 1
+private const val GROUP_LIVE = 2
+private const val GROUP_CAST = 3
+
+private fun searchGroup(channel: Channel): Int = when (channel.mediaType) {
+    MediaType.LIVE -> GROUP_LIVE
+    MediaType.MOVIE -> GROUP_MOVIE
+    MediaType.SERIES -> GROUP_SERIES
+}
 
 /**
  * Merges catalogue hits and TMDB people into one display order.
  *
- * Both use the same relevance ladder, with a catalogue title winning a tie - the app's own
- * catalogue is the primary search. Pinning people to either end broke one case each: people
- * first buried "Test Show" under performers whose surnames merely contain "Test", people last
- * buried "Bryan Cranston" under a tail of loose title matches. Pure so the ordering is
- * testable without the network.
+ * Results are grouped by type - films first, then series, live channels, and finally people
+ * (the Cast group) - and each group keeps the relevance ladder so an exact title still leads
+ * its own group. EPG program matches are appended after this list by [MainActivity.runSearch],
+ * which puts the guide after Cast. Keeping people out of the title groups means an actor query
+ * cannot bury the films and series that match the same words. Pure so the ordering is testable
+ * without the network.
  */
 internal fun rankSearchHits(
     media: List<Pair<Channel, String>>,
@@ -460,7 +473,7 @@ internal fun rankSearchHits(
     for ((channel, name) in media) {
         combined.add(
             RankedSearchHit(
-                searchRankLower(name, needle, boundaryRegex), KIND_MEDIA, name,
+                searchGroup(channel), searchRankLower(name, needle, boundaryRegex), name,
                 SearchResultItem.Media(channel)
             )
         )
@@ -469,11 +482,11 @@ internal fun rankSearchHits(
         val name = normalizeForSearch(person.person.name)
         combined.add(
             RankedSearchHit(
-                searchRankLower(name, needle, boundaryRegex), KIND_PERSON, name, person
+                GROUP_CAST, searchRankLower(name, needle, boundaryRegex), name, person
             )
         )
     }
-    combined.sortWith(compareBy({ it.rank }, { it.kind }, { it.name }))
+    combined.sortWith(compareBy({ it.group }, { it.rank }, { it.name }))
     return combined.map { it.item }
 }
 
@@ -498,9 +511,12 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
         val filter = searchFilter
         // People come from TMDB's index, not the catalogue: a query that names an actor has no
         // local title to match, so without this the results row was empty for the one search
-        // that should open their page. Not under the Live filter - a person is not a channel -
-        // and a no-key setup simply skips them (Discover is empty there too).
-        val personResults = if (filter != MainActivity.SearchFilter.LIVE && tmdbClient.hasKey()) {
+        // that should open their page. Not under Live (a person is not a channel) or EPG (a
+        // person is not a programme), and a no-key setup simply skips them (Discover is empty
+        // there too). Under the Cast chip this is the whole result set.
+        val personResults = if (filter != MainActivity.SearchFilter.LIVE &&
+            filter != MainActivity.SearchFilter.EPG && tmdbClient.hasKey()
+        ) {
             runCatching { tmdbClient.searchPeople(query) }.getOrNull()
                 .orEmpty()
                 .map { SearchResultItem.Person(it) }
@@ -524,7 +540,10 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
                     repo.vodSearch(com.lumora.model.MediaType.MOVIE, query, english, adult, 400)
                 MainActivity.SearchFilter.SERIES ->
                     repo.vodSearch(com.lumora.model.MediaType.SERIES, query, english, adult, 400)
-                MainActivity.SearchFilter.LIVE -> emptyList()
+                // Live has no on-demand rows; Cast and EPG are not on-demand rows either.
+                MainActivity.SearchFilter.LIVE,
+                MainActivity.SearchFilter.CAST,
+                MainActivity.SearchFilter.EPG -> emptyList()
             }
         }
         // Versions for anything a search hit can open, so its detail screen has chips and
@@ -555,8 +574,13 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
                 else -> emptyList()
             }
             // In-memory anime/plugin entries are never written to the catalogue DB, so add
-            // them explicitly or they stop being searchable.
-            val inMemoryVod = if (filter == MainActivity.SearchFilter.LIVE || isVodDisabled()) {
+            // them explicitly or they stop being searchable. Cast/EPG searches show no VOD.
+            val inMemoryVod = if (
+                filter == MainActivity.SearchFilter.LIVE ||
+                filter == MainActivity.SearchFilter.CAST ||
+                filter == MainActivity.SearchFilter.EPG ||
+                isVodDisabled()
+            ) {
                 emptyList()
             } else {
                 inMemoryVodChannels()
@@ -635,7 +659,12 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
  *  Capped at 30 results and 10 fetches - EPG search is a bonus surface, not a second
  *  catalog, and each fetch is a network call. */
 internal suspend fun MainActivity.buildEpgSearchResults(query: String, filter: MainActivity.SearchFilter): List<SearchResultItem.Epg> {
-    if (filter == MainActivity.SearchFilter.MOVIE || filter == MainActivity.SearchFilter.SERIES) return emptyList()
+    if (filter == MainActivity.SearchFilter.MOVIE ||
+        filter == MainActivity.SearchFilter.SERIES ||
+        filter == MainActivity.SearchFilter.CAST
+    ) {
+        return emptyList()
+    }
     val needle = normalizeForSearch(query)
     if (needle.isEmpty()) return emptyList()
     val nowSeconds = System.currentTimeMillis() / 1000

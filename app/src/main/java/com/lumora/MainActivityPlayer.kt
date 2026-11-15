@@ -690,6 +690,8 @@ internal fun MainActivity.cycleAspectMode() {
         VideoAspectFrameLayout.Mode.ZOOM -> getString(R.string.play_aspect_zoom)
         VideoAspectFrameLayout.Mode.FILL -> getString(R.string.play_aspect_stretch)
     }
+    // The deck tile is always on screen now, so its value and selected wash follow the mode.
+    updatePlayerOptionLabels()
     Toast.makeText(this, getString(R.string.play_video_label, label), Toast.LENGTH_SHORT).show()
 }
 
@@ -817,7 +819,7 @@ internal fun MainActivity.showPlayerFor(
     binding.playerSurface.pivotX = 0f
     binding.playerSurface.pivotY = 0f
     applyStatus()
-    binding.playerChannelName.text = channel.name
+    setPlayerIdentityTitle(playerIdentityTitle(channel))
     binding.playerSubtitle.visibility = View.GONE
     binding.playerLiveBadge.visibility = if (channel.mediaType == MediaType.LIVE) View.VISIBLE else View.GONE
     updatePlayerClock()
@@ -836,38 +838,19 @@ internal fun MainActivity.showPlayerFor(
 
     // Keep the logo/poster alongside the title without increasing the transport row's
     // height. On narrow screens, hide the artwork so the channel/content name has room.
+    // An episode's menu shows the series poster, not its own still - see loadPlayerArtwork().
     val density = resources.displayMetrics.density
     val isPoster = channel.mediaType != MediaType.LIVE
     binding.playerLogoBox.visibility =
         if (resources.configuration.smallestScreenWidthDp >= 540) View.VISIBLE else View.GONE
     binding.playerLogoBox.layoutParams = binding.playerLogoBox.layoutParams.apply {
-        width = ((if (isPoster) 30 else 36) * density).toInt()
-        height = ((if (isPoster) 44 else 36) * density).toInt()
+        width = ((if (isPoster) 44 else 36) * density).toInt()
+        height = ((if (isPoster) 66 else 36) * density).toInt()
     }
     binding.playerChannelLogo.scaleType = if (isPoster) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
     val logoPadding = if (isPoster) 0 else (6 * density).toInt()
     binding.playerChannelLogo.setPadding(logoPadding, logoPadding, logoPadding, logoPadding)
-    binding.playerChannelInitial.text = channel.name.firstOrNull()?.uppercase() ?: getString(R.string.play_initial_fallback)
-    binding.playerChannelInitial.visibility = View.VISIBLE
-    binding.playerChannelLogo.visibility = View.GONE
-    binding.playerChannelLogo.setImageDrawable(null)
-    val logoUrl = channel.logoUrl ?: channel.posterUrl
-    if (!logoUrl.isNullOrBlank()) {
-        scope.launch {
-            val bitmap = withContext(Dispatchers.IO) {
-                runCatching {
-                    val request = Request.Builder().url(logoUrl).build()
-                    BaseApplication.instance.okHttpClient.newCall(request).execute()
-                        .body?.byteStream()?.use { BitmapFactory.decodeStream(it) }
-                }.getOrNull()
-            }
-            if (bitmap != null && nowPlayingChannel?.id == channel.id) {
-                binding.playerChannelLogo.setImageBitmap(bitmap)
-                binding.playerChannelLogo.visibility = View.VISIBLE
-                binding.playerChannelInitial.visibility = View.GONE
-            }
-        }
-    }
+    loadPlayerArtwork(channel)
 
     if (channel.mediaType == MediaType.LIVE && channel.id.isNotBlank()) {
         // The guide itself is not a one-line subtitle any more: resolveEpgPrograms fills the
@@ -898,7 +881,9 @@ internal fun MainActivity.showPlayerFor(
     // the player card shows the exact raw version actually playing instead, same as
     // switchToVersionIndex() does on failover/manual switch.
     if (channel.mediaType == MediaType.LIVE) {
-        binding.playerChannelName.text = currentVersionGroup.getOrNull(currentVersionIndex)?.name ?: channel.name
+        setPlayerIdentityTitle(
+            currentVersionGroup.getOrNull(currentVersionIndex)?.name ?: channel.name
+        )
     }
     // The deck's Versions/Multiview shortcuts depend on this channel and group, so size and
     // relink it now rather than leaving the buttons from the previous title behind.
@@ -1148,6 +1133,95 @@ internal fun MainActivity.showPlayerFor(
         nowPlayingChannel?.id
     )
     playerManager.getExoPlayer().setPlaybackParameters(params)
+}
+
+/** Sets the identity title in both places it is shown: beside the top-strip poster and on
+ *  the bottom menu's identity line. */
+private fun MainActivity.setPlayerIdentityTitle(title: String) {
+    binding.playerTopTitle.text = title
+    binding.playerChannelName.text = title
+}
+
+/**
+ * The series card behind an episode, for the player menu's title and artwork: the context the
+ * series screen set when playback started, then the parent id stamped on the episode (Xtream,
+ * M3U, Jellyfin/Plex and the catalogue all carry it). Null for anything that is not an episode.
+ */
+private fun MainActivity.playerSeriesFor(channel: Channel): Channel? {
+    if (channel.mediaType != MediaType.SERIES || channel.episodeNum == null) return null
+    currentSeriesVersionContext?.first?.takeIf { it.name.isNotBlank() }?.let { return it }
+    val parentId = channel.categoryId?.takeIf { it.isNotBlank() } ?: return null
+    return seriesList.firstOrNull { it.id == parentId }
+        ?: seriesVersions.values.asSequence().flatten().firstOrNull { it.id == parentId }
+}
+
+/** The menu identity line. An episode reads "Series - S02E03 - Episode" instead of the
+ *  episode's own "S02E03 - Episode", so a paused show says what show it is. */
+private fun MainActivity.playerIdentityTitle(channel: Channel): String {
+    val series = playerSeriesFor(channel) ?: return channel.name
+    val seriesName = series.name.trim()
+    val episode = episodeIdentityLabel(channel)
+    return if (seriesName.isBlank()) episode else "$seriesName - $episode"
+}
+
+/** "S02E03 - Falling Sky" out of whatever the provider named the episode. Xtream already
+ *  bakes the marker in; a media-server row or a TMDB placeholder may only carry the number. */
+private fun MainActivity.episodeIdentityLabel(channel: Channel): String {
+    val name = channel.name.replace(" · ", " - ").trim()
+    if (Regex("""^S\d+E\d+""", RegexOption.IGNORE_CASE).containsMatchIn(name)) return name
+    val season = channel.season
+        ?: channel.id.substringAfterLast(":s", "").substringBefore("e").toIntOrNull()
+    val number = channel.episodeNum ?: 0
+    val marker = if (season != null) "S%02dE%02d".format(season, number) else "E%02d".format(number)
+    val title = name.replace(Regex("""^E\d+\s*-\s*""", RegexOption.IGNORE_CASE), "").trim()
+    return if (title.isBlank() || title == name) marker else "$marker - $title"
+}
+
+/** An episode shows its series poster, never its own still. Live keeps its channel logo. */
+private fun MainActivity.playerArtworkUrl(channel: Channel): String? {
+    if (channel.mediaType == MediaType.LIVE) return channel.logoUrl ?: channel.posterUrl
+    val artwork = playerSeriesFor(channel) ?: channel
+    return artwork.posterUrl ?: artwork.logoUrl ?: channel.posterUrl ?: channel.logoUrl
+}
+
+/** Loads the identity artwork. The URL is kept on the ImageView as its tag, so the layout
+ *  refreshes that follow a series context landing do not re-fetch an unchanged poster. */
+private fun MainActivity.loadPlayerArtwork(channel: Channel) {
+    val title = playerIdentityTitle(channel)
+    binding.playerChannelInitial.text =
+        title.firstOrNull()?.uppercase() ?: getString(R.string.play_initial_fallback)
+    val url = playerArtworkUrl(channel)
+    if (url == binding.playerChannelLogo.tag) return
+    binding.playerChannelLogo.tag = url
+    binding.playerChannelInitial.visibility = View.VISIBLE
+    binding.playerChannelLogo.visibility = View.GONE
+    binding.playerChannelLogo.setImageDrawable(null)
+    if (url.isNullOrBlank()) return
+    scope.launch {
+        val bitmap = withContext(Dispatchers.IO) {
+            runCatching {
+                val request = Request.Builder().url(url).build()
+                BaseApplication.instance.okHttpClient.newCall(request).execute()
+                    .body?.byteStream()?.use { BitmapFactory.decodeStream(it) }
+            }.getOrNull()
+        }
+        if (bitmap != null && nowPlayingChannel?.id == channel.id &&
+            binding.playerChannelLogo.tag == url
+        ) {
+            binding.playerChannelLogo.setImageBitmap(bitmap)
+            binding.playerChannelLogo.visibility = View.VISIBLE
+            binding.playerChannelInitial.visibility = View.GONE
+        }
+    }
+}
+
+/** Re-reads the VOD identity after a series context lands (the detail screen sets it just
+ *  after showPlayerFor returns), so the paused menu shows the show's name and poster. Live
+ *  is left alone: its identity line deliberately carries the raw version playing. */
+internal fun MainActivity.refreshPlayerIdentity() {
+    val channel = nowPlayingChannel?.takeIf { it.mediaType != MediaType.LIVE } ?: return
+    setPlayerIdentityTitle(playerIdentityTitle(channel))
+    loadPlayerArtwork(channel)
 }
 
 /** Resolves a Stalker VOD/series item's base64 command into a playable URL against the
@@ -1599,13 +1673,12 @@ internal fun MainActivity.tryNextVodVersion(): Boolean {
     return true
 }
 
-/** Keeps the wall clock beside the LIVE badge in step with the device clock. */
+/** Keeps the player's two wall clocks in step with the device clock: the one leading the
+ *  menu's identity line and the duplicate pinned to the overlay's top-right corner. */
 internal fun MainActivity.updatePlayerClock() {
-    val live = nowPlayingChannel?.mediaType == MediaType.LIVE
-    binding.playerLiveClock.visibility = if (live) View.VISIBLE else View.GONE
-    if (!live) return
-    binding.playerLiveClock.text =
-        android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date())
+    val time = android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date())
+    binding.playerInfoClock.text = time
+    binding.playerMenuClock.text = time
 }
 
 /** The end of the line: every internal recovery is spent, so the stream is handed to whatever
@@ -1645,7 +1718,7 @@ internal fun MainActivity.switchToVersionIndex(index: Int, message: String? = nu
     }
     startBlackFrameWatch()
     binding.playerAspectContainer.videoAspectRatio = 0f
-    binding.playerChannelName.text = next.name
+    setPlayerIdentityTitle(next.name)
     Toast.makeText(this, message ?: getString(R.string.play_switching_to, extractLeadingTag(next.name) ?: next.name), Toast.LENGTH_SHORT).show()
     binding.bufferingSpinner.visibility = View.VISIBLE
     reportUnsupportedDrmScheme(next)
@@ -1770,10 +1843,18 @@ internal fun MainActivity.focusOverlayNeighbour(direction: Int): Boolean {
     return target.requestFocus(direction)
 }
 
+/** The focusable quick actions in deck order, used by the focus chain and the guide's UP
+ *  links so a hidden Versions/Multiview tile is never part of either. */
+internal fun MainActivity.playerDeckActionViews(): List<View> = listOf(
+    binding.btnLanguage,
+    binding.btnLiveVersions,
+    binding.btnAspect,
+    binding.btnMultiview,
+    binding.btnMore,
+).filter { it.visibility == View.VISIBLE && it.isFocusable && it.id != View.NO_ID }
+
 internal fun MainActivity.relinkPlayerButtonRowFocus() {
-    val actions = (0 until binding.playerQuickActions.childCount)
-        .map { binding.playerQuickActions.getChildAt(it) }
-        .filter { it.visibility == View.VISIBLE && it.isFocusable && it.id != View.NO_ID }
+    val actions = playerDeckActionViews()
     val oneRow = binding.playerControlDeck.orientation == LinearLayout.HORIZONTAL
     val epgTarget = if (binding.playerEpgSection.visibility == View.VISIBLE) {
         (0 until binding.playerEpgRail.childCount)

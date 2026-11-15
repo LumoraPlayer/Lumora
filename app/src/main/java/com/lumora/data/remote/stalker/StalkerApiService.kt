@@ -3,6 +3,7 @@ package com.lumora.data.remote.stalker
 
 import android.util.Log
 import com.lumora.model.Channel
+import com.lumora.util.optStringOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -201,8 +202,8 @@ class StalkerApiService(private val client: OkHttpClient) {
 
             // get_profile may mint a fresh token; if it doesn't, the handshake token stays
             // valid, so fall back to it rather than dropping to null and losing the session.
-            val token = profileJson.optJSONObject("js")?.optString("token")?.ifBlank { null }
-                ?: profileJson.optString("token").ifBlank { null }
+            val token = profileJson.optJSONObject("js")?.optString("token")?.takeIf { it.isNotBlank() }
+                ?: profileJson.optString("token").takeIf { it.isNotBlank() }
                 ?: jsTokenFromServer
 
             authToken = token
@@ -423,8 +424,8 @@ class StalkerApiService(private val client: OkHttpClient) {
                 logo = obj.optString("logo", "").ifBlank { null },
                 categoryId = catId,
                 categoryName = catId?.let { categories[it] } ?: obj.optString("category_name", "").ifBlank { null },
-                tvgId = obj.optString("tv_genre_id", null),
-                tvgChno = obj.optString("number", null),
+                tvgId = obj.optStringOrNull("tv_genre_id"),
+                tvgChno = obj.optStringOrNull("number"),
                 isAdult = obj.optString("is_adult", "0") == "1",
                 poster = obj.optString("screenshot_uri", "").ifBlank { null }
                     ?: obj.optString("pic", "").ifBlank { null },

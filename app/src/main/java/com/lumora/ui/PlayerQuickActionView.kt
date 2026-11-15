@@ -84,12 +84,12 @@ class PlayerQuickActionView @JvmOverloads constructor(
         if (compact) {
             orientation = VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setPadding(dp(3), dp(2), dp(3), dp(2))
             val iconParams = iconView.layoutParams as LinearLayout.LayoutParams
-            iconParams.width = dp(18)
-            iconParams.height = dp(18)
+            iconParams.width = dp(16)
+            iconParams.height = dp(16)
             iconParams.marginEnd = 0
-            iconParams.bottomMargin = dp(2)
+            iconParams.bottomMargin = dp(1)
             iconView.layoutParams = iconParams
 
             val textParams = textBlock.layoutParams as LinearLayout.LayoutParams

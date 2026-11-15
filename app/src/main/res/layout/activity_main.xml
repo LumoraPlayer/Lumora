@@ -1098,7 +1098,6 @@
                  ranking for that type instead of trending/week's thin mixed list (see
                  loadDiscoverByType). Selection is applied in code (isSelected), not XML. -->
             <LinearLayout
-                android:id="@+id/discoverFilterRow"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="10dp"
@@ -1580,7 +1579,6 @@
                          "Finished" state of its own. Each pill is a state, not a sport: the
                          selected one keeps the brand fill. -->
                     <HorizontalScrollView
-                        android:id="@+id/sportsModeScroll"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
@@ -1923,7 +1921,6 @@
             android:visibility="gone" />
 
         <View
-            android:id="@+id/detailBackdropScrim"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@drawable/grad_detail_backdrop" />
@@ -2388,31 +2385,43 @@
                                 android:textSize="@dimen/text_tiny"
                                 android:visibility="gone" />
 
-                            <HorizontalScrollView
-                                android:id="@+id/detailCastScroll"
+                            <!-- This wrapper must keep clipChildren at its default (true):
+                                 a scrolled HorizontalScrollView's content is only clipped to
+                                 its viewport by its parent's clipChildren, and
+                                 detailCastColumn disables that for focus-scale overflow.
+                                 Without this layer the faces draw over the overview text as
+                                 the strip is scrolled right - same fix as dialog_search.xml's
+                                 recents strip and item_guide_channel_row.xml. -->
+                            <FrameLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginBottom="-6dp"
-                                android:clipChildren="true"
-                                android:clipToPadding="true"
-                                android:scrollbars="none"
-                                android:visibility="gone">
+                                android:layout_height="wrap_content">
 
-                                <!-- Keep 6dp vertical and 4dp horizontal breathing room for
-                                     the 1.06x focus-scale stroke; the first and last faces
-                                     need room inside the scroll viewport too. -->
-                                <LinearLayout
-                                    android:id="@+id/detailCastRow"
-                                    android:layout_width="wrap_content"
+                                <HorizontalScrollView
+                                    android:id="@+id/detailCastScroll"
+                                    android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
-                                    android:clipChildren="false"
-                                    android:clipToPadding="false"
-                                    android:orientation="horizontal"
-                                    android:paddingStart="4dp"
-                                    android:paddingEnd="4dp"
-                                    android:paddingTop="6dp"
-                                    android:paddingBottom="6dp" />
-                            </HorizontalScrollView>
+                                    android:layout_marginBottom="-6dp"
+                                    android:clipChildren="true"
+                                    android:clipToPadding="true"
+                                    android:scrollbars="none"
+                                    android:visibility="gone">
+
+                                    <!-- Keep 6dp vertical and 4dp horizontal breathing room
+                                         for the 1.06x focus-scale stroke; the first and last
+                                         faces need room inside the scroll viewport too. -->
+                                    <LinearLayout
+                                        android:id="@+id/detailCastRow"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:clipChildren="false"
+                                        android:clipToPadding="false"
+                                        android:orientation="horizontal"
+                                        android:paddingStart="4dp"
+                                        android:paddingEnd="4dp"
+                                        android:paddingTop="6dp"
+                                        android:paddingBottom="6dp" />
+                                </HorizontalScrollView>
+                            </FrameLayout>
 
                             <TextView
                                 android:id="@+id/detailCast"
@@ -3131,8 +3140,10 @@
             android:orientation="vertical"
             android:visibility="visible">
 
-            <!-- Top strip: the channel identity mark sits top-left, navigation follows it,
-                 and settings is pinned to the top-right corner. -->
+            <!-- Top strip: the poster/identity mark sits top-left, navigation follows it,
+                 then the same title the menu shows with the series and episode. The
+                 cast/settings buttons sit at the far right, with the local time pinned to
+                 the top-right corner - the same clock Live TV carries in its toolbar. -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -3203,11 +3214,21 @@
                     android:clipChildren="false"
     android:clipToPadding="false"/>
 
-                <!-- Pushes the cast and settings buttons to the far right edge of the top strip. -->
-                <Space
+                <!-- The same identity line the bottom menu carries, repeated beside the
+                     poster so the top of the pause menu names the show and the episode. -->
+                <TextView
+                    android:id="@+id/playerTopTitle"
                     android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:fontFamily="@font/inter_medium"
+                    android:includeFontPadding="false"
+                    android:maxLines="2"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_subhead" />
 
                 <!-- Phone-only: the TV is a Cast receiver, not a sender. Kept in the top
                      strip rather than the bottom deck, where it crowded playback actions. -->
@@ -3238,6 +3259,20 @@
                     android:tint="@color/text_primary"
                     android:clipChildren="false"
     android:clipToPadding="false"/>
+
+                <!-- The player's local time, pinned to the top-right corner. Non-focusable:
+                     it is a clock, not a destination, and the D-pad must never land on it. -->
+                <TextView
+                    android:id="@+id/playerMenuClock"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:fontFamily="@font/inter_medium"
+                    android:importantForAccessibility="no"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/toolbar_clock_text" />
             </LinearLayout>
 
             <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
@@ -3261,17 +3296,29 @@
                     android:paddingHorizontal="12dp"
                     android:paddingVertical="4dp">
 
-                    <!-- Playback identity: the channel or title being watched, with the LIVE
-                         badge alongside, on the one compact line above the guide. It stays in
-                         the bar rather than the top strip so the menu owns its own identity. -->
+                    <!-- Playback identity: the local time leads the line, then the channel or
+                         series/episode being watched, with the LIVE badge alongside. It stays
+                         in the bar rather than the top strip so the menu owns its own identity.
+                         The time is repeated in the top-right corner of the overlay. -->
                     <LinearLayout
-                        android:id="@+id/playerIdentity"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:clipChildren="false"
                         android:clipToPadding="false"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/playerInfoClock"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="12dp"
+                            android:fontFamily="@font/inter_medium"
+                            android:importantForAccessibility="no"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="@dimen/text_caption" />
 
                         <TextView
                             android:id="@+id/playerChannelName"
@@ -3284,18 +3331,6 @@
                             android:textColor="@color/text_primary"
                             android:textSize="@dimen/text_subhead"
                             android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/playerLiveClock"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:fontFamily="@font/inter_medium"
-                            android:includeFontPadding="false"
-                            android:maxLines="1"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="@dimen/text_caption"
-                            android:visibility="gone" />
 
                         <TextView
                             android:id="@+id/playerLiveBadge"
@@ -3539,6 +3574,17 @@
                                 android:layout_weight="1"
                                 android:visibility="gone" />
 
+                            <!-- Aspect ratio (Fit/Zoom/Stretch), one press per mode. Sits
+                                 beside Versions because both are per-stream picture
+                                 decisions reached mid-playback. -->
+                            <com.lumora.ui.PlayerQuickActionView
+                                android:id="@+id/btnAspect"
+                                android:layout_width="0dp"
+                                android:layout_height="@dimen/player_quick_action_height"
+                                android:layout_marginHorizontal="@dimen/player_quick_action_gap"
+                                android:stateListAnimator="@animator/focus_scale_flat"
+                                android:layout_weight="1" />
+
                             <!-- Live only, and only while Multiview is enabled; it is the
                                  direct way into the grid with the current channel already
                                  playing. -->
@@ -3551,6 +3597,8 @@
                                 android:layout_weight="1"
                                 android:visibility="gone" />
 
+                            <!-- More options stays on the quick-action row, in line with
+                                 Aspect and the other tiles. -->
                             <com.lumora.ui.PlayerQuickActionView
                                 android:id="@+id/btnMore"
                                 android:layout_width="0dp"
@@ -3657,7 +3705,6 @@
             android:visibility="gone">
 
         <LinearLayout
-            android:id="@+id/sideMenuNavColumn"
             android:layout_width="@dimen/player_side_menu_width"
             android:layout_height="match_parent"
             android:clipChildren="false"

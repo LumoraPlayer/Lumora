@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RoomWarnings
 import com.lumora.data.local.entity.CatalogChannelEntity
 
 /** Row shape for the per-type counters. */
@@ -262,6 +263,9 @@ interface CatalogChannelDao {
     @Query("UPDATE catalog_channels SET rank = baseRank WHERE providerId IN (:providerIds)")
     suspend fun restoreBackupProviders(providerIds: List<String>)
 
+    // MAX(rank) is what makes SQLite pick the representative row of each group, but the
+    // entity has no field for it - keep it in the SQL and silence the cursor-mismatch warning.
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query(
         "SELECT *, MAX(rank) FROM catalog_channels " +
             "WHERE mediaType = :mediaType AND groupId IS NOT NULL AND rank > 0 " +
@@ -279,6 +283,9 @@ interface CatalogChannelDao {
         offset: Int
     ): List<CatalogChannelEntity>
 
+    // MAX(rank) is what makes SQLite pick the representative row of each group, but the
+    // entity has no field for it - keep it in the SQL and silence the cursor-mismatch warning.
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query(
         "SELECT *, MAX(rank) FROM catalog_channels " +
             "WHERE mediaType = :mediaType AND groupId IS NOT NULL AND rank > 0 " +
@@ -300,6 +307,9 @@ interface CatalogChannelDao {
 
     /** One keyset page of representative cards, in group-id order. Used by the streaming
      *  list walk: an OFFSET page would re-group the whole type for every page. */
+    // MAX(rank) is what makes SQLite pick the representative row of each group, but the
+    // entity has no field for it - keep it in the SQL and silence the cursor-mismatch warning.
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query(
         "SELECT *, MAX(rank) FROM catalog_channels " +
             "WHERE mediaType = :mediaType AND groupId IS NOT NULL AND rank > 0 " +
@@ -376,6 +386,9 @@ interface CatalogChannelDao {
     )
     suspend fun vodVersions(mediaType: String, groupId: String): List<CatalogChannelEntity>
 
+    // MAX(rank) is what makes SQLite pick the representative row of each group, but the
+    // entity has no field for it - keep it in the SQL and silence the cursor-mismatch warning.
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query(
         "SELECT *, MAX(rank) FROM catalog_channels " +
             "WHERE mediaType = :mediaType AND groupId IS NOT NULL AND rank > 0 " +
@@ -431,6 +444,9 @@ interface CatalogChannelDao {
     )
     suspend fun vodVersionsForGroups(mediaType: String, groups: List<String>): List<CatalogChannelEntity>
 
+    // MAX(rank) is what makes SQLite pick the representative row of each group, but the
+    // entity has no field for it - keep it in the SQL and silence the cursor-mismatch warning.
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query(
         "SELECT *, MAX(rank) FROM catalog_channels " +
             "WHERE mediaType = :mediaType AND tmdbId = :tmdbId AND groupId IS NOT NULL AND rank > 0 " +
@@ -438,6 +454,9 @@ interface CatalogChannelDao {
     )
     suspend fun vodByTmdbId(mediaType: String, tmdbId: String): List<CatalogChannelEntity>
 
+    // MAX(rank) is what makes SQLite pick the representative row of each group, but the
+    // entity has no field for it - keep it in the SQL and silence the cursor-mismatch warning.
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query(
         "SELECT *, MAX(rank) FROM catalog_channels " +
             "WHERE mediaType = :mediaType " +
@@ -489,6 +508,9 @@ interface CatalogChannelDao {
     )
     suspend fun vodVersionKey(mediaType: String): String
 
+    // MAX(rank) is what makes SQLite pick the representative row of each group, but the
+    // entity has no field for it - keep it in the SQL and silence the cursor-mismatch warning.
+    @SuppressWarnings(RoomWarnings.CURSOR_MISMATCH)
     @Query(
         "SELECT *, MAX(rank) FROM catalog_channels " +
             "WHERE mediaType = :mediaType AND groupId IS NOT NULL AND rank > 0 " +

@@ -1447,9 +1447,17 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         val episodes = seasons.getOrNull(index)?.second ?: return
         if (episodes.isEmpty()) return
         val allWatched = episodes.all { isItemWatched(it) }
+        val target = !allWatched
+        // Only rows whose state actually changes: a season tick re-marked every episode even
+        // when most were already watched, and every one of those re-marks fired its own
+        // server/Trakt/Simkl push. The remote pushes then go out once, as a batch, after the
+        // local marks are in - see pushWatchedToSeason.
+        val changed = episodes.filter { isItemWatched(it) != target }
         // setItemWatched, not a bare store write: the mark has to land on every other copy
-        // of each episode and on the configured media servers, not just this season's ids.
-        for (ep in episodes) setItemWatched(ep, !allWatched)
+        // of each episode, not just this season's ids. The remote half is deferred to the
+        // batched push below, so a 20-episode season does not open 20 concurrent sessions.
+        for (ep in changed) setItemWatched(ep, target, alsoPushToServers = false)
+        if (changed.isNotEmpty()) pushWatchedToSeason(changed, target)
         // Recompute against the show card's own title: the episode rows can spell the show
         // differently ("Natalee Holloway" vs "Taken: Natalee Holloway"), so the marker has
         // to be maintained from the card, not inferred from the episode key.
@@ -2573,6 +2581,9 @@ internal fun MainActivity.showVideoQualityPicker(returnFocus: View? = null) {
 internal fun MainActivity.updateToolbarClock() {
     binding.toolbarClock.text = android.text.format.DateFormat.getTimeFormat(this)
         .format(java.util.Date())
+    // During playback the toolbar is GONE, but the player menu carries its own local clock
+    // in the top-right corner. Keep it on the same minute tick, including while paused.
+    if (isPlayerVisible) updatePlayerClock()
 }
 
 internal fun MainActivity.startToolbarClock() {

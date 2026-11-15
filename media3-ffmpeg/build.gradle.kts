@@ -30,4 +30,7 @@ dependencies {
     api("androidx.media3:media3-exoplayer:1.4.1")
     api("androidx.annotation:annotation:1.7.1")
     compileOnly("org.checkerframework:checker-qual:3.42.0")
+    // Media3's Kotlin metadata references kotlin.annotations.jvm.MigrationStatus; without
+    // the stdlib on the compile classpath javac reports it as an unknown enum constant.
+    compileOnly("org.jetbrains.kotlin:kotlin-stdlib:1.7.10")
 }

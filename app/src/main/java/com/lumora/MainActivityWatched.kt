@@ -363,37 +363,104 @@ internal fun MainActivity.clearPositionEntriesForWatchedKeys(keys: Set<String>) 
  */
 private fun MainActivity.pushWatchedToMediaServers(item: Channel, watched: Boolean) {
     val shared = watchedKeyFor(item) ?: return
-    val normalizedTitle = shared.substringAfter('|').substringBefore('|')
     scope.launch {
-        val ownCopies = com.lumora.data.catalog.CatalogRepository.get(this@pushWatchedToMediaServers)
-            .ownLibrary(item.mediaType)
-        for (candidate in ownCopies) {
-            if (!candidate.isOwnLibrary) continue
-            val sourceId = candidate.sourceProviderId ?: continue
-            val rawId = rawMediaItemId(candidate.id)
-            if (rawId.isBlank()) continue
-
-            if (item.mediaType == MediaType.MOVIE) {
-                // A film's server copy is already in the catalogue - no lookup needed.
-                if (candidate.mediaType != MediaType.MOVIE) continue
-                if (candidate.id == item.id) continue
-                if (watchedKeyFor(candidate) != shared) continue
-                markOnServer(candidate.isJellyfin, sourceId, rawId, watched, candidate.name)
-                continue
-            }
-
-            // Episodes: the catalogue holds media-server *series*, whose episode lists are
-            // only fetched when a series is opened - so the matching episode has to be looked
-            // up over the network, one request per server that carries the show.
-            if (candidate.mediaType != MediaType.SERIES || candidate.episodeNum != null) continue
-            if (normalizeTitleForGrouping(cleanVodTitle(candidate.name)) != normalizedTitle) continue
-            val season = tileSeasonNumber(item)
-            val episodeNum = item.episodeNum ?: return@launch
-            val targetId = runCatching {
-                serverEpisodeId(candidate.isJellyfin, sourceId, rawId, season, episodeNum)
-            }.getOrNull() ?: continue
-            markOnServer(candidate.isJellyfin, sourceId, targetId, watched, candidate.name)
+        try {
+            val ownCopies = com.lumora.data.catalog.CatalogRepository.get(this@pushWatchedToMediaServers)
+                .ownLibrary(item.mediaType)
+            pushWatchedToMediaServersNow(item, watched, shared, ownCopies, mutableMapOf())
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // This is a background agreement pass, never a reason to take down the screen the
+            // user just tapped. A dead server, a malformed id or a race with a catalogue
+            // reload stops this push, not the app.
+            Log.w("LumoraWatched", "media-server push failed for ${item.name}: ${e.message}")
         }
+    }
+}
+
+/**
+ * The whole-season version of [pushWatchedToMediaServers]: one own-library query for the
+ * season and one sequential pass over its episodes, instead of one query and one coroutine per
+ * episode. A season tick used to open a server session (and a Trakt/Simkl call) per row at
+ * once; on a large Jellyfin library that burst is what made the tick fragile. Failures are
+ * logged and the pass moves on to the next episode.
+ */
+internal fun MainActivity.pushWatchedToSeason(items: List<Channel>, watched: Boolean) {
+    val prepared = items.mapNotNull { item ->
+        val shared = watchedKeyFor(item) ?: return@mapNotNull null
+        item to shared
+    }
+    if (prepared.isEmpty()) return
+    scope.launch {
+        try {
+            val ownCopies = com.lumora.data.catalog.CatalogRepository.get(this@pushWatchedToSeason)
+                .ownLibrary(MediaType.SERIES)
+            // One server-episode fetch per series for the whole season: a provider that does
+            // not carry this season simply contributes no match, not one failed lookup per row.
+            val episodeCache = mutableMapOf<String, List<ServerEpisodeRef>>()
+            for ((item, shared) in prepared) {
+                try {
+                    pushWatchedToMediaServersNow(item, watched, shared, ownCopies, episodeCache)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w("LumoraWatched", "season push failed for ${item.name}: ${e.message}")
+                }
+                pushWatchedToTrakt(item, watched)
+                pushWatchedToSimkl(item, watched)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("LumoraWatched", "season watched push failed: ${e.message}")
+        }
+    }
+}
+
+/** The shared work behind the single-item and season pushes; caller owns the coroutine. */
+private data class ServerEpisodeRef(
+    val season: Int?,
+    val episodeNumber: Int?,
+    val id: String
+)
+
+private suspend fun MainActivity.pushWatchedToMediaServersNow(
+    item: Channel,
+    watched: Boolean,
+    shared: String,
+    ownCopies: List<Channel>,
+    episodeCache: MutableMap<String, List<ServerEpisodeRef>>
+) {
+    val normalizedTitle = shared.substringAfter('|').substringBefore('|')
+    for (candidate in ownCopies) {
+        if (!candidate.isOwnLibrary) continue
+        val sourceId = candidate.sourceProviderId ?: continue
+        val rawId = rawMediaItemId(candidate.id)
+        if (rawId.isBlank()) continue
+
+        if (item.mediaType == MediaType.MOVIE) {
+            // A film's server copy is already in the catalogue - no lookup needed.
+            if (candidate.mediaType != MediaType.MOVIE) continue
+            if (candidate.id == item.id) continue
+            if (watchedKeyFor(candidate) != shared) continue
+            markOnServer(candidate.isJellyfin, sourceId, rawId, watched, candidate.name)
+            continue
+        }
+
+        // Episodes: the catalogue holds media-server *series*, whose episode lists are
+        // only fetched when a series is opened - so the matching episode has to be looked
+        // up over the network, one request per server that carries the show.
+        if (candidate.mediaType != MediaType.SERIES || candidate.episodeNum != null) continue
+        if (normalizeTitleForGrouping(cleanVodTitle(candidate.name)) != normalizedTitle) continue
+        val season = tileSeasonNumber(item)
+        val episodeNum = item.episodeNum ?: return
+        val targetId = runCatching {
+            serverEpisodeId(
+                candidate.isJellyfin, sourceId, rawId, season, episodeNum, episodeCache
+            )
+        }.getOrNull() ?: continue
+        markOnServer(candidate.isJellyfin, sourceId, targetId, watched, candidate.name)
     }
 }
 
@@ -411,26 +478,36 @@ private suspend fun MainActivity.serverEpisodeId(
     sourceId: String,
     seriesRawId: String,
     season: Int?,
-    episodeNum: Int
+    episodeNum: Int,
+    cache: MutableMap<String, List<ServerEpisodeRef>>
 ): String? = withContext(Dispatchers.IO) {
-    if (isJellyfin) {
-        // Connect when the session has no client yet: a mark made while watching an IPTV
-        // copy used to find an empty map and quietly go nowhere, which is exactly the case
-        // this is for - the server has not been opened, but it still has to be told.
-        val client = jellyfinClients[sourceId]
-            ?: jellyfinClientOrConnect(MediaServerStore.get(prefs, sourceId))
-            ?: return@withContext null
-        client.getEpisodes(seriesRawId)?.firstOrNull {
-            it.episodeNumber == episodeNum && (season == null || it.seasonNumber == season)
-        }?.id
-    } else {
-        val client = plexClients[sourceId]
-            ?: plexClientOrConnect(MediaServerStore.get(prefs, sourceId))
-            ?: return@withContext null
-        client.getEpisodes(seriesRawId)?.firstOrNull {
-            it.episodeNumber == episodeNum && (season == null || it.seasonNumber == season)
-        }?.id
+    val cacheKey = "${if (isJellyfin) "j" else "p"}|$sourceId|$seriesRawId"
+    val episodes = cache[cacheKey] ?: run {
+        val fetched = if (isJellyfin) {
+            // Connect when the session has no client yet: a mark made while watching an IPTV
+            // copy used to find an empty map and quietly go nowhere, which is exactly the case
+            // this is for - the server has not been opened, but it still has to be told.
+            val client = jellyfinClients[sourceId]
+                ?: jellyfinClientOrConnect(MediaServerStore.get(prefs, sourceId))
+                ?: return@withContext null
+            client.getEpisodes(seriesRawId).orEmpty().map {
+                ServerEpisodeRef(it.seasonNumber, it.episodeNumber, it.id)
+            }
+        } else {
+            val client = plexClients[sourceId]
+                ?: plexClientOrConnect(MediaServerStore.get(prefs, sourceId))
+                ?: return@withContext null
+            client.getEpisodes(seriesRawId).orEmpty().map {
+                ServerEpisodeRef(it.seasonNumber, it.episodeNumber, it.id)
+            }
+        }
+        cache[cacheKey] = fetched
+        fetched
     }
+    // A season the server does not carry contributes no match; the rest of the push continues.
+    episodes.firstOrNull {
+        it.episodeNumber == episodeNum && (season == null || it.season == season)
+    }?.id
 }
 
 /** Applies the mark to one media-server item. Best effort: the local shared mark has already

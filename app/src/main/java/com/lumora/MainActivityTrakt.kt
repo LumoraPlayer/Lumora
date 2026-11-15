@@ -474,13 +474,20 @@ internal fun MainActivity.pushWatchedToTrakt(item: Channel, watched: Boolean) {
     if (watched && !TraktStore.isWatchedSyncEnabled(prefs)) return
     if (item.mediaType == MediaType.LIVE) return
     scope.launch {
-        val target = traktTargetFor(item) ?: return@launch
-        val token = traktAccessToken() ?: return@launch
-        withContext(Dispatchers.IO) {
-            runCatching {
-                if (watched) traktClient.addToHistory(token, target)
-                else traktClient.removeFromHistory(token, target)
+        try {
+            val target = traktTargetFor(item) ?: return@launch
+            val token = traktAccessToken() ?: return@launch
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    if (watched) traktClient.addToHistory(token, target)
+                    else traktClient.removeFromHistory(token, target)
+                }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Mirroring a local tick must never be able to crash the detail screen.
+            android.util.Log.w("LumoraWatched", "Trakt watched push failed: ${e.message}")
         }
     }
 }

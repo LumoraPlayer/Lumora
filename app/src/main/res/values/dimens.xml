@@ -299,7 +299,7 @@
     <dimen name="player_transport_button_size">44dp</dimen>
     <dimen name="player_play_button_size">56dp</dimen>
     <dimen name="player_seek_height">32dp</dimen>
-    <dimen name="player_quick_action_height">56dp</dimen>
+    <dimen name="player_quick_action_height">48dp</dimen>
     <dimen name="player_quick_action_gap">4dp</dimen>
     <dimen name="player_quick_action_icon_size">20dp</dimen>
     <dimen name="player_quick_action_padding_h">10dp</dimen>

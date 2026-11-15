@@ -2187,11 +2187,12 @@ internal val ANY_SEASON_MARKER_REGEX = Regex("""(?i)\bS(\d{1,2})\s*E\d{1,3}\b"""
  * looser match is confined to this label: a false positive here misprints a tile, whereas
  * [seasonNumberOf] feeds episode-queue and find-stream decisions and should stay strict.
  *
- * Jellyfin and Plex episodes state the season as a field that [Channel] has nowhere to keep,
- * and their names carry no marker at all - those tiles get a bare episode number.
+ * Jellyfin and Plex episodes state the season outright (Channel.season) and their names often
+ * carry no marker at all - without that field a later season would key as the unknown season.
  */
 internal fun tileSeasonNumber(episode: Channel): Int? =
-    seasonNumberOf(episode)
+    episode.season
+        ?: seasonNumberOf(episode)
         ?: ANY_SEASON_MARKER_REGEX.find(episode.name)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
 internal fun MainActivity.continueWatchingTiles(items: List<Channel>): List<Channel> {

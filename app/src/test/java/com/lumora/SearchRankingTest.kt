@@ -9,15 +9,19 @@ import com.lumora.util.normalizeForSearch
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** People in search are ranked with the catalogue, not pinned above or below it. */
+/** Search groups results Films -> Series -> Live -> Cast, then ranks within each group. */
 class SearchRankingTest {
 
-    private fun media(id: String, name: String): Pair<Channel, String> =
+    private fun media(
+        id: String,
+        name: String,
+        type: MediaType = MediaType.SERIES
+    ): Pair<Channel, String> =
         Channel(
             id = id,
             name = name,
             url = "https://example.invalid/$id",
-            mediaType = MediaType.SERIES
+            mediaType = type
         ) to normalizeForSearch(name)
 
     private fun person(id: Int, name: String): SearchResultItem.Person =
@@ -41,31 +45,54 @@ class SearchRankingTest {
     }
 
     @Test
-    fun `a local title that starts with the query outranks a surname match`() {
+    fun `films lead series, live channels and cast`() {
         val results = rankSearchHits(
-            media = listOf(media("show", "Test Show")),
-            people = listOf(person(1, "Riley Test")),
+            media = listOf(
+                media("live", "Test Channel", MediaType.LIVE),
+                media("show", "Test Show", MediaType.SERIES),
+                media("film", "Test Film", MediaType.MOVIE)
+            ),
+            people = listOf(person(1, "Test Actor")),
             needle = "test",
             boundaryRegex = Regex("\\btest")
         )
 
-        assertEquals(listOf("Test Show", "Riley Test"), names(results))
+        assertEquals(
+            listOf("Test Film", "Test Show", "Test Channel", "Test Actor"),
+            names(results)
+        )
     }
 
     @Test
-    fun `a person whose name starts with the query outranks a loose title match`() {
+    fun `each group keeps its own relevance ladder`() {
         val results = rankSearchHits(
-            media = listOf(media("film", "The Bryan Story")),
+            media = listOf(
+                media("loose-film", "The Test Story", MediaType.MOVIE),
+                media("exact-film", "Test", MediaType.MOVIE),
+                media("show", "Test Show", MediaType.SERIES)
+            ),
+            people = emptyList(),
+            needle = "test",
+            boundaryRegex = Regex("\\btest")
+        )
+
+        assertEquals(listOf("Test", "The Test Story", "Test Show"), names(results))
+    }
+
+    @Test
+    fun `a person is never promoted above a title group`() {
+        val results = rankSearchHits(
+            media = listOf(media("film", "The Bryan Story", MediaType.MOVIE)),
             people = listOf(person(2, "Bryan Cranston")),
             needle = "bryan",
             boundaryRegex = Regex("\\bbryan")
         )
 
-        assertEquals(listOf("Bryan Cranston", "The Bryan Story"), names(results))
+        assertEquals(listOf("The Bryan Story", "Bryan Cranston"), names(results))
     }
 
     @Test
-    fun `a local title wins a same-rank tie`() {
+    fun `a same-rank title wins over the cast group`() {
         val results = rankSearchHits(
             media = listOf(media("show", "Test Show")),
             people = listOf(person(3, "Test Tube")),

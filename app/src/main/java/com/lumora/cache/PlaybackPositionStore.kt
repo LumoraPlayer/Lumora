@@ -7,6 +7,7 @@ import android.os.Looper
 import android.util.Log
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import com.lumora.util.optStringOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONObject
 import java.io.File
@@ -319,16 +320,16 @@ object PlaybackPositionStore {
                                 id = c.optString("id"),
                                 name = c.optString("name"),
                                 url = c.optString("url"),
-                                logoUrl = c.optString("logoUrl", null),
-                                posterUrl = c.optString("posterUrl", null),
+                                logoUrl = c.optStringOrNull("logoUrl"),
+                                posterUrl = c.optStringOrNull("posterUrl"),
                                 mediaType = runCatching { MediaType.valueOf(c.optString("mediaType")) }.getOrDefault(MediaType.MOVIE),
                                 // Kept so Continue Watching can tell whether an entry is
                                 // adult content without re-finding it in the catalog - the
                                 // catalog may not be loaded yet, and a series episode is
                                 // never in it at all. Absent on entries written before this
                                 // was stored; callers fall back to the catalog then.
-                                group = c.optString("group", null),
-                                categoryName = c.optString("categoryName", null),
+                                group = c.optStringOrNull("group"),
+                                categoryName = c.optStringOrNull("categoryName"),
                                 // A plugin-resolved stream can't be replayed from `url` alone:
                                 // the CDN signs it with an expiry and gates it behind the
                                 // headers below. These three are what lets the resume path
@@ -338,35 +339,35 @@ object PlaybackPositionStore {
                                 // played episode's own season is what the cross-provider
                                 // watched keys are computed from after a cold restart.
                                 season = c.optInt("season", -1).takeIf { it >= 0 },
-                                categoryId = c.optString("categoryId", null),
+                                categoryId = c.optStringOrNull("categoryId"),
                                 isJellyfin = c.optBoolean("isJellyfin", false),
                                 isPlex = c.optBoolean("isPlex", false),
-                                sourceProviderId = c.optString("sourceProviderId", null),
-                                pluginToken = c.optString("pluginToken", null),
-                                pluginId = c.optString("pluginId", null),
+                                sourceProviderId = c.optStringOrNull("sourceProviderId"),
+                                pluginToken = c.optStringOrNull("pluginToken"),
+                                pluginId = c.optStringOrNull("pluginId"),
                                 streamHeaders = c.optJSONObject("streamHeaders")?.let { h ->
                                     h.keys().asSequence().associateWith { k -> h.getString(k) }
                                 },
-                                drmType = c.optString("drmType", null),
+                                drmType = c.optStringOrNull("drmType"),
                                 drmKeys = c.optJSONArray("drmKeys")?.let { arr ->
                                     (0 until arr.length()).mapNotNull { i ->
                                         val o = arr.optJSONObject(i) ?: return@mapNotNull null
                                         val kid = o.optString("kid").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                                        val key = o.optString("key").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                                        com.lumora.model.DrmKey(kid, key)
+                                        val keyHex = o.optString("key").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                                        com.lumora.model.DrmKey(kid, keyHex)
                                     }.takeIf { it.isNotEmpty() }
                                 },
-                                drmLicenseUrl = c.optString("drmLicenseUrl", null),
-                                drmSchemeData = c.optString("drmSchemeData", null),
-                                manifestType = c.optString("manifestType", null),
+                                drmLicenseUrl = c.optStringOrNull("drmLicenseUrl"),
+                                drmSchemeData = c.optStringOrNull("drmSchemeData"),
+                                manifestType = c.optStringOrNull("manifestType"),
                                 manifestHeaders = c.optJSONObject("manifestHeaders")?.let { h ->
                                     h.keys().asSequence().associateWith { k -> h.getString(k) }
                                 },
                                 drmLicenseHeaders = c.optJSONObject("drmLicenseHeaders")?.let { h ->
                                     h.keys().asSequence().associateWith { k -> h.getString(k) }
                                 },
-                                drmPostData = c.optString("drmPostData", null),
-                                drmLicenseResponse = c.optString("drmLicenseResponse", null)
+                                drmPostData = c.optStringOrNull("drmPostData"),
+                                drmLicenseResponse = c.optStringOrNull("drmLicenseResponse")
                             )
                         }.getOrNull()
                     }

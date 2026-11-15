@@ -632,7 +632,8 @@ class PlayerManager(
                 if (preferAudioLanguage) {
                     val wanted = preferredAudioLanguage()
                     // Both code forms, since sources tag the same language either way.
-                    val iso3 = runCatching { java.util.Locale(wanted).isO3Language }.getOrNull().orEmpty()
+                    val iso3 = runCatching { java.util.Locale.forLanguageTag(wanted).isO3Language }
+                        .getOrNull().orEmpty()
                     if (iso3.isNotEmpty() && iso3 != wanted) setPreferredAudioLanguages(wanted, iso3)
                     else setPreferredAudioLanguages(wanted)
                 } else {
@@ -766,7 +767,8 @@ class PlayerManager(
         oneShotForcedSubtitleListener?.let { player.removeListener(it) }
         // ISO 639-2 alongside the 639-1 code: sources tag the same language either way
         // ("en" or "eng"), and Media3 hands the format's tag through as it found it.
-        val iso3 = runCatching { java.util.Locale(language).isO3Language }.getOrNull().orEmpty()
+        val iso3 = runCatching { java.util.Locale.forLanguageTag(language).isO3Language }
+            .getOrNull().orEmpty()
         val listener = object : Player.Listener {
             private var decided = false
             override fun onTracksChanged(tracks: Tracks) {

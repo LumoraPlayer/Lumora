@@ -4,6 +4,7 @@ package com.lumora.data.remote.jellyfin
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.model.Provider
+import com.lumora.util.optStringOrNull
 import com.lumora.util.qualifiedMediaItemId
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -296,7 +297,7 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
                 // "Local password login is disabled"). Surface that rather than the raw
                 // JSON envelope, which also doesn't survive downstream truncation.
                 val parsed = detail?.let {
-                    runCatching { JSONObject(it).optString("Message", null) }.getOrNull()
+                    runCatching { JSONObject(it).optStringOrNull("Message") }.getOrNull()
                 }
                 val text = parsed?.takeIf { it.isNotBlank() } ?: detail
                 return Result.failure(Exception("Auth failed: HTTP ${response.code}" + (text?.let { ": $it" } ?: "")))
@@ -305,9 +306,9 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
             val body = response.body?.string() ?: return Result.failure(Exception("Empty response"))
             val json = JSONObject(body)
 
-            val token = json.optString("AccessToken", null)
-            val uid = json.optJSONObject("User")?.optString("Id", null)
-            val serverName = json.optJSONObject("Server")?.optString("Name", null)
+            val token = json.optStringOrNull("AccessToken")
+            val uid = json.optJSONObject("User")?.optStringOrNull("Id")
+            val serverName = json.optJSONObject("Server")?.optStringOrNull("Name")
 
             if (token != null && uid != null) {
                 mutex.withLock {
@@ -433,9 +434,9 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
             val body = response.body?.string() ?: return Result.failure(Exception("Empty response"))
             val json = JSONObject(body)
 
-            val token = json.optString("AccessToken", null)
-            val uid = json.optJSONObject("User")?.optString("Id", null)
-            val serverName = json.optJSONObject("Server")?.optString("Name", null)
+            val token = json.optStringOrNull("AccessToken")
+            val uid = json.optJSONObject("User")?.optStringOrNull("Id")
+            val serverName = json.optJSONObject("Server")?.optStringOrNull("Name")
 
             if (token != null && uid != null) {
                 mutex.withLock {
@@ -841,8 +842,8 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
             mediaType = "LiveTV",
             imageUrl = buildImageUrl(id, "Primary", json),
             backdropUrl = buildImageUrl(id, "Backdrop", json, backdrop = true),
-            channelNumber = json.optString("ChannelNumber", null),
-            channelType = json.optString("ChannelType", null)
+            channelNumber = json.optStringOrNull("ChannelNumber"),
+            channelType = json.optStringOrNull("ChannelType")
         )
     }
 
@@ -874,7 +875,7 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
             },
             imageUrl = buildImageUrl(id, "Primary", json),
             backdropUrl = buildImageUrl(id, "Backdrop", json, backdrop = true),
-            overview = json.optString("Overview", null),
+            overview = json.optStringOrNull("Overview"),
             year = json.optInt("ProductionYear", 0).takeIf { it > 0 },
             genres = json.optJSONArray("Genres")?.let { arr ->
                 (0 until arr.length()).map { arr.getString(it) }
@@ -885,7 +886,7 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
             episodeNumber = episode,
             runtimeMs = json.optLong("RunTimeTicks", 0L).takeIf { it > 0 }?.div(TICKS_PER_MS),
             tmdbId = json.optJSONObject("ProviderIds")
-                ?.optString("Tmdb", null)
+                ?.optStringOrNull("Tmdb")
                 ?.takeIf { it.isNotBlank() && it != "0" },
             resumePositionMs = (userData?.optLong("PlaybackPositionTicks", 0L) ?: 0L) / TICKS_PER_MS,
             played = userData?.optBoolean("Played", false) ?: false,
@@ -1135,7 +1136,8 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
      *  (commentary and descriptive tracks are the extras, not the pick). */
     private fun preferredAudioIndex(source: JSONObject, language: String?): Int? {
         val wanted = language?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
-        val iso3 = runCatching { java.util.Locale(wanted).isO3Language }.getOrNull().orEmpty().lowercase()
+        val iso3 = runCatching { java.util.Locale.forLanguageTag(wanted).isO3Language }
+            .getOrNull().orEmpty().lowercase()
         val streams = source.optJSONArray("MediaStreams") ?: return null
         val audio = (0 until streams.length())
             .mapNotNull { streams.optJSONObject(it) }
@@ -1198,7 +1200,7 @@ class JellyfinProvider(baseClient: OkHttpClient, private val isEmby: Boolean = f
         val tag = if (backdrop) {
             json.optJSONArray("BackdropImageTags")?.takeIf { it.length() > 0 }?.optString(0) ?: return null
         } else {
-            json.optJSONObject("ImageTags")?.optString(imageType, null)
+            json.optJSONObject("ImageTags")?.optStringOrNull(imageType)
         }
         val query = tag?.let { "?tag=${URLEncoder.encode(it, "UTF-8")}" } ?: ""
         return "$base/Items/$itemId/Images/$imageType$query"

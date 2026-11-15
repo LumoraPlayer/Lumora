@@ -8,6 +8,7 @@ import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.model.Provider
 import com.lumora.util.normalizeServerUrl
+import com.lumora.util.optStringOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -834,8 +835,8 @@ class XtreamClient(private val client: OkHttpClient) {
             id = id,
             name = "S${seasonKey}E${episodeNum.toString().padStart(2, '0')} · $title",
             url = streamUrl,
-            posterUrl = info?.optString("movie_image", null),
-            description = info?.optString("plot", null),
+            posterUrl = info?.optStringOrNull("movie_image"),
+            description = info?.optStringOrNull("plot"),
             episodeNum = episodeNum.takeIf { it > 0 },
             mediaType = MediaType.SERIES,
             categoryId = seriesId,

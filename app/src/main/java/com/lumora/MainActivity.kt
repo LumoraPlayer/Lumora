@@ -808,10 +808,10 @@ class MainActivity : AppCompatActivity() {
     //
     // Keyed by MediaServerConfig.id: any number of Jellyfin accounts can be configured at once,
     // and an item only opens against the server it came from (see jellyfinClientOrConnect).
-    internal val jellyfinClients = mutableMapOf<String, JellyfinProvider>()
+    internal val jellyfinClients = java.util.concurrent.ConcurrentHashMap<String, JellyfinProvider>()
     /** Same role for the Plex accounts: a Plex series' episodes only ever load through one of
      *  these clients, so they outlive the catalog fetch that created them. */
-    internal val plexClients = mutableMapOf<String, PlexProvider>()
+    internal val plexClients = java.util.concurrent.ConcurrentHashMap<String, PlexProvider>()
     internal var currentIndex = -1
     // Which episode queue (if any) is currently playing, so Next/Prev and
     // auto-advance-on-end know what "next episode" means. -1 = not playing an episode.
@@ -1330,8 +1330,8 @@ class MainActivity : AppCompatActivity() {
     // ── Incremental Search ──────────────────────
     internal var searchAllResults: List<SearchResultItem> = emptyList()
     internal var searchDisplayedCount = 0
-    /** Media-type filter for search results (All/Live/Films/Series chips). */
-    internal enum class SearchFilter { ALL, LIVE, MOVIE, SERIES }
+    /** Result-type filter for search results (All/Live/Films/Series/Cast/EPG chips). */
+    internal enum class SearchFilter { ALL, LIVE, MOVIE, SERIES, CAST, EPG }
     internal var searchFilter = SearchFilter.ALL
     /** EPG search budget: program results capped (a bonus surface, not a second catalog)
      *  and on-demand guide fetches capped (each is a network call). */

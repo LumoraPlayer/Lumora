@@ -18,10 +18,10 @@ import kotlinx.coroutines.launch
 //
 // The old bottom bar tried to keep thirteen equal-weight pills on one line beside the
 // transport. On a portrait phone each one had less width than its own label, and on TV the
-// flat grid read like a debug toolbar. The deck now keeps the transport plus Language and
-// More, with Versions/Multiview when they apply; Speed and Quality live in the two-column
-// options panel behind More, since they are adjustments rather than destinations reached
-// mid-playback. Every action that used to have a pill is still one press away.
+// flat grid read like a debug toolbar. The deck now keeps the transport plus Language,
+// Aspect and More, with Versions/Multiview when they apply; Speed and Quality live in the
+// two-column options panel behind More, since they are adjustments rather than destinations
+// reached mid-playback. Every action that used to have a pill is still one press away.
 
 /** One tile in the player options panel. A null value means the action has no state to show. */
 private data class PlayerOptionTile(
@@ -47,6 +47,11 @@ internal fun MainActivity.setupPlayerOptionsControls() {
         getString(R.string.versions),
         "",
     )
+    binding.btnAspect.bind(
+        R.drawable.ic_aspect_ratio,
+        getString(R.string.player_aspect),
+        getString(R.string.fit),
+    )
     binding.btnMultiview.bind(
         R.drawable.ic_multiview,
         getString(R.string.mv_multiview),
@@ -64,6 +69,7 @@ internal fun MainActivity.setupPlayerOptionsControls() {
     binding.btnLiveVersions.setOnClickListener {
         showVersionPicker(returnFocus = binding.btnLiveVersions)
     }
+    binding.btnAspect.setOnClickListener { cycleAspectMode() }
     binding.btnMultiview.setOnClickListener { openMultiviewFromPlayer() }
     binding.btnMore.setOnClickListener { showPlayerOptionsDialog() }
 
@@ -89,6 +95,7 @@ internal fun MainActivity.applyPlayerControlLayout() {
 
     listOf(
         binding.btnLanguage,
+        binding.btnAspect,
         binding.btnMore,
     ).forEach { it.setCompact(!oneRow) }
     // Both destination tiles centre their label over the icon. Versions keeps its current
@@ -135,6 +142,9 @@ internal fun MainActivity.applyPlayerControlLayout() {
             playerDp(4),
         )
     }
+    // The series context a detail screen sets arrives just after showPlayerFor, so this is
+    // the first layout pass that can put the show's own name and poster on the menu.
+    refreshPlayerIdentity()
     relinkPlayerButtonRowFocus()
 }
 
@@ -171,6 +181,11 @@ internal fun MainActivity.updatePlayerOptionLabels() {
 
     binding.btnLiveVersions.setValue(currentVersionQuickActionLabel())
     binding.btnLiveVersions.setActive(isPlayingAlternateVersion())
+
+    binding.btnAspect.setValue(aspectModeLabel())
+    binding.btnAspect.setActive(
+        binding.playerAspectContainer.resizeMode != VideoAspectFrameLayout.Mode.FIT
+    )
 
     binding.btnMore.setActive(
         sleepTimerDisplay != null || playerManager.getAvOffsetMs() != 0

@@ -1153,7 +1153,8 @@ class PlexProvider(baseClient: OkHttpClient, private val clientIdentifier: Strin
     private fun preferredAudioId(streams: List<AudioStream>, language: String?): Long? {
         val wanted = language?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
         if (streams.size < 2) return null
-        val iso3 = runCatching { java.util.Locale(wanted).isO3Language }.getOrNull().orEmpty().lowercase()
+        val iso3 = runCatching { java.util.Locale.forLanguageTag(wanted).isO3Language }
+            .getOrNull().orEmpty().lowercase()
         val matches = streams.filter {
             val tag = it.language?.lowercase().orEmpty()
             tag.isNotEmpty() && (tag == wanted || (iso3.isNotEmpty() && tag == iso3) || tag.startsWith("$wanted-"))
