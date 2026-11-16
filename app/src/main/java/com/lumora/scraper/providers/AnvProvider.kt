@@ -88,7 +88,13 @@ object AnvProvider : TmdbIdProvider() {
             fetchJson(
                 "https://graphql.anilist.co",
                 method = "POST",
-                headers = mapOf("Content-Type" to "application/json", "Accept" to "application/json"),
+                headers = mapOf(
+                    "Content-Type" to "application/json",
+                    "Accept" to "application/json",
+                    "Accept-Language" to "en-US,en;q=0.9",
+                    "Origin" to "https://anilist.co",
+                    "Referer" to "https://anilist.co/",
+                ),
                 body = JSONObject().put("query", query).put("variables", JSONObject().put("search", title)).toString(),
                 timeoutMs = 10_000,
             )

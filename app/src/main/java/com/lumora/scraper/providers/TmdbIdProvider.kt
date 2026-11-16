@@ -30,11 +30,10 @@ import java.util.concurrent.TimeUnit
 /**
  * Base for the public streaming sites that keep no catalogue of their own.
  *
- * A whole class of the sources people expect to find here - the ones VyseTV lists under
- * Settings → Sources, and the sites they replaced - work one way: give the site a **TMDB id**
- * (plus a season and episode for a series) and it answers with stream URLs. They have no
- * browse tree, no site-side search and no ids of their own, so the `Provider` contract's
- * catalogue half has nothing site-specific to say. Only resolution differs per site.
+ * A whole class of public sources works one way: give the site a **TMDB id** (plus a season
+ * and episode for a series) and it answers with stream URLs. They have no browse tree, no
+ * site-side search and no ids of their own, so the `Provider` contract's catalogue half has
+ * nothing site-specific to say. Only resolution differs per site.
  *
  * This class supplies the catalogue half from [TmdbProvider] (the app's TMDB provider is
  * already the catalogue behind several of the ported sites) and leaves subclasses exactly one
@@ -328,17 +327,6 @@ abstract class TmdbIdProvider : Provider {
 
     /** Scheme and host of a URL, without the path. */
     protected fun originOf(url: String): String = url.substringBefore("://") + "://" + hostOf(url)
-
-    /** SHA-256, for the sites whose own proof-of-work is built on it. */
-    protected fun sha256(input: ByteArray): ByteArray =
-        java.security.MessageDigest.getInstance("SHA-256").digest(input)
-
-    /** A fresh hex string, e.g. the 32-byte `X-Api-Key` Hexa expects per request. */
-    protected fun randomHex(byteCount: Int): String {
-        val bytes = ByteArray(byteCount)
-        java.security.SecureRandom().nextBytes(bytes)
-        return bytes.joinToString("") { "%02x".format(it) }
-    }
 
     /** The HTML entities the Astro island props are escaped with. */
     protected fun decodeHtmlEntities(value: String): String = value

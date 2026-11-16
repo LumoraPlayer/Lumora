@@ -8,12 +8,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The VidCore family - VidCore and VidUp run the same player on different hosts.
+ * The VidUp player - its pages carry no stream, only an opaque token.
  *
- * Their pages do not carry a stream, only an opaque token. Resolution is a four-hop handshake:
- * the page token is staged through `enc-dec.app` twice (each stage tells the next URL and its
- * CSRF token), the site's server list is decrypted, and then each server's payload is decrypted
- * into the actual URL. All of that is the site's own protocol; this class only carries it.
+ * Resolution is a four-hop handshake: the page token is staged through `enc-dec.app` twice
+ * (each stage tells the next URL and its CSRF token), the site's server list is decrypted, and
+ * then each server's payload is decrypted into the actual URL. All of that is the site's own
+ * protocol; this class only carries it.
+ *
+ * It stays a reusable class because the family's other hosts use the same handshake, but only
+ * VidUp's was verified working: VidCore's first-stage URL answers 404 for every title tried.
  */
 abstract class EncDecProvider(
     private val apiName: String,
@@ -120,12 +123,7 @@ abstract class EncDecProvider(
     private fun encode(value: String): String = java.net.URLEncoder.encode(value, "UTF-8")
 }
 
-/** VidCore - the family's original host. */
-object VidCoreProvider : EncDecProvider(apiName = "vidcore", serverLabel = "VidCore") {
-    override val name = "VidCore"
-}
-
-/** VidUp - the family's newer host, same protocol. */
+/** VidUp - the family's host that still answers the handshake. */
 object VidUpProvider : EncDecProvider(apiName = "vidup", serverLabel = "VidUp") {
     override val name = "VidUp"
 }

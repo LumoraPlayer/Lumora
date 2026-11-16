@@ -63,33 +63,39 @@ interface Provider {
         val providers = mapOf(
             // Public sites that resolve by TMDB id rather than by a catalogue of their own.
             // They are ordinary scraper sources: Find Stream asks TMDB for the title, then the
-            // site for its streams - see TmdbIdProvider. They lead the registry because the
-            // finder stops launching sites once four have answered, so a source appended after
-            // seventy others would almost never be queried at all.
-            VidBoltProvider to ProviderSupport(movies = true, tvShows = true),
-            VidLinkProvider to ProviderSupport(movies = true, tvShows = true),
-            VixSrcProvider to ProviderSupport(movies = true, tvShows = true),
-            ThreeEyedRavenProvider to ProviderSupport(movies = true, tvShows = true),
+            // site for its streams - see TmdbIdProvider.
+            //
+            // The order follows the reference source list's own order, which is the order its
+            // player tries them in (it is sequential there, and the first source that plays
+            // wins). Lumora's finder is concurrent with eight slots and stops launching once
+            // four sources answer, so this registry order is what decides who gets those slots.
+            // Keeping the reference order is therefore the only way to make Find & Play prefer
+            // the same sources it does.
             CnoProvider to ProviderSupport(movies = true, tvShows = true),
-            RiveStreamProvider to ProviderSupport(movies = true, tvShows = true),
-            VidCoreProvider to ProviderSupport(movies = true, tvShows = true),
             VidUpProvider to ProviderSupport(movies = true, tvShows = true),
+            OneOneFourSevenSevenProvider to ProviderSupport(movies = true, tvShows = true),
+            VidLinkProvider to ProviderSupport(movies = true, tvShows = true),
+            VidBoltProvider to ProviderSupport(movies = true, tvShows = true),
+            RiveStreamProvider to ProviderSupport(movies = true, tvShows = true),
             PurStreamProvider to ProviderSupport(movies = true, tvShows = true),
+            LookMovieProvider to ProviderSupport(movies = true, tvShows = true),
             CineBrosProvider to ProviderSupport(movies = true, tvShows = true),
             ThugTvProvider to ProviderSupport(movies = true, tvShows = true),
+            FrameXProvider to ProviderSupport(movies = true, tvShows = true),
+            WatchOutProvider to ProviderSupport(movies = false, tvShows = true),
             VidSparkProvider to ProviderSupport(movies = true, tvShows = true),
             WillowProvider to ProviderSupport(movies = true, tvShows = true),
-            MovieBoxProvider to ProviderSupport(movies = true, tvShows = true),
+            TrendiMoviesProvider to ProviderSupport(movies = true, tvShows = true),
+            VidVaultProvider to ProviderSupport(movies = true, tvShows = true),
             BraFlixProvider to ProviderSupport(movies = true, tvShows = true),
-            FrameXProvider to ProviderSupport(movies = true, tvShows = true),
-            VidLuxProvider to ProviderSupport(movies = true, tvShows = true),
-            WatchOutProvider to ProviderSupport(movies = false, tvShows = true),
-            OneOneFourSevenSevenProvider to ProviderSupport(movies = true, tvShows = true),
+            MovieBoxProvider to ProviderSupport(movies = true, tvShows = true),
+            VixSrcProvider to ProviderSupport(movies = true, tvShows = true),
             // Anime-only catalogues; the manifest marks them `anime`, so the finder skips them
             // for live-action titles and they cost a first-wave slot only when it can pay off.
             AniZoneProvider to ProviderSupport(movies = true, tvShows = true),
             AnvProvider to ProviderSupport(movies = true, tvShows = true),
             Anime123Provider to ProviderSupport(movies = false, tvShows = true),
+            MappleProvider to ProviderSupport(movies = true, tvShows = true),
 
             SflixProvider to ProviderSupport(movies = true, tvShows = true),
             FanpelisProvider to ProviderSupport(movies = true, tvShows = true),
@@ -164,19 +170,7 @@ interface Provider {
             VavooProvider("it") to ProviderSupport(movies = false, tvShows = true),
             VavooProvider("fr") to ProviderSupport(movies = false, tvShows = true),
             VavooProvider("es") to ProviderSupport(movies = false, tvShows = true),
-            VavooProvider("pl") to ProviderSupport(movies = false, tvShows = true),
-
-            // The heavier TMDB-id sources: proof-of-work challenges, cookie sessions, on-demand
-            // conversions and Astro/Next.js data embedded in pages. They are appended on purpose
-            // - each can spend seconds before answering, so they must never take a first-wave
-            // slot from the cheap sites above. They still run whenever the cheap wave comes up
-            // short, and the user can switch any of them off in Settings.
-            LookMovieProvider to ProviderSupport(movies = true, tvShows = true),
-            VidVaultProvider to ProviderSupport(movies = true, tvShows = true),
-            TrendiMoviesProvider to ProviderSupport(movies = true, tvShows = true),
-            MappleProvider to ProviderSupport(movies = true, tvShows = true),
-            HexaProvider to ProviderSupport(movies = true, tvShows = true),
-            CineSrcProvider to ProviderSupport(movies = true, tvShows = true)
+            VavooProvider("pl") to ProviderSupport(movies = false, tvShows = true)
         )
 
         // Helper functions to check support
