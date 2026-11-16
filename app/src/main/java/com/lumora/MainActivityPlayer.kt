@@ -1848,6 +1848,7 @@ internal fun MainActivity.focusOverlayNeighbour(direction: Int): Boolean {
 internal fun MainActivity.playerDeckActionViews(): List<View> = listOf(
     binding.btnLanguage,
     binding.btnLiveVersions,
+    binding.btnQuality,
     binding.btnAspect,
     binding.btnMultiview,
     binding.btnMore,

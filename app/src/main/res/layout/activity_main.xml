@@ -3574,6 +3574,20 @@
                                 android:layout_weight="1"
                                 android:visibility="gone" />
 
+                            <!-- In-manifest renditions of the stream currently playing. Sits
+                                 beside Versions because both choose which picture is shown:
+                                 Versions picks another copy of the title, Quality picks
+                                 another rendition of this copy. Hidden when the stream has
+                                 only one video track, where Auto is the only answer. -->
+                            <com.lumora.ui.PlayerQuickActionView
+                                android:id="@+id/btnQuality"
+                                android:layout_width="0dp"
+                                android:layout_height="@dimen/player_quick_action_height"
+                                android:layout_marginHorizontal="@dimen/player_quick_action_gap"
+                                android:stateListAnimator="@animator/focus_scale_flat"
+                                android:layout_weight="1"
+                                android:visibility="gone" />
+
                             <!-- Aspect ratio (Fit/Zoom/Stretch), one press per mode. Sits
                                  beside Versions because both are per-stream picture
                                  decisions reached mid-playback. -->

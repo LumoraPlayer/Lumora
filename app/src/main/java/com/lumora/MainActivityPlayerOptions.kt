@@ -19,9 +19,10 @@ import kotlinx.coroutines.launch
 // The old bottom bar tried to keep thirteen equal-weight pills on one line beside the
 // transport. On a portrait phone each one had less width than its own label, and on TV the
 // flat grid read like a debug toolbar. The deck now keeps the transport plus Language,
-// Aspect and More, with Versions/Multiview when they apply; Speed and Quality live in the
-// two-column options panel behind More, since they are adjustments rather than destinations
-// reached mid-playback. Every action that used to have a pill is still one press away.
+// Quality, Aspect and More, with Versions/Multiview when they apply; Speed lives in the
+// two-column options panel behind More, since it is an adjustment rather than a picture
+// decision reached mid-playback. Every action that used to have a pill is still one press
+// away.
 
 /** One tile in the player options panel. A null value means the action has no state to show. */
 private data class PlayerOptionTile(
@@ -47,6 +48,11 @@ internal fun MainActivity.setupPlayerOptionsControls() {
         getString(R.string.versions),
         "",
     )
+    binding.btnQuality.bind(
+        R.drawable.ic_quality,
+        getString(R.string.quality),
+        "",
+    )
     binding.btnAspect.bind(
         R.drawable.ic_aspect_ratio,
         getString(R.string.player_aspect),
@@ -69,6 +75,9 @@ internal fun MainActivity.setupPlayerOptionsControls() {
     binding.btnLiveVersions.setOnClickListener {
         showVersionPicker(returnFocus = binding.btnLiveVersions)
     }
+    binding.btnQuality.setOnClickListener {
+        showVideoQualityPicker(returnFocus = binding.btnQuality)
+    }
     binding.btnAspect.setOnClickListener { cycleAspectMode() }
     binding.btnMultiview.setOnClickListener { openMultiviewFromPlayer() }
     binding.btnMore.setOnClickListener { showPlayerOptionsDialog() }
@@ -78,8 +87,8 @@ internal fun MainActivity.setupPlayerOptionsControls() {
 }
 
 /**
- * One row on TV and landscape, two on portrait. The deck carries Language and More plus
- * Versions/Multiview when they apply; Speed and Quality are always in the More panel.
+ * One row on TV and landscape, two on portrait. The deck carries Language, Quality and More
+ * plus Versions/Multiview when they apply; Speed stays in the More panel.
  */
 internal fun MainActivity.applyPlayerControlLayout() {
     val config = resources.configuration
@@ -91,6 +100,10 @@ internal fun MainActivity.applyPlayerControlLayout() {
         isMultiviewEnabled() && !isMultiviewVisible
 
     binding.btnLiveVersions.visibility = if (hasVersions) View.VISIBLE else View.GONE
+    // Quality is a standard picture decision, not a conditional destination like Versions:
+    // it stays on the deck for every stream. A single-rendition stream still gets the picker
+    // (Auto plus its one rendition), which is the same answer the More panel gives.
+    binding.btnQuality.visibility = View.VISIBLE
     binding.btnMultiview.visibility = if (hasMultiview) View.VISIBLE else View.GONE
 
     listOf(
@@ -101,6 +114,7 @@ internal fun MainActivity.applyPlayerControlLayout() {
     // Both destination tiles centre their label over the icon. Versions keeps its current
     // copy underneath; Multiview is label-only and uses the smaller centred treatment.
     binding.btnLiveVersions.setCompact(true)
+    binding.btnQuality.setCompact(true)
     binding.btnMultiview.setCompactLabelOnly()
 
     if (oneRow) {
@@ -181,6 +195,9 @@ internal fun MainActivity.updatePlayerOptionLabels() {
 
     binding.btnLiveVersions.setValue(currentVersionQuickActionLabel())
     binding.btnLiveVersions.setActive(isPlayingAlternateVersion())
+
+    binding.btnQuality.setValue(currentQualityLabel())
+    binding.btnQuality.setActive(!trackController.isVideoAuto(playerManager.getExoPlayer()))
 
     binding.btnAspect.setValue(aspectModeLabel())
     binding.btnAspect.setActive(
