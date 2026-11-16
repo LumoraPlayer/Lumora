@@ -29,7 +29,7 @@ object LookMovieProvider : TmdbIdProvider() {
             .ifEmpty { listOf("https://www.lookmovie2.to", "https://lookmovie2.to", "https://lookmovie.foundation") }
 
     private val storageRegex = Regex(
-        """window\[['"](?:movie|show)_storage['"]\]\s*=\s*\{([^}]+)}""",
+        """window\[['"](?:movie|show)_storage['"]\]\s*=\s*\{([^}]+)\}""",
         setOf(RegexOption.DOT_MATCHES_ALL),
     )
     private val seasonsRegex = Regex("""seasons\s*:\s*(\[[\s\S]+?])\s*[,}]""")

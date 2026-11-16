@@ -11,11 +11,13 @@ import androidx.core.content.ContextCompat
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.plugin.PluginSubtitle
+import com.lumora.plugin.js.PluginScriptManager
 import com.lumora.util.cleanVodTitle
 import com.lumora.scraper.bridge.ScraperCatalog
 import com.lumora.scraper.bridge.ScraperSiteManifest
 import com.lumora.scraper.bridge.ScraperSiteStore
 import com.lumora.scraper.models.Video
+import com.lumora.scraper.utils.UserPreferences
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -360,28 +362,95 @@ private fun MainActivity.playScraperVideo(
  *
  * Lives here rather than in [ScraperSiteManifest] because getting a manifest means running the JS
  * plugin engine, which is the app's plugin layer - the scraper package only knows how to apply
- * one. A missing or broken script is not an error: the list bundled in assets was already applied
- * at startup and stays in force.
+ * one. A missing, disabled or broken script clears the list, which is what makes switching the
+ * plugin off take effect immediately.
  */
-internal fun MainActivity.loadScraperSiteManifest() {
-    scope.launch {
-        val script = pluginScriptManager.getDiscoveredScripts()
-            .firstOrNull { it.enabled && it.supportsScraperSites }
-        if (script == null) {
-            // No script, or it was just switched off: the sites it authorised stop being
-            // queryable immediately. Without this they would keep running for the rest of the
-            // process and disabling the plugin would look like it had done nothing.
-            ScraperSiteManifest.clear()
-            return@launch
-        }
-        val json = jsPluginEngine.scraperSites(pluginScriptManager.readSource(script))
-        if (json == null) {
-            ScraperSiteManifest.clear()
-            return@launch
-        }
-        ScraperSiteManifest.applyJson(this@loadScraperSiteManifest, json)
+internal suspend fun MainActivity.applyScraperSiteManifest() {
+    val script = pluginScriptManager.getDiscoveredScripts()
+        .firstOrNull { it.enabled && it.supportsScraperSites }
+    if (script == null) {
+        // No script, or it was just switched off: the sites it authorised stop being queryable
+        // immediately. Without this they would keep running for the rest of the process and
+        // disabling the plugin would look like it had done nothing.
+        ScraperSiteManifest.clear()
+        return
     }
+    val json = jsPluginEngine.scraperSites(pluginScriptManager.readSource(script))
+    if (json == null) {
+        ScraperSiteManifest.clear()
+        return
+    }
+    ScraperSiteManifest.applyJson(this, json)
 }
+
+/** Fire-and-forget form of [applyScraperSiteManifest] for the startup and plugin-toggle paths. */
+internal fun MainActivity.loadScraperSiteManifest() {
+    scope.launch { applyScraperSiteManifest() }
+}
+
+/**
+ * The site list is data, so it goes stale between app releases - a site moves, dies or is
+ * replaced, and the fix ships in the plugin store rather than in an APK.
+ *
+ * Find & Play is the moment that list decides whether a title can be found, so it refreshes the
+ * script here, at most once an hour. The update is bounded: a slow or offline store never holds
+ * the search for longer than a moment (the caller races it against a short timeout), and a
+ * failed attempt is not retried on every press. Installing preserves the user's enabled state,
+ * and only an installed script is re-applied, so a disabled plugin stays disabled.
+ */
+internal suspend fun MainActivity.refreshScraperSitePluginIfStale() {
+    val prefs = getSharedPreferences(ScraperSiteStore.PREFS_NAME, Context.MODE_PRIVATE)
+    val now = System.currentTimeMillis()
+    if (now - prefs.getLong(KEY_SCRAPER_SITES_CHECKED_AT, 0L) < SCRAPER_SITES_CHECK_INTERVAL_MS) {
+        return
+    }
+    // Stamped before the fetch: a store that is down must not turn every Find & Play into a
+    // network round trip for the next hour.
+    prefs.edit().putLong(KEY_SCRAPER_SITES_CHECKED_AT, now).apply()
+
+    val installed = pluginScriptManager.getDiscoveredScripts()
+    val siteList = installed.firstOrNull { it.supportsScraperSites }
+    val masterOn = ScraperSiteStore.isEnabled(this)
+    var siteListChanged = false
+
+    // The site list is data, so Find & Play keeps it current whichever way the plugin toggle
+    // is set. Behaviour scripts stay behind the existing opt-in ("Auto-update plugins on
+    // launch"), because those are arbitrary JS the user chose to run.
+    for (plugin in installed) {
+        if (!plugin.supportsScraperSites && !UserPreferences.autoUpdatePlugins) continue
+        runCatching { updatePluginFromStore(plugin) }
+        if (plugin.supportsScraperSites) siteListChanged = true
+    }
+
+    if (siteList == null) {
+        // "Use streaming sites" is the master opt-in: with it on and no list installed, Find &
+        // Play installs and enables one rather than silently searching only the plugins.
+        if (masterOn) {
+            for (store in pluginStoreManager.storeUrls()) {
+                val catalog = pluginStoreManager.fetchCatalog(store.url).getOrNull() ?: continue
+                val entry = catalog.firstOrNull { "scraper_sites" in it.capabilities } ?: continue
+                val text = pluginStoreManager.fetchScriptText(entry.fileUrl) ?: continue
+                val result = pluginScriptManager.installScript(text)
+                if (result is PluginScriptManager.InstallResult.Installed) {
+                    pluginScriptManager.setEnabled(result.script.id, true)
+                    siteListChanged = true
+                }
+                break
+            }
+        }
+    } else if (masterOn && !siteList.enabled) {
+        // A list present but switched off is the state that makes "Use streaming sites" look
+        // broken: the master switch is on, yet no site is queried. Find & Play turns the data
+        // plugin back on; switching the master switch off is how the feature is disabled.
+        pluginScriptManager.setEnabled(siteList.id, true)
+        siteListChanged = true
+    }
+
+    if (siteListChanged) applyScraperSiteManifest()
+}
+
+private const val KEY_SCRAPER_SITES_CHECKED_AT = "scraper_plugins_checked_at_v2"
+private const val SCRAPER_SITES_CHECK_INTERVAL_MS = 60 * 60 * 1000L
 
 /**
  * APPLICATION_M3U8 when the URL looks like a playlist, else null.

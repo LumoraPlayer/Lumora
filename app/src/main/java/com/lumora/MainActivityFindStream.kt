@@ -2,6 +2,8 @@
 package com.lumora
 
 import com.lumora.model.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Searches every enabled source for [item] and starts playing the best one that resolves.
@@ -22,5 +24,13 @@ internal fun MainActivity.showFindStreamDialog(
      */
     onResolved: ((Channel) -> Unit)? = null,
 ) {
-    StreamResolver(this, item, season, episode, onResolved).start()
+    scope.launch {
+        // The site list is data, so it can be updated between app releases. Refresh it here,
+        // where it decides whether the title can be found at all, but never let a slow store
+        // hold the search: the refresh continues in the background after the timeout and the
+        // next Find & Play uses whatever it installed.
+        val refresh = launch { runCatching { refreshScraperSitePluginIfStale() } }
+        withTimeoutOrNull(4_000) { refresh.join() }
+        StreamResolver(this@showFindStreamDialog, item, season, episode, onResolved).start()
+    }
 }
