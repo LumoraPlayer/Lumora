@@ -61,6 +61,31 @@ interface Provider {
         )
 
         val providers = mapOf(
+            // Public sites that resolve by TMDB id rather than by a catalogue of their own.
+            // They are ordinary scraper sources: Find Stream asks TMDB for the title, then the
+            // site for its streams - see TmdbIdProvider. They lead the registry because the
+            // finder stops launching sites once four have answered, so a source appended after
+            // seventy others would almost never be queried at all.
+            VidBoltProvider to ProviderSupport(movies = true, tvShows = true),
+            VidLinkProvider to ProviderSupport(movies = true, tvShows = true),
+            VixSrcProvider to ProviderSupport(movies = true, tvShows = true),
+            ThreeEyedRavenProvider to ProviderSupport(movies = true, tvShows = true),
+            CnoProvider to ProviderSupport(movies = true, tvShows = true),
+            RiveStreamProvider to ProviderSupport(movies = true, tvShows = true),
+            VidCoreProvider to ProviderSupport(movies = true, tvShows = true),
+            VidUpProvider to ProviderSupport(movies = true, tvShows = true),
+            PurStreamProvider to ProviderSupport(movies = true, tvShows = true),
+            CineBrosProvider to ProviderSupport(movies = true, tvShows = true),
+            ThugTvProvider to ProviderSupport(movies = true, tvShows = true),
+            VidSparkProvider to ProviderSupport(movies = true, tvShows = true),
+            WillowProvider to ProviderSupport(movies = true, tvShows = true),
+            MovieBoxProvider to ProviderSupport(movies = true, tvShows = true),
+            BraFlixProvider to ProviderSupport(movies = true, tvShows = true),
+            FrameXProvider to ProviderSupport(movies = true, tvShows = true),
+            VidLuxProvider to ProviderSupport(movies = true, tvShows = true),
+            WatchOutProvider to ProviderSupport(movies = false, tvShows = true),
+            OneOneFourSevenSevenProvider to ProviderSupport(movies = true, tvShows = true),
+
             SflixProvider to ProviderSupport(movies = true, tvShows = true),
             FanpelisProvider to ProviderSupport(movies = true, tvShows = true),
             SerienStreamProvider to ProviderSupport(movies = false, tvShows = true),
