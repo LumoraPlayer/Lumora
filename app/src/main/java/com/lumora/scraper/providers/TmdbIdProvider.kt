@@ -178,13 +178,21 @@ abstract class TmdbIdProvider : Provider {
     // ── HTTP ────────────────────────────────────────────────────────────────────────────
     protected class HttpFailure(val status: Int, val url: String) : IOException("HTTP $status from $url")
 
-    protected suspend fun fetch(
+    protected class HttpResponse(val code: Int, val headers: okhttp3.Headers, val body: String)
+
+    /**
+     * One request, with the response's status and headers kept. The streaming sites are not
+     * consistent about status codes - several answer 200 with `{"error":...}` - so most callers
+     * want [fetch]; the exceptions are the ones that read a Set-Cookie header off a page before
+     * asking the same host for the stream (ANV, 123Anime).
+     */
+    protected suspend fun fetchHttp(
         url: String,
         method: String = "GET",
         headers: Map<String, String> = emptyMap(),
         body: String? = null,
         timeoutMs: Long = 15_000,
-    ): String = withContext(Dispatchers.IO) {
+    ): HttpResponse = withContext(Dispatchers.IO) {
         val parsed = url.toHttpUrlOrNull() ?: throw IOException("Bad URL: $url")
         val builder = Request.Builder().url(parsed)
         headers.forEach { (key, value) -> builder.header(key, value) }
@@ -196,9 +204,20 @@ abstract class TmdbIdProvider : Provider {
         }
         val call = client.newBuilder().readTimeout(timeoutMs, TimeUnit.MILLISECONDS).build().newCall(builder.build())
         call.execute().use { response ->
-            if (!response.isSuccessful) throw HttpFailure(response.code, url)
-            response.body?.string().orEmpty()
+            HttpResponse(response.code, response.headers, response.body?.string().orEmpty())
         }
+    }
+
+    protected suspend fun fetch(
+        url: String,
+        method: String = "GET",
+        headers: Map<String, String> = emptyMap(),
+        body: String? = null,
+        timeoutMs: Long = 15_000,
+    ): String {
+        val response = fetchHttp(url, method, headers, body, timeoutMs)
+        if (response.code !in 200..299) throw HttpFailure(response.code, url)
+        return response.body
     }
 
     protected suspend fun fetchJson(
@@ -306,6 +325,28 @@ abstract class TmdbIdProvider : Provider {
 
     /** Bare host, for APIs that live on a different subdomain than the site. */
     protected fun hostOf(url: String): String = url.substringAfter("://").substringBefore('/')
+
+    /** Scheme and host of a URL, without the path. */
+    protected fun originOf(url: String): String = url.substringBefore("://") + "://" + hostOf(url)
+
+    /** SHA-256, for the sites whose own proof-of-work is built on it. */
+    protected fun sha256(input: ByteArray): ByteArray =
+        java.security.MessageDigest.getInstance("SHA-256").digest(input)
+
+    /** A fresh hex string, e.g. the 32-byte `X-Api-Key` Hexa expects per request. */
+    protected fun randomHex(byteCount: Int): String {
+        val bytes = ByteArray(byteCount)
+        java.security.SecureRandom().nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    /** The HTML entities the Astro island props are escaped with. */
+    protected fun decodeHtmlEntities(value: String): String = value
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
 
     private companion object {
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()

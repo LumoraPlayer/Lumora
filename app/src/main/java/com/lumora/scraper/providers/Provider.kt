@@ -85,6 +85,11 @@ interface Provider {
             VidLuxProvider to ProviderSupport(movies = true, tvShows = true),
             WatchOutProvider to ProviderSupport(movies = false, tvShows = true),
             OneOneFourSevenSevenProvider to ProviderSupport(movies = true, tvShows = true),
+            // Anime-only catalogues; the manifest marks them `anime`, so the finder skips them
+            // for live-action titles and they cost a first-wave slot only when it can pay off.
+            AniZoneProvider to ProviderSupport(movies = true, tvShows = true),
+            AnvProvider to ProviderSupport(movies = true, tvShows = true),
+            Anime123Provider to ProviderSupport(movies = false, tvShows = true),
 
             SflixProvider to ProviderSupport(movies = true, tvShows = true),
             FanpelisProvider to ProviderSupport(movies = true, tvShows = true),
@@ -159,7 +164,19 @@ interface Provider {
             VavooProvider("it") to ProviderSupport(movies = false, tvShows = true),
             VavooProvider("fr") to ProviderSupport(movies = false, tvShows = true),
             VavooProvider("es") to ProviderSupport(movies = false, tvShows = true),
-            VavooProvider("pl") to ProviderSupport(movies = false, tvShows = true)
+            VavooProvider("pl") to ProviderSupport(movies = false, tvShows = true),
+
+            // The heavier TMDB-id sources: proof-of-work challenges, cookie sessions, on-demand
+            // conversions and Astro/Next.js data embedded in pages. They are appended on purpose
+            // - each can spend seconds before answering, so they must never take a first-wave
+            // slot from the cheap sites above. They still run whenever the cheap wave comes up
+            // short, and the user can switch any of them off in Settings.
+            LookMovieProvider to ProviderSupport(movies = true, tvShows = true),
+            VidVaultProvider to ProviderSupport(movies = true, tvShows = true),
+            TrendiMoviesProvider to ProviderSupport(movies = true, tvShows = true),
+            MappleProvider to ProviderSupport(movies = true, tvShows = true),
+            HexaProvider to ProviderSupport(movies = true, tvShows = true),
+            CineSrcProvider to ProviderSupport(movies = true, tvShows = true)
         )
 
         // Helper functions to check support
