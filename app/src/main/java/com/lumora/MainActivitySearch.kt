@@ -30,6 +30,20 @@ import kotlinx.coroutines.*
 internal fun MainActivity.isTouchDevice(): Boolean =
     packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN)
 
+/**
+ * Whether the Cast chip belongs to this result filter.
+ *
+ * Cast and EPG are facets of their own, not of Films, Series or Live - a person is not a
+ * movie or a channel. They ride with All, and with their own chip so the row keeps saying
+ * what is being shown; every other filter hides them.
+ */
+internal fun MainActivity.SearchFilter.showsCastChip(): Boolean =
+    this == MainActivity.SearchFilter.ALL || this == MainActivity.SearchFilter.CAST
+
+/** Whether the EPG chip belongs to this result filter - see [showsCastChip]. */
+internal fun MainActivity.SearchFilter.showsEpgChip(): Boolean =
+    this == MainActivity.SearchFilter.ALL || this == MainActivity.SearchFilter.EPG
+
 internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     // Re-entry guard: a second press while the overlay is up would stack a second
     // MainActivity.FullScreenOverlay in the same container (double focus trees, overwritten
@@ -213,6 +227,17 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
         for (id in filterChipIds) {
             searchView.findViewById<View>(id).isSelected = searchView.findViewById<View>(id) === selected
         }
+        // Cast and EPG are not facets of Films or Series, and offering them beside those chips
+        // reads as "search cast within films" - a search that returns people, not films. They
+        // belong to All and to their own filter: Cast stays visible while Cast is selected so
+        // the row keeps saying what is being shown, and EPG does the same for EPG. Live, Films
+        // and Series hide both.
+        val showCast = searchFilter.showsCastChip()
+        val showEpg = searchFilter.showsEpgChip()
+        searchView.findViewById<View>(R.id.searchFilterCast).visibility =
+            if (showCast) View.VISIBLE else View.GONE
+        searchView.findViewById<View>(R.id.searchFilterEpg).visibility =
+            if (showEpg) View.VISIBLE else View.GONE
         updateSearchFocusTargets(filtersVisible = filtersRow.visibility == View.VISIBLE)
     }
 
@@ -511,11 +536,12 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
         val filter = searchFilter
         // People come from TMDB's index, not the catalogue: a query that names an actor has no
         // local title to match, so without this the results row was empty for the one search
-        // that should open their page. Not under Live (a person is not a channel) or EPG (a
-        // person is not a programme), and a no-key setup simply skips them (Discover is empty
-        // there too). Under the Cast chip this is the whole result set.
-        val personResults = if (filter != MainActivity.SearchFilter.LIVE &&
-            filter != MainActivity.SearchFilter.EPG && tmdbClient.hasKey()
+        // that should open their page. People belong to All and to Cast, not to the film,
+        // series or live facets - a person is not a movie, an episode or a channel - so those
+        // filters never build this group. A no-key setup skips it too (Discover is empty there).
+        val personResults = if (
+            (filter == MainActivity.SearchFilter.ALL || filter == MainActivity.SearchFilter.CAST) &&
+            tmdbClient.hasKey()
         ) {
             runCatching { tmdbClient.searchPeople(query) }.getOrNull()
                 .orEmpty()
