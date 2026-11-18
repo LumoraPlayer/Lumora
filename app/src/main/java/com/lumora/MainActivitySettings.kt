@@ -1176,6 +1176,45 @@ internal fun MainActivity.seedPlaybackPreferencesForBackup() {
     if (changed) editor.apply()
 }
 
+/**
+ * Asks for the "Display over other apps" grant the boot launcher needs.
+ *
+ * Android 10+ blocks a BOOT_COMPLETED receiver from bringing its own activity to the front
+ * unless the app has this permission. The checkbox has already written the pref by the time
+ * this runs, so a refusal - or a build with no overlay-permission screen - flips it back off
+ * instead of leaving a setting that can never work.
+ */
+private fun MainActivity.requestLaunchOnStartupPermission(box: CheckBox) {
+    fun revert() {
+        prefs.edit().putBoolean(PREF_LAUNCH_ON_STARTUP, false).apply()
+        box.isChecked = false
+    }
+    val dialog = LumoraDialog.Builder(this)
+        .setTitle(R.string.sett_launch_on_startup_permission_title)
+        .setMessage(R.string.sett_launch_on_startup_permission_message)
+        .setPositiveButton(R.string.open_settings) { _, _ ->
+            val opened = runCatching {
+                startActivity(
+                    Intent(
+                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+            }.isSuccess
+            if (!opened) {
+                revert()
+                Toast.makeText(
+                    this,
+                    R.string.sett_launch_on_startup_permission_failed,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+        .setNegativeButton(R.string.cancel) { _, _ -> revert() }
+        .show()
+    dialog.setOnCancelListener { revert() }
+}
+
 internal fun MainActivity.showProviderSettings() {
     // Already open: unticking the last provider or plugin from inside Settings reloads, and
     // that load's "nothing configured" branch calls straight back in here - which would
@@ -3258,14 +3297,21 @@ internal fun MainActivity.showProviderSettings() {
     // Which screen the app opens on. Next to the other whole-app choices, and above the
     // language rows: it is the one a new TV owner changes first.
     generalPane.addView(startScreenChoiceRow())
-    // Open on boot. Off by default; the BOOT_COMPLETED receiver checks the pref.
-    generalPane.addView(
-        dubCheckBoxRow(
-            getString(R.string.sett_launch_on_startup),
-            getString(R.string.sett_launch_on_startup_caption),
-            PREF_LAUNCH_ON_STARTUP
-        )
+    // Open on boot. Off by default; the BOOT_COMPLETED receiver checks the pref. Android 10+
+    // additionally requires the display-over-other-apps grant, requested here when it is
+    // switched on.
+    lateinit var launchOnStartupBox: CheckBox
+    launchOnStartupBox = dubCheckBoxRow(
+        getString(R.string.sett_launch_on_startup),
+        getString(R.string.sett_launch_on_startup_caption),
+        PREF_LAUNCH_ON_STARTUP,
+        onToggle = { checked ->
+            if (checked && !android.provider.Settings.canDrawOverlays(this)) {
+                requestLaunchOnStartupPermission(launchOnStartupBox)
+            }
+        }
     )
+    generalPane.addView(launchOnStartupBox)
     // USER PROFILES sits between the rows APP BEHAVIOUR labels and the LANGUAGE label, so
     // every section label heads its own rows: label, rows, label, rows - never two labels
     // stacked with the rows that belong to the first one filed under the second.

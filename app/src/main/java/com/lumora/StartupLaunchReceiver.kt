@@ -21,6 +21,13 @@ class StartupLaunchReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         val prefs = context.getSharedPreferences("iptv_prefs", Context.MODE_PRIVATE)
         if (!prefs.getBoolean(PREF_LAUNCH_ON_STARTUP, false)) return
+        // Android 10+ blocks a receiver from opening its own activity. "Display over other
+        // apps" is one of the platform's explicit exceptions; without it the start is silently
+        // dropped by ActivityTaskManager, so do not even ask.
+        if (!android.provider.Settings.canDrawOverlays(context)) {
+            SessionLog.event("app", "startup launch skipped: overlay permission not granted")
+            return
+        }
 
         val launch = Intent(context, MainActivity::class.java).apply {
             addFlags(

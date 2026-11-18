@@ -250,6 +250,9 @@
     <string name="sett_disable_vod_caption">Fetch only live TV from providers - movies and series are hidden everywhere</string>
     <string name="sett_launch_on_startup">Launch on device startup</string>
     <string name="sett_launch_on_startup_caption">Open Lumora when the device finishes booting. Off by default.</string>
+    <string name="sett_launch_on_startup_permission_title">Allow launch on startup</string>
+    <string name="sett_launch_on_startup_permission_message">Android TV blocks an app from opening itself on boot unless it is allowed to display over other apps. Allow that on the next screen, then leave this setting on. Fire TV can also grant it over ADB: appops set com.lumora SYSTEM_ALERT_WINDOW allow</string>
+    <string name="sett_launch_on_startup_permission_failed">Couldn\'t open the display-over-other-apps setting. Grant Lumora that permission, then turn Launch on device startup on again.</string>
     <string name="sett_start_screen">Open the app on</string>
     <string name="sett_start_screen_row">%1$s  ·  %2$s</string>
     <string name="sett_start_screen_caption">Applies the next time the app opens</string>
