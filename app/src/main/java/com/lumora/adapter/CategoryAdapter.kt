@@ -45,7 +45,29 @@ class CategoryAdapter(
      *  Outside this RecyclerView, so unreachable via nextFocusUpId (see PosterGridAdapter). */
     var topRowFocusUpTargetId: Int = View.NO_ID
 
+    /** The list this adapter is attached to, for the layout guard in [setSelected]. */
+    private var attachedList: RecyclerView? = null
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        attachedList = recyclerView
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        if (attachedList === recyclerView) attachedList = null
+        super.onDetachedFromRecyclerView(recyclerView)
+    }
+
     fun setSelected(id: String?) {
+        // `notifyItemChanged` must not land while the LayoutManager is walking its children:
+        // a duplicate or vanished row then leaves RecyclerView trying to attach a view that is
+        // already attached, which is the crash the sidebar's rapid catalogue rebuilds hit.
+        // Move the update to the next main-loop pass instead of mutating mid-layout.
+        val list = attachedList
+        if (list != null && list.isComputingLayout) {
+            list.post { setSelected(id) }
+            return
+        }
         val oldId = selectedId
         if (oldId == id) return
         selectedId = id
@@ -54,11 +76,11 @@ class CategoryAdapter(
         // keeps a notify off a stale/raced index even if the AsyncListDiffer's commit lands
         // in between - notifyItemChanged with an index outside currentList.indices would
         // crash the RecyclerView or mis-highlight a neighbour row.
-        val list = currentList
-        val oldIdx = list.indexOfFirst { it.id == oldId }
-        if (oldIdx in list.indices) notifyItemChanged(oldIdx)
-        val newIdx = list.indexOfFirst { it.id == id }
-        if (newIdx in list.indices && newIdx != oldIdx) notifyItemChanged(newIdx)
+        val current = currentList
+        val oldIdx = current.indexOfFirst { it.id == oldId }
+        if (oldIdx in current.indices) notifyItemChanged(oldIdx)
+        val newIdx = current.indexOfFirst { it.id == id }
+        if (newIdx in current.indices && newIdx != oldIdx) notifyItemChanged(newIdx)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {

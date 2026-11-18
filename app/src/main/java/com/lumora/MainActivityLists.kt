@@ -692,6 +692,12 @@ internal fun MainActivity.setupChannelList() {
     binding.seriesContent.layoutManager = LinearLayoutManager(this)
     binding.filmsContent.layoutManager = LinearLayoutManager(this)
     binding.categorySidebar.layoutManager = LinearLayoutManager(this)
+    // The rail is rewritten on every catalogue/category rebuild, sometimes twice in a frame
+    // while the TV's guide is importing. Change animations kept a detached row parented for
+    // the length of the animation, and the next layout then failed the RecyclerView's
+    // "attach on a child which is not detached" invariant. The rows are text-only, so the
+    // animation buys nothing; snap them in place.
+    binding.categorySidebar.itemAnimator = null
     binding.homeContent.layoutManager = LinearLayoutManager(this)
     binding.downloadsContent.layoutManager = LinearLayoutManager(this)
     binding.downloadsContent.adapter = downloadAdapter

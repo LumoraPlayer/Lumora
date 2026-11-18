@@ -3,6 +3,7 @@ package com.lumora
 
 import android.view.View
 import android.widget.*
+import androidx.recyclerview.widget.RecyclerView
 import com.lumora.adapter.DYNAMIC_BUCKET_ID_PREFIX
 import com.lumora.cache.DerivedCache
 import com.lumora.cache.FavoritesStore
@@ -40,6 +41,19 @@ internal fun MainActivity.formatSubscriptionStatus(expDateSeconds: Long?, isTria
  * (tens of thousands of items on a big provider) is real CPU work - it must run
  * off the main thread or the UI stalls/looks hung on every load and refresh.
  */
+/**
+ * Binds [adapter] only when this list does not already own it.
+ *
+ * `RecyclerView.setAdapter` with the *same* instance still tears down every child and
+ * re-registers the observer. These five lists keep one adapter for the whole Activity, and a
+ * catalogue load can land while the screen is already laid out; re-binding the same adapter
+ * there was enough to leave the sidebar's LayoutManager holding a view it had already detached
+ * ("Called attach on a child which is not detached").
+ */
+private fun RecyclerView.bindAdapterIfChanged(adapter: RecyclerView.Adapter<*>?) {
+    if (this.adapter !== adapter) this.adapter = adapter
+}
+
 internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
     val snapshot = allChannels
     // A new catalogue invalidates the memoised show index the tracker passes build.
@@ -82,11 +96,11 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
     // must not be, since it lives behind the overlay. Bind first, then swap visibility
     // only when nothing is covering the content.
     if (hasContent) {
-        binding.liveContent.adapter = liveAdapter
-        binding.seriesContent.adapter = seriesShelfAdapter
-        binding.filmsContent.adapter = filmsShelfAdapter
-        binding.categorySidebar.adapter = categoryAdapter
-        binding.homeContent.adapter = homeShelfAdapter
+        binding.liveContent.bindAdapterIfChanged(liveAdapter)
+        binding.seriesContent.bindAdapterIfChanged(seriesShelfAdapter)
+        binding.filmsContent.bindAdapterIfChanged(filmsShelfAdapter)
+        binding.categorySidebar.bindAdapterIfChanged(categoryAdapter)
+        binding.homeContent.bindAdapterIfChanged(homeShelfAdapter)
         seriesShelfAdapter.submitList(seriesShelves)
         filmsShelfAdapter.submitList(filmShelves)
     }
@@ -225,11 +239,11 @@ internal fun MainActivity.classifyAndShowLiveFirst() {
             // Mirror of classifyAndShow()'s adapter-bind block (all five, not just the
             // live side): on warm/stale-cache starts this is the only bind that runs, so
             // the sidebar and Home/shelf panes would otherwise stay blank.
-            binding.liveContent.adapter = liveAdapter
-            binding.seriesContent.adapter = seriesShelfAdapter
-            binding.filmsContent.adapter = filmsShelfAdapter
-            binding.categorySidebar.adapter = categoryAdapter
-            binding.homeContent.adapter = homeShelfAdapter
+            binding.liveContent.bindAdapterIfChanged(liveAdapter)
+            binding.seriesContent.bindAdapterIfChanged(seriesShelfAdapter)
+            binding.filmsContent.bindAdapterIfChanged(filmsShelfAdapter)
+            binding.categorySidebar.bindAdapterIfChanged(categoryAdapter)
+            binding.homeContent.bindAdapterIfChanged(homeShelfAdapter)
         }
         // Settings/search overlays own the whole content slot while up - defer chrome
         // swaps to their dismiss handlers, same as classifyAndShow().

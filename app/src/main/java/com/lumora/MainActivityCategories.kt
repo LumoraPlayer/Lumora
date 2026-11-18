@@ -418,6 +418,14 @@ internal suspend fun MainActivity.rebuildCategoriesForActiveTab(): List<Category
  *  buildCategoriesForActiveTab() rescans every channel in the tab (brand clustering in
  *  particular is O(channel count)), so on a large catalog that's real time saved. */
 internal fun MainActivity.submitCategories(categories: List<CategoryFilter>) {
+    // A RecyclerView cannot be mutated while its LayoutManager is walking children. The
+    // catalogue load can finish behind a focus/scroll callback that runs on the same frame;
+    // defer the whole sidebar update rather than letting submitList/visibility changes land
+    // mid-layout.
+    if (binding.categorySidebar.isComputingLayout) {
+        binding.categorySidebar.post { submitCategories(categories) }
+        return
+    }
     // Home, Discover and Downloads are not categorized tabs and have no sidebar. Every
     // caller here is asynchronous, so any of them can land after the user has left the tab
     // the categories were built for - and the sidebar must not reappear over a pane that
