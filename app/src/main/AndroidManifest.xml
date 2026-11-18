@@ -154,6 +154,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- "Launch on device startup" (Settings > General). Off by default - the receiver
+             checks the pref. Best effort: Android 10+ may refuse a background activity start
+             from BOOT_COMPLETED on some TV builds. -->
+        <receiver android:name=".StartupLaunchReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <!-- DVR capture: streams a live channel to app storage or a configured NAS share. -->
         <service
             android:name=".recording.RecordingService"

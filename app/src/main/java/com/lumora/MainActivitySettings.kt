@@ -1122,12 +1122,69 @@ internal fun MainActivity.collapseSettingsRail() {
  *  Typeface constructor is API 28+, so this hand-rolled span keeps minSdk 25 happy.) */
 
 @Suppress("DEPRECATION")
+/**
+ * Persists the effective playback defaults the first time Settings is opened.
+ *
+ * Backup collection is an allowlist of keys that *exist* in prefs, on purpose: an untouched
+ * setting is not recorded as if the user chose it. The playback switches have platform-
+ * dependent defaults (fast zap on, frame-rate match on only on a TV, A/V offset 0), so on a
+ * device where the user left them alone there was nothing in prefs for the backup to carry,
+ * and a restore to another device rebuilt that device's defaults instead. Writing the
+ * effective value once makes the backup reproduce what the user actually had. Only missing
+ * keys are written - an explicit user choice is never overwritten.
+ */
+internal fun MainActivity.seedPlaybackPreferencesForBackup() {
+    val editor = prefs.edit()
+    var changed = false
+    if (!prefs.contains(PREF_SUGGEST_EXTERNAL_PLAYER)) {
+        editor.putBoolean(PREF_SUGGEST_EXTERNAL_PLAYER, true)
+        changed = true
+    }
+    // "Ask every time" used to be the absence of the key, which a backup cannot express.
+    if (!prefs.contains(PREF_EXTERNAL_PLAYER_PACKAGE)) {
+        editor.putString(PREF_EXTERNAL_PLAYER_PACKAGE, EXTERNAL_PLAYER_ASK)
+        changed = true
+    }
+    if (!prefs.contains(com.lumora.player.PlayerManager.PREF_FAST_ZAP)) {
+        editor.putBoolean(
+            com.lumora.player.PlayerManager.PREF_FAST_ZAP,
+            com.lumora.player.PlayerManager.isFastZapEnabled(this)
+        )
+        changed = true
+    }
+    if (!prefs.contains(com.lumora.player.PlayerManager.PREF_EXTRA_BUFFERING)) {
+        editor.putBoolean(
+            com.lumora.player.PlayerManager.PREF_EXTRA_BUFFERING,
+            com.lumora.player.PlayerManager.isExtraBufferingEnabled(this)
+        )
+        changed = true
+    }
+    if (!prefs.contains(com.lumora.player.DisplayFrameRateController.PREF_MATCH_FRAME_RATE)) {
+        editor.putBoolean(
+            com.lumora.player.DisplayFrameRateController.PREF_MATCH_FRAME_RATE,
+            com.lumora.player.DisplayFrameRateController.isEnabled(this)
+        )
+        changed = true
+    }
+    if (!prefs.contains(com.lumora.player.playback.AvOffsetManager.KEY_GLOBAL_OFFSET)) {
+        editor.putInt(
+            com.lumora.player.playback.AvOffsetManager.KEY_GLOBAL_OFFSET,
+            avOffsetManager.getOffset()
+        )
+        changed = true
+    }
+    if (changed) editor.apply()
+}
+
 internal fun MainActivity.showProviderSettings() {
     // Already open: unticking the last provider or plugin from inside Settings reloads, and
     // that load's "nothing configured" branch calls straight back in here - which would
     // inflate a second settings tree on top of the live one, leaving the first orphaned
     // behind it and only the second reachable by Back.
     if (activeSettingsOverlay != null) return
+    // Make the playback switches concrete before the backup pane can export them. See the
+    // function's kdoc: untouched platform defaults used to be absent from every backup.
+    seedPlaybackPreferencesForBackup()
     // Close Search if it's open - the two share the weighted content slot and would otherwise
     // render stacked on top of each other (see showSearchDialog).
     activeSearchOverlay?.dismiss()
@@ -2980,7 +3037,7 @@ internal fun MainActivity.showProviderSettings() {
     }
 
     dialogView.findViewById<View>(R.id.settingsRegionsDetect).setOnClickListener {
-        val detected = localityFromDeviceLocale()
+        val detected = deviceRegionLocality()
         if (detected == null) {
             Toast.makeText(this, R.string.sett_locality_detect_failed, Toast.LENGTH_SHORT).show()
             return@setOnClickListener
@@ -3201,6 +3258,14 @@ internal fun MainActivity.showProviderSettings() {
     // Which screen the app opens on. Next to the other whole-app choices, and above the
     // language rows: it is the one a new TV owner changes first.
     generalPane.addView(startScreenChoiceRow())
+    // Open on boot. Off by default; the BOOT_COMPLETED receiver checks the pref.
+    generalPane.addView(
+        dubCheckBoxRow(
+            getString(R.string.sett_launch_on_startup),
+            getString(R.string.sett_launch_on_startup_caption),
+            PREF_LAUNCH_ON_STARTUP
+        )
+    )
     // USER PROFILES sits between the rows APP BEHAVIOUR labels and the LANGUAGE label, so
     // every section label heads its own rows: label, rows, label, rows - never two labels
     // stacked with the rows that belong to the first one filed under the second.
@@ -3925,9 +3990,17 @@ internal fun MainActivity.showLegalNotice() {
         .show()
 }
 
-/** The device's own region, when the locale names one the catalog knows. */
-private fun localityFromDeviceLocale(): Locality? {
-    val country = Locale.getDefault().country.orEmpty().uppercase(Locale.ROOT)
+/** The device's own region, when the system locale names one the catalog knows.
+ *
+ *  Deliberately reads the *system* configuration rather than `Locale.getDefault()`: an
+ *  in-app language override (Settings > General > Language) changes the process default
+ *  locale through AppCompatDelegate, so a French app UI on a UK device used to make "Detect
+ *  device region" return France. The region belongs to the device, not to the interface
+ *  language. */
+internal fun deviceRegionLocality(): Locality? {
+    val locales = android.content.res.Resources.getSystem().configuration.locales
+    val deviceLocale = if (locales.isEmpty) null else locales[0]
+    val country = deviceLocale?.country.orEmpty().uppercase(Locale.ROOT)
     if (country.isEmpty()) return null
     return LocalityCatalog.byCode(country)
         ?: LocalityCatalog.aliases[country]?.let { LocalityCatalog.byCode(it) }

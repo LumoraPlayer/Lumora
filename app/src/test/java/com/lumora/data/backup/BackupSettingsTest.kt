@@ -65,7 +65,15 @@ class BackupSettingsTest {
         assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["locality_show_untagged"])
         assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["simple_mode"])
         assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["ui_language"])
+        assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["launch_on_startup"])
         assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["keyboard_languages"])
+        // Settings > Playback > Playback settings (and the rows beside it). These are real
+        // choices, not runtime state, and must survive a restore to another device.
+        assertEquals(SettingType.STRING, BACKED_UP_SETTINGS["external_player_package"])
+        assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["suggest_external_player"])
+        assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["player_fast_zap"])
+        assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["player_extra_buffering"])
+        assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["player_match_frame_rate"])
         assertEquals(SettingType.INT, BACKED_UP_SETTINGS["subtitle_text_size"])
         assertEquals(SettingType.INT, BACKED_UP_SETTINGS["av_offset_ms"])
         assertEquals(SettingType.BOOLEAN, BACKED_UP_SETTINGS["update_checks_enabled"])

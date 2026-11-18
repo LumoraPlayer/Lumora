@@ -83,6 +83,7 @@ internal fun MainActivity.openInExternalPlayer(
     }
     // A remembered choice skips the picker; the picker's own last entry is how it gets unset.
     val remembered = prefs.getString(PREF_EXTERNAL_PLAYER_PACKAGE, null)
+        ?.takeIf { it != EXTERNAL_PLAYER_ASK }
     if (remembered != null) {
         launch(remembered)
         return
@@ -114,13 +115,14 @@ internal fun MainActivity.chooseDefaultExternalPlayer() {
     val installed = ExternalPlayer.installedPlayers(this)
     val labels = installed.map { it.label } + listOf(getString(R.string.play_ask_every_time))
     val current = prefs.getString(PREF_EXTERNAL_PLAYER_PACKAGE, null)
+        ?.takeIf { it != EXTERNAL_PLAYER_ASK }
     val checked = installed.indexOfFirst { it.packageName == current }.takeIf { it >= 0 } ?: installed.size
     val builder = LumoraDialog.Builder(this)
         .setTitle(getString(R.string.play_default_external_player))
         .setSingleChoiceItems(labels.toTypedArray(), checked) { dialog, which ->
             dialog.dismiss()
             if (which == installed.size) {
-                prefs.edit().remove(PREF_EXTERNAL_PLAYER_PACKAGE).apply()
+                prefs.edit().putString(PREF_EXTERNAL_PLAYER_PACKAGE, EXTERNAL_PLAYER_ASK).apply()
                 Toast.makeText(this, getString(R.string.play_external_player_ask_every_time), Toast.LENGTH_SHORT).show()
             } else {
                 prefs.edit().putString(PREF_EXTERNAL_PLAYER_PACKAGE, installed[which].packageName).apply()
@@ -188,5 +190,6 @@ internal fun MainActivity.checkForUndecodableAudio(tracks: Tracks) {
 /** Package-visibility-safe label for the settings row. */
 internal fun MainActivity.externalPlayerSummary(context: Context): String =
     prefs.getString(PREF_EXTERNAL_PLAYER_PACKAGE, null)
+        ?.takeIf { it != EXTERNAL_PLAYER_ASK }
         ?.let { ExternalPlayer.labelFor(context, it) }
         ?: context.getString(R.string.play_ask_every_time)

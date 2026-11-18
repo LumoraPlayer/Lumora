@@ -387,7 +387,7 @@ private fun MainActivity.promptOnboardingRegions(config: IptvProviderConfig, onD
             // listener, and a detect that closed the list would throw away ticks the user
             // had already made. Re-pointed here, so the list just updates in place.
             dialog.getButton(LumoraDialog.BUTTON_NEUTRAL).setOnClickListener {
-                val detected = localityForOnboarding()
+                val detected = deviceRegionLocality()
                 if (detected == null) {
                     Toast.makeText(this, R.string.sett_locality_detect_failed, Toast.LENGTH_SHORT).show()
                 } else {
@@ -480,13 +480,3 @@ private fun MainActivity.promptOnboardingCategories(
         )
     }
 }
-
-/** The device's own region, when its locale names one the catalog knows. */
-private fun MainActivity.localityForOnboarding() =
-    java.util.Locale.getDefault().country.orEmpty()
-        .uppercase(java.util.Locale.ROOT)
-        .takeIf { it.isNotEmpty() }
-        ?.let { country ->
-            LocalityCatalog.byCode(country)
-                ?: LocalityCatalog.aliases[country]?.let { LocalityCatalog.byCode(it) }
-        }
