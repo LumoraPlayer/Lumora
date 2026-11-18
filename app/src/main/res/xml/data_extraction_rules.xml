@@ -18,6 +18,8 @@
         <exclude domain="sharedpref" path="iptv_prefs.xml" />
         <exclude domain="file" path="channels_cache.txt" />
         <exclude domain="file" path="channels_cache_v2.txt" />
+        <!-- Account-scoped pending tracker writes - see backup_rules.xml. -->
+        <exclude domain="file" path="tracker_outbox.json" />
         <exclude domain="database" path="lumora_catalog.db" />
         <exclude domain="database" path="lumora_catalog.db-wal" />
         <exclude domain="database" path="lumora_catalog.db-shm" />
@@ -34,6 +36,8 @@
         <exclude domain="sharedpref" path="iptv_prefs.xml" />
         <exclude domain="file" path="channels_cache.txt" />
         <exclude domain="file" path="channels_cache_v2.txt" />
+        <!-- Account-scoped pending tracker writes - see backup_rules.xml. -->
+        <exclude domain="file" path="tracker_outbox.json" />
         <exclude domain="database" path="lumora_catalog.db" />
         <exclude domain="database" path="lumora_catalog.db-wal" />
         <exclude domain="database" path="lumora_catalog.db-shm" />

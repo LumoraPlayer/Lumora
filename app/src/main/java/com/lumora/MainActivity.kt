@@ -210,6 +210,13 @@ internal const val PREF_PIN_FAILURES = "pin_failures"
 internal const val PREF_PIN_LOCKOUT_UNTIL = "pin_lockout_until"
 /** Package of the video app external playback always uses; absent = ask each time. */
 internal const val PREF_EXTERNAL_PLAYER_PACKAGE = "external_player_package"
+/** Explicit "ask every time" choice for [PREF_EXTERNAL_PLAYER_PACKAGE].
+ *
+ *  Absence used to mean the same thing, but an absent pref cannot travel in a backup: a
+ *  restore onto a device that had a default player set kept that player instead of restoring
+ *  the user's "ask" choice. The sentinel makes the choice explicit and is filtered out by every
+ *  reader, so it is never treated as a package name. */
+internal const val EXTERNAL_PLAYER_ASK = "__ask_every_time__"
 /** Whether the app may offer to hand a stream over when it cannot play it properly. */
 internal const val PREF_SUGGEST_EXTERNAL_PLAYER = "suggest_external_player"
 /** Live guide preview pane while browsing (issue #9). Default ON = existing behavior:
@@ -232,6 +239,9 @@ internal const val PREF_ASPECT_MODE = "player_aspect_mode"
 internal const val PREF_CLASSIC_CATEGORY_LAYOUT = "classic_category_layout"
 internal const val PREF_SIMPLE_MODE = "simple_mode"
 internal const val PREF_DISABLE_VOD = "disable_vod"
+/** Open the app when the device finishes booting. Off by default: an app that takes the
+ *  screen uninvited at power-on is hostile on a shared TV. The boot receiver checks this. */
+internal const val PREF_LAUNCH_ON_STARTUP = "launch_on_startup"
 // Catalogue presentation toggles (all default ON = enabled behavior): dynamic sidebar
 // categories on Live (genres/brand clusters) vs Films/Series (genres/service clusters),
 // and quality/duplicate merging across all three tabs.
@@ -1193,6 +1203,15 @@ class MainActivity : AppCompatActivity() {
     internal var simklResolveJob: Job? = null
     internal var simklSignInJob: Job? = null
 
+    // ── Tracker outbox ──────────────────────────
+    /** The running flush, if any. Written from the connectivity callback as well as the main
+     *  thread, hence volatile; [trackerFlushMutex] is what actually serialises the send pass. */
+    @Volatile
+    internal var trackerFlushJob: Job? = null
+    internal val trackerFlushMutex = kotlinx.coroutines.sync.Mutex()
+    /** Registered once in onCreate and released in onDestroy - see MainActivityTrackerOutbox.kt. */
+    internal var trackerNetworkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+
     // ── Skip segments (IntroDB) ─────────────────
     /** The timestamps the last lookup produced for the play in progress (see
      *  MainActivitySkip.kt). Empty until the lookup lands, and until then the skip button
@@ -1799,16 +1818,24 @@ class MainActivity : AppCompatActivity() {
         // unless the account is connected with watched sync on, so this is a prefs read in
         // every other case. Writes only to WatchedStore, which is keyed by title rather than
         // by catalogue id - it does not need the catalogue to have loaded.
-        pullTraktWatched()
-        // Simkl's pull runs beside Trakt's; both no-op unless signed in with watched sync on.
-        pullSimklWatched()
-        // Trakt's resume list - what another device left half-watched. This is what fills
-        // Continue Watching on a second TV; the watched pull above only knows what was
-        // *finished*, which is Up Next's business rather than this row's.
-        pullTraktPlayback()
-        // Trakt's dropped-show list - an Up Next removal made on another device. Without it
-        // that device kept offering the show and a new play there undid the drop.
-        pullTraktDroppedShows()
+        //
+        // Cached writes are replayed *before* any pull reads the account. An un-tick made
+        // offline is still only in the outbox; a pull that ran first would read the remote mark
+        // and restore it here, and the next push would put it straight back.
+        registerTrackerNetworkCallback()
+        scope.launch {
+            flushTrackerOutboxNow()
+            pullTraktWatched()
+            // Simkl's pull runs beside Trakt's; both no-op unless signed in with watched sync on.
+            pullSimklWatched()
+            // Trakt's resume list - what another device left half-watched. This is what fills
+            // Continue Watching on a second TV; the watched pull above only knows what was
+            // *finished*, which is Up Next's business rather than this row's.
+            pullTraktPlayback()
+            // Trakt's dropped-show list - an Up Next removal made on another device. Without it
+            // that device kept offering the show and a new play there undid the drop.
+            pullTraktDroppedShows()
+        }
 
         // Downloads are a mobile-only affordance - a TV box has nowhere meaningful to
         // browse a downloaded file, and it's not what "download for offline" means there.
@@ -2295,6 +2322,10 @@ class MainActivity : AppCompatActivity() {
             mainHandler.removeCallbacks(upNextTickRunnable)
             mainHandler.postDelayed(upNextTickRunnable, 1000)
         }
+        // The network can come back while the app is backgrounded without the connectivity
+        // callback having been resumed yet; a resume is a cheap second chance to drain the
+        // tracker outbox.
+        flushTrackerOutbox()
     }
 
     /**
@@ -2467,6 +2498,7 @@ class MainActivity : AppCompatActivity() {
         }
         carDisclaimerDialog = null
         carDisclaimerKeyCode = android.view.KeyEvent.KEYCODE_UNKNOWN
+        unregisterTrackerNetworkCallback()
         super.onDestroy()
         // Keyed by View, nothing ever removed entries - drop it so this Activity's
         // view hierarchies aren't pinned forever (see clearContentBasePaddingCache).

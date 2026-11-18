@@ -33,6 +33,10 @@
          on first load anyway, and pins the restore to whatever the providers looked like then. -->
     <exclude domain="file" path="channels_cache.txt" />
     <exclude domain="file" path="channels_cache_v2.txt" />
+    <!-- Pending Trakt/Simkl writes belong to the account session in iptv_prefs.xml, which is
+         excluded above; restoring a months-old un-tick onto another device is not something the
+         user asked for. -->
+    <exclude domain="file" path="tracker_outbox.json" />
     <!-- The catalogue database. It is rebuildable, can be hundreds of MB (Auto Backup's
          per-app quota is 25 MB, so including it can silently stop every other file from
          being backed up), and its stream URLs/headers carry the same panel credentials that

@@ -11,6 +11,7 @@ import com.lumora.cache.RecentlyPlayedStore
 import com.lumora.cache.WatchlistStore
 import com.lumora.cache.WatchedStore
 import com.lumora.data.IptvProviderStore
+import com.lumora.data.TrackerOutbox
 import com.lumora.data.TraktStore
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
@@ -1859,6 +1860,10 @@ internal fun MainActivity.restoreRemovedUpNext() {
     }
     prefs.edit().remove(PREF_UP_NEXT_HIDDEN).apply()
     TraktStore.clearRemoteUpNextDrops(prefs)
+    // A drop still waiting in the outbox has not reached Trakt yet. Restoring the row means it
+    // must not land afterwards, even when its id was never resolved and so is not in the local
+    // dropped set below.
+    TrackerOutbox.cancelKind(this, TrackerOutbox.Tracker.TRAKT, TrackerOutbox.Kind.DROP)
     // Read before undropOnTrakt clears the set: these ids are the only handle Trakt's drop list
     // has, and undropping is what keeps the row from staying empty on every other Trakt client.
     // Drops mirrored from another device are included - restoring the row here means restoring

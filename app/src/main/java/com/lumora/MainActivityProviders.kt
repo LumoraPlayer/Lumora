@@ -2499,6 +2499,20 @@ private fun MainActivity.hasValidatedNetwork(): Boolean {
         capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
 }
 
+/**
+ * The looser check for best-effort background retries.
+ *
+ * `NET_CAPABILITY_VALIDATED` depends on the system's captive-portal probe succeeding, and some
+ * TV boxes and VPN setups never report it even though every request works. The tracker outbox
+ * must not be disabled on those devices, so it only asks whether Android has a network that
+ * claims internet; the request itself is what decides whether the tracker is reachable.
+ */
+internal fun MainActivity.hasInternetConnection(): Boolean {
+    val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+    val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+}
+
 // ── Reddit-scanner providers: checks after a launch ──
 
 /**

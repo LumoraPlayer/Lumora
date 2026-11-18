@@ -7,6 +7,7 @@ import android.widget.TextView
 import android.widget.Toast
 import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.WatchedStore
+import com.lumora.data.TrackerOutbox
 import com.lumora.data.TraktStore
 import com.lumora.data.remote.trakt.TraktClient
 import com.lumora.model.Channel
@@ -34,7 +35,9 @@ import kotlinx.coroutines.withContext
 //                    what was watched elsewhere reads as watched here.
 //
 // Everything is best effort and silent on failure. A tracker that interrupts playback to
-// complain about its own network is worse than one that quietly misses a report.
+// complain about its own network is worse than one that quietly misses a report - but a report
+// that cannot be delivered is no longer lost: it goes into TrackerOutbox and is replayed when
+// the connection returns (see MainActivityTrackerOutbox.kt).
 
 // ── Session ─────────────────────────────────────
 
@@ -63,6 +66,9 @@ internal suspend fun MainActivity.traktAccessToken(): String? {
     }
     if (traktClient.lastRefreshWasRejected) {
         TraktStore.clear(prefs)
+        // The grant is gone for good. Cached writes belong to the account that just lost its
+        // session, so they must not be replayed if a different account signs in next.
+        TrackerOutbox.clear(this, TrackerOutbox.Tracker.TRAKT)
         return null
     }
     // Network failure - the stored token may still have days on it, so let the call try.
@@ -202,9 +208,28 @@ private fun MainActivity.traktSend(
     target: TraktClient.ScrobbleTarget,
     progress: Double
 ) {
+    if (!isTraktSignedIn()) return
     scope.launch(Dispatchers.IO) {
-        val token = traktAccessToken() ?: return@launch
-        runCatching { traktClient.scrobble(token, action, target, progress) }
+        // Offline, skip the token refresh (which would sit on a connect timeout) and go
+        // straight to the queue for the one report that has lasting value.
+        val token = if (hasInternetConnection()) traktAccessToken() else null
+        val delivered = token != null && runCatching {
+            traktClient.scrobble(token, action, target, progress)
+        }.getOrDefault(false)
+        // A start/pause is only true for the moment it was sent; replaying one later would
+        // tell Trakt something false about what is happening now. A stop is the report that
+        // turns into a watched mark or a resume point, so it is the one worth keeping.
+        if (!delivered && action == TraktClient.ScrobbleAction.STOP && isTraktSignedIn()) {
+            TrackerOutbox.enqueue(
+                this@traktSend,
+                TrackerOutbox.Action(
+                    tracker = TrackerOutbox.Tracker.TRAKT,
+                    kind = TrackerOutbox.Kind.SCROBBLE_STOP,
+                    target = target.asOutboxTarget(),
+                    progress = progress
+                )
+            )
+        }
     }
 }
 
@@ -244,11 +269,21 @@ internal fun MainActivity.traktRemovePlayback(
     val subjects = items.filter { it.mediaType != MediaType.LIVE }
     if (subjects.isEmpty()) return
     scope.launch {
-        val token = traktAccessToken() ?: return@launch
+        // Offline, skip the token refresh and queue the removal immediately.
+        val token = if (hasInternetConnection()) traktAccessToken() else null
         // Read the list first: no resolution work is worth doing for an account with nothing
         // paused, which is the common case right after a clear-all. Null is a failed read, not
-        // an empty list - deleting nothing would leave the entries on Trakt.
-        val entries = traktClient.playbackOrNull(token) ?: return@launch
+        // an empty list - deleting nothing would leave the entries on Trakt. The removal itself
+        // is still a user instruction, so a failed read queues it for the next connection.
+        val access = token ?: run {
+            withContext(Dispatchers.IO) { queuePlaybackRemovals(subjects, matchByTitle) }
+            return@launch
+        }
+        val entries = runCatching { traktClient.playbackOrNull(access) }.getOrNull()
+        if (entries == null) {
+            withContext(Dispatchers.IO) { queuePlaybackRemovals(subjects, matchByTitle) }
+            return@launch
+        }
         // (title key, year to compare or null). A show's episodes are matched by name alone:
         // an episode tile's year is not the year Trakt stamps on the show, and requiring it
         // would quietly miss every entry for a series. Several keys are tried per item: the
@@ -290,8 +325,33 @@ internal fun MainActivity.traktRemovePlayback(
                         key == normalizeTitleForGrouping(entry.title) &&
                             (year == null || entry.year == null || year == entry.year.toString())
                     })
-            if (matched) traktClient.removePlayback(token, entry.id)
+            if (matched) traktClient.removePlayback(access, entry.id)
         }
+    }
+}
+
+/**
+ * Queues Continue Watching removals the account could not be told about.
+ *
+ * The strict form is a per-episode un-tick: the target keeps its season/number, so the flush
+ * pass can only delete that episode's resume point. The broad form is the row's own clear,
+ * where the show's name is the instruction (`matchByTitle` in [traktRemovePlayback]).
+ */
+private fun MainActivity.queuePlaybackRemovals(
+    items: List<Channel>,
+    matchByTitle: Boolean
+) {
+    if (!isTraktSignedIn()) return
+    for (item in items) {
+        val target = playbackRemovalTarget(item, broad = matchByTitle) ?: continue
+        TrackerOutbox.enqueue(
+            this,
+            TrackerOutbox.Action(
+                tracker = TrackerOutbox.Tracker.TRAKT,
+                kind = TrackerOutbox.Kind.PLAYBACK_REMOVE,
+                target = target
+            )
+        )
     }
 }
 
@@ -303,7 +363,7 @@ internal fun MainActivity.traktRemovePlayback(
  * snapshot stored behind it can read "S01E01 · Show". Whichever half carries the episode code
  * is dropped, so both shapes reduce to the show's name - the form Trakt lists an entry under.
  */
-private fun continueWatchingTitleKey(item: Channel): String? {
+internal fun MainActivity.continueWatchingTitleKey(item: Channel): String? {
     val cleaned = cleanVodTitle(item.name)
     val separatorAt = cleaned.indexOf('·')
     val title = when {
@@ -334,8 +394,8 @@ private val CW_EPISODE_CODE = Regex("""(?i)S\d{1,3}E\d{1,3}""")
  *
  * Gated on being signed in, not on the watched-sync toggle, for the same reason the playback
  * delete is: a removal is an explicit instruction, and entries can predate a toggle being
- * switched off. Best effort and silent, like the rest of the Trakt path - a show that cannot be
- * resolved to a TMDB id just stays a local removal.
+ * switched off. Best effort and silent, like the rest of the Trakt path - a show whose TMDB id
+ * could not be resolved offline is queued with its title and sent when the connection returns.
  *
  * The show's TMDB id is recorded so [undropOnTrakt] can put it back: the local hidden set is
  * keyed by provider-scoped series ids, which Trakt has never heard of.
@@ -344,13 +404,48 @@ internal fun MainActivity.dropOnTrakt(item: Channel) {
     if (!isTraktSignedIn()) return
     if (item.mediaType != MediaType.SERIES) return
     scope.launch {
-        val target = traktTargetFor(item) ?: return@launch
-        val token = traktAccessToken() ?: return@launch
-        val tmdbId = target.tmdbId
-        withContext(Dispatchers.IO) {
-            val dropped = runCatching { traktClient.setDropped(token, tmdbId, dropped = true) }
-                .getOrDefault(false)
-            if (dropped) rememberUpNextDroppedOnTrakt(tmdbId)
+        var cachedTarget: TrackerOutbox.Target? = null
+        var delivered = false
+        try {
+            // Offline the TMDB lookup can only time out; queue the local identity instead.
+            val target = if (hasInternetConnection()) traktTargetFor(item) else null
+            cachedTarget = target?.asOutboxTarget() ?: trackerTargetFor(item)
+            if (target != null) {
+                val token = traktAccessToken()
+                if (token != null) {
+                    delivered = withContext(Dispatchers.IO) {
+                        runCatching { traktClient.setDropped(token, target.tmdbId, dropped = true) }
+                            .getOrDefault(false)
+                    }
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("LumoraTrakt", "Trakt drop failed: ${e.message}")
+        }
+        val resolvedId = cachedTarget?.tmdbId
+        if (delivered && resolvedId != null) {
+            rememberUpNextDroppedOnTrakt(resolvedId)
+        } else {
+            val queueTarget = cachedTarget
+            if (queueTarget != null && isTraktSignedIn()) {
+                val stored = withContext(Dispatchers.IO) {
+                    TrackerOutbox.enqueue(
+                        this@dropOnTrakt,
+                        TrackerOutbox.Action(
+                            tracker = TrackerOutbox.Tracker.TRAKT,
+                            kind = TrackerOutbox.Kind.DROP,
+                            target = queueTarget
+                        )
+                    )
+                }
+                // Remember the intended drop even though it has not landed: the local dropped
+                // set is what "Restore removed Up Next" hands back to undropOnTrakt. With the
+                // id recorded there, a restore now queues the matching UNDROP and the queue's
+                // latest-wins rule turns the pending drop into a no-op.
+                if (stored != null) queueTarget.tmdbId?.let(::rememberUpNextDroppedOnTrakt)
+            }
         }
     }
 }
@@ -369,10 +464,28 @@ internal fun MainActivity.undropOnTrakt(ids: Set<Int>) {
     clearUpNextDroppedOnTrakt()
     if (!isTraktSignedIn()) return
     scope.launch {
-        val token = traktAccessToken() ?: return@launch
+        val token = if (hasInternetConnection()) traktAccessToken() else null
+        val failed = mutableListOf<Int>()
         withContext(Dispatchers.IO) {
             for (id in ids) {
-                runCatching { traktClient.setDropped(token, id, dropped = false) }
+                val undropped = token != null && runCatching {
+                    traktClient.setDropped(token, id, dropped = false)
+                }.getOrDefault(false)
+                if (!undropped) failed.add(id)
+            }
+        }
+        if (failed.isNotEmpty() && isTraktSignedIn()) {
+            withContext(Dispatchers.IO) {
+                for (id in failed) {
+                    TrackerOutbox.enqueue(
+                        this@undropOnTrakt,
+                        TrackerOutbox.Action(
+                            tracker = TrackerOutbox.Tracker.TRAKT,
+                            kind = TrackerOutbox.Kind.UNDROP,
+                            target = TrackerOutbox.Target(tmdbId = id, isSeries = true)
+                        )
+                    )
+                }
             }
         }
     }
@@ -474,13 +587,25 @@ internal fun MainActivity.pushWatchedToTrakt(item: Channel, watched: Boolean) {
     if (watched && !TraktStore.isWatchedSyncEnabled(prefs)) return
     if (item.mediaType == MediaType.LIVE) return
     scope.launch {
+        var cachedTarget: TrackerOutbox.Target? = null
+        var delivered = false
         try {
-            val target = traktTargetFor(item) ?: return@launch
-            val token = traktAccessToken() ?: return@launch
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    if (watched) traktClient.addToHistory(token, target)
-                    else traktClient.removeFromHistory(token, target)
+            // Offline, the TMDB lookup can only time out: go straight to the local identity so
+            // the queue is written immediately rather than after a connect/read timeout.
+            val target = if (hasInternetConnection()) traktTargetFor(item) else null
+            // Trakt is keyed by TMDB id, which is a network lookup. When that lookup could not
+            // run (offline) the local title/year and episode numbers still identify the item,
+            // so they are what the queue carries until the flush pass can resolve the id.
+            cachedTarget = target?.asOutboxTarget() ?: trackerTargetFor(item)
+            if (target != null) {
+                val token = traktAccessToken()
+                if (token != null) {
+                    delivered = withContext(Dispatchers.IO) {
+                        runCatching {
+                            if (watched) traktClient.addToHistory(token, target)
+                            else traktClient.removeFromHistory(token, target)
+                        }.getOrDefault(false)
+                    }
                 }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -488,6 +613,20 @@ internal fun MainActivity.pushWatchedToTrakt(item: Channel, watched: Boolean) {
         } catch (e: Exception) {
             // Mirroring a local tick must never be able to crash the detail screen.
             android.util.Log.w("LumoraWatched", "Trakt watched push failed: ${e.message}")
+        }
+        val queueTarget = cachedTarget
+        if (!delivered && queueTarget != null && isTraktSignedIn()) {
+            withContext(Dispatchers.IO) {
+                TrackerOutbox.enqueue(
+                    this@pushWatchedToTrakt,
+                    TrackerOutbox.Action(
+                        tracker = TrackerOutbox.Tracker.TRAKT,
+                        kind = if (watched) TrackerOutbox.Kind.WATCHED_ADD
+                        else TrackerOutbox.Kind.WATCHED_REMOVE,
+                        target = queueTarget
+                    )
+                )
+            }
         }
     }
 }
@@ -850,21 +989,27 @@ internal fun MainActivity.pushExistingWatchedToTrakt(onDone: ((pushed: Int, unre
  */
 internal fun MainActivity.traktSyncBothWays(onStatus: ((String) -> Unit)? = null) {
     if (!isTraktSignedIn() || !TraktStore.isWatchedSyncEnabled(prefs)) return
-    // The dropped list can change independently of the two history pulls, and it is what keeps
-    // another device's Up Next removal from being undone here. Fire it before the chain; it
-    // refreshes the row itself when it lands.
-    pullTraktDroppedShows(force = true)
-    pullTraktPlayback(force = true) { resumed ->
-        pullTraktWatched(force = true) { pulled ->
-            onStatus?.invoke(getString(R.string.trakt_pushing))
-            pushExistingWatchedToTrakt { pushed, unresolved ->
-                onStatus?.invoke(
-                    when {
-                        unresolved > 0 -> getString(R.string.trakt_synced_both_partial, pulled, pushed, unresolved)
-                        resumed > 0 -> getString(R.string.trakt_synced_resume, pulled, pushed, resumed)
-                        else -> getString(R.string.trakt_synced_both, pulled, pushed)
-                    }
-                )
+    scope.launch {
+        // Replay cached writes before the pull/push pair decides what is missing: a queued
+        // un-tick has to land on Trakt before the pull reads the account, or the pull would
+        // put the mark straight back.
+        flushTrackerOutboxNow()
+        // The dropped list can change independently of the two history pulls, and it is what
+        // keeps another device's Up Next removal from being undone here. Fire it before the
+        // chain; it refreshes the row itself when it lands.
+        pullTraktDroppedShows(force = true)
+        pullTraktPlayback(force = true) { resumed ->
+            pullTraktWatched(force = true) { pulled ->
+                onStatus?.invoke(getString(R.string.trakt_pushing))
+                pushExistingWatchedToTrakt { pushed, unresolved ->
+                    onStatus?.invoke(
+                        when {
+                            unresolved > 0 -> getString(R.string.trakt_synced_both_partial, pulled, pushed, unresolved)
+                            resumed > 0 -> getString(R.string.trakt_synced_resume, pulled, pushed, resumed)
+                            else -> getString(R.string.trakt_synced_both, pulled, pushed)
+                        }
+                    )
+                }
             }
         }
     }
@@ -998,6 +1143,9 @@ internal suspend fun MainActivity.performTraktSignIn(
     // A fresh connection is exactly when the two histories are worth reconciling - and that
     // means both directions: an install with years of local watched marks has to send them, or
     // Trakt stays empty however long the app runs (the per-mark push only fires on new marks).
+    // The outbox is drained first so anything cached from an earlier session lands before the
+    // pull decides what Trakt is missing.
+    flushTrackerOutboxNow()
     traktSyncBothWays { text -> onStatus(text) }
     return true
 }
@@ -1005,6 +1153,9 @@ internal suspend fun MainActivity.performTraktSignIn(
 internal fun MainActivity.traktSignOut() {
     val token = TraktStore.tokens(prefs)?.accessToken
     TraktStore.clear(prefs)
+    // Cached writes belong to the account that just signed out. Replaying them under a later
+    // account would write the wrong profile's history.
+    TrackerOutbox.clear(this, TrackerOutbox.Tracker.TRAKT)
     traktScrobbleTarget = null
     traktScrobbleForKey = null
     traktLastReportedPaused = null

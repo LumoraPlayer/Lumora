@@ -8,6 +8,7 @@ import android.widget.Toast
 import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.WatchedStore
 import com.lumora.data.SimklStore
+import com.lumora.data.TrackerOutbox
 import com.lumora.data.remote.simkl.SimklClient
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
@@ -31,7 +32,9 @@ import kotlinx.coroutines.withContext
 // always sent as show ids + season + number - because that is a property of the catalogue
 // (a name, a year, an episode number), not of the tracker.
 //
-// Everything is best effort and silent on failure, same as Trakt.
+// Everything is best effort and silent on failure, same as Trakt - and, as with Trakt, a
+// write that cannot be delivered is cached in TrackerOutbox and replayed on the next
+// connection (see MainActivityTrackerOutbox.kt).
 
 // ── Session ─────────────────────────────────────
 
@@ -57,6 +60,7 @@ internal suspend fun MainActivity.simklAccessToken(): String? {
     }
     if (simklClient.lastRefreshWasRejected) {
         SimklStore.clear(prefs)
+        TrackerOutbox.clear(this, TrackerOutbox.Tracker.SIMKL)
         return null
     }
     // Network failure - the stored token may still have a day or more on it, so let the call try.
@@ -182,9 +186,26 @@ private fun MainActivity.simklProgressPercent(): Double {
 }
 
 private fun MainActivity.simklSend(action: String, target: SimklClient.ScrobbleTarget, progress: Double) {
+    if (!isSimklSignedIn()) return
     scope.launch(Dispatchers.IO) {
-        val token = simklAccessToken() ?: return@launch
-        runCatching { simklClient.scrobble(token, action, target, progress) }
+        // Offline, skip the token refresh and go straight to the queue for a stop report.
+        val token = if (hasInternetConnection()) simklAccessToken() else null
+        val delivered = token != null && runCatching {
+            simklClient.scrobble(token, action, target, progress)
+        }.getOrDefault(false)
+        // Only the stop report has a lasting meaning - it becomes a watched mark or a resume
+        // point. A late start/pause would describe a play that is no longer happening.
+        if (!delivered && action == "stop" && isSimklSignedIn()) {
+            TrackerOutbox.enqueue(
+                this@simklSend,
+                TrackerOutbox.Action(
+                    tracker = TrackerOutbox.Tracker.SIMKL,
+                    kind = TrackerOutbox.Kind.SCROBBLE_STOP,
+                    target = target.asOutboxTarget(),
+                    progress = progress
+                )
+            )
+        }
     }
 }
 
@@ -199,22 +220,35 @@ internal fun MainActivity.pushWatchedToSimkl(item: Channel, watched: Boolean) {
     if (watched && !SimklStore.isWatchedSyncEnabled(prefs)) return
     if (item.mediaType == MediaType.LIVE) return
     scope.launch {
+        var cachedTarget: TrackerOutbox.Target? = null
+        var delivered = false
         try {
-            val target = simklTargetFor(item) ?: return@launch
-            val token = simklAccessToken() ?: return@launch
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    if (target.isSeries) {
-                        val season = target.season ?: 1
-                        val episode = target.episode ?: 1
-                        simklClient.addToHistory(
-                            token,
-                            movies = emptySet(),
-                            shows = mapOf(target.tmdbId to mapOf(season to setOf(episode))),
-                            remove = !watched
-                        )
-                    } else {
-                        simklClient.addToHistory(token, movies = setOf(target.tmdbId), shows = emptyMap(), remove = !watched)
+            // Offline the TMDB lookup can only time out; queue the local identity instead.
+            val target = if (hasInternetConnection()) simklTargetFor(item) else null
+            cachedTarget = target?.asOutboxTarget() ?: trackerTargetFor(item)
+            if (target != null) {
+                val token = simklAccessToken()
+                if (token != null) {
+                    delivered = withContext(Dispatchers.IO) {
+                        runCatching {
+                            if (target.isSeries) {
+                                val season = target.season ?: 1
+                                val episode = target.episode ?: 1
+                                simklClient.addToHistory(
+                                    token,
+                                    movies = emptySet(),
+                                    shows = mapOf(target.tmdbId to mapOf(season to setOf(episode))),
+                                    remove = !watched
+                                )
+                            } else {
+                                simklClient.addToHistory(
+                                    token,
+                                    movies = setOf(target.tmdbId),
+                                    shows = emptyMap(),
+                                    remove = !watched
+                                )
+                            }
+                        }.getOrDefault(false)
                     }
                 }
             }
@@ -222,6 +256,20 @@ internal fun MainActivity.pushWatchedToSimkl(item: Channel, watched: Boolean) {
             throw e
         } catch (e: Exception) {
             android.util.Log.w("LumoraWatched", "Simkl watched push failed: ${e.message}")
+        }
+        val queueTarget = cachedTarget
+        if (!delivered && queueTarget != null && isSimklSignedIn()) {
+            withContext(Dispatchers.IO) {
+                TrackerOutbox.enqueue(
+                    this@pushWatchedToSimkl,
+                    TrackerOutbox.Action(
+                        tracker = TrackerOutbox.Tracker.SIMKL,
+                        kind = if (watched) TrackerOutbox.Kind.WATCHED_ADD
+                        else TrackerOutbox.Kind.WATCHED_REMOVE,
+                        target = queueTarget
+                    )
+                )
+            }
         }
     }
 }
@@ -388,16 +436,21 @@ internal fun MainActivity.pushExistingWatchedToSimkl(onDone: ((pushed: Int, unre
     }
 }
 
-/** Both directions, pull first so the push's subtraction sees what just arrived. */
+/** Both directions, pull first so the push's subtraction sees what just arrived. The outbox
+ *  is drained first for the same reason as Trakt's: a queued un-tick has to land before the
+ *  pull reads the account, or the pull would put the mark straight back. */
 internal fun MainActivity.simklSyncBothWays(onStatus: ((String) -> Unit)? = null) {
     if (!isSimklSignedIn() || !SimklStore.isWatchedSyncEnabled(prefs)) return
-    pullSimklWatched(force = true) { pulled ->
-        onStatus?.invoke(getString(R.string.simkl_pushing))
-        pushExistingWatchedToSimkl { pushed, unresolved ->
-            onStatus?.invoke(
-                if (unresolved > 0) getString(R.string.simkl_synced_both_partial, pulled, pushed, unresolved)
-                else getString(R.string.simkl_synced_both, pulled, pushed)
-            )
+    scope.launch {
+        flushTrackerOutboxNow()
+        pullSimklWatched(force = true) { pulled ->
+            onStatus?.invoke(getString(R.string.simkl_pushing))
+            pushExistingWatchedToSimkl { pushed, unresolved ->
+                onStatus?.invoke(
+                    if (unresolved > 0) getString(R.string.simkl_synced_both_partial, pulled, pushed, unresolved)
+                    else getString(R.string.simkl_synced_both, pulled, pushed)
+                )
+            }
         }
     }
 }
@@ -459,7 +512,9 @@ internal suspend fun MainActivity.performSimklSignIn(
         else getString(R.string.simkl_signed_in)
     )
     // A fresh connection is when the two histories are worth reconciling - both directions,
-    // or an install with years of local marks never sends them.
+    // or an install with years of local marks never sends them. Cached writes go first so
+    // they are not read back as "missing" by the pull that follows.
+    flushTrackerOutboxNow()
     simklSyncBothWays { text -> onStatus(text) }
     return true
 }
@@ -470,6 +525,7 @@ internal fun MainActivity.simklSignOut() {
     // Best effort - the local clear is the whole of sign-out if the call never lands.
     val token = SimklStore.tokens(prefs)?.accessToken
     SimklStore.clear(prefs)
+    TrackerOutbox.clear(this, TrackerOutbox.Tracker.SIMKL)
     simklScrobbleTarget = null
     simklScrobbleForKey = null
     simklLastReportedPaused = null
