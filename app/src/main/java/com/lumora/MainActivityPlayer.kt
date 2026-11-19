@@ -3030,7 +3030,12 @@ internal fun MainActivity.hidePlayer(restorePreview: Boolean = true) {
     var returningToLiveRow = false
     if (restorePreview && activeTab == 0 && !showingSports && !showingCatchup) {
         showLivePreviewPane()
-        val previewTarget = lastFocusedLiveChannel ?: wasPlaying
+        // Never restore an adult channel into the preview: that pane renders unprompted as
+        // soon as the player closes. Exiting one falls back to the most recent all-ages
+        // channel instead (recentLiveChannels already excludes adult entries).
+        val previewTarget = previewCandidate(lastFocusedLiveChannel)
+            ?: previewCandidate(wasPlaying)
+            ?: lastPlayedLiveChannel()
         previewTarget?.let { requestPreviewLoad(it) }
         if (previewTarget != null) {
             returningToLiveRow = true

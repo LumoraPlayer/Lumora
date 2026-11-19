@@ -243,6 +243,7 @@ internal fun MainActivity.profileAllowsCategoryRow(
     if (row.id == NEWEST_CATEGORY_ID ||
         row.id == CONTINUE_WATCHING_CATEGORY_ID ||
         row.id == UP_NEXT_CATEGORY_ID ||
+        row.id == RECENT_CATEGORY_ID ||
         row.id == FAVOURITES_CATEGORY_ID ||
         row.id == JELLYFIN_CATEGORY_ID ||
         row.id == EMBY_CATEGORY_ID ||

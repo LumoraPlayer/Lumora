@@ -48,6 +48,51 @@ internal fun MainActivity.fullListForTab(tab: Int): List<Channel> = when (tab) {
     else -> emptyList()
 }
 
+/**
+ * The channels behind the Live TV "Recent" row, in play order (most recent first).
+ *
+ * Read from [com.lumora.cache.RecentlyPlayedStore] rather than baked into the row, for the
+ * same reason Favourites is: a channel played while the rail was already built must appear
+ * the moment the row is opened. Resolved against [source] so a channel that left the
+ * catalogue is skipped instead of opening a dead pane.
+ *
+ * Adult channels are dropped unconditionally - not gated on the "Hide adult categories"
+ * setting. That setting unlocks *browsing*; this row is a shortcut that lists whatever was
+ * last on, and a household screen must not surface it by accident.
+ */
+internal fun MainActivity.recentLiveChannels(
+    source: List<Channel> = liveChannels
+): List<Channel> = resolveRecentChannels(
+    com.lumora.cache.RecentlyPlayedStore.getRecentIds(this),
+    source
+)
+
+/**
+ * Pure half of [recentLiveChannels]: ids in play order resolved against [source], with
+ * adult channels and ids that are no longer in the catalogue dropped.
+ *
+ * Extracted so the ordering and the adult rule are unit-testable without a Context.
+ */
+internal fun resolveRecentChannels(ids: List<String>, source: List<Channel>): List<Channel> {
+    if (ids.isEmpty() || source.isEmpty()) return emptyList()
+    val wanted = ids.toHashSet()
+    val byId = HashMap<String, Channel>(wanted.size)
+    for (channel in source) if (channel.id in wanted) byId[channel.id] = channel
+    return ids.mapNotNull { byId[it] }.filterNot { channel ->
+        isAdultCategory(channel.categoryName, channel.group) || isAdultCategory(channel.name)
+    }
+}
+
+/**
+ * What the inline preview should tune to when nothing in the guide has been focused yet -
+ * a cold start, or a launch that resumed straight into the player. Null when there is no
+ * recent channel left in the catalogue, which leaves the pane in its idle state.
+ *
+ * The most recent first, so "last played" is literal; adult channels are already excluded
+ * by [recentLiveChannels].
+ */
+internal fun MainActivity.lastPlayedLiveChannel(): Channel? = recentLiveChannels().firstOrNull()
+
 internal fun MainActivity.pinnedCategoriesPrefsKey(tab: Int = activeTab): String = when (tab) {
     0 -> "pinned_categories_live"
     1 -> "pinned_categories_series"
@@ -793,6 +838,27 @@ internal suspend fun MainActivity.buildCategoriesForActiveTab(tab: Int = activeT
     // "Newest"/"Continue Watching" shelf title onto a real row id, and a folded row would
     // collide with the synthetic one below - skip ours when the id is already pinned.
     val rows = result.rows.toMutableList()
+    // Live TV leads with what was last on: Recently Played is the first thing anyone opens
+    // a guide for, and it sits above Favourites because playback is a stronger signal than
+    // a star. Added after the cached rows (like the Films/Series synthetic rows) so it is
+    // not part of buildCategoryRows' fingerprint - its ids change on every play, while the
+    // category pipeline behind it does not.
+    if (tab == 0 && RECENT_CATEGORY_ID !in hiddenIds && RECENT_CATEGORY_ID !in pinned) {
+        // Resolving the ids is one pass over the whole live list on a large panel - keep it
+        // off the caller's (main) thread, like the category pipeline above.
+        val recent = withContext(Dispatchers.Default) { recentLiveChannels(list) }
+        if (recent.isNotEmpty()) {
+            rows.add(
+                0,
+                CategoryFilter(
+                    id = RECENT_CATEGORY_ID,
+                    name = getString(R.string.category_recent),
+                    count = recent.size,
+                    isDynamic = true
+                )
+            )
+        }
+    }
     if (tab != 0 && NEWEST_CATEGORY_ID !in hiddenIds && NEWEST_CATEGORY_ID !in pinned) {
         rows.add(
             0,
@@ -1712,10 +1778,14 @@ internal suspend fun MainActivity.applyCategoryFilter(
         0 -> {
             val source = liveChannels
             val isFavourites = selectedRowId == FAVOURITES_CATEGORY_ID
+            val isRecent = selectedRowId == RECENT_CATEGORY_ID
             val favoriteIds = if (isFavourites) FavoritesStore.getFavoriteChannelIds(this) else emptySet()
             val brandIds = selectedBrandChannelIds
             val filtered = withContext(Dispatchers.Default) {
                 when {
+                    // Store-backed like Favourites: re-read on every open so the row follows
+                    // playback, and adult channels are always dropped (see recentLiveChannels).
+                    isRecent -> recentLiveChannels(source)
                     isFavourites -> source.filter { it.id in favoriteIds }
                     brandIds != null && matchIds != null ->
                         source.filter {
@@ -2447,6 +2517,11 @@ internal fun MainActivity.resolveSideMenuCategoryItems(tab: Int, category: Categ
     // The player's flyout then fell through to the "nothing resolved" path, which closed the
     // player and left the user unable to see what was in Favourites at all. Resolve it from
     // the favourites store, the same way the main screen does, so the column lists them.
+    // Recent is store-backed as well: read the play history when the row opens, so the
+    // column follows playback without waiting for a rail rebuild.
+    if (category.id == RECENT_CATEGORY_ID) {
+        return recentLiveChannels(source)
+    }
     if (category.id == FAVOURITES_CATEGORY_ID) {
         val favIds = if (tab == 0) FavoritesStore.getFavoriteChannelIds(this)
         else FavoritesStore.getFavoriteSeriesIds(this)

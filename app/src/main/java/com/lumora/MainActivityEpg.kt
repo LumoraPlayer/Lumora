@@ -17,6 +17,7 @@ import com.lumora.model.MediaType
 import com.lumora.parser.XtreamClient
 import com.lumora.player.PlayerManager
 import com.lumora.reminder.ReminderScheduler
+import com.lumora.util.isAdultCategory
 import com.lumora.data.local.entity.EpgGuideStateEntity
 import com.lumora.data.local.entity.EpgProgramEntity
 import com.lumora.data.local.entity.EPG_NO_PROVIDER_SCOPE
@@ -918,6 +919,17 @@ internal fun MainActivity.playPreviewedChannel() {
     } else {
         playItem(channel)
     }
+}
+
+/**
+ * Whether a channel may be started in the inline preview by the *automatic* paths - opening
+ * Live TV, resuming the app, or closing the player. Adult channels may not: those paths run
+ * without the viewer asking for that channel, and the pane starts playing on its own.
+ * Explicit picks (OK on a guide row, opening a category) are the viewer's own choice and
+ * still preview whatever was chosen.
+ */
+internal fun MainActivity.previewCandidate(channel: Channel?): Channel? = channel?.takeIf {
+    !isAdultCategory(it.categoryName, it.group) && !isAdultCategory(it.name)
 }
 
 /** Debounced so fast D-pad scrolling through the list doesn't spawn a load per row. */

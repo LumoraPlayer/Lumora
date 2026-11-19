@@ -397,7 +397,9 @@ internal fun MainActivity.selectTab(index: Int) {
         // reload. Explicitly reload whatever channel was last focused.
         showLivePreviewPane()
         buildGuideHeader()
-        lastFocusedLiveChannel?.let { requestPreviewLoad(it) }
+        // Nothing focused yet (cold start): tune to the last channel played, so the pane
+        // shows something useful instead of staying blank until the first D-pad press.
+        (previewCandidate(lastFocusedLiveChannel) ?: lastPlayedLiveChannel())?.let { requestPreviewLoad(it) }
     } else {
         releaseLivePreview()
     }

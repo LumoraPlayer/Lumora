@@ -30,7 +30,7 @@ const val DYNAMIC_BUCKET_ID_PREFIX = "dynbucket:"
  *  NEWEST_CATEGORY_ID / CONTINUE_WATCHING_CATEGORY_ID / UP_NEXT_CATEGORY_ID /
  *  JELLYFIN_CATEGORY_ID / EMBY_CATEGORY_ID / SILO_CATEGORY_ID / PLEX_CATEGORY_ID /
  *  CLASSIC_LAYOUT_TOGGLE_ID / COLLAPSE_CATEGORIES_TOGGLE_ID - keep in sync if those change. */
-val NON_PINNABLE_CATEGORY_IDS = setOf("__newest__", "__jellyfin__", "__emby__", "__silo__", "__plex__", "__classic_layout_toggle__", "__collapse_categories__", "__continue_watching__", "__up_next__", "__favourites__")
+val NON_PINNABLE_CATEGORY_IDS = setOf("__newest__", "__jellyfin__", "__emby__", "__silo__", "__plex__", "__classic_layout_toggle__", "__collapse_categories__", "__continue_watching__", "__up_next__", "__favourites__", "__recent__")
 
 class CategoryAdapter(
     private val onCategoryClick: (CategoryFilter) -> Unit,

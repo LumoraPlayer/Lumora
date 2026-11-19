@@ -363,11 +363,13 @@ internal fun MainActivity.renderLivePartial() {
             // scroll-to-top - keep the user's position, just re-submit fresh data.
             val source = liveChannels
             val isFavourites = selectedRowId == FAVOURITES_CATEGORY_ID
+            val isRecent = selectedRowId == RECENT_CATEGORY_ID
             val favoriteIds = if (isFavourites) FavoritesStore.getFavoriteChannelIds(this@renderLivePartial) else emptySet()
             val brandIds = selectedBrandChannelIds
             val matchIds = selectedCategoryIds
             val filtered = withContext(Dispatchers.Default) {
                 when {
+                    isRecent -> recentLiveChannels(source)
                     isFavourites -> source.filter { it.id in favoriteIds }
                     brandIds != null && matchIds != null -> source.filter {
                         it.id in brandIds || (matchIds.isNotEmpty() && it.filterKey() in matchIds)

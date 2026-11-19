@@ -525,6 +525,7 @@
     <string name="category_show_all_categories">Show all categories (classic list)</string>
     <string name="category_next_up">Next Up</string>
     <string name="category_recently_played">Recently Played</string>
+    <string name="category_recent">Recent</string>
     <string name="category_favourite_channels">Favourite Channels</string>
     <string name="ui_not_driving_continue">I\'m not driving - continue</string>
     <string name="list_find_and_play">Find &amp; Play</string>

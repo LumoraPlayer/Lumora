@@ -323,6 +323,12 @@ internal const val PROVIDER_FETCH_TIMEOUT_MS = 360_000L
 // Generic User-Agent for stream HTTP requests.
 internal const val STREAM_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 internal const val FAVOURITES_CATEGORY_ID = "__favourites__"
+/** Live TV sidebar row above Favourites listing the channels played most recently (see
+ *  [com.lumora.cache.RecentlyPlayedStore]). Store-backed like Favourites - the ids are read
+ *  when the row is selected rather than baked into it, so it follows playback without a
+ *  rebuild. Adult channels are never included, whatever the "Hide adult" setting says: the
+ *  row sits on the first screen of a browsing tab, like the Home shelves, not behind it. */
+internal const val RECENT_CATEGORY_ID = "__recent__"
 /** Films/Series sidebar row pooling the tab's most recent releases by date - mirrors the
  *  "Newest" content shelf that already led the Films/Series poster. */
 internal const val NEWEST_CATEGORY_ID = "__newest__"
@@ -2308,7 +2314,12 @@ class MainActivity : AppCompatActivity() {
         // Never while the fullscreen player is up: a player that was buffering when the app
         // was backgrounded falls into this branch, and starting the inline preview then ran a
         // second player behind the fullscreen one - two surfaces and two audio sources.
-        else if (activeTab == 0 && !isPlayerVisible) showLivePreviewPane()
+        else if (activeTab == 0 && !isPlayerVisible) {
+            showLivePreviewPane()
+            // A first launch has nothing focused; fall back to the last played channel so the
+            // preview is not blank. requestPreviewLoad is a no-op when it is already showing.
+            (previewCandidate(lastFocusedLiveChannel) ?: lastPlayedLiveChannel())?.let { requestPreviewLoad(it) }
+        }
         // The Local files browser sent the user to the system's "All files access" toggle;
         // coming back with the grant opens the browser they asked for, and refreshes the row
         // behind it (its subtitle shows the access state).
