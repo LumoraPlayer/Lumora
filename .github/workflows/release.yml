@@ -158,13 +158,31 @@ jobs:
           PROJECT="LumoraPlayer%2FLumora"
           BASE="https://gitlab.com/api/v4/projects/$PROJECT"
           ASSET="$BASE/packages/generic/lumora/$GITHUB_REF_NAME/Lumora.apk"
+          RELEASE="$BASE/releases/$GITHUB_REF_NAME"
+          TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
+
+          # Every call reports the status and GitLab's own error body before failing. The
+          # old `curl -sf` swallowed both, so a rejected release POST read as a bare
+          # "exit code 22" with no way to tell which call failed or why.
+          gl() {
+            local method="$1" url="$2" status
+            shift 2
+            status=$(curl -sS -o "$TMP/response" -w '%{http_code}' --request "$method" "$@" "$url")
+            if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+              echo "GitLab $method $url failed: HTTP $status" >&2
+              cat "$TMP/response" >&2
+              return 1
+            fi
+            cat "$TMP/response"
+          }
 
           # The APK goes to the generic package registry: unlike plain project uploads,
           # package files download anonymously on a public project, which is exactly what
           # the app's updater needs. The endpoint takes a raw body (--upload-file) - a
           # --form body would be stored verbatim, multipart wrapper and all.
-          curl -sf --request PUT --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-            --upload-file app/build/outputs/apk/release/Lumora.apk "$ASSET" > /dev/null
+          gl PUT "$ASSET" --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            --upload-file app/build/outputs/apk/release/Lumora.apk > /dev/null
 
           # Verify what anonymous clients will actually download.
           LOCAL_HASH=$(sha256sum app/build/outputs/apk/release/Lumora.apk | cut -d' ' -f1)
@@ -174,31 +192,49 @@ jobs:
             exit 1
           fi
 
-          if [ "$(curl -s -o /dev/null -w '%{http_code}' --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$BASE/releases/$GITHUB_REF_NAME")" = "200" ]; then
-            curl -sf --request PUT --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+          # Create the release, or refresh it when an earlier run (or the other
+          # repository's copy of this workflow) already made one. A 404 on the lookup is
+          # the only case that creates: any other failure must stop the step, not fall
+          # through to a POST that hides the real error.
+          STATUS=$(curl -sS -o "$TMP/release" -w '%{http_code}' \
+            --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$RELEASE")
+          if [ "$STATUS" = "200" ]; then
+            gl PUT "$RELEASE" --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
               --data-urlencode "name=Lumora $GITHUB_REF_NAME" \
-              --data-urlencode "description=$(cat release-notes.md)" \
-              "$BASE/releases/$GITHUB_REF_NAME" > /dev/null
-          else
+              --data-urlencode "description@release-notes.md" > /dev/null
+          elif [ "$STATUS" = "404" ]; then
             # `ref` is what lets GitLab create the tag as part of the release. Without it
             # the POST is rejected when the tag was never pushed to the GitLab home - the
-            # APK upload above still succeeds, so the failure reads as a mystery 22.
-            curl -sf --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+            # APK upload above still succeeds, so the failure looks like a bad token.
+            # A 409 means another run created the release between the lookup and here.
+            STATUS=$(curl -sS -o "$TMP/release" -w '%{http_code}' --request POST \
+              --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
               --data-urlencode "name=Lumora $GITHUB_REF_NAME" \
               --data-urlencode "tag_name=$GITHUB_REF_NAME" \
               --data-urlencode "ref=$GITHUB_SHA" \
-              --data-urlencode "description=$(cat release-notes.md)" \
-              "$BASE/releases" > /dev/null
+              --data-urlencode "description@release-notes.md" "$BASE/releases")
+            case "$STATUS" in
+              2*|409) ;;
+              *)
+                echo "GitLab release create failed: HTTP $STATUS" >&2
+                cat "$TMP/release" >&2
+                exit 1
+                ;;
+            esac
+          else
+            echo "GitLab release lookup failed: HTTP $STATUS" >&2
+            cat "$TMP/release" >&2
+            exit 1
           fi
 
           # Replace the APK link so repeated runs don't stack duplicate links on the release.
-          for LINK_ID in $(curl -s --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$BASE/releases/$GITHUB_REF_NAME/assets/links" | jq -r '.[].id'); do
-            curl -sf --request DELETE --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "$BASE/releases/$GITHUB_REF_NAME/assets/links/$LINK_ID" > /dev/null
+          gl GET "$RELEASE/assets/links" --header "PRIVATE-TOKEN: $GITLAB_TOKEN" > "$TMP/links"
+          for LINK_ID in $(jq -r '.[].id' "$TMP/links"); do
+            gl DELETE "$RELEASE/assets/links/$LINK_ID" --header "PRIVATE-TOKEN: $GITLAB_TOKEN" > /dev/null
           done
-          curl -sf --request POST --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+          gl POST "$RELEASE/assets/links" --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
             --data-urlencode "name=Lumora.apk" --data-urlencode "url=$ASSET" \
-            --data-urlencode "link_type=package" \
-            "$BASE/releases/$GITHUB_REF_NAME/assets/links" > /dev/null
+            --data-urlencode "link_type=package" > /dev/null
 
       - name: Publish to GitFlic
         if: startsWith(github.ref, 'refs/tags/v') && env.GITFLIC_TOKEN != ''
@@ -206,6 +242,25 @@ jobs:
           set -euo pipefail
           BASE="https://api.gitflic.ru/project/lumora/lumora"
           APK="app/build/outputs/apk/release/Lumora.apk"
+
+          # The release is hung on the tag, so make sure this home actually has it before
+          # creating anything: a tag push that only reached GitHub used to leave GitFlic
+          # unable to create the release. `lumora` is the account the token belongs to;
+          # the other forms stay as fallbacks for a rotated transport token.
+          git fetch --tags --force origin
+          TAG_PUSHED=false
+          for user in lumora oauth2 token gitflic; do
+            if GIT_TERMINAL_PROMPT=0 git push \
+                 "https://${user}:${GITFLIC_TOKEN}@gitflic.ru/project/lumora/lumora.git" \
+                 "$GITHUB_REF_NAME" 2>/dev/null; then
+              TAG_PUSHED=true
+              break
+            fi
+          done
+          if [ "$TAG_PUSHED" != "true" ]; then
+            echo "GitFlic tag push failed with every authentication form"
+            exit 1
+          fi
 
           # The release is rebuilt from scratch on every run. GitFlic has no call to update
           # a release's description or to delete a single attachment (PATCH and the

@@ -32,21 +32,28 @@ jobs:
           git push "https://oauth2:${GITLAB_TOKEN}@gitlab.com/LumoraPlayer/Lumora.git" \
             main --tags
 
-      # GitFlic accepts a token as the password, but the accepted username varies between
-      # their API tokens and transport tokens. Try the documented forms in turn; the token
-      # is never echoed, and the first success ends the step.
+      # GitFlic accepts a token as the password but not every username: `lumora` is the
+      # account the token belongs to (the repo-local credential helper uses it), while the
+      # generic forms stay as fallbacks for a rotated transport token. The token is never
+      # echoed, and the first success ends the step. A failed form prints git's reason with
+      # the token redacted, so a future auth change is diagnosable instead of a silent retry.
       - name: Push main and tags to GitFlic
         if: env.GITFLIC_TOKEN != ''
         run: |
           set -euo pipefail
           git fetch --tags --force origin
           URL="gitflic.ru/project/lumora/lumora.git"
-          for user in oauth2 token gitflic; do
+          ERR=$(mktemp)
+          trap 'rm -f "$ERR"' EXIT
+          for user in lumora oauth2 token gitflic; do
             if GIT_TERMINAL_PROMPT=0 git push "https://${user}:${GITFLIC_TOKEN}@${URL}" \
-                 main --tags 2>/dev/null; then
-              echo "GitFlic push succeeded"
+                 main --tags 2>"$ERR"; then
+              echo "GitFlic push succeeded as $user"
               exit 0
             fi
+            echo "GitFlic push as $user failed:" >&2
+            ERR_TEXT=$(cat "$ERR")
+            echo "${ERR_TEXT//$GITFLIC_TOKEN/***}" >&2
           done
           echo "GitFlic push failed with every authentication form"
           exit 1
