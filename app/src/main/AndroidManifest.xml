@@ -18,6 +18,18 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- Android TV Watch Next. Netflix and SparkleTV hold these on Fire TV
+         and the AOSP TV provider grants them at install; Lumora writes only
+         its own in-progress films and episodes and never reads another app's
+         rows. This is the provider route, not a TvInputService: a TV input is
+         only needed to expose tunable live channels. -->
+    <uses-permission
+        android:name="com.android.providers.tv.permission.READ_EPG_DATA"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="com.android.providers.tv.permission.WRITE_EPG_DATA"
+        tools:ignore="ProtectedPermissions" />
     <!-- Android 10+ blocks a background app from opening its own activity, including from
          BOOT_COMPLETED. "Display over other apps" is one of the platform's explicit
          background-activity-launch exceptions, so the optional launch-on-startup setting
@@ -106,6 +118,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true"
@@ -121,6 +134,14 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <!-- A Watch Next card carries lumora://play?key=<progress key>.
+                 MainActivityWatchNext.kt resumes the snapshot saved under it. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="lumora" android:host="play" />
             </intent-filter>
         </activity>
 

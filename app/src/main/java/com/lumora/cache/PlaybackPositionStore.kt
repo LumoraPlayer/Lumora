@@ -8,6 +8,7 @@ import android.util.Log
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
 import com.lumora.util.optStringOrNull
+import com.lumora.watchnext.WatchNextPublisher
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONObject
 import java.io.File
@@ -106,16 +107,24 @@ object PlaybackPositionStore {
         if (key.isBlank()) return
         if (positionMs <= 0 && (progressPercent == null || progressPercent <= 0.0)) return
         val map = ensureLoaded(context)
-        map[key] = PlaybackPosition(
+        val saved = PlaybackPosition(
             positionMs = positionMs,
             durationMs = durationMs,
             updatedAt = updatedAt,
             channel = channel,
             progressPercent = progressPercent
         )
+        map[key] = saved
         if (map.size > MAX_ENTRIES) {
-            map.entries.minByOrNull { it.value.updatedAt }?.key?.let { map.remove(it) }
+            map.entries.minByOrNull { it.value.updatedAt }?.key?.let { evicted ->
+                map.remove(evicted)
+                WatchNextPublisher.remove(context, evicted)
+            }
         }
+        // Keep the system Watch Next row in step with Continue Watching. The
+        // publisher runs its own single-thread executor and swallows provider
+        // failures, so a missing TV provider never affects playback.
+        WatchNextPublisher.update(context, key, saved)
         // Debounce writes — only flush to disk after DEBOUNCE_MS of inactivity
         pendingSaveRunnable?.let { debounceHandler.removeCallbacks(it) }
         val runnable = Runnable { flushToDisk(context) }
@@ -146,7 +155,10 @@ object PlaybackPositionStore {
 
     fun clear(context: Context, key: String) {
         val map = ensureLoaded(context)
-        if (map.remove(key) != null) writeExecutor.execute { persist(context, map) }
+        if (map.remove(key) != null) {
+            writeExecutor.execute { persist(context, map) }
+            WatchNextPublisher.remove(context, key)
+        }
     }
 
     /** In-progress (not near-complete) items with a resumable channel snapshot, most
@@ -213,6 +225,7 @@ object PlaybackPositionStore {
 
     fun clearAll(context: Context) {
         cache = ConcurrentHashMap()
+        WatchNextPublisher.clearAll(context)
         // Route the disk wipe through the same single-thread executor as every other write:
         // a persist queued before this captured the OLD map reference and must run first and
         // be overwritten by this delete - deleting the file inline while a queued persist was
@@ -254,7 +267,10 @@ object PlaybackPositionStore {
             }
         }.keys
         if (doomed.isEmpty()) return 0
-        doomed.forEach(map::remove)
+        doomed.forEach { key ->
+            map.remove(key)
+            WatchNextPublisher.remove(context, key)
+        }
         writeExecutor.execute { persist(context, map) }
         return doomed.size
     }

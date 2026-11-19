@@ -60,6 +60,7 @@ import com.lumora.model.ContentShelf
 import com.lumora.model.MediaType
 import com.lumora.parser.XtreamClient
 import com.lumora.model.IptvProviderConfig
+import com.lumora.watchnext.WatchNextPublisher
 import com.lumora.pairing.QrPairingManager
 import com.lumora.plugin.DiscoveredProvider
 import com.lumora.plugin.js.JsPluginEngine
@@ -1871,7 +1872,21 @@ class MainActivity : AppCompatActivity() {
             binding.navSettings.nextFocusUpId = R.id.navSearch
         }
 
+        // Publish the existing Continue Watching list to Android TV's Watch
+        // Next row. Existing progress appears immediately after an update;
+        // the publisher serialises its writes and never blocks startup.
+        WatchNextPublisher.sync(this)
+        // A cold start from a Watch Next card carries the progress-store key
+        // in the launch intent. Posted so the player surface and the rest of
+        // onCreate's setup are in place before playback starts.
+        binding.root.post { handleWatchNextIntent(intent) }
         onBackPressedDispatcher.addCallback(this, backCallback)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleWatchNextIntent(intent)
     }
 
     /**
