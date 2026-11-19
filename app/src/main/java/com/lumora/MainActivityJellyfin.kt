@@ -31,14 +31,19 @@ internal fun MainActivity.jellyfinServerUrl(cfg: MediaServerConfig): String? =
     cfg.url?.takeIf { it.isNotBlank() }?.let { normalizeServerUrl(it, defaultScheme = "https") }
 
 /** The Jellyfin-protocol account a channel came from (Jellyfin, Emby or Silo), or null when
- *  it isn't a Jellyfin-protocol item (or its account has since been removed). */
+ *  it isn't a Jellyfin-protocol item (or its account has since been removed).
+ *
+ *  A switched-off account is null too: a cached item from a server the user turned off must
+ *  not still fetch its episode list or have its stream URL built, so the disabled switch also
+ *  closes this path. */
 internal fun MainActivity.jellyfinConfigFor(channel: Channel): MediaServerConfig? =
     if (!channel.isJellyfin) null
-    else MediaServerStore.get(prefs, channel.sourceProviderId)?.takeIf { it.usesJellyfinProtocol }
+    else MediaServerStore.get(prefs, channel.sourceProviderId)
+        ?.takeIf { it.usesJellyfinProtocol && it.enabled }
         // A catalogue written before media servers became a list carries no source id; with
         // exactly one Jellyfin account configured there is no ambiguity about which it is,
         // so it still plays instead of failing until the next refresh re-stamps it.
-        ?: jellyfinServers().singleOrNull()
+        ?: jellyfinServers().singleOrNull()?.takeIf { it.enabled }
 
 /** toChannel() only reads serverUrl off a Provider - a minimal stand-in instead of the
  *  shared `provider` field, which now belongs solely to the IPTV slots. Passing that

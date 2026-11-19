@@ -8,6 +8,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /**
@@ -44,17 +46,48 @@ class TmdbClient {
      *  trending/week's ~10-per-type gives them. /movie/popular and /tv/popular are fixed
      *  lists with no filter params, so the discover endpoints are used instead - same
      *  ranking (sort_by=popularity.desc), with with_original_language as the one thing added.
-     *  [page] is 1-based, same as TMDB's own paging. */
-    suspend fun popularMovies(page: Int): List<Channel> = withContext(Dispatchers.IO) {
-        val body = fetchBody("/discover/movie", "language=$languageTag&page=$page&sort_by=popularity.desc&with_original_language=en")
-            ?: return@withContext emptyList()
-        parse(body, forcedType = "movie")
+     *  [page] is 1-based, same as TMDB's own paging.
+     *
+     *  A release-date floor sits behind that ranking: TMDB's raw popularity is a *rewatch*
+     *  list, so its first pages read as a rerun shelf (Seinfeld 1989, Supernatural 2005,
+     *  The Mentalist 2008) rather than recommendations. The floor is asked of TMDB rather
+     *  than applied to the response, so every page still comes back full.
+     *
+     *  Returns the ranking inputs alongside each title, because the pages are pooled and
+     *  re-ranked by quality before they reach the grid - see [rankDiscoverCandidates]. */
+    internal suspend fun popularMovies(page: Int): List<DiscoverCandidate> = withContext(Dispatchers.IO) {
+        val body = fetchBody(
+            "/discover/movie",
+            "language=$languageTag&page=$page&sort_by=popularity.desc&with_original_language=en" +
+                "&primary_release_date.gte=${isoDateYearsAgo(MOVIE_MAX_AGE_YEARS)}" +
+                "&primary_release_date.lte=${isoDateYearsAgo(0)}"
+        ) ?: return@withContext emptyList()
+        parseRows(body, forcedType = "movie")
     }
 
-    suspend fun popularTv(page: Int): List<Channel> = withContext(Dispatchers.IO) {
-        val body = fetchBody("/discover/tv", "language=$languageTag&page=$page&sort_by=popularity.desc&with_original_language=en")
-            ?: return@withContext emptyList()
-        parse(body, forcedType = "tv")
+    internal suspend fun popularTv(page: Int): List<DiscoverCandidate> = withContext(Dispatchers.IO) {
+        val body = fetchBody(
+            "/discover/tv",
+            "language=$languageTag&page=$page&sort_by=popularity.desc&with_original_language=en" +
+                "&first_air_date.gte=${isoDateYearsAgo(TV_MAX_AGE_YEARS)}" +
+                "&first_air_date.lte=${isoDateYearsAgo(0)}"
+        ) ?: return@withContext emptyList()
+        parseRows(body, forcedType = "tv")
+    }
+
+    /** "yyyy-MM-dd" for [years] before today, for TMDB's date floors. Calendar +
+     *  String.format rather than a SimpleDateFormat field: one chip's five pages are
+     *  fetched concurrently, and a shared formatter is not thread-safe. */
+    private fun isoDateYearsAgo(years: Int): String {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.YEAR, -years)
+        return String.format(
+            Locale.US,
+            "%04d-%02d-%02d",
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH) + 1,
+            cal.get(Calendar.DAY_OF_MONTH)
+        )
     }
 
     /** Multi-search across movies and TV; people/other media_types are dropped. */
@@ -519,9 +552,17 @@ class TmdbClient {
         null
     }
 
-    private fun parse(body: String, forcedType: String? = null): List<Channel> {
+    private fun parse(body: String, forcedType: String? = null): List<Channel> =
+        parseRows(body, forcedType).map { it.channel }
+
+    /** [parse]'s loop, keeping the ranking inputs (votes, popularity, date) alongside the
+     *  mapped channel - the discover chips re-rank their pool locally (see
+     *  [rankDiscoverCandidates]) and `Channel` has no room for a vote count. */
+    private fun parseRows(body: String, forcedType: String? = null): List<DiscoverCandidate> {
         val results = JSONObject(body).optJSONArray("results") ?: return emptyList()
-        val out = ArrayList<Channel>(results.length())
+        val out = ArrayList<DiscoverCandidate>(results.length())
+        // Today, as an ISO date: lexicographic comparison is date order for this format.
+        val today = isoDateYearsAgo(0)
         for (i in 0 until results.length()) {
             val o = results.optJSONObject(i) ?: continue
             // /search/tv and /search/movie omit media_type entirely - the caller knows it.
@@ -545,26 +586,36 @@ class TmdbClient {
             val title = o.optStringOrNull("title") ?: o.optStringOrNull("name")
             if (title.isNullOrBlank()) continue
             val date = o.optStringOrNull("release_date") ?: o.optStringOrNull("first_air_date")
+            // Not out yet. Discover is a "what can I watch" grid: a title whose release (or
+            // first air) date is still ahead of today is a trailer for a future, and offering
+            // it next to watchable ones is what put an unreleased film at the top of Films.
+            if (date != null && date.length >= 10 && date > today) continue
             val year = date?.take(4)?.takeIf { it.length == 4 }
             val poster = o.optStringOrNull("poster_path")?.let { "$IMG$it" }
             val backdrop = o.optStringOrNull("backdrop_path")?.let { "$BACKDROP$it" }
             val id = o.optInt("id")
             out.add(
-                Channel(
-                    id = "tmdb:$type:$id",
-                    name = title,
-                    url = "",
-                    posterUrl = poster,
-                    backdropUrl = backdrop,
-                    mediaType = mediaType,
-                    year = year,
-                    // The id Discover matched by is stamped on the tile so a library copy can
-                    // be found by id rather than by name - a Jellyfin library naming the film
-                    // in another language, or with metadata the name comparison can't bridge,
-                    // is otherwise invisible to the tile badge (see findCatalogMatches).
-                    tmdbId = id.toString(),
-                    description = o.optStringOrNull("overview"),
-                    rating = o.optDouble("vote_average", 0.0).takeIf { it > 0 }?.let { "%.1f".format(it) }
+                DiscoverCandidate(
+                    channel = Channel(
+                        id = "tmdb:$type:$id",
+                        name = title,
+                        url = "",
+                        posterUrl = poster,
+                        backdropUrl = backdrop,
+                        mediaType = mediaType,
+                        year = year,
+                        // The id Discover matched by is stamped on the tile so a library copy can
+                        // be found by id rather than by name - a Jellyfin library naming the film
+                        // in another language, or with metadata the name comparison can't bridge,
+                        // is otherwise invisible to the tile badge (see findCatalogMatches).
+                        tmdbId = id.toString(),
+                        description = o.optStringOrNull("overview"),
+                        rating = o.optDouble("vote_average", 0.0).takeIf { it > 0 }?.let { "%.1f".format(it) }
+                    ),
+                    voteAverage = o.optDouble("vote_average", 0.0),
+                    voteCount = o.optInt("vote_count", 0),
+                    popularity = o.optDouble("popularity", 0.0),
+                    releaseDate = date
                 )
             )
         }
@@ -684,6 +735,20 @@ class TmdbClient {
 
         /** Ceiling on how long a 429's Retry-After may park a caller - see [fetchBody]. */
         private const val MAX_RETRY_AFTER_SEC = 10L
+
+        /** How far back Discover's Films/Series rankings may reach. TMDB's popularity is a
+         *  rewatch ranking, not a recency one, so without a floor the chips recommend decade-old
+         *  catalogue titles (Seinfeld is page 1). A film's relevance follows its release, so it
+         *  ages out fastest; a show that premiered a few years ago can still be rolling out
+         *  seasons, which is why its window is the wider of the two. */
+        private const val MOVIE_MAX_AGE_YEARS = 3
+        private const val TV_MAX_AGE_YEARS = 5
+
+        /** The window [popularMovies]/[popularTv] ask TMDB for, so a caller re-ranking the
+         *  pooled pages (see [rankDiscoverCandidates]) measures freshness against the same
+         *  span the query used. */
+        internal fun discoverWindowYears(type: MediaType): Int =
+            if (type == MediaType.SERIES) TV_MAX_AGE_YEARS else MOVIE_MAX_AGE_YEARS
 
         /** First usable key, or "" if none are configured. For callers outside this client that
          *  take a bare key string rather than going through [request] - notably the ported

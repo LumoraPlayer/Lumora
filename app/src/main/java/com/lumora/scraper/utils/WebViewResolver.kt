@@ -25,12 +25,15 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.lumora.R
+import com.lumora.scraper.ScrapeSiteContext
 import com.lumora.scraper.ScraperApp
+import com.lumora.scraper.bridge.ScraperSiteStore
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONTokener
+import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -64,6 +67,18 @@ class WebViewResolver(private val context: Context) {
                 runCatching { resolver.dismissActiveChallenge() }
             }
         }
+
+        /**
+         * Whether a fetch may put a Cloudflare verification page on screen for the viewer to
+         * solve.
+         *
+         * Off. A challenge that needs a human to move a cursor and press OK is not something a
+         * media player can answer, and on a TV it takes over the screen mid-search. A site that
+         * raises one is dropped from the search instead, and switched off so the next Find & Play
+         * does not spend a fetch on it again (see [checkChallengeStatus]).
+         */
+        @Volatile
+        var interactiveChallengesAllowed: Boolean = false
     }
 
     data class Result(
@@ -88,18 +103,33 @@ class WebViewResolver(private val context: Context) {
     private var lastMobileZoomUrl: String? = null
     private val isTv = context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 
+    /** The site this resolver is currently fetching for - see [ScrapeSiteContext]. */
+    @Volatile
+    private var activeSite: String? = null
+
+    /**
+     * Markers that only a real Cloudflare interstitial carries.
+     *
+     * A bare "cloudflare" used to be in this list, which matched any ordinary page that merely
+     * loads a Cloudflare script or beacon - the bypass then treated a working page as a
+     * challenge and put its dialog over the app. These are the strings the interstitial itself
+     * renders or its challenge script defines.
+     */
     private val challengeKeywords = listOf(
-        "Just a moment...", "cf-browser-verification", "challenge-running", "Checking your browser", "cloudflare"
+        "Just a moment...", "cf-browser-verification", "challenge-running",
+        "Checking your browser", "cf_chl_opt", "cf-chl-"
     )
 
     /**
-     * The exception a fetch fails with when it needed to put its challenge on screen but the
-     * player owns the screen (see [ScraperApp.activityForScraperUi]). A plain failure - the
-     * fetch's caller treats it like any other dead source - rather than a coroutine
-     * cancellation, which the scraper's search waves deliberately rethrow.
+     * A fetch failed because it hit a Cloudflare verification page and this app does not ask the
+     * viewer to solve one. The provider treats it as a dead source; the same decision also
+     * switches the site off, at the point of detection, so it is not queried again.
      */
-    private class ChallengeSuppressedException : IllegalStateException(
-        "Cloudflare challenge suppressed: Lumora's player is on screen"
+    internal class ChallengeSuppressedException(
+        val needsVerification: Boolean = false
+    ) : IllegalStateException(
+        if (needsVerification) "Cloudflare verification needed - site switched off"
+        else "Cloudflare challenge did not clear - source skipped"
     )
 
     suspend fun get(
@@ -140,6 +170,10 @@ class WebViewResolver(private val context: Context) {
         silent: Boolean = false,
     ): Result = mutex.withLock {
         Log.d(TAG, "[WebView] Fetching: $url (IsTV: $isTv)")
+        // Which site this fetch belongs to, so a verification page can switch that site off.
+        // Read from the coroutine context, not a parameter: the providers are ported code and
+        // every one of them would have to grow a signature to carry it.
+        activeSite = coroutineContext[ScrapeSiteContext]?.providerName
         pollingCount = 0
         loginKeyboardPrimed = false
         val result = withTimeoutOrNull(120000) {
@@ -328,11 +362,10 @@ class WebViewResolver(private val context: Context) {
             val success = completion?.invoke(currentUrl, cleanHtml, cookies)
                 ?: ((!isChallenge && hasContent && cleanHtml.length > 1000) || hasClearance)
 
-            // The login focus grab and the visible challenge are both interactive UI: neither may
-            // happen when there is nowhere legitimate to put it. activityForScraperUi() is null
-            // while the player is up - letting the challenge cover the player is exactly the
-            // "drops me on a captcha mid-playback" bug - and null when no Activity is on screen,
-            // where the fetch falls back to headless-only.
+            // The login focus grab is interactive UI too: it may not happen when there is
+            // nowhere legitimate to put it. activityForScraperUi() is null while the player is
+            // up - letting a challenge cover the player is exactly the "drops me on a captcha
+            // mid-playback" bug - and null when no Activity is on screen.
             val uiContext = ScraperApp.activityForScraperUi()
 
             // The keyboard is primed only alongside a challenge dialog that is actually going to
@@ -371,19 +404,39 @@ class WebViewResolver(private val context: Context) {
             // failure; see CineLiteProvider).
             val challengeNeeded = !silent && dialog == null &&
                 (isChallenge || (pollingCount >= 2 && !hasContent))
-            if (challengeNeeded && uiContext != null) {
-                Log.d(TAG, "[WebView] Visible challenge UI needed")
-                showVisibleChallenge(continuation)
-            } else if (challengeNeeded && ScraperApp.playerActive) {
-                // The fetch needs a visible challenge but the player owns the screen - the
-                // abandoned-source case: a resolve still in flight when a stream started
-                // playing. It must not poll on to its global timeout with its WebView sitting
-                // invisible on a challenge page, and above all it must not surface over the
-                // playback - fail now, and its caller moves on exactly as if the site were dead.
-                Log.d(TAG, "[WebView] Challenge needed but the player is on screen - abandoning fetch")
-                cleanup()
-                if (continuation.isActive) continuation.resumeWithException(ChallengeSuppressedException())
-                return@evaluateJavascript
+            when {
+                // Only an opt-in caller may put a verification page on screen. Nothing in the app
+                // opts in (see the companion flag): a challenge needing a cursor and a click is
+                // the site's problem, not the viewer's.
+                challengeNeeded && interactiveChallengesAllowed && uiContext != null -> {
+                    Log.d(TAG, "[WebView] Visible challenge UI needed")
+                    showVisibleChallenge(continuation)
+                }
+                // Still a challenge after one retry (~2s): anything that clears itself, like a
+                // managed challenge the WebView can pass, has had its chance. Abandon the fetch -
+                // and if the page was a real interstitial, switch the site off so the next search
+                // does not ask it again. A page that is merely slow is skipped for this search
+                // but stays enabled.
+                challengeNeeded && pollingCount >= 1 -> {
+                    val site = activeSite
+                    Log.d(TAG, "[WebView] Challenge not cleared - skipping site ${site ?: "?"} (verification: $isChallenge)")
+                    if (isChallenge && site != null) {
+                        runCatching { ScraperSiteStore.setSiteEnabled(context, site, false) }
+                        // The site disappears from the list, so say why: otherwise a site the
+                        // user never touched silently stops being searched.
+                        runCatching {
+                            com.lumora.diagnostics.SessionLog.event(
+                                "scraper",
+                                "$site switched off: Cloudflare verification required"
+                            )
+                        }
+                    }
+                    cleanup()
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(ChallengeSuppressedException(isChallenge))
+                    }
+                    return@evaluateJavascript
+                }
             }
 
             pollingCount++

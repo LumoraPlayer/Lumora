@@ -837,6 +837,10 @@ class MainActivity : AppCompatActivity() {
      *  and on any explicit play. */
     internal var userPausedPlayback = false
     internal var isContentDetailVisible = false
+    /** The title whose detail page is up right now. Held so switching off the provider it
+     *  came from can re-render that page (Play, version chips, episodes) instead of leaving
+     *  it offering a source Settings just disabled. Null while no detail page is open. */
+    internal var detailOpenItem: Channel? = null
     /** Channel id of the item whose detail screen is open, so closing it can return focus to
      *  the poster it was opened from rather than to the tab bar. */
     internal var detailReturnItemId: String? = null

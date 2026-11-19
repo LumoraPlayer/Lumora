@@ -26,6 +26,7 @@ import com.lumora.cache.PlaybackPositionStore
 import com.lumora.cache.WatchlistStore
 import com.lumora.model.Channel
 import com.lumora.model.MediaType
+import com.lumora.data.IptvProviderStore
 import com.lumora.anime.AnimeCatalogClient
 import com.lumora.parser.XtreamClient
 import com.lumora.util.BackdropLoader
@@ -995,6 +996,7 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
     // previews; keep it resident so next/previous and the version chips can find it.
     ensureVodResident(item)
     isContentDetailVisible = true
+    detailOpenItem = item
     // Any opening starts a fresh trail; the person-page return flag is re-armed by
     // openPersonCredit once this call has reset the screen.
     detailFromPerson = false
@@ -1297,7 +1299,15 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
             }
         }
     }
-    val seriesGroup = if (isSeries) versionGroup ?: versionGroupContaining(seriesVersions, item.id) else null
+    // Copies whose own provider is switched off (or gone) are not versions of this title any
+    // more: their catalogue rows are parked out of every VOD read, but the in-memory map was
+    // built before the switch and would otherwise keep a chip that re-opens a dead source.
+    val seriesGroup = if (isSeries) {
+        val configs = IptvProviderStore.load(prefs)
+        val servers = mediaServers()
+        (versionGroup ?: versionGroupContaining(seriesVersions, item.id))
+            ?.filter { isChannelSourceEnabled(it, configs, servers) }
+    } else null
     if (seriesGroup != null && seriesGroup.size > 1) {
         renderSeriesVersionChips(seriesGroup)
     } else if (isSeries && seriesGroup == null && item.id.isNotBlank()) {
@@ -1307,8 +1317,11 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
         // resident for the screen's lifetime.
         scope.launch {
             val group = withContext(Dispatchers.IO) {
+                val configs = IptvProviderStore.load(prefs)
+                val servers = mediaServers()
                 com.lumora.data.catalog.CatalogRepository.get(this@showContentDetail)
                     .vodVersions(item)
+                    .filter { isChannelSourceEnabled(it, configs, servers) }
             }
             if (group.size <= 1 || !isContentDetailVisible || detailReturnItemId != item.id) {
                 return@launch
@@ -1927,9 +1940,20 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 // Other providers' copies of the same show are merged first, so their episodes
                 // arrive with real streams - a show with seasons 1-4 on a panel and season 5 on
                 // Jellyfin reads as one complete list - and TMDB only fills what no provider has.
-                val fromVersions = mergeSeasonsFromVersions(siblingFetch.await(), librarySeasons)
-                val seasons = if (fromVersions.all { it.second.isEmpty() }) tmdbSeasonsFor(item)
-                    else mergeMissingEpisodesFromTmdb(item, fromVersions)
+                //
+                // A copy whose provider is now switched off is not a provider that "has" an
+                // episode: its episodes are dropped *before* the TMDB merge, so a title whose
+                // only panel is off still lists what TMDB knows (each row routing to Find &
+                // Play) instead of showing a dead episode list or an empty state.
+                val gateConfigs = IptvProviderStore.load(prefs)
+                val gateServers = mediaServers()
+                val reachable = mergeSeasonsFromVersions(siblingFetch.await(), librarySeasons)
+                    .map { (label, eps) ->
+                        label to eps.filter { isChannelSourceEnabled(it, gateConfigs, gateServers) }
+                    }
+                val seasons = (if (reachable.all { it.second.isEmpty() }) tmdbSeasonsFor(item)
+                    else mergeMissingEpisodesFromTmdb(item, reachable))
+                    .filter { it.second.isNotEmpty() }
                 if (nowShowingDetailId != requestedItemId) return@launch
                 detailSeasons = seasons
                 // Backfills the whole-series watched marker for a show finished before this
@@ -2028,18 +2052,27 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 if (nowShowingDetailId != requestedItemId) return@launch
                 applyDetails(details)
                 enrichDetailsFromTmdb(details, isSeries = false, requestedItemId = requestedItemId)
-                val versions = versionGroupContaining(filmVersions, item.id)
+                // A copy whose own provider has since been switched off (or removed) is not a
+                // version of this title any more. The catalogue parks its rows out of every
+                // VOD read, but a Continue Watching snapshot - which is where a disabled
+                // provider's film usually comes back from - and the in-memory map outlive
+                // that parking, and Play must not offer them.
+                val gateConfigs = IptvProviderStore.load(prefs)
+                val gateServers = mediaServers()
+                val versions = (versionGroupContaining(filmVersions, item.id)
                     ?: com.lumora.data.catalog.CatalogRepository.get(this@showContentDetail)
                         .vodVersions(item).takeIf { it.size > 1 }
                         ?.also { group -> filmVersions = filmVersions + (group.first().id to group) }
-                    ?: listOf(item)
+                    ?: listOf(item))
+                    .filter { isChannelSourceEnabled(it, gateConfigs, gateServers) }
                 // The group is ordered best-copy-first, and that is what Play uses for a card
                 // opened from a shelf (where the opened item *is* the first). Opened from
                 // Continue Watching or a search hit, though, the item is some other copy in
                 // the group - and the resume position, the "Resume" label and the highlighted
                 // chip all belong to that copy, so playing the group's best one instead would
-                // start a different file from zero while the screen said Resume.
-                val opened = versions.firstOrNull { it.id == item.id } ?: versions.first()
+                // start a different file from zero while the screen said Resume. Null when
+                // every copy belonged to a source that is now switched off.
+                val opened = versions.firstOrNull { it.id == item.id } ?: versions.firstOrNull()
                 hideDetailStatus()
 
                 // The obvious action for a film is "play it" - a button, not a list
@@ -2047,7 +2080,8 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 // No episode tag to add here (that's series-only), but a part-watched
                 // film should still read "Resume" rather than "Play", same as one does
                 // in the Continue Watching shelf it was probably reached from.
-                val filmKey = item.id.ifBlank { item.url }
+                val progressItem = opened ?: item
+                val filmKey = progressItem.id.ifBlank { progressItem.url }
                 val filmProgress = filmKey.takeIf { it.isNotBlank() }
                     ?.let { PlaybackPositionStore.get(this@showContentDetail, it) }
                     ?.takeIf { it.isInProgress }
@@ -2059,8 +2093,8 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                 // what resolves - instead of hiding and leaving the screen with no obvious
                 // action. Hidden only when there is no way to find anything either (no plugin,
                 // no scrapers enabled).
-                val playable = item.url.isNotBlank() || !item.stalkerCmd.isNullOrBlank() ||
-                    versions.any { it.url.isNotBlank() || !it.stalkerCmd.isNullOrBlank() }
+                val playable = opened != null &&
+                    (opened.url.isNotBlank() || !opened.stalkerCmd.isNullOrBlank())
                 val mustFind = !playable && canFindStream(item)
                 // Films have no episode rows to carry the watched check, so this is the
                 // only place to mark one seen without playing it. The shared m|title mark
@@ -2125,11 +2159,11 @@ internal fun MainActivity.showContentDetail(item: Channel, versionGroup: List<Ch
                         return@setOnClickListener
                     }
                     currentIndex = filmList.indexOfChannel(item)
-                    showPlayerFor(opened)
+                    opened?.let { showPlayerFor(it) }
                     detailReturnItem = item
                     detailReturnGroup = versionGroup
                 }
-                if (!isTv) {
+                if (!isTv && opened != null) {
                     downloadButton.visibility = View.VISIBLE
                     downloadButton.setOnClickListener { downloadItem(opened) }
                 }
@@ -2266,6 +2300,7 @@ internal fun MainActivity.backOutOfContentDetail() {
 
 internal fun MainActivity.hideContentDetail(restoreMain: Boolean = true) {
     isContentDetailVisible = false
+    detailOpenItem = null
     detailFromPerson = false
     applyStatus()
     nowShowingDetailId = null

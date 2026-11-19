@@ -54,6 +54,13 @@
 # The scrapers' models are deserialised by name - Gson reflects over field names, and the
 # kotlinx.serialization ones need their generated serializers kept alongside them.
 -keep class com.lumora.scraper.models.** { *; }
+
+# TMDb3's DTOs are Gson targets too - the shared TMDB search every resolver-style site runs
+# through. PageResult<T> in particular has to keep its generic signature: unkept, R8 renamed and
+# merged these classes and the element type was lost, so Gson produced untyped maps and every
+# one of those sites' searches died with a ClassCastException before reaching its own API.
+-keep class com.lumora.scraper.utils.TMDb3 { *; }
+-keep class com.lumora.scraper.utils.TMDb3$* { *; }
 -keepclassmembers class com.lumora.scraper.models.** {
     *** Companion;
 }

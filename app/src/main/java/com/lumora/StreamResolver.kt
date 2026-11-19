@@ -37,6 +37,19 @@ private const val KEY_LAST_GOOD = "last_good_source"
 private const val STALL_TIMEOUT_MS = 20_000L
 
 /**
+ * How long a native-torrent answer is held back while the searches that can still produce a
+ * direct-play (web) source are running.
+ *
+ * The queue is ranked web-first, but `onFound` used to start whatever arrived first - and a
+ * torrent indexer answers in a few hundred milliseconds, well before a site scrape returns.
+ * Find & Play therefore committed to "Starting libtorrent session" and sat on a black screen
+ * (or stalled for the torrent metadata timeout) while a streaming site that would have played
+ * in a second or two answered right after. The wait is capped so a torrent-only setup still
+ * starts without the site searches' full runtime.
+ */
+private const val WEB_SOURCE_GRACE_MS = 4_000L
+
+/**
  * Find Stream: one search across every source Lumora has, played best-first without asking.
  *
  * There are three kinds of source and they used to be mutually exclusive - an installed
@@ -98,6 +111,13 @@ internal class StreamResolver(
             activity.scraperToast(activity.getString(R.string.scraper_no_sources))
             return
         }
+        // One line per Find & Play: which sources were asked, and for what. The per-site
+        // results follow at debug level from ScraperCatalog.
+        android.util.Log.i(
+            "FindStream",
+            "search plugin=${plugin?.id} sites=${siteProviders.size} stremio=${stremioAddons.size} " +
+                "title='${streamSearchTitle(item.name)}' year=${streamSearchYear(item)}"
+        )
 
         val isSeries = item.mediaType == MediaType.SERIES
         val epTag = if (season != null && episode != null) " S%02dE%02d".format(season, episode) else ""
@@ -149,6 +169,20 @@ internal class StreamResolver(
             (if (stremioAddons.isNotEmpty()) 1 else 0)
         lateinit var searchJob: Job
 
+        // Searches still running that can produce a direct-play (web) source. A native-torrent
+        // answer waits for these, capped by [WEB_SOURCE_GRACE_MS], instead of starting first just
+        // because it answered first - see the constant's kdoc.
+        var webSearchesPending =
+            (if (plugin != null && !plugin.resolvesNatively) 1 else 0) +
+                (if (siteProviders.isNotEmpty()) 1 else 0) +
+                (if (stremioAddons.isNotEmpty()) 1 else 0)
+        var graceRun: Runnable? = null
+
+        fun cancelGrace() {
+            graceRun?.let { activity.mainHandler.removeCallbacks(it) }
+            graceRun = null
+        }
+
         /** Stops watching the current attempt, whether it succeeded or is being abandoned. */
         fun clearWatch() {
             watchdog?.let { activity.mainHandler.removeCallbacks(it) }
@@ -164,6 +198,7 @@ internal class StreamResolver(
             .setOnDismissListener {
                 if (!playbackStarted) {
                     searchJob.cancel()
+                    cancelGrace()
                     // A native-torrent resolve (a plugin magnet or a Stremio infoHash) does not
                     // stop when its coroutine is cancelled - TorrentEngine.start() blocks until
                     // TorrentEngine.stop() is called. Only reachable before any playback started
@@ -208,6 +243,7 @@ internal class StreamResolver(
             // user backed out, and playing now would resurrect what they cancelled. Only the
             // single-source path can land here - the search path arms nothing until it plays.
             if (onlySource != null && !dialog.isShowing) return
+            cancelGrace()
             playbackStarted = true
             prefs.edit().putString(KEY_LAST_GOOD, source.lastGoodKey()).apply()
             dialog.dismiss()
@@ -437,6 +473,40 @@ internal class StreamResolver(
                 status.text = activity.resources.getQuantityString(
                     R.plurals.scraper_sources_found, found.size, found.size
                 )
+                when {
+                    // Web sources, a finished search, or a hand-picked source: go now.
+                    source.webStart || webSearchesPending == 0 || onlySource != null -> {
+                        cancelGrace()
+                        tryNext()
+                    }
+                    // A torrent answered before any site. Hold the queue briefly: the ranked
+                    // order would pick a site anyway, and starting the torrent engine first is
+                    // what left a black screen while sites were still answering. Only before the
+                    // first attempt - once one is in flight the window has been given.
+                    graceRun == null && attempts == 0 -> {
+                        val wait = Runnable {
+                            graceRun = null
+                            if (!playbackStarted) tryNext()
+                        }
+                        graceRun = wait
+                        activity.mainHandler.postDelayed(wait, WEB_SOURCE_GRACE_MS)
+                    }
+                }
+            }
+        }
+
+        /**
+         * One search is over. A web-capable search releasing the last slot lets a torrent start
+         * immediately instead of sitting out the rest of the grace period for an answer that is
+         * not coming.
+         */
+        fun onSearchFinished(webCapable: Boolean) {
+            activity.runOnUiThread {
+                searchesDone++
+                if (webCapable) {
+                    webSearchesPending = (webSearchesPending - 1).coerceAtLeast(0)
+                    if (webSearchesPending == 0) cancelGrace()
+                }
                 tryNext()
             }
         }
@@ -477,7 +547,7 @@ internal class StreamResolver(
                         // Swallowed exactly as the old runCatching did; the queue is advanced by
                         // tryNext() below regardless of a single search's failure.
                     }
-                    activity.runOnUiThread { searchesDone++; tryNext() }
+                    onSearchFinished(webCapable = !plugin.resolvesNatively)
                 }
             }
             if (siteProviders.isNotEmpty()) {
@@ -512,7 +582,7 @@ internal class StreamResolver(
                         // Swallowed exactly as the old runCatching did; the queue is advanced by
                         // tryNext() below regardless of a single search's failure.
                     }
-                    activity.runOnUiThread { searchesDone++; tryNext() }
+                    onSearchFinished(webCapable = true)
                 }
             }
             if (stremioAddons.isNotEmpty()) {
@@ -551,7 +621,7 @@ internal class StreamResolver(
                         // Swallowed exactly as the old runCatching did; the queue is advanced by
                         // tryNext() below regardless of a single search's failure.
                     }
-                    activity.runOnUiThread { searchesDone++; tryNext() }
+                    onSearchFinished(webCapable = true)
                 }
             }
         }
@@ -580,6 +650,11 @@ internal sealed class FoundSource {
         override val title get() = result.title
         override val score get() = StreamQuality.score(result.quality, result.title)
         override val seeders get() = result.seeders ?: 0
+        // A resolvesNatively plugin hands back a magnet, so nothing plays until the torrent
+        // engine has metadata and peers. A JS plugin's resolve() returns a plain URL - a page
+        // fetch like a site's, with no swarm involved - so it belongs on the web side of the
+        // queue's ordering instead of waiting behind a torrent's metadata fetch.
+        override val webStart get() = !plugin.resolvesNatively
         override val detail
             get() = listOfNotNull(
                 StreamQuality.label(result.quality, result.title) ?: result.quality,
@@ -817,7 +892,14 @@ internal fun isSearchNoise(token: String): Boolean {
  * while one token is left, so a film genuinely named "Raw" or "Cam" survives being all-noise.
  */
 internal fun streamSearchTitle(name: String): String {
-    var tokens = cleanVodTitle(name)
+    var cleaned = cleanVodTitle(name)
+    // Catalogue numbering ("14. Inception", "14 - Inception", "14) Inception") is the panel's
+    // row index, not part of the name. Sites do not number their listings, so carrying it makes
+    // the exact-title search miss on every one of them - and this is how an IPTV copy of a film
+    // ended up "not carried by any site". Requires a separator and following space, so titles
+    // that really start with a number ("1917", "13 Hours", "2 Fast 2 Furious") keep it.
+    cleaned = LEADING_INDEX_PREFIX_REGEX.replace(cleaned, "")
+    var tokens = cleaned
         // The year is carried separately - see streamSearchYear.
         .replace(Regex("""\(\s*(19|20)\d{2}\s*\)"""), " ")
         .split(' ')
@@ -826,6 +908,9 @@ internal fun streamSearchTitle(name: String): String {
     while (tokens.size > 1 && isSearchNoise(tokens.first())) tokens = tokens.drop(1)
     return tokens.joinToString(" ").ifBlank { cleanVodTitle(name) }
 }
+
+/** "14. " / "14 - " / "14) " at the start of a catalogue name - see [streamSearchTitle]. */
+private val LEADING_INDEX_PREFIX_REGEX = Regex("""^\s*\d{1,3}\s*[.)\-:]\s+""")
 
 /** The year to search under: what the catalog states, else the one baked into the title that
  *  [streamSearchTitle] just removed - dropping it there must not lose it here. */

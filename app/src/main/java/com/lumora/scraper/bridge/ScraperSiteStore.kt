@@ -51,6 +51,17 @@ object ScraperSiteStore {
     }
 
     /**
+     * [setSiteEnabled] by provider name, for callers that only know the name - the WebView
+     * bypass decides a verification page makes a site unusable here, and it holds the name the
+     * scraper fetch was tagged with rather than the [Provider] instance.
+     */
+    fun setSiteEnabled(context: Context, providerName: String, enabled: Boolean) {
+        val updated = disabledNames(context).toMutableSet()
+        if (enabled) updated.remove(providerName) else updated.add(providerName)
+        prefs(context).edit().putStringSet(KEY_DISABLED, updated).apply()
+    }
+
+    /**
      * The sites a stream search should actually query.
      *
      * Empty unless all three agree: the master switch is on, a `scraper_sites` plugin script has

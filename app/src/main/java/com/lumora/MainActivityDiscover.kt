@@ -13,6 +13,8 @@ import com.lumora.cache.WatchedStore
 import com.lumora.data.IptvProviderStore
 import com.lumora.data.TrackerOutbox
 import com.lumora.data.TraktStore
+import com.lumora.data.remote.tmdb.TmdbClient
+import com.lumora.data.remote.tmdb.rankDiscoverCandidates
 import com.lumora.model.Channel
 import com.lumora.model.ContentShelf
 import com.lumora.model.ContentShelfSection
@@ -348,9 +350,14 @@ internal suspend fun MainActivity.fetchPopularPaged(type: MediaType): List<Chann
     // tile with no way to tell them apart - the grid has no year/country subtitle to
     // disambiguate them the way the detail screen would - so fold those together too,
     // keeping the highest-ranked (first) copy of each title.
-    return pages.awaitAll().flatten()
-        .distinctBy { it.id }
-        .distinctBy { it.name.trim().lowercase(Locale.US) }
+    val pool = pages.awaitAll().flatten()
+        .distinctBy { it.channel.id }
+        .distinctBy { it.channel.name.trim().lowercase(Locale.US) }
+    // Popularity got these titles into the pool; quality and freshness decide the order they
+    // are shown in (a 4.0/10 churn title was ranking above an 8.2/10 one, and unreleased
+    // zero-vote titles were landing in the top ten). Ranked across all five pages at once, so
+    // page boundaries from the parallel fetches do not leak into the grid's order.
+    return rankDiscoverCandidates(pool, TmdbClient.discoverWindowYears(type))
 }
 
 /** Loads trending (null query) or search results into the Discover grid. */
@@ -549,11 +556,22 @@ internal suspend fun MainActivity.findCatalogMatches(item: Channel): List<Channe
     // title the user owns showed no "Jellyfin" badge on its Discover tile. The id is stamped
     // on Discover tiles by TmdbClient and read from the server's ProviderIds (see
     // JellyfinProvider), and the panel's own `tmdb` field feeds it for Xtream copies too.
+    // A copy from a source that is switched off is not a copy the user owns any more. The
+    // catalogue parks a disabled provider's rows, but a park can be missed (a restored
+    // backup, a toggle racing an in-flight write, rows written by an older build) - and then
+    // Discover resolves a TMDB tile to a library entry from a provider Settings says is off,
+    // carrying that panel's decorated name into the page and into every stream search.
+    val gateConfigs = IptvProviderStore.load(prefs)
+    val gateServers = mediaServers()
+    fun allowed(copies: List<Channel>) =
+        copies.filter { isChannelSourceEnabled(it, gateConfigs, gateServers) }
+
     if (item.tmdbId != null) {
         val byId = com.lumora.data.catalog.CatalogRepository.get(this)
             .vodByTmdbId(item.mediaType, item.tmdbId)
-        if (byId.isNotEmpty()) {
-            return byId.sortedBy { if (it.isOwnLibrary) 0 else 1 }.distinctBy { it.id.ifBlank { it.url } }
+        val enabledById = allowed(byId)
+        if (enabledById.isNotEmpty()) {
+            return enabledById.sortedBy { if (it.isOwnLibrary) 0 else 1 }.distinctBy { it.id.ifBlank { it.url } }
         }
     }
     // Cheap gate before the expensive one. Normalising and cleaning a title runs the best
@@ -594,7 +612,8 @@ internal suspend fun MainActivity.findCatalogMatches(item: Channel): List<Channe
         val backupPenalty = if (candidate.sourceProviderId in backupIds) 1000 else 0
         scored += (rank * 10_000 + yearBonus + sourceBonus + backupPenalty + extra) to candidate
     }
-    return scored.sortedBy { it.first }.map { it.second }.distinctBy { it.id.ifBlank { it.url } }
+    return allowed(scored.sortedBy { it.first }.map { it.second })
+        .distinctBy { it.id.ifBlank { it.url } }
 }
 
 /** The full set of copies to offer for [match] - the matches Discover found, plus whatever
@@ -712,6 +731,15 @@ internal fun MainActivity.onHomeItemClick(channel: Channel) {
     when (channel.mediaType) {
         MediaType.LIVE -> playItem(channel)
         MediaType.MOVIE -> {
+            // A tile whose only copy sits on a provider that is now switched off has no
+            // stream this row may start. Open its detail page instead: that is where the
+            // "nothing to play from here" answer belongs (Find & Play when scrapers exist),
+            // and it keeps the switch honest rather than starting a stream from a source
+            // Settings says is off.
+            if (!isChannelSourceEnabled(channel, IptvProviderStore.load(prefs), mediaServers())) {
+                showContentDetail(channel)
+                return
+            }
             currentIndex = filmList.indexOfChannel(channel)
             showPlayerFor(channel)
             // Back out to the film's own poster, same as playing it from its detail page.

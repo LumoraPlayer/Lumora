@@ -1228,7 +1228,11 @@ internal fun MainActivity.refreshPlayerIdentity() {
  *  portal it came from (matched by sourceProviderId). Null if the portal's gone or the
  *  config isn't a Stalker one. */
 internal fun MainActivity.stalkerConfigFor(channel: Channel): IptvProviderConfig? =
-    channel.sourceProviderId?.let { id -> IptvProviderStore.load(prefs).firstOrNull { it.id == id && it.type == "stalker" } }
+    channel.sourceProviderId?.let { id ->
+        // Only a switched-on portal is a source: a disabled one must not be queried for an
+        // episode list or have a play command resolved from it, even for a cached item.
+        IptvProviderStore.load(prefs).firstOrNull { it.id == id && it.type == "stalker" && it.enabled }
+    }
 
 internal fun MainActivity.stalkerProviderStub(config: IptvProviderConfig): Provider = Provider(
     name = config.name, type = ProviderType.M3U,

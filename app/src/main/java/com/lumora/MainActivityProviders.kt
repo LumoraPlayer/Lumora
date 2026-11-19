@@ -355,6 +355,52 @@ internal fun MainActivity.isTypeAllowed(
     }
 }
 
+/** Whether the source behind [ch] is still configured *and* switched on, so offering it to
+ *  play is honest. The catalogue parks a switched-off provider's rows at a rank every VOD
+ *  read skips, but a Continue Watching snapshot, a watchlist entry, an episode row already on
+ *  screen and the in-memory version maps all outlive that parking - those surfaces come here
+ *  before showing Play, a version chip or an episode.
+ *
+ *  A channel with no source id is a plugin/anime/local-file row with no provider to switch
+ *  off, so it passes. One whose id matches nothing at all belongs to a source that has been
+ *  removed, which leaves nothing to play from either. [configs] and [servers] are passed in
+ *  so a whole list of channels can be checked off one prefs read. */
+internal fun MainActivity.isChannelSourceEnabled(
+    ch: Channel,
+    configs: List<IptvProviderConfig>,
+    servers: List<MediaServerConfig>
+): Boolean {
+    /** The per-type gate one source entry carries (its own switch is checked by the caller). */
+    fun allowsType(
+        live: Boolean,
+        movies: Boolean,
+        series: Boolean
+    ): Boolean = when (ch.mediaType) {
+        MediaType.LIVE -> live
+        MediaType.MOVIE -> movies
+        MediaType.SERIES -> series
+    }
+    val sourceId = ch.sourceProviderId
+    // Own-library items (Jellyfin/Plex/Emby/Silo) keep both an account switch and per-type
+    // gates; the account is what says the item still exists at all.
+    if (ch.isOwnLibrary) {
+        val server = mediaServerOwner(ch, servers) ?: return false
+        return server.enabled &&
+            allowsType(server.liveEnabled, server.moviesEnabled, server.seriesEnabled)
+    }
+    // Shares and local libraries are media-server entries too, but carry no per-type gates -
+    // their own row's switch is what says whether the file is still reachable from here.
+    val server = sourceId?.let { id -> servers.firstOrNull { it.id == id } }
+    if (server != null) return server.enabled
+    val owner = sourceId?.let { id -> configs.firstOrNull { it.id == id } }
+    return when {
+        owner != null -> owner.enabled &&
+            allowsType(owner.liveEnabled, owner.moviesEnabled, owner.seriesEnabled)
+        sourceId == null -> true
+        else -> false
+    }
+}
+
 /** Every gate the stored live catalogue has to pass before it is painted: enabled owner,
  *  the global VOD switch (which drops any non-live entry), the per-provider content types
  *  and the plugin-content drop. The database retains rows across gate changes, so applying
@@ -583,6 +629,13 @@ internal fun MainActivity.applyProviderToggle(
 ) {
     // The enabled set (and therefore the 40 MB RAM cutoff) is about to change.
     com.lumora.data.catalog.CatalogMode.invalidate()
+    // The activity's provider snapshots are from the last full load. A switch-off has to
+    // refresh them here, or xtreamProviderFor keeps answering for a provider Settings just
+    // disabled and a detail page can still fetch that panel's episodes behind Play.
+    IptvProviderStore.load(prefs).let { configs ->
+        xtreamProviderConfigs = configs.filter { it.enabled && it.type == "xtream" }.associateBy { it.id }
+        providerNamesById = configs.associate { it.id to it.name }
+    }
     if (enabled) {
         if (providerId == null) {
             loadAllConfiguredProviders(forceRefresh = true)
@@ -621,6 +674,32 @@ internal fun MainActivity.applyProviderToggle(
             }
         }
         allChannels = allChannels.filterNot(belongsToProvider)
+        // The version maps are only rebuilt by a later tab render, and the player's version
+        // picker reads them directly - so a copy of this source would keep a chip that plays
+        // a switched-off panel. Drop it now, keeping each group only while it is still a
+        // group (a lone remaining copy needs no chip).
+        fun withoutProvider(versions: Map<String, List<Channel>>): Map<String, List<Channel>> =
+            versions.mapNotNull { (_, group) ->
+                val kept = group.filterNot(belongsToProvider)
+                if (kept.size <= 1) null else kept.first().id to kept
+            }.toMap()
+        filmVersions = withoutProvider(filmVersions)
+        seriesVersions = withoutProvider(seriesVersions)
+        // A series playing from another source holds its own copy of the group for the
+        // player's version picker; drop this source there too. The pair itself is kept even
+        // when only one copy is left - it is also what tells the player this is a series,
+        // and nulling it would hand a series to the film version picker.
+        currentSeriesVersionContext = currentSeriesVersionContext?.let { (series, group) ->
+            series to group.filterNot(belongsToProvider)
+        }
+        // A film/series page open behind Settings was rendered while this source was on.
+        // Re-render it so Play and its version chips stop offering what was just switched
+        // off; Settings is a dialog over that screen, so the repaint lands as it closes.
+        // The person page owns the screen when it is up, and re-opening the title under it
+        // would tear down its Back trail - that ordering is left alone.
+        detailOpenItem
+            ?.takeIf { belongsToProvider(it) && !isPersonDetailVisible }
+            ?.let { showContentDetail(it) }
         // Switching a provider off only drops local rows - the panel does not revoke the
         // stream - so anything already on screen has to be taken down explicitly. Without
         // this the channel the user was watching carried on playing from a source Settings
@@ -976,6 +1055,14 @@ internal fun MainActivity.loadAllConfiguredProviders(
                 if (!server.moviesEnabled) repo.deleteProviderType(server.id, MediaType.MOVIE)
                 if (!server.seriesEnabled) repo.deleteProviderType(server.id, MediaType.SERIES)
             }
+            // Re-assert the park for every switched-off source. A park can be missed - a
+            // restored backup recreates its rows at live ranks, a toggle can race a write that
+            // was already in flight, and rows written by an older build predate parking - and
+            // a disabled provider's titles then stay visible in discovery and in every VOD
+            // read, carrying that panel's decorated names. Parking is idempotent, and a no-op
+            // for a source with no rows.
+            for (config in configured.filterNot { it.enabled }) repo.parkProvider(config.id)
+            for (server in servers.filterNot { it.enabled }) repo.parkProvider(server.id)
         }
         // Enforcing the storage invariant is maintenance, not data the first frame needs:
         // it runs at most once per load, and on a cold start it is deferred until the stored

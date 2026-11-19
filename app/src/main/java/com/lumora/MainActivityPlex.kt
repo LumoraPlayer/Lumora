@@ -41,13 +41,17 @@ internal fun MainActivity.plexServerUrl(cfg: MediaServerConfig): String? =
     cfg.url?.takeIf { it.isNotBlank() }
 
 /** The Plex server a channel came from, or null when it isn't a Plex item (or its server has
- *  since been removed). */
+ *  since been removed).
+ *
+ *  A switched-off server is null too - a cached item from it must not keep fetching its
+ *  episode list or resolve a stream the user turned off. */
 internal fun MainActivity.plexConfigFor(channel: Channel): MediaServerConfig? =
     if (!channel.isPlex) null
-    else MediaServerStore.get(prefs, channel.sourceProviderId)?.takeIf { it.isPlex }
+    else MediaServerStore.get(prefs, channel.sourceProviderId)
+        ?.takeIf { it.isPlex && it.enabled }
         // A catalogue written before media servers became a list carries no source id; with
         // exactly one Plex server configured there is no ambiguity about which it is.
-        ?: plexServers().singleOrNull()
+        ?: plexServers().singleOrNull()?.takeIf { it.enabled }
 
 /**
  * This install's Plex client identifier, minted once and kept.
