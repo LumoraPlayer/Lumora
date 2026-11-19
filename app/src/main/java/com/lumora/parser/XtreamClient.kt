@@ -26,6 +26,24 @@ private const val TAG = "XtreamClient"
 private const val PROGRESS_STEP_BYTES = 512L * 1024
 
 /**
+ * The suffix to put on a live stream URL, from the panel's own
+ * `user_info.allowed_output_formats`.
+ *
+ * Live rows carry no `container_extension`, so unlike films and series the URL's suffix is
+ * ours to choose. A panel that serves only MPEG-TS answers 405 to `.m3u8` - every live
+ * channel then fails with a container the player cannot even open. HLS is kept when the
+ * panel offers it (the historical default, and the better behaviour for seeking), TS is
+ * used when that is all the panel serves, and an unspecified panel keeps the old default.
+ */
+internal fun liveContainerFor(allowedOutputFormats: List<String>): String {
+    if (allowedOutputFormats.isEmpty()) return "m3u8"
+    val offersHls = allowedOutputFormats.any {
+        it.equals("m3u8", ignoreCase = true) || it.equals("hls", ignoreCase = true)
+    }
+    return if (offersHls) "m3u8" else "ts"
+}
+
+/**
  * Minimal Xtream Codes API client using OkHttp.
  * Fetches live TV, VOD, and series from an Xtream server.
  */
@@ -79,7 +97,12 @@ class XtreamClient(private val client: OkHttpClient) {
         val serverProtocol: String? = null,
         val valid: Boolean = false,
         val expDateSeconds: Long? = null,
-        val isTrial: Boolean = false
+        val isTrial: Boolean = false,
+        /** The live output formats the panel says it serves (user_info
+         *  .allowed_output_formats) - "ts", "m3u8", ... A panel that lists only "ts"
+         *  answers 405 to the .m3u8 live URL, so the ingest picks its suffix from here
+         *  (see [liveContainerFor]). Empty when the panel states nothing. */
+        val allowedOutputFormats: List<String> = emptyList()
     )
 
     data class EpgProgram(
@@ -131,7 +154,16 @@ class XtreamClient(private val client: OkHttpClient) {
                     serverProtocol = userInfo.optString("server_protocol"),
                     valid = auth == "1",
                     expDateSeconds = userInfo.optString("exp_date", "").toLongOrNull(),
-                    isTrial = userInfo.optString("is_trial", "0") == "1"
+                    isTrial = userInfo.optString("is_trial", "0") == "1",
+                    allowedOutputFormats = userInfo.optJSONArray("allowed_output_formats")
+                        ?.let { formats ->
+                            // optString(index) returns "" for anything that is not a string;
+                            // the array is always string values on real panels.
+                            (0 until formats.length())
+                                .map { formats.optString(it) }
+                                .filter { it.isNotBlank() }
+                        }
+                        .orEmpty()
                 ))
             } else {
                 Result.failure(Exception("Invalid server response - check URL and credentials"))
@@ -461,7 +493,10 @@ class XtreamClient(private val client: OkHttpClient) {
         /** When set, only that category is requested. The bulk endpoints honour it, which is
          *  what makes a narrowed import a real download cut rather than a client-side skip -
          *  see IptvProviderConfig.liveCategoryIds. */
-        categoryId: String? = null
+        categoryId: String? = null,
+        /** Suffix for live rows that have no `container_extension` - see
+         *  [liveContainerFor]. Ignored for films and series, which carry their own. */
+        liveContainer: String = "m3u8"
     ): Int? {
         val key = when (action) {
             "get_live_streams" -> "live_streams"
@@ -471,7 +506,9 @@ class XtreamClient(private val client: OkHttpClient) {
         }
         val readItem: (Map<String, String?>, String?) -> Channel? = when (action) {
             "get_series" -> { map, _ -> seriesFromMap(map)?.let(transform) }
-            else -> { map, first -> streamFromMap(map, first, mediaType, provider)?.let(transform) }
+            else -> { map, first ->
+                streamFromMap(map, first, mediaType, provider, liveContainer)?.let(transform)
+            }
         }
         val params = if (categoryId.isNullOrBlank()) "action=$action" else "action=$action&category_id=$categoryId"
         return streamBulkArrayInto(
@@ -722,7 +759,9 @@ class XtreamClient(private val client: OkHttpClient) {
         obj: Map<String, String?>,
         firstCategoryId: String?,
         mediaType: MediaType,
-        provider: Provider
+        provider: Provider,
+        /** Fallback suffix for live rows; films and series have their own container. */
+        liveContainer: String = "m3u8"
     ): Channel? {
         val streamId = obj["stream_id"]?.takeIf { it.isNotBlank() } ?: return null
         val name = obj["name"]?.takeIf { it.isNotBlank() } ?: "Unknown"
@@ -734,7 +773,7 @@ class XtreamClient(private val client: OkHttpClient) {
         val rating = obj["rating"] ?: ""
         val year = obj["year"] ?: ""
         val container = obj["container_extension"]?.takeIf { it.isNotBlank() }
-            ?: if (mediaType == MediaType.LIVE) "m3u8" else "mp4"
+            ?: if (mediaType == MediaType.LIVE) liveContainer else "mp4"
         val base = provider.serverUrl?.let { normalizeServerUrl(it) }
         val streamUrl = when (mediaType) {
             MediaType.MOVIE -> "$base/movie/${provider.username}/${provider.password}/$streamId.$container"

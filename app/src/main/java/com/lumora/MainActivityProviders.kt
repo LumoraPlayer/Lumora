@@ -24,6 +24,7 @@ import com.lumora.data.catalog.CatalogRepository
 import com.lumora.anime.AnimeCatalogClient
 import com.lumora.parser.M3uParser
 import com.lumora.parser.XtreamClient
+import com.lumora.parser.liveContainerFor
 import com.lumora.util.CatalogueFingerprint
 import com.lumora.util.duplicateProviderIds
 import com.lumora.util.normalizeServerUrl
@@ -2077,6 +2078,10 @@ internal suspend fun MainActivity.fetchXtreamChannels(
         val authResult = withContext(Dispatchers.IO) { client.authenticate(xtreamProvider) }
         val auth = authResult.getOrElse { return FetchResult.Failure(it.message?.take(60) ?: "auth error") }
         if (!auth.valid) return FetchResult.Failure("auth failed - check server URL and credentials")
+        // Live rows have no container_extension, so their suffix comes from what the panel
+        // says it serves. Asking a TS-only panel for .m3u8 earns a 405 on every channel;
+        // see liveContainerFor.
+        val liveContainer = liveContainerFor(auth.allowedOutputFormats)
 
         val live = ArrayList<Channel>()
         val isBackup = IptvProviderStore.load(prefs).firstOrNull { it.id == config.id }?.backup == true
@@ -2245,6 +2250,7 @@ internal suspend fun MainActivity.fetchXtreamChannels(
                         entityNanos += System.nanoTime() - t
                         rows++
                     },
+                    liveContainer = liveContainer,
                     onProgress = { bytes, callTotal ->
                         bytesThisCall = bytes
                         bytesRead = bytesBase + bytes

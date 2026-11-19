@@ -68,6 +68,34 @@ class XtreamBulkMappingTest {
     }
 
     @Test
+    fun `live container follows the panel's allowed formats`() {
+        // The reported case: a panel that serves only MPEG-TS answers 405 to .m3u8.
+        assertEquals("ts", liveContainerFor(listOf("ts")))
+        // HLS stays the default when the panel offers it.
+        assertEquals("m3u8", liveContainerFor(listOf("ts", "m3u8")))
+        assertEquals("m3u8", liveContainerFor(listOf("m3u8")))
+        // A panel that states nothing keeps the old default rather than guessing.
+        assertEquals("m3u8", liveContainerFor(emptyList()))
+        // Panels vary the casing.
+        assertEquals("m3u8", liveContainerFor(listOf("HLS")))
+    }
+
+    @Test
+    fun `ts-only panel builds a ts live url, and a stated container still wins`() {
+        val ch = client.streamFromMap(
+            mapOf("stream_id" to "2", "name" to "RTP 1"),
+            null, MediaType.LIVE, provider, liveContainer = "ts"
+        )!!
+        assertEquals("http://panel.example:8080/live/user/pass/2.ts", ch.url)
+
+        val stated = client.streamFromMap(
+            mapOf("stream_id" to "3", "container_extension" to "m3u8"),
+            null, MediaType.LIVE, provider, liveContainer = "ts"
+        )!!
+        assertEquals("http://panel.example:8080/live/user/pass/3.m3u8", stated.url)
+    }
+
+    @Test
     fun `literal null strings treated as absent`() {
         val ch = live(mapOf("stream_id" to "1", "category_id" to "null", "category_name" to "null"))
         assertEquals("", ch.categoryId)
