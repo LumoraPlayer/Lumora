@@ -4,14 +4,19 @@ package com.lumora.data
 import com.lumora.model.IptvProviderConfig
 import com.lumora.model.MediaServerConfig
 import kotlinx.coroutines.runBlocking
+import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import java.net.ServerSocket
+import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
 /**
@@ -174,6 +179,93 @@ class ProviderStatusProbeTest {
                 )
             )
             assertEquals("/identity", web.takeRequest().path)
+        } finally {
+            web.shutdown()
+        }
+    }
+
+    @Test
+    fun `the probe client drops the shared http cache`() {
+        // The app's shared client carries a 50 MB disk cache. A reachability verdict has to
+        // come from this run's round trip, or a cached 2xx from before the server went away
+        // keeps the dot green for a dead server.
+        val dir = Files.createTempDirectory("lumora-probe-cache").toFile()
+        try {
+            val cached = OkHttpClient.Builder()
+                .cache(Cache(File(dir, "http"), 1024 * 1024))
+                .build()
+            assertNotNull(cached.cache)
+            assertNull(ProviderStatusProbe.statusClient(cached).cache)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `probes tell the http cache not to answer`() = runBlocking {
+        // Plex /identity and a static M3U both arrive with cache headers, so the requests
+        // themselves must opt out of caching as well - the probe is often handed a client by
+        // a caller, and this keeps those paths honest too.
+        val web = MockWebServer()
+        web.enqueue(MockResponse().setBody("#EXTM3U\n").setHeader("Cache-Control", "max-age=3600"))
+        web.enqueue(MockResponse().setBody("<MediaContainer/>").setHeader("Cache-Control", "max-age=3600"))
+        web.start()
+        try {
+            assertTrue(
+                ProviderStatusProbe.probeIptv(
+                    iptv(url = web.url("/list.m3u").toString()), OkHttpClient()
+                )
+            )
+            assertEquals("no-store", web.takeRequest().getHeader("Cache-Control"))
+            assertTrue(
+                ProviderStatusProbe.probeServer(
+                    server(type = "plex", url = web.url("/").toString()), OkHttpClient()
+                )
+            )
+            assertEquals("no-store", web.takeRequest().getHeader("Cache-Control"))
+        } finally {
+            web.shutdown()
+        }
+    }
+
+    @Test
+    fun `a media server whose public endpoint is forbidden is offline`() = runBlocking {
+        // A working Jellyfin/Emby/Plex answers its public info/identity endpoint with 200.
+        // A 401/403/404 there is a blocking proxy, a login page or a parked domain - the
+        // page answered, not the service, so the dot must not be green.
+        val web = MockWebServer()
+        web.enqueue(MockResponse().setResponseCode(403))
+        web.start()
+        try {
+            assertFalse(
+                ProviderStatusProbe.probeServer(
+                    server(type = "jellyfin", url = web.url("/").toString()), OkHttpClient()
+                )
+            )
+        } finally {
+            web.shutdown()
+        }
+    }
+
+    @Test
+    fun `a page that is not the service is offline even when it answers ok`() = runBlocking {
+        // An ISP/captive portal or a parked domain answers 200 for every URL. The body is
+        // not the server's public info/identity payload, so "online" would be a lie.
+        val web = MockWebServer()
+        web.enqueue(MockResponse().setBody("<html><body>Sign in to Wi-Fi</body></html>"))
+        web.enqueue(MockResponse().setBody("<html><body>This domain is for sale</body></html>"))
+        web.start()
+        try {
+            assertFalse(
+                ProviderStatusProbe.probeServer(
+                    server(type = "jellyfin", url = web.url("/").toString()), OkHttpClient()
+                )
+            )
+            assertFalse(
+                ProviderStatusProbe.probeServer(
+                    server(type = "plex", url = web.url("/").toString()), OkHttpClient()
+                )
+            )
         } finally {
             web.shutdown()
         }

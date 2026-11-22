@@ -74,8 +74,15 @@ object ProviderStatusProbe {
     }
 
     /** A client with the probe's short timeouts, sharing the app's connection pool and
-     *  dispatcher with the rest of the app rather than standing up a second network stack. */
+     *  dispatcher with the rest of the app rather than standing up a second network stack.
+     *
+     *  The shared client's 50 MB disk cache is deliberately dropped: a reachability verdict
+     *  has to come from this run's round trip. Plex's /identity and a static M3U playlist
+     *  both arrive with cache headers, so a cached 2xx from before the server went away would
+     *  be replayed here - the dot said green for a dead server, which is exactly what the
+     *  probe exists to prevent. */
     fun statusClient(base: OkHttpClient): OkHttpClient = base.newBuilder()
+        .cache(null)
         .connectTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         .readTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         .callTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
@@ -125,6 +132,8 @@ object ProviderStatusProbe {
                 .url(url)
                 .header("User-Agent", config.userAgent?.takeIf { it.isNotBlank() } ?: "Mozilla/5.0")
                 .header("Accept", "*/*")
+                // Never let the shared HTTP cache answer a reachability check - see statusClient.
+                .header("Cache-Control", "no-store")
                 .apply {
                     // A big playlist can be megabytes; the status only needs the response,
                     // not the body, and closing the socket after the headers keeps it cheap.
@@ -164,11 +173,20 @@ object ProviderStatusProbe {
                     config.isPlex -> httpReachable(
                         appendPath(raw, "identity"),
                         client
-                    )
+                    ) { body ->
+                        // Plex answers /identity with <MediaContainer ...>, or the same
+                        // identity as JSON when a client asks for it.
+                        body.contains("<MediaContainer", ignoreCase = true) ||
+                            body.contains("machineIdentifier")
+                    }
                     else -> httpReachable(
                         appendPath(raw, "System", "Info", "Public"),
                         client
-                    )
+                    ) { body ->
+                        // Jellyfin/Emby/Silo answer with a JSON object (ServerName, Version,
+                        // Id, ...). HTML here is a proxy or parked page, not the server.
+                        body.trimStart().startsWith("{")
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -194,18 +212,38 @@ object ProviderStatusProbe {
         return builder.build().toString()
     }
 
-    /** Any response below 500 means the server is there and answering; 401/403 are still an
-     *  answer, and are not this status dot's verdict to make (see the object KDoc). */
-    private fun httpReachable(url: String?, client: OkHttpClient): Boolean {
+    /** 2xx means the public info/identity endpoint answered as the service itself. Unlike
+     *  Stalker/WebDAV, these endpoints (Jellyfin/Emby/Silo `System/Info/Public`, Plex
+     *  `/identity`) need no credentials and answer 200 on a working server, so a 401/403/404
+     *  here is a blocking proxy, a login page or a parked domain - the page answered, not the
+     *  service, and the dot must not read green for it. [looksLikeService] additionally
+     *  rejects a 200 whose body is not the service's payload (an ISP/captive-portal page
+     *  answers 200 for every URL). The request also asks for `no-store` so a cached previous
+     *  answer cannot stand in for a live check. */
+    private fun httpReachable(
+        url: String?,
+        client: OkHttpClient,
+        looksLikeService: (String) -> Boolean
+    ): Boolean {
         val target = url?.toHttpUrlOrNull() ?: return false
-        return client.newCall(Request.Builder().url(target).build()).execute().use {
-            it.code < 500
+        val request = Request.Builder()
+            .url(target)
+            .header("Cache-Control", "no-store")
+            .build()
+        return client.newCall(request).execute().use { response ->
+            if (response.code !in 200..299) return@use false
+            // Both payloads are tiny (a few hundred bytes); peek so the response is still
+            // closed by use{} exactly as before.
+            looksLikeService(response.peekBody(4 * 1024).string())
         }
     }
 
     private fun webdavReachable(config: MediaServerConfig, client: OkHttpClient): Boolean {
         val base = normalizeServerUrl(config.url.orEmpty()).toHttpUrlOrNull() ?: return false
-        val builder = Request.Builder().url(base).method("OPTIONS", null)
+        val builder = Request.Builder()
+            .url(base)
+            .method("OPTIONS", null)
+            .header("Cache-Control", "no-store")
         val user = config.username.orEmpty()
         if (user.isNotBlank() || !config.password.isNullOrBlank()) {
             builder.header("Authorization", Credentials.basic(user, config.password.orEmpty()))
