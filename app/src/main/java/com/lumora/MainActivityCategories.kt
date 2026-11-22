@@ -76,11 +76,22 @@ internal fun MainActivity.recentLiveChannels(
 internal fun resolveRecentChannels(ids: List<String>, source: List<Channel>): List<Channel> {
     if (ids.isEmpty() || source.isEmpty()) return emptyList()
     val wanted = ids.toHashSet()
-    val byId = HashMap<String, Channel>(wanted.size)
-    for (channel in source) if (channel.id in wanted) byId[channel.id] = channel
-    return ids.mapNotNull { byId[it] }.filterNot { channel ->
-        isAdultCategory(channel.categoryName, channel.group) || isAdultCategory(channel.name)
+    // One id can name more than one catalogue channel - a panel can repeat a tvg-id across
+    // distinct streams, and two panels can share an id. A single id->channel map collapses
+    // them (last wins), so every recent entry carrying the id resolved to the same channel:
+    // the last recent channel was shadowed and "another channel" showed instead. A per-id
+    // list consumed as the entries come gives each recent id its own channel, in play order.
+    val byId = HashMap<String, ArrayDeque<Channel>>(wanted.size)
+    for (channel in source) {
+        if (channel.id in wanted) byId.getOrPut(channel.id) { ArrayDeque() }.addLast(channel)
     }
+    val resolved = ArrayList<Channel>(ids.size)
+    for (id in ids) {
+        val channel = byId[id]?.removeFirstOrNull() ?: continue
+        if (isAdultCategory(channel.categoryName, channel.group) || isAdultCategory(channel.name)) continue
+        resolved.add(channel)
+    }
+    return resolved
 }
 
 /**
@@ -1767,7 +1778,13 @@ internal suspend fun MainActivity.applyCategoryFilter(
     focusFirstLiveChannel: Boolean = false,
     /** True for a category pick (the list changes wholesale), false for an in-place
      *  refresh where the diff is worth computing. Live TV uses it to skip DiffUtil. */
-    wholesale: Boolean = false
+    wholesale: Boolean = false,
+    /** True when the user is already on Live TV and this run refreshes the guide beneath
+     *  them (a catalog load landing, classifyAndShow re-entering the tab) rather than
+     *  entering the tab fresh - the guide's scroll position and focus are then the viewer's
+     *  and must not jump back to the top, which is what the unconditional scroll resets
+     *  below did on every load. */
+    refreshLiveInPlace: Boolean = false
 ) {
     // Claim this run. Anything that resumes from the background filter below only gets to
     // touch an adapter if no newer switch has started since - see categoryFilterGeneration.
@@ -1808,7 +1825,7 @@ internal suspend fun MainActivity.applyCategoryFilter(
                 // Blank guide panes read as a failed render. Say why the pane is empty and
                 // give the one action that can leave it.
                 if (wholesale) liveAdapter.replaceAll(emptyList()) else liveAdapter.submitList(emptyList())
-                binding.liveContent.scrollToPosition(0)
+                if (!refreshLiveInPlace) binding.liveContent.scrollToPosition(0)
                 updateGuideRowWrap()
                 val hasAnyChannels = liveChannels.isNotEmpty()
                 showContentEmptyState(
@@ -1837,7 +1854,7 @@ internal suspend fun MainActivity.applyCategoryFilter(
             hideContentEmptyState(restoreFocusTo = binding.liveContent)
             val commit = Runnable {
                 updateGuideRowWrap()
-                if (focusFirstLiveChannel) {
+                if (focusFirstLiveChannel && !refreshLiveInPlace) {
                     val first = filtered.firstOrNull()
                     if (first != null) {
                         requestPreviewLoad(first)
@@ -1856,7 +1873,7 @@ internal suspend fun MainActivity.applyCategoryFilter(
                 }
             }
             if (wholesale) liveAdapter.replaceAll(filtered, commit) else liveAdapter.submitList(filtered, commit)
-            binding.liveContent.scrollToPosition(0)
+            if (!refreshLiveInPlace) binding.liveContent.scrollToPosition(0)
         }
         1 -> applyVodTabFilter(
             tab = 1,

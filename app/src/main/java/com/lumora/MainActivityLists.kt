@@ -363,6 +363,12 @@ internal fun MainActivity.selectTab(index: Int) {
     // Capture the current Films/Series selection before anything is cleared. On a same-tab
     // press this also keeps the category the user is on instead of snapping back to shelves.
     rememberVodSelection()
+    // Also captured before activeTab moves: a selectTab(0) while Live is already on screen is
+    // a re-entry under the viewer (a catalog load landing, classifyAndShow re-entering the
+    // tab), not the user walking to Live TV - the guide's scroll and focus are theirs then,
+    // and the unconditional scroll-to-top in applyCategoryFilter is what put them back at
+    // the top "as new things load in".
+    val alreadyOnLiveTab = index == 0 && activeTab == 0 && !showingHome
     activeSettingsOverlay?.dismiss()
     activeSearchOverlay?.dismiss()
     activeTab = index
@@ -564,7 +570,7 @@ internal fun MainActivity.selectTab(index: Int) {
             }
         }
         submitCategories(categories)
-        applyCategoryFilter(focusFirstLiveChannel = index == 0)
+        applyCategoryFilter(focusFirstLiveChannel = index == 0, refreshLiveInPlace = alreadyOnLiveTab)
         // Always scroll back to the very top of the sidebar when switching tabs, so the
         // first row (Live TV's "Show all categories" toggle, Films/Series' first row) is
         // what's on screen rather than wherever the previous tab was scrolled to - and,

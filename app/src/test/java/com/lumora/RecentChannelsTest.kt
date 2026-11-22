@@ -47,4 +47,33 @@ class RecentChannelsTest {
         assertTrue(resolveRecentChannels(emptyList(), listOf(ch("1"))).isEmpty())
         assertTrue(resolveRecentChannels(listOf("1"), emptyList()).isEmpty())
     }
+
+    @Test
+    fun `an id shared by two channels resolves to one channel, not the same one twice`() {
+        // Duplicate ids in the source (a panel repeating a tvg-id, say): a single
+        // id->channel map collapses them, so two recent entries for the id both resolved
+        // to the same (last) channel. Each recent entry now gets its own.
+        val source = listOf(ch("1", name = "A"), ch("1", name = "B"), ch("2", name = "C"))
+        assertEquals(
+            listOf("A", "B"),
+            resolveRecentChannels(listOf("1", "1"), source).map { it.name }
+        )
+        assertEquals(
+            listOf("A"),
+            resolveRecentChannels(listOf("1"), source).map { it.name }
+        )
+    }
+
+    @Test
+    fun `the last recent channel is not shadowed by another channel with the same id`() {
+        // "The last recent channel isn't showing - it shows another channel": with the
+        // id->channel map collapsing duplicates, the most recent id resolved to the
+        // channel that happened to sort last in the list. Order is kept, so the
+        // distinct channels are consumed in catalogue order per recent entry.
+        val source = listOf(ch("1", name = "Older"), ch("2", name = "Fresh"), ch("1", name = "Newer"))
+        assertEquals(
+            listOf("Older", "Newer"),
+            resolveRecentChannels(listOf("1", "1"), source).map { it.name }
+        )
+    }
 }

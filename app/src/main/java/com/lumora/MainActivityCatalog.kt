@@ -191,7 +191,7 @@ internal suspend fun MainActivity.classifyAndShow(preserveUi: Boolean = false) {
                         if (empty) selectedCategoryIds = null
                     }
                     submitCategories(categories)
-                    applyCategoryFilter(focusFirstLiveChannel = false)
+                    applyCategoryFilter(focusFirstLiveChannel = false, refreshLiveInPlace = activeTab == 0)
                     binding.contentRow.visibility = View.VISIBLE
                     setStatus("", visible = false)
                     applyStatus()
