@@ -36,4 +36,18 @@ class SearchFilterChipsTest {
         assertFalse(SearchFilter.SERIES.showsEpgChip())
         assertFalse(SearchFilter.CAST.showsEpgChip())
     }
+
+    @Test
+    fun `epg results belong to all and epg only`() {
+        // The EPG search builder gates on this predicate, so guide programs appear exactly
+        // where the EPG chip does. Live returning its channels, not the guide's programmes,
+        // is the rule that regressed.
+        assertTrue(SearchFilter.ALL.searchesEpg())
+        assertTrue(SearchFilter.EPG.searchesEpg())
+
+        assertFalse(SearchFilter.LIVE.searchesEpg())
+        assertFalse(SearchFilter.MOVIE.searchesEpg())
+        assertFalse(SearchFilter.SERIES.searchesEpg())
+        assertFalse(SearchFilter.CAST.searchesEpg())
+    }
 }

@@ -40,9 +40,13 @@ internal fun MainActivity.isTouchDevice(): Boolean =
 internal fun MainActivity.SearchFilter.showsCastChip(): Boolean =
     this == MainActivity.SearchFilter.ALL || this == MainActivity.SearchFilter.CAST
 
-/** Whether the EPG chip belongs to this result filter - see [showsCastChip]. */
-internal fun MainActivity.SearchFilter.showsEpgChip(): Boolean =
+/** Whether this filter's results include EPG program matches. Only All and EPG do: a
+ *  programme is not a channel, so a Live search must not surface the guide. */
+internal fun MainActivity.SearchFilter.searchesEpg(): Boolean =
     this == MainActivity.SearchFilter.ALL || this == MainActivity.SearchFilter.EPG
+
+/** Whether the EPG chip belongs to this result filter - see [showsCastChip]. */
+internal fun MainActivity.SearchFilter.showsEpgChip(): Boolean = searchesEpg()
 
 internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
     // Re-entry guard: a second press while the overlay is up would stack a second
@@ -222,7 +226,7 @@ internal fun MainActivity.showSearchDialog(initialQuery: String? = null) {
         }
     }
 
-    // P2-4: result-type filter chips. EPG results are shown under All/Live/EPG.
+    // P2-4: result-type filter chips. EPG results are shown under All/EPG only.
     fun applyFilterChip(selected: View) {
         for (id in filterChipIds) {
             searchView.findViewById<View>(id).isSelected = searchView.findViewById<View>(id) === selected
@@ -685,12 +689,10 @@ internal fun MainActivity.runSearch(query: String, runId: Int, adapter: SearchRe
  *  Capped at 30 results and 10 fetches - EPG search is a bonus surface, not a second
  *  catalog, and each fetch is a network call. */
 internal suspend fun MainActivity.buildEpgSearchResults(query: String, filter: MainActivity.SearchFilter): List<SearchResultItem.Epg> {
-    if (filter == MainActivity.SearchFilter.MOVIE ||
-        filter == MainActivity.SearchFilter.SERIES ||
-        filter == MainActivity.SearchFilter.CAST
-    ) {
-        return emptyList()
-    }
+    // Guide programmes ride with All and the EPG chip, exactly like the chip row - a
+    // programme is not a channel, so a Live-filtered search must not surface them. Driving
+    // this from the same predicate keeps the results and the visible chips from disagreeing.
+    if (!filter.searchesEpg()) return emptyList()
     val needle = normalizeForSearch(query)
     if (needle.isEmpty()) return emptyList()
     val nowSeconds = System.currentTimeMillis() / 1000
